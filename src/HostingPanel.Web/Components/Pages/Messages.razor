@@ -26,7 +26,7 @@ else
                     Text(x, "subject").Contains(search, StringComparison.OrdinalIgnoreCase) ||
                     Text(x, "fromName").Contains(search, StringComparison.OrdinalIgnoreCase)))
                 {
-                    <tr><td><button type="button" disabled="@loading" @onclick="() => Open(item.GetProperty("id").GetInt64())">@Text(item, "subject")</button></td>
+                    <tr><td><button type="button" disabled="@loading" @onclick="() => OpenMessage(item)">@Text(item, "subject")</button></td>
                         <td>@Text(item, "fromName")</td><td>@Text(item, "timestamp")</td>
                         <td><span class="status-pill @(Flag(item, "unread") ? "warning" : "muted")">
                             @(Flag(item, "unread") ? "Nieuw" : "Gelezen")</span></td></tr>
@@ -78,6 +78,7 @@ else
         { error = ex.Message; messages = null; }
         finally { loading = false; }
     }
+    private Task OpenMessage(JsonElement entry) => Open(entry.GetProperty("id").GetInt64());
     private async Task Open(long id)
     {
         if (loading) return;
