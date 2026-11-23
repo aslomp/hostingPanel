@@ -10,14 +10,14 @@ var checks = new List<(string Description, Action Test)>
     }),
     ("Legacy adapter converts modern search response", () =>
     {
-        var names = LegacyUsersAdapter.ParseUsernames("[\\"demo\\",\\"admin\\",\\"demoadmin\\"]");
+        var names = LegacyUsersAdapter.ParseUsernames("[\"demo\",\"admin\",\"demoadmin\"]");
         var filtered = LegacyUsersAdapter.SearchUsers(names, "demo", 1);
         Require(filtered.Count == 1 && filtered[0] == "demo");
     }),
     ("Legacy adapter rejects error responses", () =>
-        Throws<LegacyApiException>(() => LegacyUsersAdapter.ParseUsernames("{\\"error\\":1,\\"text\\":\\"Denied\\"}"))),
+        Throws<LegacyApiException>(() => LegacyUsersAdapter.ParseUsernames("{\"error\":1,\"text\":\"Denied\"}"))),
     ("Legacy adapter rejects invalid schema", () =>
-        Throws<FormatException>(() => LegacyUsersAdapter.ParseUsernames("{\\"users\\":[\\"admin\\"]}"))),
+        Throws<FormatException>(() => LegacyUsersAdapter.ParseUsernames("{\"users\":[\"admin\"]}"))),
     ("Legacy adapter validates search limits", () =>
         Throws<ArgumentOutOfRangeException>(() => LegacyUsersAdapter.SearchUsers(["admin"], null, 0))),
     ("Empty list is valid", () => Require(DirectAdminUsersParser.Parse("[]").Count == 0)),
