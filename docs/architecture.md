@@ -121,3 +121,27 @@ DirectAdmin heeft afzonderlijke admin- en user-endpoints. HostingPanel moet die 
 - Voor geïmpersoneerde sessies wordt de effectieve gebruiker gebruikt en niet het administratorniveau van de oorspronkelijke account.
 
 Legacy admin-JSON-tabelrijen zijn numeriek geïndexeerd; metadata als `info` wordt genegeerd. `local_data`/`local_mail` zijn nullable omdat oude releases velden kunnen weglaten.
+
+## DirectAdmin scopes: authoritative backend, no second authorization model
+
+Account discovery and domain visibility are evaluated by **DirectAdmin**, not a
+HostingPanel role hierarchy. API credentials are forwarded unchanged for each
+request, including the effective delegated identity when login-as is active.
+
+- `GET /api/search/users`: modern DirectAdmin contract, array of usernames visible through the available legacy account-list operations.
+- `GET /hosting/accounts`: richer account catalog with `username`, `role` and `creator`; used to display admin → reseller → enduser relationships. It probes `CMD_API_SHOW_ADMINS`, `CMD_API_SHOW_RESELLERS`, `CMD_API_SHOW_ALL_USERS` and `CMD_API_SHOW_USERS`. An upstream denial means that particular category is not available; HostingPanel does not impose a second role filter.
+- `GET /hosting/domains/accessible`: aggregates `CMD_API_SHOW_USER_DOMAINS?user=...` across accessible accounts plus `CMD_API_SHOW_DOMAINS` for the active account. Returns domain names, owners and a partial-result warning when some backend calls fail.
+- `GET /hosting/domains?user=...`: direct per-account query, preserving backend authorization.
+- Domain details and mutations no longer reject requests merely because a domain is absent from the *current* account's own domain list. DirectAdmin authorizes the selected operation.
+- DNS admin endpoints are selected by a non-mutating backend probe, not a locally assigned `admin` role. Server-level zone listing is directly requested from DirectAdmin and may be denied there.
+- Impersonation eligibility is validated with DirectAdmin's effective identity response; the user does not need to be locally classified as admin or reseller before the backend is asked.
+
+Account roles and creator values are **display metadata**, not authorization
+claims. Mutations retain the global `HostingPanel:EnableMutations` switch,
+input validation, and explicit confirmation for destructive operations.
+The pinned modern Swagger remains the public `/api/*` contract; legacy
+differences are internal.
+
+The aggregate catalog is not a backup of account ownership; it is derived from
+live DirectAdmin responses. Empty or inaccessible categories remain distinct
+from connection/protocol errors, which must be reported.
