@@ -35,6 +35,32 @@ public sealed class UserController(IHostingBackend backend) : BackendController
             : Results.Json(new { type = result.Error }, statusCode: result.Status);
     }
 
+    [HttpPut("/hosting/users/{username}/limit")]
+    public async Task<IResult> SetUserLimit([FromRoute] string username,
+        [FromBody] AccountLimitChange input, CancellationToken ct)
+    {
+        if (!TryGetBasic(HttpContext, out var auth))
+            return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+        var result = await backend.AccountMutations.SetLimitAsync(
+            "user", username, input, auth, ct);
+        return result.Error is null
+            ? Results.Json(new { username, field = input.Field, updated = true })
+            : Results.Json(new { type = result.Error }, statusCode: result.Status);
+    }
+
+    [HttpPut("/hosting/accounts/{username}/suspension")]
+    public async Task<IResult> SetAccountSuspension([FromRoute] string username,
+        [FromBody] AccountSuspension input, CancellationToken ct)
+    {
+        if (!TryGetBasic(HttpContext, out var auth))
+            return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+        var result = await backend.AccountMutations.SetSuspendedAsync(
+            username, input.Suspended, auth, ct);
+        return result.Error is null
+            ? Results.Json(new { username, suspended = input.Suspended, updated = true })
+            : Results.Json(new { type = result.Error }, statusCode: result.Status);
+    }
+
     [HttpGet("/hosting/accounts")]
     public async Task<IResult> hosting_accounts_Get_4()
     {
