@@ -123,6 +123,17 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
         return await GetRawAsync($"api/users/{Uri.EscapeDataString(username)}/{kind}", cancellationToken);
     }
 
+    public Task<(int Status, string Body)> GetAccountOverviewAsync(string username,
+        CancellationToken cancellationToken = default)
+    {
+        if (username.Length is < 1 or > 64 ||
+            !username.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-'))
+            throw new ArgumentException("Invalid username.", nameof(username));
+        return SendAsync(HttpMethod.Get,
+            "hosting/users/" + Uri.EscapeDataString(username) + "/overview",
+            null, cancellationToken);
+    }
+
     // Reject absolute URLs, path traversal and cross-endpoint ambiguity at the UI boundary.
     public static bool IsAllowedEndpoint(string endpoint)
     {
