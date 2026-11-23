@@ -42,6 +42,29 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
         return await SendAsync(HttpMethod.Get, endpoint, null, cancellationToken);
     }
 
+    /// <summary>
+    /// Call a modern DirectAdmin operation through HostingPanel.Api with the current
+    /// effective identity. Authorization remains entirely with the backend.
+    /// </summary>
+    public async Task<(int Status, string Body)> RequestApiAsync(
+        HttpMethod method, string endpoint, string? json = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsAllowedEndpoint(endpoint))
+            throw new ArgumentException("Only relative modern DirectAdmin API paths are allowed.", nameof(endpoint));
+        if (method != HttpMethod.Get && method != HttpMethod.Post &&
+            method != HttpMethod.Put && method != HttpMethod.Patch &&
+            method != HttpMethod.Delete)
+            throw new ArgumentException("Unsupported HTTP method.", nameof(method));
+        if (json is not null)
+        {
+            using var parsed = JsonDocument.Parse(json);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            return await SendAsync(method, endpoint, content, cancellationToken);
+        }
+        return await SendAsync(method, endpoint, null, cancellationToken);
+    }
+
     private async Task<(int Status, string Body)> SendAsync(HttpMethod method, string endpoint,
         HttpContent? content, CancellationToken cancellationToken)
     {
