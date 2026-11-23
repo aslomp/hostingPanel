@@ -16,6 +16,7 @@ builder.Services.AddScoped<AccessibleDomainsService>();
 builder.Services.AddScoped<ImpersonationService>();
 builder.Services.AddScoped<DnsZoneService>();
 builder.Services.AddScoped<DatabaseManagementService>();
+builder.Services.AddScoped<FileAccessService>();
 builder.Services.AddHttpClient("legacy-directadmin", client =>
 {
     var configured = builder.Configuration["DirectAdmin:BaseUrl"]
