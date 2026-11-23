@@ -74,11 +74,9 @@ public abstract class BackendController : ControllerBase
 
     protected static async Task ForwardToBackendAsync(HttpContext context, IHttpClientFactory clients)
     {
-        if (!TryGetBasic(context, out var auth))
-        {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return;
-        }
+        // Authentication and authorization for official DirectAdmin routes belong
+        // to the backend. In particular, login/logout may not have Basic credentials.
+        // Forward Authorization (of any scheme) and cookies unchanged.
 
         var rawPath = context.Request.Path.Value ?? string.Empty;
         if (!rawPath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase)
@@ -91,7 +89,6 @@ public abstract class BackendController : ControllerBase
 
         using var request = new HttpRequestMessage(
             new HttpMethod(context.Request.Method), rawPath.TrimStart('/') + context.Request.QueryString);
-        request.Headers.Authorization = auth;
         if (context.Request.ContentLength is > 0 || context.Request.Headers.ContainsKey("Transfer-Encoding"))
             request.Content = new StreamContent(context.Request.Body);
 
@@ -99,8 +96,7 @@ public abstract class BackendController : ControllerBase
         // multipart upload headers. Exclude only hop-by-hop transport headers.
         foreach (var (key, values) in context.Request.Headers)
         {
-            if (key.Equals("Authorization", StringComparison.OrdinalIgnoreCase)
-                || key.Equals("Host", StringComparison.OrdinalIgnoreCase)
+            if (key.Equals("Host", StringComparison.OrdinalIgnoreCase)
                 || IsHopByHop(key)
                 || key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
                 continue;
