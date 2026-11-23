@@ -31,24 +31,42 @@ public sealed class DnsZoneService(IHttpClientFactory clients)
         { return new(504,null,"UPSTREAM_TIMEOUT"); }
     }
 
-    public async Task<DnsZoneResult> ReadAsync(string domain, bool adminScope, AuthenticationHeaderValue auth,
+    public async Task<DnsZoneResult> ReadAsync(string domain, AuthenticationHeaderValue auth,
         CancellationToken ct)
     {
         if (!LegacyDomainsAdapter.IsValidDomain(domain)) return new(400, null, "INVALID_DOMAIN");
         try
         {
-            // Endpoint selection is the caller's explicit workflow choice, not a permission probe.
-            using var request = new HttpRequestMessage(HttpMethod.Get,
-                (adminScope ? "CMD_DNS_ADMIN" : "CMD_DNS_CONTROL") +
-                "?domain=" + Uri.EscapeDataString(domain) + "&json=yes&ttl=yes");
-            request.Headers.Authorization = auth;
-            using var response = await clients.CreateClient("legacy-directadmin").SendAsync(request, ct);
-            if (response.StatusCode == HttpStatusCode.Unauthorized) return new(401, null, "UNAUTHORIZED");
-            if (response.StatusCode == HttpStatusCode.Forbidden) return new(403, null, "ACCESS_DENIED");
-            if (response.StatusCode == HttpStatusCode.NotFound) return new(404, null, "ZONE_NOT_FOUND");
-            if (!response.IsSuccessStatusCode) return new(502, null, "UPSTREAM_ERROR");
-            var records = LegacyDnsAdapter.ParseRecords(await response.Content.ReadAsStringAsync(ct));
-            return new(200, records, null);
+            // Discover capabilities from DirectAdmin results, never from locally inferred roles.
+            // Reads can be retried through the alternative legacy interface safely.
+            foreach (var endpoint in new[] { "CMD_DNS_ADMIN", "CMD_DNS_CONTROL" })
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get,
+                    endpoint + "?domain=" + Uri.EscapeDataString(domain) + "&json=yes&ttl=yes");
+                request.Headers.Authorization = auth;
+                using var response = await clients.CreateClient("legacy-directadmin").SendAsync(request, ct);
+                if (response.StatusCode == HttpStatusCode.Unauthorized)
+                    return new(401, null, "UNAUTHORIZED");
+                if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
+                {
+                    if (endpoint == "CMD_DNS_ADMIN") continue;
+                    return new((int)response.StatusCode, null, "ACCESS_DENIED");
+                }
+                if (!response.IsSuccessStatusCode)
+                    return new((int)response.StatusCode, null, "UPSTREAM_ERROR");
+                try
+                {
+                    var records = LegacyDnsAdapter.ParseRecords(
+                        await response.Content.ReadAsStringAsync(ct));
+                    return new(200, records, null);
+                }
+                catch (InvalidOperationException) when (endpoint == "CMD_DNS_ADMIN")
+                {
+                    // Legacy backends sometimes report denial inside HTTP 200.
+                    // A second READ is safe; this is not an authorization decision.
+                }
+            }
+            return new(403, null, "ACCESS_DENIED");
         }
         catch (InvalidOperationException) { return new(403, null, "ACCESS_DENIED"); }
         catch (JsonException) { return new(502, null, "INVALID_LEGACY_RESPONSE"); }
@@ -59,31 +77,38 @@ public sealed class DnsZoneService(IHttpClientFactory clients)
     }
 
     public async Task<DnsChangeResult> ChangeAsync(string domain, DnsChange change,
-        bool adminScope, AuthenticationHeaderValue auth, CancellationToken ct)
+        AuthenticationHeaderValue auth, CancellationToken ct)
     {
         if (!LegacyDomainsAdapter.IsValidDomain(domain) || !LegacyDnsAdapter.Valid(change.Record)
             || change.Action is not ("add" or "edit" or "delete")
             || (change.Action != "add" && (change.Previous is null || !LegacyDnsAdapter.Valid(change.Previous))))
             return new(400, "INVALID_DNS_CHANGE");
 
-        // No mandatory zone read or local conflict/ownership decision before the write.
-        // DirectAdmin is the authoritative source for record existence and write permissions.
         try
         {
             var form = LegacyDnsAdapter.Form(domain, change);
-            using var request = new HttpRequestMessage(HttpMethod.Post,
-                adminScope ? "CMD_API_DNS_ADMIN" : "CMD_API_DNS_CONTROL");
-            request.Headers.Authorization = auth;
-            request.Content = new FormUrlEncodedContent(form);
-            using var response = await clients.CreateClient("legacy-directadmin").SendAsync(request, ct);
-            if (response.StatusCode == HttpStatusCode.Unauthorized) return new(401, "UNAUTHORIZED");
-            if (response.StatusCode == HttpStatusCode.Forbidden) return new(403, "ACCESS_DENIED");
-            if (!response.IsSuccessStatusCode) return new(502, "UPSTREAM_ERROR");
-            var result = await response.Content.ReadAsStringAsync(ct);
-            LegacyDomainsAdapter.AssertMutationSucceeded(result);
-            // A successful backend response is authoritative; a later read may be denied
-            // independently and cannot be made a precondition for this write.
-            return new(200, null);
+            // Only a definitive HTTP denial (403/404) permits a second attempt.
+            // Never replay on timeout, HTTP 200 with legacy error, or ambiguous failure.
+            foreach (var endpoint in new[] { "CMD_API_DNS_ADMIN", "CMD_API_DNS_CONTROL" })
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+                request.Headers.Authorization = auth;
+                request.Content = new FormUrlEncodedContent(form);
+                using var response = await clients.CreateClient("legacy-directadmin").SendAsync(request, ct);
+                if (response.StatusCode == HttpStatusCode.Unauthorized)
+                    return new(401, "UNAUTHORIZED");
+                if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
+                {
+                    if (endpoint == "CMD_API_DNS_ADMIN") continue;
+                    return new((int)response.StatusCode, "ACCESS_DENIED");
+                }
+                if (!response.IsSuccessStatusCode)
+                    return new((int)response.StatusCode, "UPSTREAM_ERROR");
+                var result = await response.Content.ReadAsStringAsync(ct);
+                LegacyDomainsAdapter.AssertMutationSucceeded(result);
+                return new(200, null);
+            }
+            return new(403, "ACCESS_DENIED");
         }
         catch (ArgumentException) { return new(400, "INVALID_DNS_CHANGE"); }
         catch (LegacyApiException) { return new(422, "DIRECTADMIN_REJECTED_OPERATION"); }
