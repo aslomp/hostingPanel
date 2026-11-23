@@ -44,6 +44,36 @@ var checks = new List<(string Description, Action Test)>
         Require(usage["bandwidthBytes"]!["unlimited"]!.GetValue<bool>());
         Require(usage["quotaBytes"]!["limit"]!.GetValue<long>() == 52428800L);
     }),
+    ("Domain fixtures accept only valid xyz1 test domains", () =>
+    {
+        Require(LegacyDomainsAdapter.IsSafeTestDomain("hosting-test.xyz1"));
+        Require(LegacyDomainsAdapter.IsSafeTestDomain("web.demo-01.xyz1"));
+        Require(!LegacyDomainsAdapter.IsSafeTestDomain("example.com"));
+        Require(!LegacyDomainsAdapter.IsSafeTestDomain("bad..xyz1"));
+        Require(!LegacyDomainsAdapter.IsSafeTestDomain("-bad.xyz1"));
+    }),
+    ("Legacy indexed domain list is normalized", () =>
+    {
+        var domains = LegacyDomainsAdapter.ParseDomains("list%5B%5D=web.demo.xyz1&list%5B%5D=hosting-test.xyz1");
+        Require(domains.Count == 2 && domains[0] == "hosting-test.xyz1");
+    }),
+    ("Account domain-keyed response is parsed", () =>
+    {
+        var domains = LegacyDomainsAdapter.ParseDomains(
+            "site-one.xyz1=123%3Aunlimited%3A0%3A3%3A0%3Ano%3Aunlimited%3AON%3AOFF%3AON&site-two.xyz1=42%3A100");
+        Require(domains.SequenceEqual(["site-one.xyz1","site-two.xyz1"]));
+    }),
+    ("Domain JSON fixtures are parsed", () =>
+    {
+        var domains = LegacyDomainsAdapter.ParseDomains("""["hosting-test.xyz1","web.demo.xyz1"]""");
+        Require(domains.Count == 2);
+    }),
+    ("Domain creation preview retains safe fixed form", () =>
+    {
+        var form = LegacyDomainsAdapter.EncodeCreateForm("hosting-test.xyz1", true, true, false);
+        Require(form.Contains("action=create") && form.Contains("domain=hosting-test.xyz1") &&
+                form.Contains("php=ON") && form.Contains("cgi=OFF"));
+    }),
     ("Empty list is valid", () => Require(DirectAdminUsersParser.Parse("[]").Count == 0)),
     ("Legacy error object is rejected", () =>
         Throws<InvalidOperationException>(() => DirectAdminUsersParser.Parse("{\"error\":1,\"text\":\"Access denied\"}"))),
