@@ -6,6 +6,7 @@ using HostingPanel.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<LegacyUserDetailsService>();
+builder.Services.AddScoped<LegacyAccountOverviewService>();
 builder.Services.AddScoped<DomainManagementService>();
 builder.Services.AddHttpClient("legacy-directadmin", client =>
 {
@@ -112,6 +113,25 @@ static async Task<IResult> ReadUserDetail(HttpContext context, string username,
         ? Results.Json(result.Result)
         : Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status);
 }
+
+// HostingPanel business view: available legacy account properties and the assigned package.
+// This is separate from the strict modern /api/users/{username}/config Swagger response.
+app.MapGet("/hosting/users/{username}/overview", async (HttpContext context,
+    string username, LegacyAccountOverviewService service) =>
+{
+    if (!TryGetBasic(context, out var auth))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    if (!LegacyAccountOverviewService.ValidUsername(username))
+        return Results.Json(new { type = "INVALID_USERNAME" }, statusCode: 400);
+    var result = await service.GetAsync(username, auth, context.RequestAborted);
+    return result.Config is null
+        ? Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
+        : Results.Json(new {
+            username, config = result.Config,
+            package = result.Package, packageSettings = result.PackageSettings,
+            packageError = result.Error
+        });
+});
 
 // HostingPanel-specific business routes: not misrepresented as DirectAdmin Swagger routes.
 // Reads current-account domains, or (for authorized admins/resellers) a selected user's domains.
