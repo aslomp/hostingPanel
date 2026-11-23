@@ -12,6 +12,7 @@ builder.Services.AddHttpClient("hosting-api", client =>
 });
 builder.Services.AddSingleton<TicketChannelRegistry>();
 builder.Services.AddScoped<DirectAdminSession>();
+builder.Services.AddScoped<NavigationContextState>();
 builder.Services.AddScoped<TicketLiveMonitor>();
 
 // Support dotnet run in a non-Development environment without requiring dotnet publish.
