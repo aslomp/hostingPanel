@@ -2,8 +2,10 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using HostingPanel.Api.Adapters;
+using HostingPanel.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddScoped<LegacyUserDetailsService>();
 builder.Services.AddHttpClient("legacy-directadmin", client =>
 {
     var configured = builder.Configuration["DirectAdmin:BaseUrl"]
@@ -71,6 +73,28 @@ app.MapGet("/api/search/users", async (HttpContext context, IHttpClientFactory f
     catch (TaskCanceledException) when (!context.RequestAborted.IsCancellationRequested)
     { return Results.Json(new { type = "UPSTREAM_TIMEOUT" }, statusCode: 504); }
 });
+
+// Modern DirectAdmin user detail endpoints backed by a legacy read-only adapter.
+// The strict Swagger validator returns 501 if the old server lacks required fields.
+// This is preferable to plausible-looking but incorrect account state.
+app.MapGet("/api/users/{username}/config", (HttpContext context, string username,
+    LegacyUserDetailsService service) => ReadUserDetail(context, username, "config", service));
+app.MapGet("/api/users/{username}/usage", (HttpContext context, string username,
+    LegacyUserDetailsService service) => ReadUserDetail(context, username, "usage", service));
+
+static async Task<IResult> ReadUserDetail(HttpContext context, string username,
+    string kind, LegacyUserDetailsService service)
+{
+    if (!TryGetBasic(context, out var auth))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    if (username.Length is < 1 or > 64 || !username.All(c =>
+        char.IsAsciiLetterOrDigit(c) || c is '_' or '-'))
+        return Results.Json(new { type = "BAD_REQUEST" }, statusCode: 400);
+    var result = await service.GetAsync(username, kind, auth, context.RequestAborted);
+    return result.Result is not null
+        ? Results.Json(result.Result)
+        : Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status);
+}
 
 // Do not blindly proxy modern routes to an older DirectAdmin installation:
 // that violates the pinned Swagger contract.
