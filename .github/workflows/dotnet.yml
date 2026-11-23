@@ -86,3 +86,8 @@ jobs:
           done
           curl -fsS http://127.0.0.1:5090/openapi/directadmin.json -o /tmp/hosted-swagger.json
           cmp src/HostingPanel.Api/spec/directadmin.swagger.json /tmp/hosted-swagger.json
+          for endpoint in /api/users/demo/config /api/users/demo/usage; do
+            status=$(curl -s -o /tmp/response -w '%{http_code}' "http://127.0.0.1:5090$endpoint")
+            test "$status" = "401"
+            grep -q 'UNAUTHORIZED' /tmp/response
+          done
