@@ -101,6 +101,46 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
         !string.IsNullOrWhiteSpace(username) && username.Length <= 64 &&
         username.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
 
+    public Task<(int Status, string Body)> GetDatabasesAsync(
+        CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Get, "hosting/databases", null, ct);
+
+    public Task<(int Status, string Body)> GetDatabaseUsersAsync(
+        string database, CancellationToken ct = default)
+    {
+        if (!ValidDatabaseName(database))
+            throw new ArgumentException("Invalid database.", nameof(database));
+        return SendAsync(HttpMethod.Get,
+            "hosting/databases/" + Uri.EscapeDataString(database) + "/users", null, ct);
+    }
+
+    public async Task<(int Status, string Body)> CreateDatabaseAsync(
+        string database, string dbUser, string password, CancellationToken ct = default)
+    {
+        if (!ValidDatabaseName(database) || !ValidDatabaseName(dbUser) ||
+            string.IsNullOrWhiteSpace(password))
+            throw new ArgumentException("Invalid database creation request.");
+        using var body = new StringContent(
+            JsonSerializer.Serialize(new { database, dbUser, password }),
+            Encoding.UTF8, "application/json");
+        return await SendAsync(HttpMethod.Post, "hosting/databases", body, ct);
+    }
+
+    public async Task<(int Status, string Body)> DeleteDatabaseAsync(
+        string database, string confirmation, CancellationToken ct = default)
+    {
+        if (!ValidDatabaseName(database) || database != confirmation)
+            throw new ArgumentException("The confirmation must match the database name.");
+        using var body = new StringContent(JsonSerializer.Serialize(new { confirmation }),
+            Encoding.UTF8, "application/json");
+        return await SendAsync(HttpMethod.Delete,
+            "hosting/databases/" + Uri.EscapeDataString(database), body, ct);
+    }
+
+    private static bool ValidDatabaseName(string? name) =>
+        !string.IsNullOrWhiteSpace(name) && name.Length <= 64 &&
+        name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_');
+
     public Task<(int Status, string Body)> GetAccessibleAccountsAsync(
         CancellationToken cancellationToken = default) =>
         SendAsync(HttpMethod.Get, "hosting/accounts", null, cancellationToken);
