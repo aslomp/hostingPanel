@@ -7,12 +7,12 @@ else
 {
     <section class="card">
         <h2>ModSecurity</h2>
-        <label>Configuratieoverzicht</label><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@modsecurity</pre>
-        <label>Auditlogs — samenvatting</label><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@audit</pre>
+        <label>Configuratieoverzicht</label><JsonOverview Json="@modsecurity" />
+        <label>Auditlogs — samenvatting</label><JsonOverview Json="@audit" />
     </section>
     <section class="card">
         <h2>ClamAV</h2>
-        <p>Actieve scanprocessen</p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@clamav</pre>
+        <p>Actieve scanprocessen</p><JsonOverview Json="@clamav" />
         <h2>Scan starten</h2>
         <p>Gebruik een pad dat de DirectAdmin-backend mag scannen. De backend valideert het pad en beslist over toegang.</p>
         <label>Pad op de server</label><input @bind="scanPath" placeholder="/home/..." />
@@ -27,7 +27,7 @@ else
         <h2>ModSecurity voor domein</h2>
         <label>Hostnaam</label><input @bind="hostname" placeholder="example.com" />
         <button disabled="@busy" @onclick="LoadHostConfig">Configuratie ophalen</button>
-        <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@hostConfig</pre>
+        <JsonOverview Json="@hostConfig" />
         <label>Nieuwe domeinconfiguratie (JSON)</label>
         <textarea rows="6" @bind="configJson" spellcheck="false"></textarea>
         <p>Vereist velden <code>engineEnabled</code> en <code>disabledRules</code>.</p>
