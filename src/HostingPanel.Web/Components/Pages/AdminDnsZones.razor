@@ -1,0 +1,121 @@
+@page "/dns-zones"
+@using System.Text.Json
+@inject DirectAdminSession Session
+
+<PageTitle>DNS Beheer — HostingPanel</PageTitle>
+<div class="page-header">
+    <div>
+        <div class="eyebrow">Serverbeheer / DNS</div>
+        <h1>DNS Beheer</h1>
+        <p>Alle DNS-zones op de DirectAdmin-server, onafhankelijk van de hostinggebruiker.</p>
+    </div>
+    <button @onclick="Reload" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
+</div>
+@if (!Session.Connected)
+{
+    <section class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</section>
+}
+else
+{
+    <section class="card">
+        <label for="dnsSearch">Domeinen filteren</label>
+        <input id="dnsSearch" @bind="search" @bind:event="oninput" placeholder="Zoek op domeinnaam" />
+        <div class="domain-options">
+            <label for="localData">Lokale gegevens</label>
+            <select id="localData" @bind="localDataFilter">
+                <option value="all">Beide</option><option value="yes">Ingeschakeld</option>
+                <option value="no">Uitgeschakeld</option>
+            </select>
+            <label for="localMail">Lokale mail</label>
+            <select id="localMail" @bind="localMailFilter">
+                <option value="all">Beide</option><option value="yes">Ingeschakeld</option>
+                <option value="no">Uitgeschakeld</option>
+            </select>
+        </div>
+        @if (error is not null) { <p class="error" role="alert">@error</p> }
+        @if (loading) { <p role="status">DNS-zones ophalen…</p> }
+        @if (zones is not null)
+        {
+            <p>@Visible.Count zone(s) in het huidige resultaat.</p>
+            <table>
+                <thead><tr><th>Domein</th><th>Lokale gegevens</th><th>Lokale mail</th></tr></thead>
+                <tbody>
+                @foreach (var zone in Visible)
+                {
+                    <tr>
+                        <td><a href="@($"/domains/{Uri.EscapeDataString(zone.Domain)}/dns")">@zone.Domain</a></td>
+                        <td>@Display(zone.LocalData)</td>
+                        <td>@Display(zone.LocalMail)</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+            <div class="domain-options">
+                <button disabled="@(loading || page == 1)" @onclick="Previous">Vorige pagina</button>
+                <span>Pagina @page</span>
+                <button disabled="@(loading || zones.Count == 0)" @onclick="Next">Volgende pagina</button>
+            </div>
+        }
+    </section>
+}
+@code {
+    private sealed record Zone(string Domain, bool? LocalData, bool? LocalMail);
+    private List<Zone>? zones;
+    private string search = "", localDataFilter = "all", localMailFilter = "all";
+    private string? error;
+    private int page = 1;
+    private bool loading;
+
+    private IReadOnlyList<Zone> Visible => (zones ?? [])
+        .Where(z => z.Domain.Contains(search, StringComparison.OrdinalIgnoreCase) &&
+            Matches(z.LocalData, localDataFilter) && Matches(z.LocalMail, localMailFilter))
+        .ToArray();
+
+    private static bool Matches(bool? value, string filter) =>
+        filter == "all" || (value is not null && (filter == "yes") == value.Value);
+
+    private static string Display(bool? value) =>
+        value switch { true => "Ja", false => "Nee", null => "Niet beschikbaar" };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.Connected) await Reload();
+    }
+    private async Task Previous() { if (page > 1) { page--; await Reload(); } }
+    private async Task Next() { page++; await Reload(); }
+
+    private async Task Reload()
+    {
+        if (loading || !Session.Connected) return;
+        loading = true;
+        error = null;
+        try
+        {
+            var (status, body) = await Session.GetAdminDnsZonesAsync(page);
+            if (status != 200)
+            {
+                error = status == 403 ? "Alleen een administrator kan de serverbrede DNS-zones ophalen."
+                    : $"DNS-zones niet beschikbaar (HTTP {status}).";
+                zones = null;
+                return;
+            }
+            using var doc = JsonDocument.Parse(body);
+            zones = doc.RootElement.GetProperty("zones").EnumerateArray()
+                .Select(x => new Zone(x.GetProperty("domain").GetString() ?? "",
+                    ReadFlag(x, "localData"), ReadFlag(x, "localMail"))).ToList();
+        }
+        catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException)
+        { error = e.Message; zones = null; }
+        finally { loading = false; }
+    }
+    private static bool? ReadFlag(JsonElement element, string key)
+    {
+        if (!element.TryGetProperty(key, out var prop)) return null;
+        return prop.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => null
+        };
+    }
+}
