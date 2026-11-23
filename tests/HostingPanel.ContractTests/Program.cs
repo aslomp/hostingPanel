@@ -127,6 +127,44 @@ var checks = new List<(string Description, Action Test)>
         Require(LegacyAccountOverviewService.ValidUsername("customer_01"));
         Require(!LegacyAccountOverviewService.ValidUsername("../root"));
     }),
+    ("DirectAdmin DNS JSON zone parses multiple record types", () =>
+    {
+        var entries = LegacyDnsAdapter.ParseRecords("""{"records":[{"type":"A","index":"www","value":"192.0.2.3","ttl":300},{"type":"TXT","index":"_acme-challenge","value":"test-token"}]}""");
+        Require(entries.Count == 2 && entries[0].Name == "www" && entries[0].Ttl == "300");
+        Require(entries[1].Type == "TXT");
+    }),
+    ("DNS add form uses only exact DNS fields", () =>
+    {
+        var form = LegacyDnsAdapter.Form("hosting-test.xyz1",
+            new DnsChange("add", new DnsRecord("AAAA","www","2001:db8::1","300")));
+        Require(form["action"] == "add" && form["type"] == "AAAA");
+        Require(!form.Keys.Any(k => k.EndsWith("recs0")));
+    }),
+    ("DNS delete selects one exact value", () =>
+    {
+        var previous = new DnsRecord("TXT","_acme-challenge","token=&value=other");
+        var form = LegacyDnsAdapter.Form("hosting-test.xyz1",
+            new DnsChange("delete",previous,previous));
+        Require(form["action"] == "select");
+        Require(form["txtrecs0"] == "name=_acme-challenge&value=token=&value=other");
+        Require(!form.ContainsKey("value"));
+    }),
+    ("DNS edits require existing record and observe exact delta", () =>
+    {
+        var old = new DnsRecord("A","www","192.0.2.1");
+        var newer = new DnsRecord("A","www","192.0.2.2");
+        var form = LegacyDnsAdapter.Form("hosting-test.xyz1",new DnsChange("edit",newer,old));
+        Require(form["action"] == "edit" && form["arecs0"] == "name=www&value=192.0.2.1");
+        Require(LegacyDnsAdapter.Applied([old],[newer],new DnsChange("edit",newer,old)));
+        Require(!LegacyDnsAdapter.Applied([old],[old],new DnsChange("edit",newer,old)));
+    }),
+    ("DNS validation rejects malformed record addresses and TTLs", () =>
+    {
+        Require(!LegacyDnsAdapter.Valid(new DnsRecord("A","www","not-an-ip")));
+        Require(!LegacyDnsAdapter.Valid(new DnsRecord("A","www","192.0.2.1","2")));
+        Require(!LegacyDnsAdapter.Valid(new DnsRecord("TXT","name&value=bad","hello")));
+        Require(LegacyDnsAdapter.Valid(new DnsRecord("MX","@","10 mail.example.com.")));
+    }),
     ("Empty list is valid", () => Require(DirectAdminUsersParser.Parse("[]").Count == 0)),
     ("Legacy error object is rejected", () =>
         Throws<InvalidOperationException>(() => DirectAdminUsersParser.Parse("{\"error\":1,\"text\":\"Access denied\"}"))),
