@@ -36,6 +36,7 @@ public sealed class HostingController(IHostingBackend backend) : BackendControll
                 : Results.Json(new {
                     items = result.Items, domains = result.Items.Select(x => x.Domain).ToArray(),
                     warning = result.Warning
+                });
     }
 
     [HttpGet("/hosting/impersonation/check")]
@@ -68,6 +69,7 @@ public sealed class HostingController(IHostingBackend backend) : BackendControll
                     username, config = result.Config,
                     package = result.Package, packageSettings = result.PackageSettings,
                     packageError = result.Error, usage = result.Usage, usageError = result.UsageError
+                });
     }
 
     [HttpGet("/hosting/databases")]
@@ -156,6 +158,7 @@ public sealed class HostingController(IHostingBackend backend) : BackendControll
                 method = "POST",
                 form = LegacyDomainsAdapter.EncodeCreateForm(input.Domain.ToLowerInvariant(), input.Php, input.Ssl, input.Cgi),
                 executed = false
+            });
     }
 
     [HttpPost("/hosting/domains/execute")]
