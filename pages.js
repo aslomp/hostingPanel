@@ -238,7 +238,7 @@ function flowUsersPage(){
  if(flowView==="overview")return flowLayout(current,"Quota, services en pakketrechten.",flowBtn("＋ Nieuw pakket","create",true),flowTable(["Pakket","Opslag","Dataverkeer","Domeinen","Mailaccounts"],rows));
  return flowLayout(flowView==="create"?"Nieuw pakket":"Pakket: "+flowItem,"Stel resources en toegestane diensten in.",flowBtn("← Pakketten","back"),flowTabs(["Limieten","Diensten"])+flowForm("Pakketgegevens",flowTab==="Diensten"?[check("FTP"),check("DNS"),check("E-mail"),check("SSL"),check("Cronjobs"),check("Back-ups")]:[F("Pakketnaam","text",flowItem),F("Opslag (MB)","number","5120"),F("Dataverkeer (GB)","number","50"),F("Maximaal aantal domeinen","number","5"),F("E-mailaccounts","number","10"),F("Databases","number","5")]));
  }
- if(isNew)return flowLayout(current,"Accountaanmaak met hostingconfiguratie en autorisaties.",flowBtn("← Gebruikersoverzicht","back"),flowTabs(["Account","Hosting","Rechten"])+flowForm("Nieuwe accountgegevens",flowFieldsForUser(["Account","Hosting","Rechten"].includes(flowTab)?flowTab:"Account","")));
+ if(isNew)return flowLayout(current,"Accountaanmaak met hostingconfiguratie en autorisaties.",flowBtn("← Gebruikersoverzicht","users-back"),flowTabs(["Account","Hosting","Rechten"])+flowForm("Nieuwe accountgegevens",flowFieldsForUser(["Account","Hosting","Rechten"].includes(flowTab)?flowTab:"Account","")));
  if(flowView==="detail"){
  const user=flowUsers.find(r=>r[0]===flowItem)||flowUsers[0];
  const active=["Overzicht","Account","Hosting","Rechten"].includes(flowTab)?flowTab:"Overzicht";
@@ -312,11 +312,12 @@ document.addEventListener("click",function(e){
  const action=button.dataset.flow;
  if(action==="simulate"){toast("Dit is uitsluitend een UI-actie; er is niets gewijzigd.");return;}
  if(action==="packages"){go("Beheer gebruikers pakketten");return;}
+ if(action==="users-back"){go("Toon Alle Gebruikers");return;}
  if(action.startsWith("dns:")){go("DNS Beheer");flowView="detail";flowItem=action.slice(4);draw();return;}
  if(action==="back"){flowView="overview";flowItem="";flowTab="";}
  else if(action==="zone-back"){flowView="detail";flowItem=flowItem.split("|")[0];flowTab="Records";}
- else if(action==="create"||action==="record-create"){if(action==="record-create"){flowItem=flowItem+"|new";}flowView=action;flowTab="";}
- else if(action.startsWith("open:")){if(flowGroup()==="dns"&&flowView==="detail"){flowView="record-detail";flowItem=flowItem+"|"+action.slice(5);}else{flowView="detail";flowItem=action.slice(5);}flowTab="";}
+ else if(action==="create"||action==="record-create"){if(action==="record-create"){flowItem=flowItem.split("|")[0]+"|new";}flowView=action;flowTab="";}
+ else if(action.startsWith("open:")){if(flowGroup()==="dns"&&flowView==="detail"){flowView="record-detail";flowItem=flowItem.split("|")[0]+"|"+action.slice(5);}else{flowView="detail";flowItem=action.slice(5);}flowTab="";}
  draw();
 });
 document.addEventListener("click",function(e){
