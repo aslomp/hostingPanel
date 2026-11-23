@@ -1,0 +1,51 @@
+@page "/sessions"
+@inject DirectAdminSession Session
+<PageTitle>Sessies — HostingPanel</PageTitle>
+<div class="page-header"><div><div class="eyebrow">Accountbeheer</div><h1>Sessies</h1><p>Huidige sessie, actieve sessies en sessiebeheer uit DirectAdmin.</p></div><button disabled="@busy" @onclick="Load">Vernieuwen</button></div>
+@if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
+else
+{
+    <section class="card"><h2>Huidige sessie</h2><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@current</pre></section>
+    <section class="card"><h2>Actieve sessies</h2><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@all</pre></section>
+    <section class="card">
+        <h2>Andere sessies beëindigen</h2>
+        <p>De backend bepaalt welke sessies mogen worden beëindigd. De huidige sessie blijft bij deze operatie bestaan.</p>
+        <label>Typ DESTROY om te bevestigen</label><input @bind="confirmation" />
+        <button class="primary" disabled="@(busy || confirmation != "DESTROY")" @onclick="DestroyOthers">Alle andere sessies beëindigen</button>
+        @if (feedback is not null) { <p role="status">@feedback</p> }
+    </section>
+    @if (busy) { <p role="status">Verwerken…</p> }
+}
+@code {
+    private string current = "", all = "", confirmation = "";
+    private string? feedback;
+    private bool busy;
+    protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true;
+        try
+        {
+            var (cs, cb) = await Session.GetRawAsync("api/session");
+            current = $"HTTP {cs}\n{cb}";
+            var (ls, lb) = await Session.GetRawAsync("api/sessions");
+            all = $"HTTP {ls}\n{lb}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }
+        finally { busy = false; }
+    }
+    private async Task DestroyOthers()
+    {
+        if (busy || confirmation != "DESTROY") return;
+        busy = true; feedback = null;
+        try
+        {
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post, "api/sessions/destroy-all-other");
+            feedback = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }
+        finally { busy = false; confirmation = ""; }
+        if (feedback is not null) await Load();
+    }
+}
