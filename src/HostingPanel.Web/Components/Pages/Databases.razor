@@ -6,9 +6,9 @@
 <div class="page-header">
   <div><div class="eyebrow">Accountbeheer / Databases</div>
     <h1>Databasebeheer</h1>
-    <p>Databases die DirectAdmin beschikbaar stelt aan de effectieve gebruiker.</p>
+    <p>Databases van jouw account en alle backend-toegankelijke onderliggende accounts.</p>
   </div>
-  <button disabled="@loading" @onclick="Load">Vernieuwen</button>
+  <button disabled="@(loading || overallLoading)" @onclick="RefreshAll">Vernieuwen</button>
 </div>
 @if (!Session.Connected)
 {
@@ -17,7 +17,37 @@
 else
 {
   <section class="card">
-    <h2>Databases</h2>
+    <h2>Alle toegankelijke databases</h2>
+    <p>Inclusief databases van onderliggende accounts, voor zover DirectAdmin die toegankelijk maakt.</p>
+    <button disabled="@overallLoading" @onclick="LoadOverall">Overzicht vernieuwen</button>
+    @if (overallLoading) { <p role="status">Databases uit toegankelijke accounts ophalen…</p> }
+    @if (overallError is not null) { <p class="error" role="alert">@overallError</p> }
+    @if (overall is not null)
+    {
+      <p>@overall.Count databases gevonden. @(overallWarnings.Count == 0 ? "Volledige inventarisatie." : $"Onvolledig: {overallWarnings.Count} accounts konden niet worden uitgelezen.")</p>
+      <label for="overallDbFilter">Zoek op eigenaar of database</label>
+      <input id="overallDbFilter" @bind="overallSearch" @bind:event="oninput" />
+      <table><thead><tr><th>Eigenaar</th><th>Database</th><th>Tabellen</th><th>Gebruikers</th><th>Grootte (bytes)</th><th>Definer issues</th></tr></thead><tbody>
+        @foreach (var item in overall.Where(x => x.Owner.Contains(overallSearch, StringComparison.OrdinalIgnoreCase) || x.Name.Contains(overallSearch, StringComparison.OrdinalIgnoreCase)))
+        {
+          <tr>
+            <td>@item.Owner</td><td>@item.Name</td>
+            <td>@item.TableCount</td><td>@item.UserCount</td>
+            <td>@item.SizeBytes</td><td>@item.DefinerIssues</td>
+          </tr>
+        }
+      </tbody></table>
+      @if (overall.Count == 0) { <p>De backend heeft geen databases teruggegeven voor de raadpleegbare accounts.</p> }
+      @foreach (var warning in overallWarnings)
+      {
+        <p class="error">@warning</p>
+      }
+    }
+  </section>
+  <section class="card">
+    <h2>Databases van de huidige sessie</h2>
+    <p>Beheer databases in de huidige sessie. Voor databases van een ander account gebruik je de backend-ondersteunde sessiewissel.</p>
+
     @if (error is not null) { <p role="alert" class="error">@error</p> }
     @if (loading) { <p role="status">Databases laden…</p> }
     @if (databases is not null)
@@ -32,30 +62,6 @@ else
         }
       </tbody></table>
       @if(databases.Count==0) { <p>Geen databases gevonden.</p> }
-    }
-  </section>
-  <section class="card">
-    <h2>Alle toegankelijke databases (overall)</h2>
-    <p>De backend bepaalt welke gedelegeerde accounts benaderbaar zijn. Resultaten van geweigerde accounts worden niet als lege databases weergegeven.</p>
-    <button disabled="@overallLoading" @onclick="LoadOverall">Alle accounts doorzoeken</button>
-    @if (overallError is not null) { <p class="error" role="alert">@overallError</p> }
-    @if (overall is not null)
-    {
-      <p>@overall.Count databases gevonden. @(overallWarnings.Count == 0 ? "Volledige inventarisatie." : $"Onvolledig: {overallWarnings.Count} accounts konden niet worden uitgelezen.")</p>
-      <table><thead><tr><th>Eigenaar</th><th>Database</th><th>Tabellen</th><th>Gebruikers</th><th>Grootte (bytes)</th><th>Definer issues</th></tr></thead><tbody>
-        @foreach (var item in overall)
-        {
-          <tr>
-            <td>@item.Owner</td><td>@item.Name</td>
-            <td>@item.TableCount</td><td>@item.UserCount</td>
-            <td>@item.SizeBytes</td><td>@item.DefinerIssues</td>
-          </tr>
-        }
-      </tbody></table>
-      @foreach (var warning in overallWarnings)
-      {
-        <p class="error">@warning</p>
-      }
     }
   </section>
   <section class="card">
@@ -80,13 +86,19 @@ else
   private string? overallError;
   private bool overallLoading;
   private List<string>? databases;
-  private string search = "";
+  private string search = "", overallSearch = "";
   private string newDatabase = "app", newUser = "app", newPassword = "";
   private string? error, createMessage;
   private bool loading, creating;
   protected override async Task OnInitializedAsync()
   {
-    if (Session.Connected) await Load();
+    if (Session.Connected) await RefreshAll();
+  }
+  private async Task RefreshAll()
+  {
+    if (!Session.Connected) return;
+    await LoadOverall();
+    await Load();
   }
   private async Task Load()
   {
@@ -156,7 +168,7 @@ else
       if(status==200)
       {
         newPassword="";
-        await Load();
+        await RefreshAll();
       }
     }
     catch(Exception e) when(e is HttpRequestException or ArgumentException or InvalidOperationException)
