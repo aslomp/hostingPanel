@@ -216,6 +216,39 @@ var checks = new List<(string Description, Action Test)>
         Throws<FormatException>(() => LegacyAccountListParser.Parse("""["valid","../invalid"]"""))),
     ("Backend is the sole source of admin reseller and enduser scopes", ScopeContractTests.Run),
     ("DNS forwards without role selection or read-gated writes", DnsForwardingContractTests.Run),
+    ("Database legacy list parses URL encoded and JSON fixtures", () =>
+    {
+        var form=LegacyDatabaseAdapter.ParseNames("list%5B%5D=demo_app&list%5B%5D=demo_test");
+        Require(form.SequenceEqual(["demo_app","demo_test"]));
+        var json=LegacyDatabaseAdapter.ParseNames("""["demo_app","demo_test"]""");
+        Require(json.SequenceEqual(form));
+    }),
+    ("Database create never serializes unrelated fields", () =>
+    {
+        var form=LegacyDatabaseAdapter.CreateForm("app","app","sample-password");
+        Require(form["action"]=="create" && form["name"]=="app" &&
+            form["user"]=="app" && form["passwd"]==form["passwd2"]);
+        Require(form.Count==5);
+    }),
+    ("Database delete selects only named database", () =>
+    {
+        var form=LegacyDatabaseAdapter.DeleteForm("demo_app");
+        Require(form["action"]=="delete" && form["select0"]=="demo_app");
+        Require(form.Count==2);
+        Throws<ArgumentException>(()=>LegacyDatabaseAdapter.DeleteForm("../../mysql"));
+    }),
+    ("Database backend errors cannot be treated as success", () =>
+    {
+        LegacyDatabaseAdapter.RequireSuccess("error=0&text=done");
+        Throws<LegacyApiException>(()=>LegacyDatabaseAdapter.RequireSuccess("error=1&text=denied"));
+        Throws<FormatException>(()=>LegacyDatabaseAdapter.RequireSuccess("text=done"));
+    }),
+    ("Database delete requires disappearance from live list", () =>
+    {
+        Require(LegacyDatabaseAdapter.Contains(["demo_app","demo_other"],
+            ["demo_other"],"demo_app",false));
+        Require(!LegacyDatabaseAdapter.Contains(["demo_app"],["demo_app"],"demo_app",false));
+    }),
     ("Empty list is valid", () => Require(DirectAdminUsersParser.Parse("[]").Count == 0)),
     ("Legacy error object is rejected", () =>
         Throws<InvalidOperationException>(() => DirectAdminUsersParser.Parse("{\"error\":1,\"text\":\"Access denied\"}"))),
