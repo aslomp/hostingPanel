@@ -14,10 +14,15 @@ public static class LegacyUsersAdapter
         var root = document.RootElement;
         if (root.ValueKind == JsonValueKind.Object)
         {
+            if (!root.TryGetProperty("error", out var error) ||
+                !(error.ValueKind == JsonValueKind.Number && error.TryGetInt32(out var number) && number == 1) &&
+                !(error.ValueKind == JsonValueKind.String && error.GetString() == "1") &&
+                !(error.ValueKind == JsonValueKind.True))
+                throw new FormatException("Unexpected legacy user-list object.");
             var message = root.TryGetProperty("text", out var text) &&
                 text.ValueKind == JsonValueKind.String ? text.GetString() : null;
             throw new LegacyApiException(string.IsNullOrWhiteSpace(message)
-                ? "Legacy DirectAdmin API returned an error object." : message);
+                ? "Legacy DirectAdmin API returned an error." : message);
         }
 
         if (root.ValueKind != JsonValueKind.Array)
