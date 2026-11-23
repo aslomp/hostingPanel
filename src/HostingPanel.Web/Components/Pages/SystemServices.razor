@@ -17,7 +17,7 @@ else
         <label>Servicenaam</label>
         <input @bind="service" placeholder="bijvoorbeeld nginx" />
         <button disabled="@busy" @onclick="Details">Details en log ophalen</button>
-        <JsonOverview Json="@details" />
+        <h3>Servicegegevens</h3><JsonOverview Json="@details" /><h3>Servicelog</h3><JsonOverview Json="@serviceLog" />
     </section>
     <section class="card">
         <h2>Service beheren</h2>
@@ -39,7 +39,7 @@ else
 @code {
     private string service = "", action = "restart", confirmation = "";
     private string watchdog = "true", watchdogConfirmation = "";
-    private string services = "", details = "";
+    private string services = "", details = "", serviceLog = "";
     private string? error, outcome;
     private bool busy;
     protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
@@ -69,7 +69,8 @@ else
             var p = Uri.EscapeDataString(service);
             var (s, b) = await Session.GetRawAsync($"api/system-services/service/{p}");
             var (ls, lb) = await Session.GetRawAsync($"api/system-services/service/{p}/log");
-            details = $"Details HTTP {s}\n{b}\n\nLog HTTP {ls}\n{lb}";
+            details = $"HTTP {s}\n{b}";
+            serviceLog = $"HTTP {ls}\n{lb}";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         { error = ex.Message; }
