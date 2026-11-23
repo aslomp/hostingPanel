@@ -47,10 +47,12 @@ var checks = new List<(string Description, Action Test)>
     ("Domain validator supports normal and xyz1 domains", () =>
     {
         Require(LegacyDomainsAdapter.IsValidDomain("hosting-test.xyz1"));
-        Require(LegacyDomainsAdapter.IsSafeTestDomain("web.demo-01.xyz1"));
-        Require(!LegacyDomainsAdapter.IsSafeTestDomain("example.com"));
-        Require(!LegacyDomainsAdapter.IsSafeTestDomain("bad..xyz1"));
-        Require(!LegacyDomainsAdapter.IsSafeTestDomain("-bad.xyz1"));
+        Require(LegacyDomainsAdapter.IsValidDomain("web.demo-01.xyz1"));
+        Require(LegacyDomainsAdapter.IsValidDomain("example.com"));
+        Require(LegacyDomainsAdapter.IsValidDomain("customer.co.uk"));
+        Require(!LegacyDomainsAdapter.IsValidDomain("bad..xyz1"));
+        Require(!LegacyDomainsAdapter.IsValidDomain("-bad.xyz1"));
+        Require(!LegacyDomainsAdapter.IsValidDomain("not-a-domain"));
     }),
     ("Legacy indexed domain list is normalized", () =>
     {
