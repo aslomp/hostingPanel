@@ -9,6 +9,8 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <Compile Include="../../src/HostingPanel.Web/Services/DirectAdminUsersParser.cs" Link="DirectAdminUsersParser.cs" />
     <Compile Include="../../src/HostingPanel.Web/Services/DirectAdminSession.cs" Link="DirectAdminSession.cs" />
+    <Compile Include="../../src/HostingPanel.Web/Realtime/TicketRealtime.cs" Link="TicketRealtime.cs" />
+    <Compile Include="../../src/HostingPanel.Api/Services/TicketService.cs" Link="TicketService.cs" />
     <Compile Include="../../src/HostingPanel.Api/Adapters/LegacyUsersAdapter.cs" Link="LegacyUsersAdapter.cs" />
     <Compile Include="../../src/HostingPanel.Api/Adapters/LegacyDatabaseAdapter.cs" Link="LegacyDatabaseAdapter.cs" />
     <Compile Include="../../src/HostingPanel.Api/Services/DatabaseManagementService.cs" Link="DatabaseManagementService.cs" />
