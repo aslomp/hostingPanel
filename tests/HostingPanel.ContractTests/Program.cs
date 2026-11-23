@@ -93,6 +93,26 @@ var checks = new List<(string Description, Action Test)>
         Throws<FormatException>(() => LegacyDomainsAdapter.AssertMutationSucceeded("text=Unknown"));
         Throws<FormatException>(() => LegacyDomainsAdapter.AssertMutationSucceeded(""));
     }),
+    ("Domain detail view parses legacy fields", () =>
+    {
+        var settings = LegacyDomainDetailsAdapter.Parse(
+            "domain=hosting-test.xyz1&username=demo&php=ON&ssl=OFF&quota=unlimited&ip=192.0.2.1");
+        Require(settings["domain"] == "hosting-test.xyz1" && settings["php"] == "ON");
+        Require(settings["quota"] == "unlimited");
+    }),
+    ("Domain detail update only changes selected field", () =>
+    {
+        var payload = LegacyDomainDetailsAdapter.EncodeSetting("hosting-test.xyz1", "ssl", "ON");
+        Require(payload.Contains("only_affect=ssl") && payload.Contains("ssl=ON")
+            && !payload.Contains("&php=") && !payload.Contains("&cgi="));
+    }),
+    ("Domain detail prevents unrelated writes", () =>
+    {
+        Require(!LegacyDomainDetailsAdapter.IsAllowedValue("password", "anything"));
+        Require(!LegacyDomainDetailsAdapter.IsAllowedValue("quota", "-1"));
+        Require(!LegacyDomainDetailsAdapter.IsAllowedValue("php", "ignored"));
+        Require(LegacyDomainDetailsAdapter.IsAllowedValue("bandwidth", "unlimited"));
+    }),
     ("Empty list is valid", () => Require(DirectAdminUsersParser.Parse("[]").Count == 0)),
     ("Legacy error object is rejected", () =>
         Throws<InvalidOperationException>(() => DirectAdminUsersParser.Parse("{\"error\":1,\"text\":\"Access denied\"}"))),
