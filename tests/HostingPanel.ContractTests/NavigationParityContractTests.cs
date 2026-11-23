@@ -59,6 +59,14 @@ public static class NavigationParityContractTests
                     "Unmapped prototype-only menu item: " + destination);
         }
 
+        Require(navigation.Contains("private static readonly NavSection[] AdminSections", StringComparison.Ordinal) &&
+                navigation.Contains("private static readonly NavSection[] UserSections", StringComparison.Ordinal) &&
+                navigation.Contains("navigationContext == \"user\" ? UserSections : AdminSections",
+                    StringComparison.Ordinal),
+            "Administrator and user navigation must be separate presentation contexts.");
+        Require(navigation.Contains("SetContext", StringComparison.Ordinal) &&
+                navigation.Contains("aria-pressed", StringComparison.Ordinal),
+            "Manual navigation context selector is required.");
         Require(!navigation.Contains("Session.Role", StringComparison.Ordinal) &&
                 !navigation.Contains("isAdmin", StringComparison.Ordinal),
             "Navigation must not perform local account-role authorization");
