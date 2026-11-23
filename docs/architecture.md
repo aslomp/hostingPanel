@@ -18,15 +18,15 @@
 - GET /api/users/{username}/config — read-only translation of CMD_API_SHOW_USER_CONFIG, strict required-field check against pinned web.userConfig schema.
 - GET /api/users/{username}/usage — read-only translation of CMD_API_SHOW_USER_USAGE with limits from CMD_API_SHOW_USER_CONFIG; legacy MiB is converted into integer bytes.
 - These two details routes return **501 LEGACY_FIELDS_UNAVAILABLE** if the legacy server does not provide all required fields. No placeholder values are invented. The Blazor detail view explains that limitation.
-- Other /api/* routes — **501 NOT_IMPLEMENTED** instead of forwarding incompatible requests to legacy endpoints.
+- Other /api/* routes — forwarded with the original method, query and request body to the configured DirectAdmin origin; DirectAdmin determines support and authorization. No synthetic local 501.
 - Existing Blazor dashboard and users page use modern endpoint.
 - Account modification, user details, DNS, hosting packages, TLS, databases, etc. are **not implemented yet**.
 
 ## Compatibility invariants
 
 1. Each route's HTTP method, JSON field names, response codes, permission scopes and validation must match the pinned modern Swagger contract.
-2. An endpoint is advertised by the pinned full specification even before our implementation is available; use explicit 501 for unimplemented operations. Track implementation coverage separately.
-3. Do not return fake responses or silently proxy a modern endpoint to the old DirectAdmin.
+2. An endpoint is advertised by the pinned full specification even before a local adapter exists; unimplemented routes are forwarded to DirectAdmin, whose response is authoritative. Track local adapter coverage separately.
+3. Never invent a successful modern response. Forwarding unknown /api/* operations is an explicit compatibility fallback; it does not guarantee matching modern and legacy response schemas.
 4. The legacy adapter must preserve upstream authorization boundaries; never call as a shared administrator.
 5. Do not log login keys or embed them in static assets or repository.
 6. Before publishing publicly, implement authentication/rate limiting/audit logging, restrict upstream egress and validate operations against legacy production behavior.
@@ -64,26 +64,21 @@ De gepinde moderne DirectAdmin Swagger heeft **geen algemene create/update/delet
 Echte aanmaak, wijziging en verwijdering verlopen via de apart bevestigde execute-route. De preview is nadrukkelijk geen uitvoerende create-call.
 
 
-## Eén globale mutatieschakelaar
+## Mutations and authorization
 
-`HostingPanel:EnableMutations` (omgevingsvariabele `HostingPanel__EnableMutations`) is de **enige** globale write-switch. Standaard `false`.
+HostingPanel does **not** implement a global mutation toggle. `HostingPanel:EnableMutations` is obsolete.
+Authenticated write requests reach the appropriate DirectAdmin operation; DirectAdmin decides access and validates supported operations. Domain deletion still uses explicit exact-name confirmation to prevent accidental user actions.
 
-- `false`: alle uitvoerende POST/PUT/PATCH/DELETE-verzoeken naar de API worden door middleware met HTTP 409 `MUTATIONS_DISABLED` geblokkeerd. Het niet-uitvoerende endpoint `POST /hosting/domains/preview` blijft toegankelijk.
-- `true`: de globale blokkade vervalt; elke geïmplementeerde mutatie kan worden uitgevoerd mits de authenticatie, DirectAdmin-rechten, invoervalidatie en eventuele expliciete bevestiging slagen. Niet-geïmplementeerde operaties blijven HTTP 501 retourneren.
-- De domeinnaamvalidator accepteert normale domeinen (bijvoorbeeld `example.com`, `customer.co.uk`) én fictieve `.xyz1`-testdomeinen. Alleen de geautomatiseerde testfixtures gebruiken standaard `.xyz1`.
-- `POST /hosting/domains/execute` verwerkt `create`, `modify` en `delete`. Wijzigen en verwijderen vereisen dat het domein al bij het aangemelde account bestaat; aanmaken vereist dat de naam nog niet in diens domeinlijst voorkomt. De exacte domeinnaam moet expliciet worden bevestigd.
-- De vlag verleent op zichzelf geen rechten. DirectAdmin blijft de authorisatie uitvoeren met de credentials van de aanroepende gebruiker.
-
-**Let op:** als de vlag aan staat, mogen alle bestaande geïmplementeerde mutaties ook **echte productiedomeinen** wijzigen. Zet de vlag uitsluitend aan in een passend afgeschermde omgeving.
+The fixed HTTPS DirectAdmin origin, authenticated session, safe path handling, explicit endpoint mappings and syntax checks remain security boundaries. They are not a second admin/reseller/enduser authorization model.
 
 ## Domain detail and editing
 
 - The domain list links to `/domains/{domain}`. The new Razor page displays the current domain configuration and all supplementary legacy fields from `CMD_API_ADDITIONAL_DOMAINS?action=view&domain=...`.
-- `GET /hosting/domains/{domain}` requires a valid authenticated DirectAdmin user and verifies that the requested domain belongs to the current DirectAdmin account before reading settings.
-- `PUT /hosting/domains/{domain}/settings` accepts `{"setting":"ssl","value":"ON"}` for a single, explicitly supported setting: `ssl`, `php`, `cgi`, `bandwidth`, or `quota`. It checks membership and actual availability in the returned domain config, and the global `HostingPanel:EnableMutations` gate applies.
+- `GET /hosting/domains/{domain}` forwards the authenticated request; HostingPanel does not check membership in an account-domain list.
+- `PUT /hosting/domains/{domain}/settings` accepts `{"setting":"ssl","value":"ON"}` for supported fields. It does not require a successful preliminary read or presence of that field in a previously returned config. DirectAdmin decides whether the requested write is permitted.
 - Single-property saves use `CMD_API_DOMAIN` with `action=modify&only_affect=<field>`, which avoids accidentally turning unrelated unchecked legacy options off. All updates use the original user's login key and DirectAdmin enforces permissions.
 - Legacy domain settings may expose extra keys depending on the DirectAdmin release. The interface displays those as informational fields, but does not offer speculative editing for unknown parameters.
-- The detail endpoint is scoped to the authenticated account. When an admin lists another user's domains, the original credentials must also have user-level access to that domain for detail calls; separate impersonation support is future work.
+- The detail endpoint uses original or delegated DirectAdmin credentials. No local account hierarchy or role is used to block reads or writes.
 
 No production mutations occur in CI; contract tests use `hosting-test.xyz1`.
 
@@ -96,31 +91,17 @@ No production mutations occur in CI; contract tests use `hosting-test.xyz1`.
 
 ## DNS zone management
 
-The fixed external reference contract is `https://demo.directadmin.com:2222/static/swagger.json` (snapshot at `src/HostingPanel.Api/spec/directadmin.swagger.json`). The pinned Swagger 2.0 document exposes **no generic DNS zone CRUD endpoints**. It must not be extended with invented `/api/dns` routes.
+- `GET /hosting/domains/{domain}/dns` asks DirectAdmin for the zone. It first tries the legacy admin DNS interface and may retry the user DNS interface after an explicit denial or not-found result. This is backend capability handling, **not** a claim about the caller's identity or role.
+- `POST /hosting/domains/{domain}/dns` sends an authenticated operation to DirectAdmin. A second endpoint is attempted only after an explicit HTTP 403/404 denial, never after a timeout, ambiguous response, or a legacy application error.
+- Neither a successful zone read nor existence of a record in a local snapshot is required to initiate a write. Backend permission and mutation results are authoritative.
+- Form encoding remains restricted to supported DNS record syntax and unambiguous legacy selection fields. After success the UI refreshes the zone for presentation, not as write authorization.
+- Blazor shows one DNS workflow. There is no admin/user selector or local permission-based control gating.
 
-HostingPanel business endpoints:
+## Server-wide DNS overview
 
-- `GET /hosting/domains/{domain}/dns` — legacy `CMD_DNS_CONTROL?domain=...&json=yes&ttl=yes`, returns real DNS records.
-- `POST /hosting/domains/{domain}/dns` — legacy `CMD_API_DNS_CONTROL` for `add`, `edit`, `delete`; uses exact previous name and value for targeted changes.
-- The global `HostingPanel:EnableMutations` middleware gates all writes, including DNS writes.
-- Blazor `/domains/{domain}/dns` provides record listing, record edit/create, delete confirmation, and refresh.
-- After a mutation the adapter reloads the zone and verifies the exact expected record delta. An ambiguous legacy record-selection string is rejected rather than risking modification of another record.
-- CI verifies fake `.xyz1` DNS fixtures, validates mutation encoding, and checks that actual write calls are blocked by default. It does not contact the configured legacy server for mutations.
+`GET /hosting/dns/zones?page=1` uses `CMD_DNS_ADMIN` for the server-wide zone catalog. The backend may allow or deny it. Clicking a zone opens the same DNS editor as every other domain; no identity mode is selected by HostingPanel.
 
-DNS record changes are production-impacting once mutations are enabled. DNSSEC and multi-server propagation are not implemented by this slice. Actual wire-format conformance must still be confirmed against the user's DirectAdmin installation.
-
-## DNS beheer op administratorniveau
-
-DirectAdmin heeft afzonderlijke admin- en user-endpoints. HostingPanel moet die scheiding behouden:
-
-- `GET /hosting/dns/zones?page=1` leest het **serverbrede** zoneoverzicht uit `CMD_DNS_ADMIN?json=yes&page=1`. Een administrator ziet zones onafhankelijk van de eigenaar van het hostingaccount.
-- `GET /hosting/domains/{domain}/dns` gebruikt voor administrators `CMD_DNS_ADMIN?domain=...&json=yes&ttl=yes`; op gebruikersniveau `CMD_DNS_CONTROL`.
-- `POST /hosting/domains/{domain}/dns` gebruikt voor administrators `CMD_API_DNS_ADMIN`; op gebruikersniveau `CMD_API_DNS_CONTROL`, altijd onder de globale mutatieschakelaar.
-- `/dns-zones` toont de serverbrede DNS-administratie met domeinnaam, lokale gegevens, lokale mail en filtering. Klikken opent `/domains/{domain}/dns`.
-- De adapter controleert het daadwerkelijke administrator-account via DirectAdmin. Dit is **niet** hetzelfde als impersonation: admins hoeven niet eerst als een hostinggebruiker in te loggen om diens DNS-zone te lezen of te beheren.
-- Voor geïmpersoneerde sessies wordt de effectieve gebruiker gebruikt en niet het administratorniveau van de oorspronkelijke account.
-
-Legacy admin-JSON-tabelrijen zijn numeriek geïndexeerd; metadata als `info` wordt genegeerd. `local_data`/`local_mail` zijn nullable omdat oude releases velden kunnen weglaten.
+The distinct DirectAdmin admin and user DNS wire operations remain implementation details of the adapter, not a HostingPanel account role or permission gate.
 
 ## DirectAdmin scopes: authoritative backend, no second authorization model
 
@@ -133,12 +114,12 @@ request, including the effective delegated identity when login-as is active.
 - `GET /hosting/domains/accessible`: aggregates `CMD_API_SHOW_USER_DOMAINS?user=...` across accessible accounts plus `CMD_API_SHOW_DOMAINS` for the active account. Returns domain names, owners and a partial-result warning when some backend calls fail.
 - `GET /hosting/domains?user=...`: direct per-account query, preserving backend authorization.
 - Domain details and mutations no longer reject requests merely because a domain is absent from the *current* account's own domain list. DirectAdmin authorizes the selected operation.
-- DNS admin endpoints are selected by a non-mutating backend probe, not a locally assigned `admin` role. Server-level zone listing is directly requested from DirectAdmin and may be denied there.
+- DNS does not probe account roles or expose a scope selector. It requests a backend DNS operation and only retries through another endpoint after a definitive rejection; ambiguous write outcomes are never replayed.
 - Impersonation eligibility is validated with DirectAdmin's effective identity response; the user does not need to be locally classified as admin or reseller before the backend is asked.
 
 Account roles and creator values are **display metadata**, not authorization
-claims. Mutations retain the global `HostingPanel:EnableMutations` switch,
-input validation, and explicit confirmation for destructive operations.
+claims. Mutations retain syntax validation and explicit confirmation for destructive
+operations, but no global HostingPanel permission or mutation switch.
 The pinned modern Swagger remains the public `/api/*` contract; legacy
 differences are internal.
 
