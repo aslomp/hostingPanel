@@ -19,6 +19,8 @@ jobs:
         run: dotnet build src/HostingPanel.Web/HostingPanel.Web.csproj -c Release
       - name: Run contract tests
         run: dotnet run --project tests/HostingPanel.ContractTests -c Release
+      - name: Run API forwarding integration tests (fake DirectAdmin)
+        run: dotnet run --project tests/HostingPanel.ApiIntegrationTests -c Release
       - name: Smoke test Blazor framework script
         shell: bash
         run: |
