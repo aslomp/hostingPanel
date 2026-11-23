@@ -24,11 +24,11 @@ else if (users is not null)
     <div class="card">
         <label for="userFilter">Gebruikers filteren (@users.Count totaal)</label>
         <input id="userFilter" @bind="search" @bind:event="oninput" placeholder="Zoek op gebruikersnaam" />
-        <table><thead><tr><th>Gebruikersnaam</th><th>Bron</th></tr></thead>
+        <table><thead><tr><th>Gebruikersnaam</th><th>Bron</th><th>Domeinen</th></tr></thead>
         <tbody>
         @foreach (var user in users.Where(x => x.Contains(search, StringComparison.OrdinalIgnoreCase)))
         {
-            <tr><td><a href="@($"/users/{Uri.EscapeDataString(user)}")">@user</a></td><td>DirectAdmin</td></tr>
+            <tr><td><a href="@($"/users/{Uri.EscapeDataString(user)}")">@user</a></td><td>DirectAdmin</td><td><a href="@($"/domains?user={Uri.EscapeDataString(user)}")">Bekijk domeinen</a></td></tr>
         }
         </tbody></table>
         @if (users.Count == 0) { <p>Geen gebruikers gevonden.</p> }
