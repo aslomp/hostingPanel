@@ -10,6 +10,22 @@ namespace HostingPanel.Api.Controllers;
 [ApiController]
 public sealed class DnsController(IHostingBackend backend) : BackendController
 {
+    /// <summary>
+    /// Overall DNS zone list sourced from the backend-accessible domain catalog.
+    /// No local admin/reseller/user role restriction.
+    /// </summary>
+    [HttpGet("/hosting/dns/zones/accessible")]
+    public async Task<IResult> ListAccessibleDnsZones(CancellationToken ct)
+    {
+        if (!TryGetBasic(HttpContext, out var auth))
+            return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+
+        var result = await backend.AccessibleDomains.ListAsync(auth, ct);
+        return result.Items is null
+            ? Results.Json(new { type = result.Warning ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
+            : Results.Json(new { zones = result.Items, warning = result.Warning });
+    }
+
     [HttpGet("/hosting/dns/zones")]
     public async Task<IResult> hosting_dns_zones_Get_19()
     {
