@@ -8,7 +8,7 @@
     <div>
         <div class="eyebrow">Accountbeheer / Domeinen</div>
         <h1>Domeinbeheer</h1>
-        <p>Live domeinlijst via de HostingPanel-adapter naar DirectAdmin. Testacties gebruiken uitsluitend de fictieve extensie .xyz1.</p>
+        <p>Live domeinlijst via de HostingPanel-adapter naar DirectAdmin. Geautomatiseerde tests gebruiken fictieve .xyz1-domeinen; echte domeinen zijn eveneens toegestaan als mutaties ingeschakeld zijn.</p>
     </div>
     <button @onclick="Refresh" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
 </div>
@@ -46,10 +46,10 @@ else
     </div>
 
     <div class="card">
-        <h2>Testdomein voorbereiden</h2>
+        <h2>Domeinbewerking voorbereiden</h2>
         <p>Deze actie genereert uitsluitend een voorbeeld van de legacy-aanroep.
             Er wordt <strong>geen domein aangemaakt of gewijzigd</strong> op de DirectAdmin-server.</p>
-        <label for="testDomain">Domeinnaam (.xyz1)</label>
+        <label for="testDomain">Domeinnaam</label>
         <input id="testDomain" @bind="testDomain" placeholder="hosting-test.xyz1" />
         <div class="domain-options">
             <label><input type="checkbox" @bind="php" /> PHP</label>
@@ -66,9 +66,9 @@ else
             <pre>@previewBody</pre>
         }
         <div class="card" style="margin-top:24px">
-            <h2>.xyz1 testoperatie uitvoeren</h2>
+            <h2>Domeinbewerking uitvoeren</h2>
             <p>Gebruik eerst de preview hierboven. Deze actie wijzigt de echte DirectAdmin-server
-               uitsluitend wanneer de beheerder expliciet de server-side testschakelaar aanzet.
+               uitsluitend wanneer de beheerder expliciet de algemene server-side mutatieschakelaar aanzet.
                Verwijderen kan ook bestanden en mailgegevens verwijderen.</p>
             <label for="domainAction">Actie</label>
             <select id="domainAction" @bind="mutationAction">
@@ -78,9 +78,9 @@ else
             </select>
             <label for="confirmDomain">Typ de exacte domeinnaam ter bevestiging: @testDomain</label>
             <input id="confirmDomain" @bind="confirmation" autocomplete="off" />
-            <button disabled="@(mutationBusy || confirmation != testDomain || !testDomain.EndsWith(".xyz1", StringComparison.OrdinalIgnoreCase))"
+            <button disabled="@(mutationBusy || confirmation != testDomain || string.IsNullOrWhiteSpace(testDomain))"
                     @onclick="ExecuteMutation">
-                @(mutationBusy ? "Uitvoeren…" : "Bevestig testoperatie")
+                @(mutationBusy ? "Uitvoeren…" : "Bevestig domeinbewerking")
             </button>
             @if (mutationStatus is not null)
             {
@@ -155,7 +155,7 @@ else
             var (status, body) = await Session.PreviewDomainAsync(testDomain.Trim(), php, ssl, cgi);
             if (status != 200)
             {
-                previewError = $"Testdomein geweigerd (HTTP {status}). Alleen geldige .xyz1-namen zijn toegestaan.";
+                previewError = $"Testdomein geweigerd (HTTP {status}). Gebruik een geldige domeinnaam.";
                 return;
             }
             using var doc = JsonDocument.Parse(body);
@@ -179,11 +179,11 @@ else
                 testDomain, mutationAction, confirmation, php, ssl, cgi);
             mutationStatus = status switch
             {
-                200 => "DirectAdmin heeft de testoperatie bevestigd. Vernieuw het domeinoverzicht.",
-                409 => "Testmutaties zijn uitgeschakeld of het domein bestaat al. Controleer de API-configuratie.",
+                200 => "DirectAdmin heeft de domeinbewerking bevestigd. Vernieuw het domeinoverzicht.",
+                409 => "Mutaties zijn uitgeschakeld of het domein bestaat al. Controleer de API-configuratie.",
                 404 => "Het testdomein behoort niet tot de domeinen van het huidige account.",
-                400 => "Ongeldige .xyz1-naam of bevestiging.",
-                _ => $"De testoperatie is niet bevestigd: HTTP {status}."
+                400 => "Ongeldige domeinnaam of bevestiging.",
+                _ => $"De domeinbewerking is niet bevestigd: HTTP {status}."
             };
             if (status == 200) { confirmation = ""; await Refresh(); }
         }
