@@ -35,8 +35,16 @@
   </aside>
   <div class="workspace">
     <header class="topbar">
-      <span>HostingPanel / beheer</span>
-      <span>@(Session.Connected ? Session.Username : "Niet verbonden")</span>
+      <div class="crumb">
+        <a href="/">HostingPanel</a><span aria-hidden="true">/</span>
+        <strong>@CurrentPage</strong>
+      </div>
+      <div class="session-identity">
+        <span>@(Session.Connected ? "Verbonden account" : "Backend niet verbonden")
+          <strong>@(Session.Connected ? Session.Username : "Niet aangemeld")</strong>
+        </span>
+        <span class="session-avatar" aria-hidden="true">@(Session.Connected ? Session.Username[..Math.Min(2,Session.Username.Length)].ToUpperInvariant() : "HP")</span>
+      </div>
     </header>
     @if (Session.IsImpersonating)
     {
@@ -52,6 +60,17 @@
 
 @code {
     private string navSearch = "";
+    private string CurrentPage
+    {
+        get
+        {
+            var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', 2)[0].Trim('/');
+            if (string.IsNullOrWhiteSpace(path)) return "Dashboard";
+            var item = Sections.SelectMany(section => section.Items)
+                .FirstOrDefault(link => link.Path.Trim('/').Equals(path, StringComparison.OrdinalIgnoreCase));
+            return item?.Label ?? path.Split('/')[0].Replace('-', ' ');
+        }
+    }
     private IEnumerable<NavSection> FilteredSections => string.IsNullOrWhiteSpace(navSearch)
         ? Sections
         : Sections.Select(section => section with {
