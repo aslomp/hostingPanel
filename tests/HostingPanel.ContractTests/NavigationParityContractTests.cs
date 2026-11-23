@@ -42,7 +42,8 @@ public static class NavigationParityContractTests
         var hostingPanelExtras = new HashSet<string>(StringComparer.Ordinal)
         {
             "Sessies", "Resellerbeheer", "Databasebeheer", "Systeeminformatie",
-            "ModSecurity en ClamAV", "DirectAdmin API"
+            "ModSecurity en ClamAV", "DirectAdmin API",
+            "Tickets", "Nieuw ticket", "Berichten", "Wachtwoord wijzigen"
         };
         foreach (Match match in declared)
         {
