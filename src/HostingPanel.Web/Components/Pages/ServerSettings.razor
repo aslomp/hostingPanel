@@ -1,0 +1,70 @@
+@page "/server-settings"
+@using System.Text.Json
+@inject DirectAdminSession Session
+<PageTitle>Serverinstellingen — HostingPanel</PageTitle>
+<div class="page-header"><div><div class="eyebrow">Serverbeheer</div><h1>Serverinstellingen</h1><p>DirectAdmin-configuratie en serverinstellingen via de officiële API.</p></div><button disabled="@busy" @onclick="Load">Vernieuwen</button></div>
+@if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
+else
+{
+    <section class="card">
+        <h2>Configuratiebron</h2>
+        <select @bind="endpoint">
+            <option value="api/server-settings/directadmin-conf/active">Actieve DirectAdmin-configuratie</option>
+            <option value="api/server-settings/directadmin-conf/default">Standaardconfiguratie</option>
+            <option value="api/server-settings/directadmin-conf/local">Lokale overrides</option>
+            <option value="api/server-settings/db-config">Databaseverbinding</option>
+            <option value="api/server-settings/email/config">E-mailserverconfiguratie</option>
+            <option value="api/server-settings/email/outbound-filter">Uitgaand mailfilter</option>
+            <option value="api/server-settings/timezone/current">Tijdzone</option>
+        </select>
+        <button disabled="@busy" @onclick="Load">Configuratie ophalen</button>
+        <p>@message</p>
+        <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@result</pre>
+    </section>
+    <section class="card">
+        <h2>Lokale DirectAdmin-overrides wijzigen</h2>
+        <p>Deze PATCH gebruikt uitsluitend <code>/api/server-settings/directadmin-conf/local</code>. Geef alleen velden op die je wilt aanpassen.</p>
+        <textarea rows="10" @bind="patch" spellcheck="false" placeholder="{}"></textarea>
+        <label>Typ PATCH om te bevestigen</label><input @bind="confirmation" />
+        <button class="primary" disabled="@(busy || confirmation != "PATCH")" @onclick="Apply">Patch toepassen</button>
+        @if (mutation is not null) { <p role="status">@mutation</p> }
+    </section>
+}
+@code {
+    private string endpoint = "api/server-settings/directadmin-conf/active";
+    private string patch = "{}", confirmation = "", result = "";
+    private string? message, mutation;
+    private bool busy;
+    protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; message = null;
+        try
+        {
+            var (status, body) = await Session.GetRawAsync(endpoint);
+            message = $"HTTP {status}";
+            result = body;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { message = ex.Message; result = ""; }
+        finally { busy = false; }
+    }
+    private async Task Apply()
+    {
+        if (busy || confirmation != "PATCH") return;
+        busy = true; mutation = null;
+        try
+        {
+            using var json = JsonDocument.Parse(patch);
+            if (json.RootElement.ValueKind != JsonValueKind.Object)
+            { mutation = "De patch moet een JSON-object zijn."; return; }
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Patch,
+                "api/server-settings/directadmin-conf/local", patch);
+            mutation = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        { mutation = ex.Message; }
+        finally { busy = false; confirmation = ""; }
+    }
+}
