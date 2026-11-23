@@ -23,6 +23,18 @@
     <button disabled="@(busy || string.IsNullOrWhiteSpace(deleteUsername) || deleteUsername != deleteConfirmation)"
         @onclick="Delete">Account verwijderen</button>
 </section>
+@if (Kind == "user")
+{
+<section class="card">
+    <h2>Gebruikerspakket wijzigen</h2>
+    <p>Het pakket moet op de backend bestaan. De wijziging wordt na opslaan gecontroleerd via de gebruikersconfiguratie.</p>
+    <label>Gebruikersnaam</label><input @bind="packageUsername" />
+    <label>Nieuw pakket</label><input @bind="newPackage" />
+    <label>Typ de gebruikersnaam ter bevestiging</label><input @bind="packageConfirmation" />
+    <button disabled="@(busy || string.IsNullOrWhiteSpace(packageUsername) || packageConfirmation != packageUsername)"
+        @onclick="ChangePackage">Pakket wijzigen</button>
+</section>
+}
 <section class="card">
     <h2>Accountlimiet aanpassen</h2>
     <p>Wijzigt slechts één limiet. DirectAdmin past daarna zijn eigen pakket- en limietregels toe.</p>
@@ -49,9 +61,27 @@
     private string password = "", passwordConfirmation = "";
     private string deleteUsername = "", deleteConfirmation = "";
     private string limitUsername = "", limitField = "bandwidth", limitValue = "", limitConfirmation = "";
+    private string packageUsername = "", newPackage = "", packageConfirmation = "";
     private string suspensionUsername = "", suspensionConfirmation = "", suspend = "true";
     private bool busy;
     private string? result;
+
+    private async Task ChangePackage()
+    {
+        if (busy || !Session.Connected || Kind != "user" ||
+            packageUsername != packageConfirmation) return;
+        busy = true; result = null;
+        try
+        {
+            var (status, _) = await Session.SetUserPackageAsync(packageUsername, newPackage);
+            result = status == 200
+                ? "DirectAdmin heeft het nieuwe gebruikerspakket bevestigd."
+                : $"Pakketwijziging niet bevestigd: backend HTTP {status}.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        { result = ex.Message; }
+        finally { busy = false; packageConfirmation = ""; }
+    }
 
     private async Task SetLimit()
     {
