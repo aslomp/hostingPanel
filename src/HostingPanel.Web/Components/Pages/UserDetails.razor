@@ -1,0 +1,90 @@
+@page "/users/{Username}"
+@using System.Text.Json
+@inject DirectAdminSession Session
+
+<PageTitle>@Username — HostingPanel</PageTitle>
+<div class="page-header">
+  <div>
+    <div class="eyebrow"><a href="/users">Accountbeheer</a> / Gebruikersdetails</div>
+    <h1>@Username</h1>
+    <p>Moderne DirectAdmin API: accountconfiguratie en resourceverbruik.</p>
+  </div>
+  <button @onclick="Load" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
+</div>
+@if (!Session.Connected)
+{
+  <div class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</div>
+}
+else if (loading)
+{
+  <div class="card" role="status">Accountgegevens worden opgehaald…</div>
+}
+else
+{
+  <div class="tiles">
+    <div class="card">
+      <h2>Accountconfiguratie</h2>
+      <p><code>GET /api/users/@Username/config</code></p>
+      @if (configError is not null) { <p class="error" role="alert">@configError</p> }
+      else if (config is not null) { <table><tbody>
+        @foreach(var entry in config) { <tr><th>@entry.Key</th><td>@entry.Value</td></tr> }
+      </tbody></table> }
+    </div>
+    <div class="card">
+      <h2>Resourceverbruik</h2>
+      <p><code>GET /api/users/@Username/usage</code></p>
+      @if (usageError is not null) { <p class="error" role="alert">@usageError</p> }
+      else if (usage is not null) { <table><tbody>
+        @foreach(var entry in usage) { <tr><th>@entry.Key</th><td>@entry.Value</td></tr> }
+      </tbody></table> }
+    </div>
+  </div>
+}
+@code {
+  [Parameter] public string Username { get; set; } = "";
+  private Dictionary<string,string>? config;
+  private Dictionary<string,string>? usage;
+  private string? configError;
+  private string? usageError;
+  private bool loading;
+
+  protected override async Task OnParametersSetAsync()
+  {
+    if (Session.Connected) await Load();
+  }
+
+  private async Task Load()
+  {
+    if (loading || !Session.Connected) return;
+    loading = true;
+    configError = null; usageError = null;
+    try
+    {
+      (config, configError) = await Read("config");
+      (usage, usageError) = await Read("usage");
+    }
+    finally { loading = false; }
+  }
+  private async Task<(Dictionary<string,string>?,string?)> Read(string kind)
+  {
+    try
+    {
+      var (status, body) = await Session.GetUserDetailAsync(Username, kind);
+      if (status == 501)
+        return (null, "De legacy DirectAdmin-server levert nog niet alle verplichte gegevens uit het moderne Swagger-contract. Er worden geen fictieve waarden getoond.");
+      if (status != 200)
+        return (null, $"API-verzoek mislukt: HTTP {status}.");
+      using var json = JsonDocument.Parse(body);
+      if (json.RootElement.ValueKind != JsonValueKind.Object)
+        return (null, "Onverwacht responseformaat.");
+      var rows = json.RootElement.EnumerateObject()
+        .ToDictionary(p => p.Name, p => p.Value.ToString(), StringComparer.OrdinalIgnoreCase);
+      return (rows, null);
+    }
+    catch (Exception error) when (error is HttpRequestException or FormatException or
+        InvalidOperationException or ArgumentException or JsonException)
+    {
+      return (null,error.Message);
+    }
+  }
+}
