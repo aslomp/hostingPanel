@@ -160,6 +160,31 @@ app.MapPost("/hosting/domains/execute", async (HttpContext context,
         : Results.Json(new { type = result.Error }, statusCode: result.Status);
 });
 
+// Read and update a single domain's DirectAdmin settings. Not part of the pinned
+// modern DirectAdmin Swagger: these are HostingPanel-owned business routes.
+app.MapGet("/hosting/domains/{domain}", async (HttpContext context,
+    string domain, DomainManagementService service) =>
+{
+    if (!TryGetBasic(context, out var auth))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    var result = await service.GetDetailsAsync(domain, auth, context.RequestAborted);
+    return result.Settings is not null
+        ? Results.Json(new { domain, settings = result.Settings })
+        : Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status);
+});
+
+app.MapPut("/hosting/domains/{domain}/settings", async (HttpContext context, string domain,
+    DomainSettingRequest input, DomainManagementService service) =>
+{
+    if (!TryGetBasic(context, out var auth))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    var result = await service.UpdateSettingAsync(domain, input.Setting, input.Value,
+        auth, context.RequestAborted);
+    return result.Error is null
+        ? Results.Json(new { domain, setting = input.Setting, updated = true })
+        : Results.Json(new { type = result.Error }, statusCode: result.Status);
+});
+
 // Do not blindly proxy modern routes to an older DirectAdmin installation:
 // that violates the pinned Swagger contract.
 app.MapMethods("/api/{**path}", ["GET", "POST", "PUT", "PATCH", "DELETE"],
