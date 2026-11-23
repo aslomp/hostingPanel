@@ -1,0 +1,38 @@
+@page "/users"
+@inject DirectAdminSession Session
+
+<PageTitle>Gebruikers — HostingPanel</PageTitle>
+<div class="page-header"><div><div class="eyebrow">Accountbeheer</div><h1>Toon alle gebruikers</h1><p>Live uit de DirectAdmin-compatibele API.</p></div><button @onclick="Load">Vernieuwen</button></div>
+@if (!Session.Connected) { <div class="card">Verbind eerst met DirectAdmin via het <a href="/">dashboard</a>.</div> }
+else if (error is not null) { <div class="card error">@error</div> }
+else if (users is null) { <div class="card">Gebruikers laden…</div> }
+else
+{
+    <div class="card">
+        <label>Zoeken<input @bind="search" @bind:event="oninput" placeholder="Filter gebruikers" /></label>
+        <table><thead><tr><th>Gebruikersnaam</th><th>Bron</th></tr></thead>
+        <tbody>
+            @foreach (var user in users.Where(x => x.Contains(search, StringComparison.OrdinalIgnoreCase)))
+            {
+                <tr><td>@user</td><td>DirectAdmin</td></tr>
+            }
+        </tbody></table>
+    </div>
+}
+@code {
+    private IReadOnlyList<string>? users;
+    private string search = "";
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.Connected) await Load();
+    }
+    private async Task Load()
+    {
+        error = null;
+        users = null;
+        try { users = await Session.GetUsersAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}
