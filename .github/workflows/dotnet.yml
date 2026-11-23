@@ -33,4 +33,8 @@ jobs:
           grep -q '/_framework/blazor.web.js' /tmp/hostingpanel.html
           curl --fail --silent --show-error -D /tmp/asset-headers.txt -o /tmp/blazor.web.js http://127.0.0.1:5088/_framework/blazor.web.js
           test -s /tmp/blazor.web.js
+          curl --fail --silent --show-error -D /tmp/css-headers.txt -o /tmp/site.css http://127.0.0.1:5088/site.css
+          test -s /tmp/site.css
+          grep -q '.sidebar' /tmp/site.css
+          grep -qi 'content-type:.*css' /tmp/css-headers.txt
           grep -qi 'content-type:.*javascript' /tmp/asset-headers.txt
