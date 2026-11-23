@@ -173,20 +173,20 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
     }
 
     public Task<(int Status, string Body)> GetDnsZoneAsync(string domain,
-        bool adminScope = false, CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(domain) || domain.Contains('/') || domain.Contains('\\')
             || domain.Contains('?') || domain.Any(char.IsControl))
             throw new ArgumentException("Invalid domain.", nameof(domain));
         return SendAsync(HttpMethod.Get,
-            "hosting/domains/" + Uri.EscapeDataString(domain) + "/dns?scope=" +
-            (adminScope ? "admin" : "user"), null, cancellationToken);
+            "hosting/domains/" + Uri.EscapeDataString(domain) + "/dns",
+            null, cancellationToken);
     }
 
     public async Task<(int Status, string Body)> ChangeDnsRecordAsync(string domain, string action,
         string type, string name, string value, string? ttl,
         string? previousType, string? previousName, string? previousValue,
-        bool adminScope = false, CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(domain) || domain.Contains('/') || domain.Contains('\\')
             || domain.Contains('?') || domain.Any(char.IsControl))
@@ -198,8 +198,7 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
             action, record = new { type, name, value, ttl }, previous
         }), Encoding.UTF8, "application/json");
         return await SendAsync(HttpMethod.Post, "hosting/domains/" +
-            Uri.EscapeDataString(domain) + "/dns?scope=" +
-            (adminScope ? "admin" : "user"), body, cancellationToken);
+            Uri.EscapeDataString(domain) + "/dns", body, cancellationToken);
     }
 
     public async Task<IReadOnlyList<string>> GetUsersAsync(CancellationToken cancellationToken = default)
