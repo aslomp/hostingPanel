@@ -1,19 +1,19 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text.Json;
+using HostingPanel.Api.Adapters;
 
 var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddHttpClient("directadmin", client =>
+builder.Services.AddHttpClient("legacy-directadmin", client =>
 {
     var configured = builder.Configuration["DirectAdmin:BaseUrl"]
-        ?? throw new InvalidOperationException("DirectAdmin:BaseUrl ontbreekt.");
-    var uri = new Uri(configured, UriKind.Absolute);
-    if (uri.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(uri.UserInfo)
-        || uri.AbsolutePath != "/" || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
-        throw new InvalidOperationException("DirectAdmin:BaseUrl moet een HTTPS-origin zonder credentials of pad zijn.");
-
-    client.BaseAddress = uri;
-    client.Timeout = TimeSpan.FromMinutes(3);
+        ?? throw new InvalidOperationException("DirectAdmin:BaseUrl is required.");
+    var origin = new Uri(configured, UriKind.Absolute);
+    if (origin.Scheme != Uri.UriSchemeHttps || origin.AbsolutePath != "/"
+        || origin.UserInfo.Length != 0 || origin.Query.Length != 0 || origin.Fragment.Length != 0)
+        throw new InvalidOperationException("DirectAdmin:BaseUrl must be a credential-free HTTPS origin.");
+    client.BaseAddress = origin;
+    client.Timeout = TimeSpan.FromSeconds(30);
 }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
 {
     AllowAutoRedirect = false,
@@ -25,95 +25,73 @@ var app = builder.Build();
 app.UseHttpsRedirection();
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
-// Serve the pinned OpenAPI snapshot checked into this repository.
-// This is schema hosting, NOT a claim that all documented endpoints have native implementations.
-app.MapGet("/openapi/directadmin.json", (IWebHostEnvironment env) =>
+// Static published contract. The backend adapter is implemented incrementally.
+app.MapGet("/openapi/directadmin.json", (IWebHostEnvironment environment) =>
 {
-    var path = Path.Combine(env.ContentRootPath, "spec", "directadmin.swagger.json");
-    return File.Exists(path)
-        ? Results.File(path, "application/json")
-        : Results.Problem("The static DirectAdmin Swagger snapshot is missing. Run scripts/sync-directadmin-swagger.sh and rebuild.", statusCode: 503);
+    var filename = Path.Combine(environment.ContentRootPath, "spec", "directadmin.swagger.json");
+    return File.Exists(filename)
+        ? Results.File(filename, "application/json")
+        : Results.Problem("Pinned OpenAPI specification unavailable.", statusCode: 503);
 });
 
-// Auth, authorization, and DirectAdmin API semantics are enforced by the fixed HTTPS upstream.
-// No shared administrator credentials exist in this application.
-app.Run(async context =>
+// Public modern API contract: GET /api/search/users -> JSON array of usernames.
+// Internal legacy adapter: CMD_API_SHOW_ALL_USERS?json=yes.
+// Each request is authorized by the upstream DirectAdmin account; never use shared admin credentials.
+app.MapGet("/api/search/users", async (HttpContext context, IHttpClientFactory factory) =>
 {
-    var path = context.Request.Path.Value ?? "";
-    if (!(path.StartsWith("/CMD_API_", StringComparison.Ordinal)
-          || path.StartsWith("/api/", StringComparison.Ordinal)
-          || path.StartsWith("/CMD_", StringComparison.Ordinal)
-          || path.Equals("/static/swagger.json", StringComparison.Ordinal)))
-    {
-        context.Response.StatusCode = StatusCodes.Status404NotFound;
-        return;
-    }
+    if (!TryGetBasic(context, out var authentication)) return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
 
-    if (!AuthenticationHeaderValue.TryParse(context.Request.Headers.Authorization.ToString(), out var auth)
-        || !auth.Scheme.Equals("Basic", StringComparison.OrdinalIgnoreCase)
-        || string.IsNullOrWhiteSpace(auth.Parameter))
-    {
-        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        context.Response.Headers.WWWAuthenticate = "Basic realm=\"DirectAdmin API\"";
-        return;
-    }
-
-    var client = context.RequestServices.GetRequiredService<IHttpClientFactory>().CreateClient("directadmin");
-    // A relative URI is resolved against the configured upstream origin; request headers
-    // cannot override the target server. Query and form bodies are passed through verbatim.
-    using var upstreamRequest = new HttpRequestMessage(new HttpMethod(context.Request.Method),
-        path.TrimStart('/') + context.Request.QueryString);
-    upstreamRequest.Headers.Authorization = auth;
-
-    if (context.Request.ContentLength > 0 || context.Request.Headers.ContainsKey("Transfer-Encoding"))
-    {
-        upstreamRequest.Content = new StreamContent(context.Request.Body);
-        if (!string.IsNullOrEmpty(context.Request.ContentType))
-            upstreamRequest.Content.Headers.TryAddWithoutValidation("Content-Type", context.Request.ContentType);
-    }
-
-    foreach (var (name, values) in context.Request.Headers)
-    {
-        if (name.Equals("Authorization", StringComparison.OrdinalIgnoreCase)
-            || name.Equals("Host", StringComparison.OrdinalIgnoreCase)
-            || name.Equals("Cookie", StringComparison.OrdinalIgnoreCase)
-            || name.Equals("Connection", StringComparison.OrdinalIgnoreCase)
-            || name.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)
-            || name.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
-            continue;
-        if (!upstreamRequest.Headers.TryAddWithoutValidation(name, values.ToArray()))
-            upstreamRequest.Content?.Headers.TryAddWithoutValidation(name, values.ToArray());
-    }
+    var q = context.Request.Query["q"].ToString();
+    var rawLimit = context.Request.Query["limit"].ToString();
+    var limit = 50;
+    if (rawLimit.Length > 0 && (!int.TryParse(rawLimit, out limit) || limit is < 1 or > 1000))
+        return Results.Json(new { type = "BAD_REQUEST" }, statusCode: 400);
+    if (q.Length > 256)
+        return Results.Json(new { type = "BAD_REQUEST" }, statusCode: 400);
 
     try
     {
-        using var response = await client.SendAsync(upstreamRequest, HttpCompletionOption.ResponseHeadersRead,
-            context.RequestAborted);
-        context.Response.StatusCode = (int)response.StatusCode;
-        foreach (var (name, values) in response.Headers)
-        {
-            if (!name.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)
-                && !name.Equals("Connection", StringComparison.OrdinalIgnoreCase)
-                && !name.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase))
-                context.Response.Headers[name] = values.ToArray();
-        }
-        foreach (var (name, values) in response.Content.Headers)
-        {
-            if (!name.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase))
-                context.Response.Headers[name] = values.ToArray();
-        }
-        context.Response.Headers.Remove("transfer-encoding");
-        await response.Content.CopyToAsync(context.Response.Body, context.RequestAborted);
+        var client = factory.CreateClient("legacy-directadmin");
+        using var upstreamRequest = new HttpRequestMessage(HttpMethod.Get, "CMD_API_SHOW_ALL_USERS?json=yes");
+        upstreamRequest.Headers.Authorization = authentication;
+        using var response = await client.SendAsync(upstreamRequest, context.RequestAborted);
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            return Results.Json(new { type = response.StatusCode == HttpStatusCode.Forbidden ? "ACCESS_DENIED" : "UNAUTHORIZED" },
+                statusCode: (int)response.StatusCode);
+        if (!response.IsSuccessStatusCode)
+            return Results.Json(new { type = "UPSTREAM_ERROR" }, statusCode: 502);
+        var payload = await response.Content.ReadAsStringAsync(context.RequestAborted);
+        var users = LegacyUsersAdapter.SearchUsers(LegacyUsersAdapter.ParseUsernames(payload), q, limit);
+        return Results.Json(users);
     }
-    catch (HttpRequestException)
-    {
-        if (!context.Response.HasStarted)
-            context.Response.StatusCode = StatusCodes.Status502BadGateway;
-    }
+    catch (LegacyApiException) { return Results.Json(new { type = "ACCESS_DENIED" }, statusCode: 403); }
+    catch (JsonException) { return Results.Json(new { type = "UPSTREAM_ERROR" }, statusCode: 502); }
+    catch (FormatException) { return Results.Json(new { type = "UPSTREAM_ERROR" }, statusCode: 502); }
+    catch (HttpRequestException) { return Results.Json(new { type = "UPSTREAM_UNAVAILABLE" }, statusCode: 502); }
     catch (TaskCanceledException) when (!context.RequestAborted.IsCancellationRequested)
-    {
-        if (!context.Response.HasStarted)
-            context.Response.StatusCode = StatusCodes.Status504GatewayTimeout;
-    }
+    { return Results.Json(new { type = "UPSTREAM_TIMEOUT" }, statusCode: 504); }
 });
+
+// Do not blindly proxy modern routes to an older DirectAdmin installation:
+// that violates the pinned Swagger contract.
+app.MapMethods("/api/{**path}", ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    (HttpContext context) =>
+        TryGetBasic(context, out _)
+            ? Results.Json(new { type = "NOT_IMPLEMENTED" }, statusCode: 501)
+            : Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401));
+
 app.Run();
+
+static bool TryGetBasic(HttpContext context, out AuthenticationHeaderValue authentication)
+{
+    authentication = null!;
+    if (!AuthenticationHeaderValue.TryParse(context.Request.Headers.Authorization.ToString(), out var value)
+        || !value.Scheme.Equals("Basic", StringComparison.OrdinalIgnoreCase)
+        || string.IsNullOrWhiteSpace(value.Parameter))
+    {
+        context.Response.Headers.WWWAuthenticate = "Basic realm=\"HostingPanel API\"";
+        return false;
+    }
+    authentication = value;
+    return true;
+}
