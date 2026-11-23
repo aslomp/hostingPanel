@@ -5,7 +5,7 @@ using HostingPanel.Api.Adapters;
 
 namespace HostingPanel.Api.Services;
 
-public sealed class DomainManagementService(IHttpClientFactory clients, IConfiguration configuration)
+public sealed class DomainManagementService(IHttpClientFactory clients)
 {
     public async Task<DomainListResult> ListAsync(string? owner,
         AuthenticationHeaderValue credentials, CancellationToken cancellationToken)
@@ -40,16 +40,12 @@ public sealed class DomainManagementService(IHttpClientFactory clients, IConfigu
     public async Task<DomainMutationResult> MutateAsync(DomainMutationRequest input,
         AuthenticationHeaderValue credentials, CancellationToken cancellationToken)
     {
-        if (!LegacyDomainsAdapter.IsSafeTestDomain(input.Domain))
-            return new(400, "INVALID_TEST_DOMAIN");
+        if (!LegacyDomainsAdapter.IsValidDomain(input.Domain))
+            return new(400, "INVALID_DOMAIN");
         if (input.Action is not ("create" or "modify" or "delete"))
             return new(400, "INVALID_OPERATION");
         if (!string.Equals(input.Confirmation, input.Domain, StringComparison.Ordinal))
             return new(400, "CONFIRMATION_REQUIRED");
-
-        // Deliberately disabled by default even when the caller has admin credentials.
-        if (!configuration.GetValue<bool>("HostingPanel:EnableXyz1Mutations"))
-            return new(409, "TEST_MUTATIONS_DISABLED");
 
         var domain = input.Domain.ToLowerInvariant();
         var before = await ListAsync(null, credentials, cancellationToken);
