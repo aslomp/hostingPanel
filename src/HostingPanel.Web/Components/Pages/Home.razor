@@ -27,10 +27,13 @@
 else
 {
     <div class="tiles">
-        <a class="card tile" href="/users"><b>♙</b><span>Gebruikers beheren</span><small>Live gebruikers uit DirectAdmin</small></a>
+        <a class="card tile" href="/users"><b>♙</b><span>Gebruikers beheren</span><small>Accounts en instellingen</small></a>
+        <a class="card tile" href="/domains"><b>◎</b><span>Domeinbeheer</span><small>Alle toegankelijke domeinen</small></a>
+        <a class="card tile" href="/dns-zones"><b>◈</b><span>DNS-beheer</span><small>Zones en records</small></a>
+        <a class="card tile" href="/databases"><b>▤</b><span>Databasebeheer</span><small>Databases van alle toegankelijke accounts</small></a>
         <a class="card tile" href="/api-browser"><b>⌘</b><span>API-respons bekijken</span><small>Ongewijzigde DirectAdmin-antwoorden</small></a>
     </div>
-    <p>Verbonden als <strong>@Session.Username</strong>. Gebruikersendpoint: <code>GET /api/search/users</code>.</p>
+    <p>Verbonden als <strong>@Session.Username</strong>. De backend bepaalt per resource welke gegevens toegankelijk zijn.</p>
     <button @onclick="Disconnect">Verbinding verbreken</button>
 }
 @code {
@@ -47,8 +50,12 @@ else
         try
         {
             Session.SetCredentials(username, key);
-            // Authentication and read permission are checked against the exact first business use case.
-            await Session.GetUsersAsync();
+            // Authenticate using the session endpoint, not permission to list users.
+            var (status, _) = await Session.GetRawAsync("api/session");
+            if (status is 401 or 403)
+                throw new UnauthorizedAccessException("DirectAdmin heeft de aanmelding geweigerd.");
+            if (status is < 200 or >= 300)
+                throw new HttpRequestException($"DirectAdmin sessiecontrole: HTTP {status}.");
             key = "";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
