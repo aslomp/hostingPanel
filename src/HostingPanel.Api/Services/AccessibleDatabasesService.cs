@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -25,19 +26,25 @@ public sealed class AccessibleDatabasesService(
         if (!ImpersonationService.TryDecode(auth, out var principal, out var password))
             return new(401, null, null, "INVALID_CREDENTIALS");
 
-        var results = new List<OwnedDatabase>();
-        var warnings = new List<DatabaseInventoryWarning>();
-        foreach (var account in listed.Accounts.DistinctBy(x => x.Username, StringComparer.OrdinalIgnoreCase))
+        var results = new ConcurrentBag<OwnedDatabase>();
+        var warnings = new ConcurrentBag<DatabaseInventoryWarning>();
+        var accountsToQuery = listed.Accounts.DistinctBy(x => x.Username,
+            StringComparer.OrdinalIgnoreCase);
+        await Parallel.ForEachAsync(accountsToQuery, new ParallelOptions
+        {
+            MaxDegreeOfParallelism = 4,
+            CancellationToken = ct
+        }, async (account, token) =>
         {
             var username = account.Username;
             AuthenticationHeaderValue effectiveAuth = auth;
             if (!username.Equals(principal, StringComparison.OrdinalIgnoreCase))
             {
-                var check = await impersonation.CheckAsync(auth, username, ct);
+                var check = await impersonation.CheckAsync(auth, username, token);
                 if (check.Status != 200)
                 {
                     warnings.Add(new(username, check.Status, check.Error ?? "DELEGATION_UNAVAILABLE"));
-                    continue;
+                    return;
                 }
                 effectiveAuth = new AuthenticationHeaderValue("Basic",
                     Convert.ToBase64String(Encoding.UTF8.GetBytes(
@@ -48,17 +55,17 @@ public sealed class AccessibleDatabasesService(
                 using var request = new HttpRequestMessage(HttpMethod.Get, "api/db-show/databases?no-size=true");
                 request.Headers.Authorization = effectiveAuth;
                 using var response = await clients.CreateClient("legacy-directadmin")
-                    .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                    .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
                 if (!response.IsSuccessStatusCode)
                 {
                     warnings.Add(new(username, (int)response.StatusCode, "UPSTREAM_DATABASE_LIST_UNAVAILABLE"));
-                    continue;
+                    return;
                 }
-                using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+                using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
                 if (json.RootElement.ValueKind != JsonValueKind.Array)
                 {
                     warnings.Add(new(username, 502, "INVALID_DATABASE_LIST"));
-                    continue;
+                    return;
                 }
                 foreach (var database in json.RootElement.EnumerateArray())
                     results.Add(new(username, database.Clone()));
@@ -67,11 +74,14 @@ public sealed class AccessibleDatabasesService(
             { warnings.Add(new(username, 502, "UPSTREAM_UNAVAILABLE")); }
             catch (JsonException)
             { warnings.Add(new(username, 502, "INVALID_DATABASE_LIST")); }
-            catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+            catch (TaskCanceledException) when (!token.IsCancellationRequested)
             { warnings.Add(new(username, 504, "UPSTREAM_TIMEOUT")); }
-        }
+        });
 
-        return new(200, results, warnings, warnings.Count == 0 ? null : "PARTIAL_UPSTREAM_RESULTS");
+        var sorted = results.OrderBy(x => x.Owner, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.Database.ToString(), StringComparer.Ordinal).ToArray();
+        var issues = warnings.OrderBy(x => x.Account, StringComparer.OrdinalIgnoreCase).ToArray();
+        return new(200, sorted, issues, issues.Length == 0 ? null : "PARTIAL_UPSTREAM_RESULTS");
     }
 }
 
