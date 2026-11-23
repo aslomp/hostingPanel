@@ -19,7 +19,7 @@ else
         </select>
         <button disabled="@busy" @onclick="Load">Configuratie ophalen</button>
         <p>@message</p>
-        <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@result</pre>
+        <JsonOverview Json="@result" />
     </section>
     <section class="card">
         <h2>Lokale DirectAdmin-overrides wijzigen</h2>
@@ -48,7 +48,7 @@ else
         <h2>Tijdzone wijzigen</h2>
         <label>Tijdzone (IANA)</label><input @bind="timezone" placeholder="Europe/Amsterdam" />
         <button disabled="@busy" @onclick="ListTimezones">Beschikbare tijdzones ophalen</button>
-        <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@timezones</pre>
+        <JsonOverview Json="@timezones" />
         <label>Typ TIMEZONE om te bevestigen</label><input @bind="timezoneConfirmation" />
         <button disabled="@(busy || string.IsNullOrWhiteSpace(timezone) || timezoneConfirmation != "TIMEZONE")" @onclick="ChangeTimezone">Tijdzone wijzigen</button>
     </section>
