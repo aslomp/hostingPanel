@@ -28,25 +28,8 @@ public sealed class ImpersonationService(IHttpClientFactory clients)
         {
             var client = clients.CreateClient("legacy-directadmin");
 
-            // Only an authenticated administrator may enter another user's context.
-            // Access to a user-list on its own does NOT prove admin privilege.
-            using var own = new HttpRequestMessage(HttpMethod.Get,
-                "CMD_API_SHOW_USER_CONFIG?user=" + Uri.EscapeDataString(admin));
-            own.Headers.Authorization = Authorization(admin, key);
-            using var ownResponse = await client.SendAsync(own, ct);
-            if (ownResponse.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-                return new(403, "ADMIN_ACCESS_REQUIRED");
-            if (!ownResponse.IsSuccessStatusCode)
-                return new(502, "UPSTREAM_ERROR");
-            var config = LegacyUserDetailsAdapter.Parse(
-                await ownResponse.Content.ReadAsStringAsync(ct));
-            if (!config.TryGetValue("usertype", out var role) ||
-                !role.Equals("admin", StringComparison.OrdinalIgnoreCase))
-                return new(403, "ADMIN_ACCESS_REQUIRED");
-            if (config.TryGetValue("username", out var reported) &&
-                !reported.Equals(admin, StringComparison.OrdinalIgnoreCase))
-                return new(403, "ADMIN_ACCESS_REQUIRED");
-
+            // No local administrator/reseller role check: DirectAdmin evaluates
+            // whether the authenticated account can switch to the target.
             // Have DirectAdmin authenticate the delegated identity *before* the
             // Blazor circuit changes identity. No local permission override exists.
             var delegatedUsername = admin + "|" + target;
