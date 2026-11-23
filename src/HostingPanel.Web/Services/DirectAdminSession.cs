@@ -43,7 +43,7 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
 
     public async Task<IReadOnlyList<string>> GetUsersAsync(CancellationToken cancellationToken = default)
     {
-        var (status, body) = await GetRawAsync("CMD_API_SHOW_ALL_USERS?json=yes", cancellationToken);
+        var (status, body) = await GetRawAsync("api/search/users?limit=1000", cancellationToken);
         if (status == 401 || status == 403)
             throw new UnauthorizedAccessException("DirectAdmin heeft de aanmelding geweigerd.");
         if (status is < 200 or >= 300)
