@@ -75,3 +75,14 @@ Echte aanmaak, wijziging en verwijdering verlopen via de apart bevestigde execut
 - De vlag verleent op zichzelf geen rechten. DirectAdmin blijft de authorisatie uitvoeren met de credentials van de aanroepende gebruiker.
 
 **Let op:** als de vlag aan staat, mogen alle bestaande geïmplementeerde mutaties ook **echte productiedomeinen** wijzigen. Zet de vlag uitsluitend aan in een passend afgeschermde omgeving.
+
+## Domain detail and editing
+
+- The domain list links to `/domains/{domain}`. The new Razor page displays the current domain configuration and all supplementary legacy fields from `CMD_API_ADDITIONAL_DOMAINS?action=view&domain=...`.
+- `GET /hosting/domains/{domain}` requires a valid authenticated DirectAdmin user and verifies that the requested domain belongs to the current DirectAdmin account before reading settings.
+- `PUT /hosting/domains/{domain}/settings` accepts `{"setting":"ssl","value":"ON"}` for a single, explicitly supported setting: `ssl`, `php`, `cgi`, `bandwidth`, or `quota`. It checks membership and actual availability in the returned domain config, and the global `HostingPanel:EnableMutations` gate applies.
+- Single-property saves use `CMD_API_DOMAIN` with `action=modify&only_affect=<field>`, which avoids accidentally turning unrelated unchecked legacy options off. All updates use the original user's login key and DirectAdmin enforces permissions.
+- Legacy domain settings may expose extra keys depending on the DirectAdmin release. The interface displays those as informational fields, but does not offer speculative editing for unknown parameters.
+- The detail endpoint is scoped to the authenticated account. When an admin lists another user's domains, the original credentials must also have user-level access to that domain for detail calls; separate impersonation support is future work.
+
+No production mutations occur in CI; contract tests use `hosting-test.xyz1`.
