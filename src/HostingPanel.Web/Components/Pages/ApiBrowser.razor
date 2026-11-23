@@ -2,7 +2,7 @@
 @inject DirectAdminSession Session
 
 <PageTitle>API — HostingPanel</PageTitle>
-<div class="page-header"><div><div class="eyebrow">Integratie</div><h1>DirectAdmin API</h1><p>Bekijk de ongewijzigde API-antwoorden van DirectAdmin.</p></div></div>
+<div class="page-header"><div><div class="eyebrow">Integratie</div><h1>DirectAdmin API</h1><p>Bekijk de moderne DirectAdmin-compatibele API-antwoorden van HostingPanel.</p></div></div>
 @if (!Session.Connected) { <div class="card">Verbind eerst via het <a href="/">dashboard</a>.</div> }
 else
 {
@@ -14,7 +14,7 @@ else
     </div>
 }
 @code {
-    private string endpoint = "CMD_API_SHOW_ALL_USERS?json=yes";
+    private string endpoint = "api/search/users?limit=1000";
     private string status = "";
     private string body = "";
     private async Task Fetch()
