@@ -221,6 +221,22 @@ app.MapPut("/hosting/domains/{domain}/settings", async (HttpContext context, str
         : Results.Json(new { type = result.Error }, statusCode: result.Status);
 });
 
+// Administrator-level server-wide DNS zones, independent of hosting account ownership.
+// DirectAdmin itself verifies the original admin account on each request.
+app.MapGet("/hosting/dns/zones", async (HttpContext context, DnsZoneService service) =>
+{
+    if (!TryGetBasic(context, out var auth))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    var rawPage = context.Request.Query["page"].ToString();
+    if (!int.TryParse(string.IsNullOrEmpty(rawPage) ? "1" : rawPage, out var page)
+        || page is < 1 or > 10000)
+        return Results.Json(new { type = "INVALID_PAGE" }, statusCode: 400);
+    var result = await service.ListAdminZonesAsync(auth, page, context.RequestAborted);
+    return result.Zones is null
+        ? Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
+        : Results.Json(new { zones = result.Zones, page });
+});
+
 // DNS management is a HostingPanel-owned interface because the pinned modern
 // DirectAdmin Swagger has no public DNS zone CRUD path.
 app.MapGet("/hosting/domains/{domain}/dns", async (HttpContext context,
