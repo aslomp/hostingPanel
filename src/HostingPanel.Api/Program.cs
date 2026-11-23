@@ -1,10 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
-using HostingPanel.Api;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddMemoryCache();
-builder.Services.AddSingleton<DirectAdminSwaggerMirror>();
 
 builder.Services.AddHttpClient("directadmin", client =>
 {
@@ -28,10 +25,15 @@ var app = builder.Build();
 app.UseHttpsRedirection();
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
-// Expose the complete server-specific Swagger document without altering its schemas.
-// Only expose HostingPanel.Api on trusted networks until the API is authenticated end-to-end.
-app.MapGet("/openapi/directadmin.json", async (DirectAdminSwaggerMirror mirror, CancellationToken ct) =>
-    Results.Content(await mirror.GetAsync(ct), "application/json; charset=utf-8"));
+// Serve the pinned OpenAPI snapshot checked into this repository.
+// This is schema hosting, NOT a claim that all documented endpoints have native implementations.
+app.MapGet("/openapi/directadmin.json", (IWebHostEnvironment env) =>
+{
+    var path = Path.Combine(env.ContentRootPath, "spec", "directadmin.swagger.json");
+    return File.Exists(path)
+        ? Results.File(path, "application/json")
+        : Results.Problem("The static DirectAdmin Swagger snapshot is missing. Run scripts/sync-directadmin-swagger.sh and rebuild.", statusCode: 503);
+});
 
 // Auth, authorization, and DirectAdmin API semantics are enforced by the fixed HTTPS upstream.
 // No shared administrator credentials exist in this application.
