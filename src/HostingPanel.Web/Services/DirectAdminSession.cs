@@ -34,12 +34,38 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
         if (!IsAllowedEndpoint(endpoint))
             throw new ArgumentException("Alleen relatieve DirectAdmin API-paden zijn toegestaan.", nameof(endpoint));
 
+        return await SendAsync(HttpMethod.Get, endpoint, null, cancellationToken);
+    }
+
+    private async Task<(int Status, string Body)> SendAsync(HttpMethod method, string endpoint,
+        HttpContent? content, CancellationToken cancellationToken)
+    {
+        if (!Connected) throw new InvalidOperationException("Maak eerst verbinding met DirectAdmin.");
         var http = clients.CreateClient("hosting-api");
-        using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+        using var request = new HttpRequestMessage(method, endpoint) { Content = content };
         var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes(_username + ":" + _loginKey));
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         return ((int)response.StatusCode, await response.Content.ReadAsStringAsync(cancellationToken));
+    }
+
+    public async Task<(int Status, string Body)> GetDomainsAsync(string? username = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (username is not null && (username.Length is < 1 or > 64 ||
+            !username.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-')))
+            throw new ArgumentException("Ongeldige gebruiker.", nameof(username));
+        return await SendAsync(HttpMethod.Get,
+            "hosting/domains" + (username is null ? "" : "?user=" + Uri.EscapeDataString(username)),
+            null, cancellationToken);
+    }
+
+    public async Task<(int Status, string Body)> PreviewDomainAsync(string domain, bool php,
+        bool ssl, bool cgi, CancellationToken cancellationToken = default)
+    {
+        using var content = new StringContent(
+            JsonSerializer.Serialize(new { domain, php, ssl, cgi }), Encoding.UTF8, "application/json");
+        return await SendAsync(HttpMethod.Post, "hosting/domains/preview", content, cancellationToken);
     }
 
     public async Task<IReadOnlyList<string>> GetUsersAsync(CancellationToken cancellationToken = default)
