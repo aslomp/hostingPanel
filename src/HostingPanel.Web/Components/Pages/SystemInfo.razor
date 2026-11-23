@@ -12,7 +12,7 @@ else
         {
             <section class="card">
                 <h2>@item.Label</h2><p>HTTP @item.Status</p>
-                <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@item.Body</pre>
+                <JsonOverview Json="@item.Body" />
             </section>
         }
     </div>
