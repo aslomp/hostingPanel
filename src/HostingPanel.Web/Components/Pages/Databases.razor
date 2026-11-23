@@ -42,10 +42,14 @@ else
     @if (overall is not null)
     {
       <p>@overall.Count databases gevonden. @(overallWarnings.Count == 0 ? "Volledige inventarisatie." : $"Onvolledig: {overallWarnings.Count} accounts konden niet worden uitgelezen.")</p>
-      <table><thead><tr><th>Eigenaar</th><th>Database (backend)</th></tr></thead><tbody>
+      <table><thead><tr><th>Eigenaar</th><th>Database</th><th>Tabellen</th><th>Gebruikers</th><th>Grootte (bytes)</th><th>Definer issues</th></tr></thead><tbody>
         @foreach (var item in overall)
         {
-          <tr><td>@item.Owner</td><td><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@item.Database</pre></td></tr>
+          <tr>
+            <td>@item.Owner</td><td>@item.Name</td>
+            <td>@item.TableCount</td><td>@item.UserCount</td>
+            <td>@item.SizeBytes</td><td>@item.DefinerIssues</td>
+          </tr>
         }
       </tbody></table>
       @foreach (var warning in overallWarnings)
@@ -70,7 +74,7 @@ else
   </section>
 }
 @code {
-  private sealed record OwnedDb(string Owner, string Database);
+  private sealed record OwnedDb(string Owner, string Name, long TableCount, long UserCount, long SizeBytes, long DefinerIssues);
   private List<OwnedDb>? overall;
   private List<string> overallWarnings = [];
   private string? overallError;
@@ -104,6 +108,9 @@ else
     { error=e.Message; databases=null; }
     finally {loading=false;}
   }
+  private static long Number(JsonElement item, string property) =>
+    item.TryGetProperty(property, out var value) && value.TryGetInt64(out var number)
+      ? number : 0;
   private async Task LoadOverall()
   {
     if (overallLoading || !Session.Connected) return;
@@ -114,9 +121,14 @@ else
       if (status != 200) { overallError = $"Overall databaseoverzicht: HTTP {status}."; return; }
       using var doc = JsonDocument.Parse(body);
       overall = doc.RootElement.GetProperty("items").EnumerateArray()
-        .Select(x => new OwnedDb(
-          x.GetProperty("owner").GetString() ?? "",
-          x.GetProperty("database").GetRawText())).ToList();
+        .Select(x => {
+          var db = x.GetProperty("database");
+          return new OwnedDb(
+            x.GetProperty("owner").GetString() ?? "",
+            db.GetProperty("database").GetString() ?? "",
+            Number(db, "tableCount"), Number(db, "userCount"),
+            Number(db, "sizeBytes"), Number(db, "definerIssues"));
+        }).ToList();
       overallWarnings = [];
       if (doc.RootElement.TryGetProperty("warnings", out var warnings)
           && warnings.ValueKind == JsonValueKind.Array)
