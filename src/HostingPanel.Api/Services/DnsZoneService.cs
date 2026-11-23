@@ -7,14 +7,31 @@ namespace HostingPanel.Api.Services;
 
 public sealed class DnsZoneService(IHttpClientFactory clients)
 {
+    /// <summary>Determine whether DirectAdmin authenticated this request as a real admin.
+    /// A delegated admin|user login is not treated as an administrator.</summary>
+    private async Task<bool> IsAdminAsync(AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        if (!ImpersonationService.TryDecode(auth, out var username, out _)) return false;
+        using var request = new HttpRequestMessage(HttpMethod.Get,
+            "CMD_API_SHOW_USER_CONFIG?user=" + Uri.EscapeDataString(username));
+        request.Headers.Authorization = auth;
+        using var response = await clients.CreateClient("legacy-directadmin").SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode) return false;
+        var config = LegacyUserDetailsAdapter.Parse(await response.Content.ReadAsStringAsync(ct));
+        return config.TryGetValue("usertype", out var role) &&
+            role.Equals("admin", StringComparison.OrdinalIgnoreCase);
+    }
+
     public async Task<DnsZoneResult> ReadAsync(string domain, AuthenticationHeaderValue auth,
         CancellationToken ct)
     {
         if (!LegacyDomainsAdapter.IsValidDomain(domain)) return new(400, null, "INVALID_DOMAIN");
         try
         {
+            var administrator = await IsAdminAsync(auth, ct);
             using var request = new HttpRequestMessage(HttpMethod.Get,
-                "CMD_DNS_CONTROL?domain=" + Uri.EscapeDataString(domain) + "&json=yes&ttl=yes");
+                (administrator ? "CMD_DNS_ADMIN" : "CMD_DNS_CONTROL") +
+                "?domain=" + Uri.EscapeDataString(domain) + "&json=yes&ttl=yes");
             request.Headers.Authorization = auth;
             using var response = await clients.CreateClient("legacy-directadmin").SendAsync(request, ct);
             if (response.StatusCode == HttpStatusCode.Unauthorized) return new(401, null, "UNAUTHORIZED");
@@ -50,7 +67,9 @@ public sealed class DnsZoneService(IHttpClientFactory clients)
         try
         {
             var form = LegacyDnsAdapter.Form(domain, change);
-            using var request = new HttpRequestMessage(HttpMethod.Post, "CMD_API_DNS_CONTROL");
+            var administrator = await IsAdminAsync(auth, ct);
+            using var request = new HttpRequestMessage(HttpMethod.Post,
+                administrator ? "CMD_API_DNS_ADMIN" : "CMD_API_DNS_CONTROL");
             request.Headers.Authorization = auth;
             request.Content = new FormUrlEncodedContent(form);
             using var response = await clients.CreateClient("legacy-directadmin").SendAsync(request, ct);
