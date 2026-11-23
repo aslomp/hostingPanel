@@ -65,6 +65,28 @@ else
             <p><strong>Dry-run:</strong> alleen ter controle, niet uitgevoerd.</p>
             <pre>@previewBody</pre>
         }
+        <div class="card" style="margin-top:24px">
+            <h2>.xyz1 testoperatie uitvoeren</h2>
+            <p>Gebruik eerst de preview hierboven. Deze actie wijzigt de echte DirectAdmin-server
+               uitsluitend wanneer de beheerder expliciet de server-side testschakelaar aanzet.
+               Verwijderen kan ook bestanden en mailgegevens verwijderen.</p>
+            <label for="domainAction">Actie</label>
+            <select id="domainAction" @bind="mutationAction">
+                <option value="create">Aanmaken</option>
+                <option value="modify">Wijzigen (PHP / SSL / CGI)</option>
+                <option value="delete">Verwijderen</option>
+            </select>
+            <label for="confirmDomain">Typ de exacte domeinnaam ter bevestiging: @testDomain</label>
+            <input id="confirmDomain" @bind="confirmation" autocomplete="off" />
+            <button disabled="@(mutationBusy || confirmation != testDomain || !testDomain.EndsWith(".xyz1", StringComparison.OrdinalIgnoreCase))"
+                    @onclick="ExecuteMutation">
+                @(mutationBusy ? "Uitvoeren…" : "Bevestig testoperatie")
+            </button>
+            @if (mutationStatus is not null)
+            {
+                <p role="status">@mutationStatus</p>
+            }
+        </div>
     </div>
 }
 @code {
@@ -79,6 +101,10 @@ else
     private bool php = true;
     private bool ssl = true;
     private bool cgi;
+    private string mutationAction = "create";
+    private string confirmation = "";
+    private bool mutationBusy;
+    private string? mutationStatus;
     private bool previewBusy;
     private string? previewError;
     private string? previewBody;
@@ -142,4 +168,31 @@ else
         }
         finally { previewBusy = false; }
     }
+    private async Task ExecuteMutation()
+    {
+        if (mutationBusy || !Session.Connected || confirmation != testDomain) return;
+        mutationBusy = true;
+        mutationStatus = null;
+        try
+        {
+            var (status, body) = await Session.ExecuteTestDomainAsync(
+                testDomain, mutationAction, confirmation, php, ssl, cgi);
+            mutationStatus = status switch
+            {
+                200 => "DirectAdmin heeft de testoperatie bevestigd. Vernieuw het domeinoverzicht.",
+                409 => "Testmutaties zijn uitgeschakeld of het domein bestaat al. Controleer de API-configuratie.",
+                404 => "Het testdomein behoort niet tot de domeinen van het huidige account.",
+                400 => "Ongeldige .xyz1-naam of bevestiging.",
+                _ => $"De testoperatie is niet bevestigd: HTTP {status}."
+            };
+            if (status == 200) { confirmation = ""; await Refresh(); }
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException
+            or ArgumentException)
+        {
+            mutationStatus = exception.Message;
+        }
+        finally { mutationBusy = false; }
+    }
+
 }
