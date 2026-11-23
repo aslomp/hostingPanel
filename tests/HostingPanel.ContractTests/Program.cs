@@ -198,6 +198,22 @@ var checks = new List<(string Description, Action Test)>
     ("Admin DNS list rejects invalid domains", () =>
         Throws<FormatException>(() => AdminDnsZonesAdapter.Parse(
             """{"0":{"domain":"bad..xyz1"}}"""))),
+    ("Legacy account lists accept JSON and URL encoded arrays", () =>
+    {
+        Require(LegacyAccountListParser.Parse("""["admin","reseller1","user1"]""")
+            .SequenceEqual(["admin","reseller1","user1"]));
+        Require(LegacyAccountListParser.Parse("list%5B%5D=reseller1&list%5B%5D=user1")
+            .SequenceEqual(["reseller1","user1"]));
+        Require(LegacyAccountListParser.Parse("""{"list":["reseller1","user1"]}""")
+            .Count == 2);
+    }),
+    ("Backend-denied account discovery must not be interpreted as an empty list", () =>
+    {
+        Throws<LegacyApiException>(() => LegacyAccountListParser.Parse("error=1&text=denied"));
+        Throws<LegacyApiException>(() => LegacyAccountListParser.Parse("""{"error":"1"}"""));
+    }),
+    ("Legacy account list rejects invalid account names", () =>
+        Throws<FormatException>(() => LegacyAccountListParser.Parse("""["valid","../invalid"]"""))),
     ("Empty list is valid", () => Require(DirectAdminUsersParser.Parse("[]").Count == 0)),
     ("Legacy error object is rejected", () =>
         Throws<InvalidOperationException>(() => DirectAdminUsersParser.Parse("{\"error\":1,\"text\":\"Access denied\"}"))),
