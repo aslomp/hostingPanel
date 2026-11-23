@@ -4,7 +4,7 @@
 <PageTitle>Gebruikers — HostingPanel</PageTitle>
 <div class="page-header">
     <div><div class="eyebrow">Accountbeheer</div><h1>Toon alle gebruikers</h1>
-        <p>Gegevens van <code>CMD_API_SHOW_ALL_USERS?json=yes</code>, opgehaald via HostingPanel.Api.</p></div>
+        <p>Gegevens van <code>GET /api/search/users</code>, opgehaald via HostingPanel.Api.</p></div>
     <button @onclick="Load" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
 </div>
 @if (!Session.Connected)
