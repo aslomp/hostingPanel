@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using HostingPanel.Web.Services;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 
 namespace HostingPanel.Web.Realtime;
 
