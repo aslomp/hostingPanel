@@ -62,3 +62,19 @@ De gepinde moderne DirectAdmin Swagger heeft **geen algemene create/update/delet
 `.xyz1` is een fictieve testextensie en wordt niet als echte DNS-TLD verondersteld. De daadwerkelijke lijst wordt live gelezen, niet door fixtures vervangen. Bestaande accounts en productiedomeinen worden niet gewijzigd.
 
 De volgende slice kan echte aanmaak, wijziging en verwijdering implementeren met afzonderlijke per-operatie autorisatie, bevestiging, rollback- en auditcontracten. De huidige preview is nadrukkelijk nog geen uitvoerende create-call.
+
+## .xyz1 domain mutations (explicit opt-in)
+
+`POST /hosting/domains/execute` accepts JSON:
+`{"domain":"hosting-test.xyz1","action":"create","confirmation":"hosting-test.xyz1","php":true,"ssl":true,"cgi":false}`
+
+Supported actions: `create`, `modify`, `delete`. The API always enforces the `.xyz1` suffix and exact typed-domain confirmation. It checks the current authenticated DirectAdmin account's domain list before performing a mutation. DirectAdmin applies its own permission checks through the caller's login key.
+
+**Default: mutations disabled.** To explicitly enable the test feature on the API process only, set `HostingPanel__EnableXyz1Mutations=true` (not on the Blazor process). This is intentionally not enabled in source or `appsettings.json`.
+
+- Create: `CMD_API_DOMAIN` POST with `action=create`, PHP/SSL/CGI options and shared quota/bandwidth.
+- Modify: the same endpoint and parameters using `action=modify`.
+- Delete: `CMD_API_DOMAIN` POST with `delete=yes&confirmed=yes&select0=domain.xyz1`. Deleting an account domain may remove websites and related data; there is no automatic rollback.
+- The backend checks `error=0` in the legacy response before reporting success. No mutation requests are issued during CI. The tests use `.xyz1` fixture names and an API gate that must return HTTP 409 by default.
+
+Do **not** enable this test feature on a public-facing API. Keep it restricted to a controlled development network until persistent auditing, authentication, privilege management and domain-specific ownership controls are implemented. The test feature works only against the DirectAdmin account associated with the supplied credentials, not an arbitrary selected `user` query parameter.
