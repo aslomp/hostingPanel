@@ -101,6 +101,14 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
         !string.IsNullOrWhiteSpace(username) && username.Length <= 64 &&
         username.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
 
+    public Task<(int Status, string Body)> GetAccessibleAccountsAsync(
+        CancellationToken cancellationToken = default) =>
+        SendAsync(HttpMethod.Get, "hosting/accounts", null, cancellationToken);
+
+    public Task<(int Status, string Body)> GetAccessibleDomainsAsync(
+        CancellationToken cancellationToken = default) =>
+        SendAsync(HttpMethod.Get, "hosting/domains/accessible", null, cancellationToken);
+
     public async Task<(int Status, string Body)> GetDomainsAsync(string? username = null,
         CancellationToken cancellationToken = default)
     {
