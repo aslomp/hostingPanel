@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@implements IDisposable
 @inject DirectAdminSession Session
 @inject NavigationManager Navigation
 
@@ -49,6 +50,7 @@
         <strong>@CurrentPage</strong>
       </div>
       <div class="session-identity">
+        <TicketNotifications @key="Session.TicketChannel" />
         <span>@(Session.Connected ? "Verbonden account" : "Backend niet verbonden")
           <strong>@(Session.Connected ? Session.Username : "Niet aangemeld")</strong>
         </span>
@@ -68,6 +70,13 @@
 </div>
 
 @code {
+    protected override void OnInitialized()
+    {
+        Session.Changed += OnSessionChanged;
+    }
+    private void OnSessionChanged() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => Session.Changed -= OnSessionChanged;
+
     private string navSearch = "";
     private string navigationContext = "admin";
     private void SetContext(string value)
