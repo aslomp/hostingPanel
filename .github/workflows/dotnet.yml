@@ -126,12 +126,18 @@ jobs:
             http://127.0.0.1:5091/hosting/domains/preview)
           test "$code" = "200"
           grep -q '"dryRun":true' /tmp/hp-preview
-          for target in hosting/domains/execute hosting/domains/hosting-test.xyz1/dns; do
-            code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X POST \
-              -H 'Content-Type: application/json' -d '{}' \
-              "http://127.0.0.1:5091/$target")
-            test "$code" = "401"
-          done
+          # Supply valid DTOs: model validation otherwise returns 400 before
+          # the controller can reject the missing legacy credentials.
+          code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X POST \
+            -H 'Content-Type: application/json' \
+            -d '{"domain":"hosting-test.xyz1","action":"create","confirmation":"yes"}' \
+            http://127.0.0.1:5091/hosting/domains/execute)
+          test "$code" = "401"
+          code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X POST \
+            -H 'Content-Type: application/json' \
+            -d '{"action":"add","record":{"type":"A","name":"www","value":"192.0.2.1","ttl":"300"}}' \
+            http://127.0.0.1:5091/hosting/domains/hosting-test.xyz1/dns)
+          test "$code" = "401"
           code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X PUT \
             -H 'Content-Type: application/json' -d '{"setting":"ssl","value":"ON"}' \
             http://127.0.0.1:5091/hosting/domains/hosting-test.xyz1/settings)
@@ -139,14 +145,15 @@ jobs:
           code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X PATCH \
             http://127.0.0.1:5091/api/arbitrary/new-operation)
           test "$code" = "404"
-          for route in hosting/databases hosting/databases/demo_app; do
-            method=POST
-            if [[ "$route" == */demo_app ]]; then method=DELETE; fi
-            code=$(curl -sS -o /tmp/hp-db-disabled -w '%{http_code}' -X "$method" \
-              -H 'Authorization: Basic ZGVtbzpkZW1v' -H 'Content-Type: application/json' \
-              -d '{}' "http://127.0.0.1:5091/$route")
-            test "$code" = "409"
-            grep -q 'MUTATIONS_DISABLED' /tmp/hp-db-disabled
-          done
+          # Never submit authenticated mutations to the live DirectAdmin demo.
+          code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X POST \
+            -H 'Content-Type: application/json' \
+            -d '{"database":"app","dbUser":"app","password":"example"}' \
+            http://127.0.0.1:5091/hosting/databases)
+          test "$code" = "401"
+          code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X DELETE \
+            -H 'Content-Type: application/json' -d '{"confirmation":"yes"}' \
+            http://127.0.0.1:5091/hosting/databases/demo_app)
+          test "$code" = "401"
           # Intentionally no authenticated writes to the live demo server in CI.
           # Authorized writes and fallback behavior are verified with fake HTTP handlers.
