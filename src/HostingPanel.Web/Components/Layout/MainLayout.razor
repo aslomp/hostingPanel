@@ -3,37 +3,36 @@
 @inject NavigationManager Navigation
 
 <div class="shell">
-  <aside class="sidebar">
+  <aside class="sidebar" aria-label="Hoofdnavigatie">
     <a class="brand" href="/">◈ <span>HostingPanel<small>CONTROL CENTER</small></span></a>
     <div class="nav-caption">Navigatie</div>
     <NavLink href="/" Match="NavLinkMatch.All">▦ Dashboard</NavLink>
-    <details open>
-      <summary>Accountbeheer</summary>
-      <NavLink href="/users">Toon alle gebruikers</NavLink>
-      <NavLink href="/resellers">Resellers en pakketten</NavLink>
-      <NavLink href="/change-password">Wachtwoord wijzigen</NavLink>
-      <NavLink href="/domains">Domeinbeheer</NavLink>
-      <NavLink href="/databases">Databasebeheer</NavLink>
-      <NavLink href="/api-browser">DirectAdmin API</NavLink>
-    </details>
-    <details open>
-      <summary>Serverbeheer</summary>
-      <NavLink href="/dns-zones">DNS Beheer</NavLink>
-      <NavLink href="/system-info">Systeeminformatie</NavLink>
-      <NavLink href="/system-services">Services</NavLink>
-      <NavLink href="/server-settings">Serverinstellingen</NavLink>
-      <NavLink href="/server-tls">Server TLS</NavLink>
-      <NavLink href="/system-updates">Pakketten en updates</NavLink>
-      <NavLink href="/security">ModSecurity en ClamAV</NavLink>
-    </details>
-    <details open>
-      <summary>Sessies</summary>
-      <NavLink href="/sessions">Actieve sessies</NavLink>
-    </details>
-    <p class="nav-note">DirectAdmin-compatibele API<br />Business UI — eerste verticale slice</p>
+    <nav class="sidebar-scroll" aria-label="Beheeronderdelen">
+      @foreach (var section in Sections)
+      {
+        <details class="nav-section" open>
+          <summary><span class="nav-icon" aria-hidden="true">@section.Icon</span>@section.Title</summary>
+          <div class="nav-section-items">
+            @foreach (var item in section.Items)
+            {
+              <NavLink href="@item.Path" class="nav-item">
+                <span class="nav-icon" aria-hidden="true">@item.Icon</span>
+                <span>@item.Label</span>
+                @if (!item.Implemented)
+                {
+                  <span class="nav-pending" title="Nog niet geïmplementeerd" aria-label="Nog niet geïmplementeerd">○</span>
+                }
+              </NavLink>
+            }
+          </div>
+        </details>
+      }
+    </nav>
+    <p class="nav-note">DirectAdmin-compatibele API<br />De backend bepaalt de toegangsrechten.</p>
   </aside>
   <div class="workspace">
-    <header class="topbar"><span>HostingPanel / beheer</span>
+    <header class="topbar">
+      <span>HostingPanel / beheer</span>
       <span>@(Session.Connected ? Session.Username : "Niet verbonden")</span>
     </header>
     @if (Session.IsImpersonating)
@@ -49,6 +48,99 @@
 </div>
 
 @code {
+    private sealed record NavItem(string Label, string Icon, string Path, bool Implemented = true);
+    private sealed record NavSection(string Title, string Icon, NavItem[] Items);
+
+    private static NavItem Live(string label, string icon, string path) => new(label, icon, path);
+    private static NavItem Planned(string label, string icon, string key) =>
+        new(label, icon, "/navigation/" + key, false);
+
+    // Match the section and item order in the reference index.html.
+    // All items remain visible for every account: DirectAdmin authorizes each request.
+    private static readonly NavSection[] Sections =
+    [
+        new("Accountbeheer", "♙",
+        [
+            Live("Nieuwe Gebruiker Toevoegen", "♙", "/users"),
+            Live("Toon Alle Gebruikers", "♧", "/users"),
+            Live("Mijn Gebruikers", "♙", "/users"),
+            Live("Beheer gebruikers pakketten", "▤", "/users"),
+            Planned("Verplaats Gebruikers tussen Resellers", "⇄", "move-users"),
+            Planned("Berichtsjablonen", "✉", "message-templates"),
+            Live("Wachtwoorden wijzigen", "⚿", "/change-password"),
+            Live("Reseller Aanmaken", "♙", "/resellers"),
+            Live("Resellers", "♙", "/resellers"),
+            Live("Beheer Reseller Pakketten", "▤", "/resellers"),
+            Planned("Admin Aanmaken", "♙", "create-admin"),
+            Live("Administrators", "♙", "/users")
+        ]),
+        new("Server Beheer", "▣",
+        [
+            Live("Administrator instellingen", "⚙", "/server-settings"),
+            Planned("Aangepaste HTTPD configuraties", "▤", "httpd-config"),
+            Live("DNS Beheer", "◎", "/dns-zones"),
+            Planned("IP Beheer", "⌁", "ip-management"),
+            Planned("Naam Servers", "◇", "name-servers"),
+            Planned("Multi Server Instellen", "▦", "multi-server"),
+            Planned("PHP Instellingen", "⌘", "php-settings"),
+            Live("Server TLS Certificaat", "♢", "/server-tls"),
+            Planned("CustomBuild", "⚒", "custombuild")
+        ]),
+        new("Admin Gereedschap", "⚒",
+        [
+            Planned("Back-up en herstel", "◷", "backup-restore"),
+            Planned("Brute Force Monitor", "♢", "brute-force-monitor"),
+            Planned("Proces Monitor", "▥", "process-monitor"),
+            Planned("Beheer van e-mail wachtrij", "✉", "mail-queue"),
+            Live("Systeem Services", "⚙", "/system-services"),
+            Planned("Systeem Backup", "▣", "system-backup"),
+            Planned("cPanel Importeren", "⇩", "cpanel-import"),
+            Planned("Bericht aan Alle Gebruikers", "✉", "broadcast"),
+            Planned("Thema’s", "◈", "themes"),
+            Planned("Evolution Thema Aanpassen", "◈", "evolution-theme"),
+            Planned("Onderhoud", "⚒", "maintenance")
+        ]),
+        new("Systeem Info & Bestanden", "▤",
+        [
+            Planned("Cron Taken van alle Gebruikers", "◷", "global-cron"),
+            Planned("Systeem bestand editor", "▤", "system-file-editor"),
+            Planned("Bekijk Logboek", "☷", "system-logs"),
+            Live("Globale Statistieken", "◴", "/system-info")
+        ]),
+        new("Extra Programma's", "▦",
+        [
+            Planned("Plugin Beheer", "▦", "plugin-manager"),
+            Planned("ConfigServer Security & Firewall", "♢", "csf")
+        ]),
+        new("Support", "?",
+        [
+            Planned("Beheer Tickets", "☏", "tickets"),
+            Planned("Ticket Aanmaken", "✉", "new-ticket"),
+            Live("Updates", "↻", "/system-updates"),
+            Planned("Licensering", "♧", "licensing")
+        ]),
+        new("Gebruiker", "♙",
+        [
+            Live("Domeinbeheer", "◎", "/domains"),
+            Planned("E-mailaccounts", "✉", "email-accounts"),
+            Planned("Bestandsbeheer", "▤", "file-manager"),
+            Live("Databases", "▦", "/databases"),
+            Live("SSL certificaten", "♢", "/server-tls"),
+            Live("DNS Beheer", "◎", "/dns-zones"),
+            Planned("Cron Taken", "◷", "cron-jobs"),
+            Planned("Back-ups", "◷", "user-backups")
+        ]),
+        new("Aanvullende HostingPanel-functies", "⌘",
+        [
+            Live("Sessies", "◷", "/sessions"),
+            Live("Resellerbeheer", "♙", "/resellers"),
+            Live("Databasebeheer", "▦", "/databases"),
+            Live("Systeeminformatie", "▤", "/system-info"),
+            Live("ModSecurity en ClamAV", "♢", "/security"),
+            Live("DirectAdmin API", "⌘", "/api-browser")
+        ])
+    ];
+
     private void ReturnToAdministrator()
     {
         Session.EndImpersonation();
