@@ -94,7 +94,7 @@ else
             var (status, body) = await Session.GetAdminDnsZonesAsync(currentPage);
             if (status != 200)
             {
-                error = status == 403 ? "Alleen een administrator kan de serverbrede DNS-zones ophalen."
+                error = status == 403 ? "DirectAdmin heeft het serverbrede DNS-zoneoverzicht geweigerd."
                     : $"DNS-zones niet beschikbaar (HTTP {status}).";
                 zones = null;
                 return;
