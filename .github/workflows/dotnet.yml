@@ -62,6 +62,12 @@ jobs:
           grep -q '.sidebar' /tmp/hp-style
           curl -fsS http://127.0.0.1:5089/_framework/blazor.web.js -o /tmp/hp-script
           test "$(wc -c </tmp/hp-script)" -gt 1000
+          # All prioritized management pages must render without runtime exceptions.
+          for route in system-info system-services server-settings system-updates server-tls security sessions resellers change-password dns-zones; do
+            echo "Rendering /$route"
+            curl -fsS "http://127.0.0.1:5089/$route" -o "/tmp/hp-$route.html"
+            grep -qi 'HostingPanel' "/tmp/hp-$route.html"
+          done
 
       - name: Validate pinned Swagger and static API endpoint
         shell: bash
