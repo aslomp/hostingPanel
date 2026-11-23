@@ -42,7 +42,8 @@ public static class LegacyDnsAdapter
 
     public static bool Valid(DnsRecord r)
     {
-        if (!Types.Contains(r.Type, StringComparer.Ordinal) || string.IsNullOrWhiteSpace(r.Name) ||
+        if (r is null || !Types.Contains(r.Type, StringComparer.Ordinal) || string.IsNullOrWhiteSpace(r.Name) ||
+            string.IsNullOrWhiteSpace(r.Value) ||
             r.Name.Length > 253 || r.Value.Length > 4096 || r.Value.Any(char.IsControl) ||
             r.Name.Any(c => char.IsControl(c) || c is '&' or '=' or '/' or '\\' or '?'))
             return false;
