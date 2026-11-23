@@ -15,7 +15,7 @@ else
         <h2>Reseller-details</h2>
         <label>Gebruikersnaam</label><input @bind="username" placeholder="reseller" />
         <button disabled="@busy" @onclick="LoadDetails">Configuratie en gebruik ophalen</button>
-        <JsonOverview Json="@details" />
+        <h3>Configuratie</h3><JsonOverview Json="@details" /><h3>Gebruik</h3><JsonOverview Json="@usage" />
     </section>
     <section class="card">
         <h2>Reseller-pakketten</h2>
@@ -25,7 +25,7 @@ else
     <AccountActions Kind="reseller" />
 }
 @code {
-    private string accounts = "", details = "", packages = "", username = "";
+    private string accounts = "", details = "", usage = "", packages = "", username = "";
     private string? error;
     private bool busy;
     protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
@@ -55,7 +55,8 @@ else
             var path = Uri.EscapeDataString(username);
             var (c, d) = await Session.GetRawAsync($"api/resellers/{path}/config");
             var (u, v) = await Session.GetRawAsync($"api/resellers/{path}/usage");
-            details = $"Configuratie HTTP {c}\n{d}\n\nGebruik HTTP {u}\n{v}";
+            details = $"HTTP {c}\n{d}";
+            usage = $"HTTP {u}\n{v}";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { error = ex.Message; }
         finally { busy = false; }
