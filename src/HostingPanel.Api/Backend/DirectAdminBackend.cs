@@ -13,6 +13,7 @@ public interface IHostingBackend
     LegacyAccountOverviewService LegacyAccountOverview { get; }
     ImpersonationService Impersonation { get; }
     DatabaseManagementService Databases { get; }
+    AccessibleDatabasesService AccessibleDatabases { get; }
     DomainManagementService Domains { get; }
     DnsZoneService Dns { get; }
     FileAccessService FileAccess { get; }
@@ -26,6 +27,7 @@ public sealed class DirectAdminBackend(
     LegacyAccountOverviewService legacyAccountOverview,
     ImpersonationService impersonation,
     DatabaseManagementService databases,
+    AccessibleDatabasesService accessibleDatabases,
     DomainManagementService domains,
     DnsZoneService dns,
     FileAccessService fileAccess,
@@ -37,6 +39,7 @@ public sealed class DirectAdminBackend(
     public LegacyAccountOverviewService LegacyAccountOverview => legacyAccountOverview;
     public ImpersonationService Impersonation => impersonation;
     public DatabaseManagementService Databases => databases;
+    public AccessibleDatabasesService AccessibleDatabases => accessibleDatabases;
     public DomainManagementService Domains => domains;
     public DnsZoneService Dns => dns;
     public FileAccessService FileAccess => fileAccess;
