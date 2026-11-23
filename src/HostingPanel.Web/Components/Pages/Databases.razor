@@ -1,0 +1,107 @@
+@page "/databases"
+@using System.Text.Json
+@inject DirectAdminSession Session
+
+<PageTitle>Databasebeheer — HostingPanel</PageTitle>
+<div class="page-header">
+  <div><div class="eyebrow">Accountbeheer / Databases</div>
+    <h1>Databasebeheer</h1>
+    <p>Databases die DirectAdmin beschikbaar stelt aan de effectieve gebruiker.</p>
+  </div>
+  <button disabled="@loading" @onclick="Load">Vernieuwen</button>
+</div>
+@if (!Session.Connected)
+{
+  <section class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</section>
+}
+else
+{
+  <section class="card">
+    <h2>Databases</h2>
+    @if (error is not null) { <p role="alert" class="error">@error</p> }
+    @if (loading) { <p role="status">Databases laden…</p> }
+    @if (databases is not null)
+    {
+      <label for="dbFilter">Zoek database (@databases.Count)</label>
+      <input id="dbFilter" @bind="search" @bind:event="oninput" placeholder="Databasenaam" />
+      <table><thead><tr><th>Database</th><th>Acties</th></tr></thead><tbody>
+        @foreach(var database in databases.Where(x => x.Contains(search,StringComparison.OrdinalIgnoreCase)))
+        {
+          <tr><td><a href="@($"/databases/{Uri.EscapeDataString(database)}")">@database</a></td>
+            <td><a href="@($"/databases/{Uri.EscapeDataString(database)}")">Gebruikers bekijken / verwijderen</a></td></tr>
+        }
+      </tbody></table>
+      @if(databases.Count==0) { <p>Geen databases gevonden.</p> }
+    }
+  </section>
+  <section class="card">
+    <h2>Database met gebruiker aanmaken</h2>
+    <p>DirectAdmin voegt waar nodig de accountprefix toe. De exacte naam wordt na aanmaken opnieuw uit de backend opgehaald.</p>
+    <label for="databaseName">Databasenaam</label>
+    <input id="databaseName" @bind="newDatabase" autocomplete="off" placeholder="app" />
+    <label for="dbUsername">Databasegebruiker</label>
+    <input id="dbUsername" @bind="newUser" autocomplete="off" placeholder="app" />
+    <label for="dbPassword">Wachtwoord</label>
+    <input id="dbPassword" type="password" @bind="newPassword" autocomplete="new-password" />
+    <button class="primary" disabled="@creating" @onclick="Create">
+      @(creating ? "Aanmaken…" : "Database aanmaken")
+    </button>
+    @if (createMessage is not null) { <p role="status">@createMessage</p> }
+  </section>
+}
+@code {
+  private List<string>? databases;
+  private string search = "";
+  private string newDatabase = "app", newUser = "app", newPassword = "";
+  private string? error, createMessage;
+  private bool loading, creating;
+  protected override async Task OnInitializedAsync()
+  {
+    if (Session.Connected) await Load();
+  }
+  private async Task Load()
+  {
+    if (loading || !Session.Connected) return;
+    loading = true; error = null;
+    try
+    {
+      var (status, body) = await Session.GetDatabasesAsync();
+      if(status!=200)
+      {
+        error=$"Databaseoverzicht niet beschikbaar (HTTP {status}).";
+        databases=null; return;
+      }
+      using var json=JsonDocument.Parse(body);
+      databases=json.RootElement.GetProperty("databases").EnumerateArray()
+        .Select(x=>x.GetString()??"").ToList();
+    }
+    catch(Exception e) when(e is HttpRequestException or JsonException or ArgumentException or InvalidOperationException)
+    { error=e.Message; databases=null; }
+    finally {loading=false;}
+  }
+  private async Task Create()
+  {
+    if (creating || !Session.Connected) return;
+    creating=true; createMessage=null;
+    try
+    {
+      var (status, body)=await Session.CreateDatabaseAsync(newDatabase.Trim(),newUser.Trim(),newPassword);
+      createMessage=status switch
+      {
+        200 => "Database aangemaakt. Het overzicht is bijgewerkt.",
+        409 => "Mutaties zijn uitgeschakeld of de wijziging kon niet worden bevestigd.",
+        400 => "Controleer de database- en gebruikersnaam en het wachtwoord.",
+        403 => "DirectAdmin weigert deze databasebewerking.",
+        _ => $"DirectAdmin heeft het aanmaken niet bevestigd (HTTP {status})."
+      };
+      if(status==200)
+      {
+        newPassword="";
+        await Load();
+      }
+    }
+    catch(Exception e) when(e is HttpRequestException or ArgumentException or InvalidOperationException)
+    { createMessage=e.Message; }
+    finally {creating=false;}
+  }
+}
