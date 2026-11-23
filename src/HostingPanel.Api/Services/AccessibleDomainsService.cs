@@ -35,8 +35,6 @@ public sealed class AccessibleDomainsService(
         var own = await domains.ListAsync(null, auth, ct);
         if (own.Domains is not null)
         {
-            var current = listed.Accounts.FirstOrDefault(x =>
-                !discovered.Values.Any(d => d.Owner.Equals(x.Username, StringComparison.OrdinalIgnoreCase)));
             // ListAsync(null) represents the authenticated effective user's own domains.
             // Owner is taken from the first account only when it can be established.
             // Avoid inventing ownership; caller can still see the domain name.
