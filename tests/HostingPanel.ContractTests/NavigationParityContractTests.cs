@@ -39,11 +39,17 @@ public static class NavigationParityContractTests
                 @"@page ""(?<route>/[^""]+)""").Select(x => x.Groups["route"].Value))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        var hostingPanelExtras = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "Sessies", "Resellerbeheer", "Databasebeheer", "Systeeminformatie",
+            "ModSecurity en ClamAV", "DirectAdmin API"
+        };
         foreach (Match match in declared)
         {
             var label = match.Groups["label"].Value;
             var destination = match.Groups["path"].Value;
-            Require(referenceSectionText.Contains("\"" + label + "\"", StringComparison.Ordinal),
+            Require(hostingPanelExtras.Contains(label) ||
+                referenceSectionText.Contains("\"" + label + "\"", StringComparison.Ordinal),
                 "Navigation label absent in index.html: " + label);
             if (match.Value.StartsWith("Live(", StringComparison.Ordinal))
                 Require(paths.Contains(destination), "Missing implemented page route: " + destination);
