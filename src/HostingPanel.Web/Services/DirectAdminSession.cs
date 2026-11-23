@@ -124,6 +124,49 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
         !string.IsNullOrWhiteSpace(username) && username.Length <= 64 &&
         username.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
 
+    public async Task<(int Status, string Body)> CreateHostingAccountAsync(
+        string kind, string username, string email, string password,
+        string domain, string package, string ip, CancellationToken ct = default)
+    {
+        if (kind is not ("user" or "reseller"))
+            throw new ArgumentException("Invalid account kind.", nameof(kind));
+        using var body = new StringContent(JsonSerializer.Serialize(new {
+            kind, username, email, password, domain, package, ip
+        }), Encoding.UTF8, "application/json");
+        return await SendAsync(HttpMethod.Post, kind == "reseller" ?
+            "hosting/resellers" : "hosting/users", body, ct);
+    }
+
+    public async Task<(int Status, string Body)> DeleteHostingAccountAsync(
+        string kind, string username, string confirmation, CancellationToken ct = default)
+    {
+        if (kind is not ("user" or "reseller") || !IsValidAccountName(username))
+            throw new ArgumentException("Invalid account.");
+        using var body = new StringContent(
+            JsonSerializer.Serialize(new { confirmation }), Encoding.UTF8, "application/json");
+        return await SendAsync(HttpMethod.Delete,
+            (kind == "reseller" ? "hosting/resellers/" : "hosting/users/") +
+            Uri.EscapeDataString(username), body, ct);
+    }
+
+    public async Task<(int Status, string Body)> CreateDnsZoneAsync(
+        string domain, string ip, string ns1, string ns2, CancellationToken ct = default)
+    {
+        using var body = new StringContent(
+            JsonSerializer.Serialize(new { domain, ip, ns1, ns2 }),
+            Encoding.UTF8, "application/json");
+        return await SendAsync(HttpMethod.Post, "hosting/dns/zones", body, ct);
+    }
+
+    public async Task<(int Status, string Body)> DeleteDnsZoneAsync(
+        string domain, string confirmation, CancellationToken ct = default)
+    {
+        using var body = new StringContent(
+            JsonSerializer.Serialize(new { confirmation }), Encoding.UTF8, "application/json");
+        return await SendAsync(HttpMethod.Delete, "hosting/dns/zones/" +
+            Uri.EscapeDataString(domain), body, ct);
+    }
+
     public Task<(int Status, string Body)> GetAccessibleDatabasesAsync(
         CancellationToken ct = default) =>
         SendAsync(HttpMethod.Get, "hosting/databases/accessible", null, ct);
