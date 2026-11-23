@@ -51,14 +51,20 @@ public sealed class AccountCatalogService(IHttpClientFactory clients)
                 ownRequest.Headers.Authorization = auth;
                 using var ownResponse = await clients.CreateClient("legacy-directadmin")
                     .SendAsync(ownRequest, ct);
-                if (ownResponse.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-                    return new((int)ownResponse.StatusCode, null, "ACCESS_DENIED");
-                if (!ownResponse.IsSuccessStatusCode) return new(502, null, "UPSTREAM_ERROR");
-                var fields = LegacyUserDetailsAdapter.Parse(
-                    await ownResponse.Content.ReadAsStringAsync(ct));
-                own = new VisibleAccount(loggedIn,
-                    fields.TryGetValue("usertype", out var role) ? role.ToLowerInvariant() : "user",
-                    fields.TryGetValue("creator", out var creator) ? creator : null);
+                if (ownResponse.IsSuccessStatusCode)
+                {
+                    try
+                    {
+                        var fields = LegacyUserDetailsAdapter.Parse(
+                            await ownResponse.Content.ReadAsStringAsync(ct));
+                        own = new VisibleAccount(loggedIn,
+                            fields.TryGetValue("usertype", out var role) ? role.ToLowerInvariant() : "user",
+                            fields.TryGetValue("creator", out var creator) ? creator : null);
+                    }
+                    catch (LegacyApiException) { /* User config is optional discovery metadata. */ }
+                }
+                // Users may be denied CMD_API_SHOW_USER_CONFIG and still have
+                // access to their own domains. Discovery must not fail here.
             }
 
             var accounts = new Dictionary<string, VisibleAccount>(StringComparer.OrdinalIgnoreCase)
@@ -107,6 +113,7 @@ public sealed class AccountCatalogService(IHttpClientFactory clients)
         }
         catch (LegacyApiException) { return new(403, null, "ACCESS_DENIED"); }
         catch (FormatException) { return new(502, null, "INVALID_LEGACY_RESPONSE"); }
+        catch (System.Text.Json.JsonException) { return new(502, null, "INVALID_LEGACY_RESPONSE"); }
         catch (HttpRequestException) { return new(502, null, "UPSTREAM_UNAVAILABLE"); }
         catch (TaskCanceledException) when (!ct.IsCancellationRequested)
         { return new(504, null, "UPSTREAM_TIMEOUT"); }
