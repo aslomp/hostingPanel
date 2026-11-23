@@ -45,7 +45,7 @@ else
         busy = true; feedback = null;
         try
         {
-            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post, endpoint);
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post, endpoint, """{"packages":[]}""");
             feedback = $"Backend HTTP {status}: {body}";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }
