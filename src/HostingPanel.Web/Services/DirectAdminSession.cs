@@ -10,22 +10,27 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
 {
     private string? _username;
     private string? _loginKey;
+    private string? _impersonatedUsername;
 
     public bool Connected => _loginKey is not null;
-    public string Username => _username ?? "";
+    public string Username => _impersonatedUsername ?? _username ?? "";
+    public string OriginalUsername => _username ?? "";
+    public bool IsImpersonating => _impersonatedUsername is not null;
 
     public void SetCredentials(string username, string loginKey)
     {
-        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(loginKey))
-            throw new ArgumentException("Gebruikersnaam en login key zijn verplicht.");
+        if (string.IsNullOrWhiteSpace(loginKey) || !IsValidAccountName(username))
+            throw new ArgumentException("Geldige gebruikersnaam en login key zijn verplicht.");
         _username = username.Trim();
         _loginKey = loginKey;
+        _impersonatedUsername = null;
     }
 
     public void Disconnect()
     {
         _username = null;
         _loginKey = null;
+        _impersonatedUsername = null;
     }
 
     public async Task<(int Status, string Body)> GetRawAsync(string endpoint, CancellationToken cancellationToken = default)
@@ -43,11 +48,58 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
         if (!Connected) throw new InvalidOperationException("Maak eerst verbinding met DirectAdmin.");
         var http = clients.CreateClient("hosting-api");
         using var request = new HttpRequestMessage(method, endpoint) { Content = content };
-        var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes(_username + ":" + _loginKey));
+        var authenticatedUsername = _impersonatedUsername is null
+            ? _username : _username + "|" + _impersonatedUsername;
+        var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes(authenticatedUsername + ":" + _loginKey));
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         return ((int)response.StatusCode, await response.Content.ReadAsStringAsync(cancellationToken));
     }
+
+    /// <summary>
+    /// Switch the active identity only after HostingPanel.Api has verified the
+    /// original administrator and the delegated identity with DirectAdmin.
+    /// The original login key stays private inside this Blazor circuit.
+    /// </summary>
+    public async Task StartImpersonationAsync(string username, CancellationToken ct = default)
+    {
+        if (!Connected) throw new InvalidOperationException("Maak eerst verbinding.");
+        if (IsImpersonating)
+            throw new InvalidOperationException("Keer eerst terug naar je eigen sessie.");
+        if (!IsValidAccountName(username) || username.Equals(_username, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Ongeldige doelgebruiker.", nameof(username));
+
+        var (status, body) = await SendAsync(HttpMethod.Get,
+            "hosting/impersonation/check?user=" + Uri.EscapeDataString(username), null, ct);
+        if (status != 200)
+        {
+            string error = status switch
+            {
+                401 or 403 => "DirectAdmin staat aanmelden als deze gebruiker niet toe.",
+                501 => "De DirectAdmin-server ondersteunt de vereiste sessievalidatie niet.",
+                _ => $"Impersonation kon niet worden gevalideerd (HTTP {status})."
+            };
+            throw new UnauthorizedAccessException(error);
+        }
+
+        using var response = JsonDocument.Parse(body);
+        if (response.RootElement.ValueKind != JsonValueKind.Object ||
+            !response.RootElement.TryGetProperty("allowed", out var allowed) ||
+            allowed.ValueKind != JsonValueKind.True ||
+            !response.RootElement.TryGetProperty("effectiveUsername", out var actual) ||
+            !username.Equals(actual.GetString(), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("De doelidentiteit kon niet worden bevestigd.");
+        _impersonatedUsername = username;
+    }
+
+    public void EndImpersonation()
+    {
+        _impersonatedUsername = null;
+    }
+
+    private static bool IsValidAccountName(string? username) =>
+        !string.IsNullOrWhiteSpace(username) && username.Length <= 64 &&
+        username.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
 
     public async Task<(int Status, string Body)> GetDomainsAsync(string? username = null,
         CancellationToken cancellationToken = default)
