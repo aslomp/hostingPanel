@@ -4,12 +4,11 @@
 
 <PageTitle>API — HostingPanel</PageTitle>
 <div class="page-header"><div><div class="eyebrow">Integratie</div><h1>DirectAdmin API</h1><p>Bekijk de moderne DirectAdmin-compatibele API-antwoorden van HostingPanel.</p></div></div>
+<div class="card"><p><a href="@SwaggerUrl" target="_blank" rel="noopener noreferrer">Volledige Swagger-documentatie (274 API-paden)</a></p><p>De volledige vastgepinde DirectAdmin-specificatie; niet iedere operatie is al in HostingPanel geïmplementeerd.</p></div>
 @if (!Session.Connected) { <div class="card">Verbind eerst via het <a href="/">dashboard</a>.</div> }
 else
 {
     <div class="card">
-        <p><a href="@SwaggerUrl" target="_blank" rel="noopener noreferrer">Volledige Swagger-documentatie (274 API-paden)</a></p>
-        <p>Dit is de volledige vastgepinde DirectAdmin Swagger. Niet alle operaties zijn al beschikbaar via de legacy-adapter.</p>
         <label>Endpoint<input @bind="endpoint" /></label>
         <button class="primary" @onclick="Fetch">Ophalen</button>
         <p>@status</p>
