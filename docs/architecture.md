@@ -93,3 +93,18 @@ No production mutations occur in CI; contract tests use `hosting-test.xyz1`.
 - The page `/users/{username}` displays the account settings, assigned hosting package, package limits and usage from the adapter, without depending on a fully populated strict `web.userConfig` or `web.userUsage` schema. Missing optional data is shown as unavailable rather than replacing the entire page with HTTP 501.
 - The pinned modern `/api/users/{username}/config` and `/usage` contracts remain separate; contract completeness is evaluated there, not applied as a UI rendering prerequisite.
 - The API strips fields with credential-related names from the account, usage and package details. Package and usage fetch failures do not hide successfully loaded account settings.
+
+## DNS zone management
+
+The fixed external reference contract is `https://demo.directadmin.com:2222/static/swagger.json` (snapshot at `src/HostingPanel.Api/spec/directadmin.swagger.json`). The pinned Swagger 2.0 document exposes **no generic DNS zone CRUD endpoints**. It must not be extended with invented `/api/dns` routes.
+
+HostingPanel business endpoints:
+
+- `GET /hosting/domains/{domain}/dns` — legacy `CMD_DNS_CONTROL?domain=...&json=yes&ttl=yes`, returns real DNS records.
+- `POST /hosting/domains/{domain}/dns` — legacy `CMD_API_DNS_CONTROL` for `add`, `edit`, `delete`; uses exact previous name and value for targeted changes.
+- The global `HostingPanel:EnableMutations` middleware gates all writes, including DNS writes.
+- Blazor `/domains/{domain}/dns` provides record listing, record edit/create, delete confirmation, and refresh.
+- After a mutation the adapter reloads the zone and verifies the exact expected record delta. An ambiguous legacy record-selection string is rejected rather than risking modification of another record.
+- CI verifies fake `.xyz1` DNS fixtures, validates mutation encoding, and checks that actual write calls are blocked by default. It does not contact the configured legacy server for mutations.
+
+DNS record changes are production-impacting once mutations are enabled. DNSSEC and multi-server propagation are not implemented by this slice. Actual wire-format conformance must still be confirmed against the user's DirectAdmin installation.
