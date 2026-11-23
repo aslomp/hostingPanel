@@ -15,6 +15,9 @@
 - GET /healthz — service status.
 - GET /openapi/directadmin.json — complete pinned Swagger spec.
 - GET /api/search/users — modern JSON array, search query `q` and `limit` (default 50, cap 1000); legacy adapter.
+- GET /api/users/{username}/config — read-only translation of CMD_API_SHOW_USER_CONFIG, strict required-field check against pinned web.userConfig schema.
+- GET /api/users/{username}/usage — read-only translation of CMD_API_SHOW_USER_USAGE with limits from CMD_API_SHOW_USER_CONFIG; legacy MiB is converted into integer bytes.
+- These two details routes return **501 LEGACY_FIELDS_UNAVAILABLE** if the legacy server does not provide all required fields. No placeholder values are invented. The Blazor detail view explains that limitation.
 - Other /api/* routes — **501 NOT_IMPLEMENTED** instead of forwarding incompatible requests to legacy endpoints.
 - Existing Blazor dashboard and users page use modern endpoint.
 - Account modification, user details, DNS, hosting packages, TLS, databases, etc. are **not implemented yet**.
