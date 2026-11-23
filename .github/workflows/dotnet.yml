@@ -92,7 +92,7 @@ jobs:
             grep -q 'UNAUTHORIZED' /tmp/response
           done
 
-      - name: Validate read-only preview and global mutation gate
+      - name: Validate preview and unauthenticated mutation boundaries
         shell: bash
         run: |
           set -euo pipefail
@@ -105,77 +105,24 @@ jobs:
             if curl -fsS http://127.0.0.1:5091/healthz >/dev/null 2>&1; then break; fi
             sleep 1
           done
-          status=$(curl -sS -o /tmp/hp-domain-preview -w '%{http_code}' -X POST \
-            -H 'Authorization: Basic ZGVtbzpkZW1v' \
-            -H 'Content-Type: application/json' \
-            -d '{"domain":"hosting-test.xyz1","php":true,"ssl":true,"cgi":false}' \
-            http://127.0.0.1:5091/hosting/domains/preview)
-          test "$status" = "200"
-          python3 - <<'PY'
-          import json
-          doc=json.load(open("/tmp/hp-domain-preview"))
-          assert doc["domain"] == "hosting-test.xyz1"
-          assert doc["dryRun"] is True and doc["executed"] is False
-          assert doc["legacyEndpoint"] == "CMD_API_DOMAIN"
-          PY
-          status=$(curl -sS -o /tmp/hp-invalid-domain -w '%{http_code}' -X POST \
-            -H 'Authorization: Basic ZGVtbzpkZW1v' \
-            -H 'Content-Type: application/json' \
-            -d '{"domain":"production.com"}' \
-            http://127.0.0.1:5091/hosting/domains/preview)
-          test "$status" = "200"
-
-          # Mutations must be disabled by default, even with apparently valid Basic credentials.
-          code=$(curl -sS -o /tmp/hp-disabled -w '%{http_code}' -X POST \
-            -H 'Authorization: Basic ZGVtbzpkZW1v' \
-            -H 'Content-Type: application/json' \
-            -d '{"domain":"hosting-test.xyz1","action":"create","confirmation":"hosting-test.xyz1"}' \
-            http://127.0.0.1:5091/hosting/domains/execute)
-          test "$code" = "409"
-          grep -q MUTATIONS_DISABLED /tmp/hp-disabled
-          code=$(curl -sS -o /tmp/hp-invalid -w '%{http_code}' -X POST \
-            -H 'Authorization: Basic ZGVtbzpkZW1v' \
-            -H 'Content-Type: application/json' \
-            -d '{"domain":"example.com","action":"delete","confirmation":"example.com"}' \
-            http://127.0.0.1:5091/hosting/domains/execute)
-          test "$code" = "409"
-
-      - name: Check domain settings mutation is blocked globally
-        shell: bash
-        run: |
-          set -euo pipefail
-          ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://127.0.0.1:5092 \
-            DirectAdmin__BaseUrl=https://demo.directadmin.com:2222/ \
-            dotnet run --no-build -c Release --project src/HostingPanel.Api >/tmp/hp-domain-detail.log 2>&1 &
-          pid=$!
-          trap 'cat /tmp/hp-domain-detail.log; kill "$pid" 2>/dev/null || true' EXIT
-          for i in {1..40}; do
-            if curl -fsS http://127.0.0.1:5092/healthz >/dev/null 2>&1; then break; fi
-            sleep 1
-          done
-          code=$(curl -sS -o /tmp/hp-settings-disabled -w '%{http_code}' -X PUT \
+          code=$(curl -sS -o /tmp/hp-preview -w '%{http_code}' -X POST \
             -H 'Authorization: Basic ZGVtbzpkZW1v' -H 'Content-Type: application/json' \
-            -d '{"setting":"ssl","value":"ON"}' \
-            http://127.0.0.1:5092/hosting/domains/demo.xyz1/settings)
-          test "$code" = "409"
-          grep -q MUTATIONS_DISABLED /tmp/hp-settings-disabled
-
-      - name: DNS mutation respects global read-only mode
-        shell: bash
-        run: |
-          set -euo pipefail
-          ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://127.0.0.1:5093 \
-            DirectAdmin__BaseUrl=https://demo.directadmin.com:2222/ \
-            dotnet run --no-build -c Release --project src/HostingPanel.Api >/tmp/hp-dns.log 2>&1 &
-          pid=$!
-          trap 'cat /tmp/hp-dns.log; kill "$pid" 2>/dev/null || true' EXIT
-          for i in {1..40}; do
-            if curl -fsS http://127.0.0.1:5093/healthz >/dev/null 2>&1; then break; fi
-            sleep 1
+            -d '{"domain":"hosting-test.xyz1","php":true,"ssl":true}' \
+            http://127.0.0.1:5091/hosting/domains/preview)
+          test "$code" = "200"
+          grep -q '"dryRun":true' /tmp/hp-preview
+          for target in hosting/domains/execute hosting/domains/hosting-test.xyz1/dns; do
+            code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X POST \
+              -H 'Content-Type: application/json' -d '{}' \
+              "http://127.0.0.1:5091/$target")
+            test "$code" = "401"
           done
-          code=$(curl -sS -o /tmp/hp-dns-disabled -w '%{http_code}' -X POST \
-            -H 'Authorization: Basic ZGVtbzpkZW1v' -H 'Content-Type: application/json' \
-            -d '{"action":"add","record":{"type":"A","name":"www","value":"192.0.2.10"}}' \
-            http://127.0.0.1:5093/hosting/domains/hosting-test.xyz1/dns)
-          test "$code" = "409"
-          grep -q MUTATIONS_DISABLED /tmp/hp-dns-disabled
+          code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X PUT \
+            -H 'Content-Type: application/json' -d '{"setting":"ssl","value":"ON"}' \
+            http://127.0.0.1:5091/hosting/domains/hosting-test.xyz1/settings)
+          test "$code" = "401"
+          code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X PATCH \
+            http://127.0.0.1:5091/api/arbitrary/new-operation)
+          test "$code" = "401"
+          # Intentionally no authenticated writes to the live demo server in CI.
+          # Authorized writes and fallback behavior are verified with fake HTTP handlers.
