@@ -1,4 +1,5 @@
 @page "/system-updates"
+@using System.Text.Json
 @inject DirectAdminSession Session
 <PageTitle>Systeemupdates — HostingPanel</PageTitle>
 <div class="page-header"><div><div class="eyebrow">Serverbeheer</div><h1>Systeempakketten</h1><p>Beschikbare updates en updatehistorie rechtstreeks uit de backend.</p></div><button disabled="@busy" @onclick="Load">Vernieuwen</button></div>
@@ -9,6 +10,8 @@ else
     <section class="card"><h2>Updatehistorie</h2><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@history</pre></section>
     <section class="card">
         <h2>Updates controleren</h2><p>Laat DirectAdmin zijn updatecontrole uitvoeren zonder pakketten te installeren.</p>
+        <label>Pakketten (komma-gescheiden, leeg betekent alle updates)</label>
+        <input @bind="selectedPackages" placeholder="openssl, nginx" />
         <button disabled="@busy" @onclick="Check">Update-test starten</button>
         <h2>Update uitvoeren</h2>
         <p>Dit kan systeemsoftware daadwerkelijk veranderen. Bevestig expliciet.</p>
@@ -16,10 +19,17 @@ else
         <button class="primary" disabled="@(busy || confirmation != "UPDATE")" @onclick="Run">Updates starten</button>
         @if (feedback is not null) { <p role="status">@feedback</p> }
     </section>
+    <section class="card">
+        <h2>Update-transactielog</h2>
+        <label>Transactie-ID uit de updatehistorie</label><input @bind="transactionId" />
+        <button disabled="@(busy || string.IsNullOrWhiteSpace(transactionId))" @onclick="FetchLog">Log ophalen</button>
+        <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@transactionLog</pre>
+    </section>
     @if (busy) { <p role="status">Verwerken…</p> }
 }
 @code {
     private string updates = "", history = "", confirmation = "";
+    private string selectedPackages = "", transactionId = "", transactionLog = "";
     private string? feedback;
     private bool busy;
     protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
@@ -37,6 +47,23 @@ else
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }
         finally { busy = false; }
     }
+    private async Task FetchLog()
+    {
+        if (busy || !Session.Connected || string.IsNullOrWhiteSpace(transactionId) ||
+            transactionId.Length > 128 ||
+            transactionId.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_')))
+        { feedback = "Ongeldige transactie-ID."; return; }
+        busy = true; feedback = null;
+        try
+        {
+            var (status, body) = await Session.GetRawAsync(
+                "api/system-packages/history/" + Uri.EscapeDataString(transactionId) + "/log");
+            transactionLog = $"HTTP {status}\\n{body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { feedback = ex.Message; }
+        finally { busy = false; }
+    }
     private Task Check() => Action("api/system-packages/update-test");
     private Task Run() => confirmation == "UPDATE" ? Action("api/system-packages/update-run") : Task.CompletedTask;
     private async Task Action(string endpoint)
@@ -45,7 +72,12 @@ else
         busy = true; feedback = null;
         try
         {
-            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post, endpoint, """{"packages":[]}""");
+            var packages = selectedPackages.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (packages.Any(p => p.Length is < 1 or > 128 ||
+                p.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.' or '+'))))
+            { feedback = "Ongeldige pakketnaam."; return; }
+            var payload = JsonSerializer.Serialize(new { packages });
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post, endpoint, payload);
             feedback = $"Backend HTTP {status}: {body}";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }
