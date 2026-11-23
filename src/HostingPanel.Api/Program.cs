@@ -8,6 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<LegacyUserDetailsService>();
 builder.Services.AddScoped<LegacyAccountOverviewService>();
 builder.Services.AddScoped<DomainManagementService>();
+builder.Services.AddScoped<ImpersonationService>();
 builder.Services.AddScoped<DnsZoneService>();
 builder.Services.AddHttpClient("legacy-directadmin", client =>
 {
@@ -114,6 +115,20 @@ static async Task<IResult> ReadUserDetail(HttpContext context, string username,
         ? Results.Json(result.Result)
         : Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status);
 }
+
+// Read-only validation of an administrator's delegated DirectAdmin identity.
+// This does not create a session, change privileges or disclose credentials.
+app.MapGet("/hosting/impersonation/check", async (HttpContext context,
+    ImpersonationService service) =>
+{
+    if (!TryGetBasic(context, out var auth))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    var target = context.Request.Query["user"].ToString();
+    var result = await service.CheckAsync(auth, target, context.RequestAborted);
+    return result.Error is null
+        ? Results.Json(new { allowed = true, effectiveUsername = target })
+        : Results.Json(new { type = result.Error }, statusCode: result.Status);
+});
 
 // HostingPanel business view: available legacy account properties and the assigned package.
 // This is separate from the strict modern /api/users/{username}/config Swagger response.
