@@ -36,7 +36,7 @@ public static class NavigationParityContractTests
             reference.IndexOf("const sampleRows =", StringComparison.Ordinal)];
         var paths = Directory.GetFiles(pages, "*.razor")
             .SelectMany(path => Regex.Matches(File.ReadAllText(path),
-                "@page \\\"(?<route>/[^\\\"]+)\\\"").Select(x => x.Groups["route"].Value))
+                @"@page ""(?<route>/[^""]+)""").Select(x => x.Groups["route"].Value))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         foreach (Match match in declared)
