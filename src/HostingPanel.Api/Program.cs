@@ -5,6 +5,8 @@ using HostingPanel.Api.Adapters;
 using HostingPanel.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddControllers();
+builder.Services.AddScoped<IHostingBackend, DirectAdminBackend>();
 builder.Services.AddScoped<LegacyUserDetailsService>();
 builder.Services.AddScoped<LegacyAccountOverviewService>();
 builder.Services.AddScoped<DomainManagementService>();
@@ -32,8 +34,6 @@ builder.Services.AddHttpClient("legacy-directadmin", client =>
 
 var app = builder.Build();
 
-// Swagger UI assets are embedded in Swashbuckle; no browser-side CDN is required.
-// Serve the complete pinned upstream contract, not a generated subset of implemented routes.
 app.UseSwaggerUI(options =>
 {
     options.RoutePrefix = "swagger";
@@ -41,36 +41,9 @@ app.UseSwaggerUI(options =>
     options.DocumentTitle = "HostingPanel | DirectAdmin API documentation";
     options.DefaultModelsExpandDepth(-1);
 });
-app.MapGet("/swagger", () => Results.Redirect("/swagger/index.html"));
 app.UseHttpsRedirection();
 
-// Global write gate. Permission decisions for enabled operations remain with DirectAdmin.
-app.Use(async (context, next) =>
-{
-    var mutating = HttpMethods.IsPost(context.Request.Method) ||
-        HttpMethods.IsPut(context.Request.Method) ||
-        HttpMethods.IsPatch(context.Request.Method) ||
-        HttpMethods.IsDelete(context.Request.Method);
-    var preview = context.Request.Path.Equals(
-        "/hosting/domains/preview", StringComparison.OrdinalIgnoreCase);
-    if (mutating && !preview &&
-        AuthenticationHeaderValue.TryParse(context.Request.Headers.Authorization.ToString(), out var presented) &&
-        presented.Scheme.Equals("Basic", StringComparison.OrdinalIgnoreCase) &&
-        !string.IsNullOrWhiteSpace(presented.Parameter) &&
-        !context.RequestServices.GetRequiredService<IConfiguration>()
-            .GetValue<bool>("HostingPanel:EnableMutations"))
-    {
-        context.Response.StatusCode = StatusCodes.Status409Conflict;
-        await context.Response.WriteAsJsonAsync(new { type = "MUTATIONS_DISABLED" });
-        return;
-    }
-    await next();
-});
-
-
-app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
-
-// Static published contract. The backend adapter is implemented incrementally.
+// Published upstream Swagger 2.0 contract is authoritative, including schemas and security definitions.
 app.MapGet("/openapi/directadmin.json", (IWebHostEnvironment environment) =>
 {
     var filename = Path.Combine(environment.ContentRootPath, "spec", "directadmin.swagger.json");
@@ -78,329 +51,13 @@ app.MapGet("/openapi/directadmin.json", (IWebHostEnvironment environment) =>
         ? Results.File(filename, "application/json")
         : Results.Problem("Pinned OpenAPI specification unavailable.", statusCode: 503);
 });
-
-// Modern DirectAdmin contract: GET /api/search/users returns a string array.
-// DirectAdmin itself decides which user, reseller and admin account lists are
-// accessible. HostingPanel does not duplicate its scope or privilege model.
-app.MapGet("/api/search/users", async (HttpContext context, AccountCatalogService catalog) =>
+app.MapGet("/swagger/v1/swagger.json", (IWebHostEnvironment environment) =>
 {
-    if (!TryGetBasic(context, out var authentication))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var query = context.Request.Query["q"].ToString();
-    var rawLimit = context.Request.Query["limit"].ToString();
-    var limit = 50;
-    if (rawLimit.Length > 0 && (!int.TryParse(rawLimit, out limit) || limit is < 1 or > 1000))
-        return Results.Json(new { type = "BAD_REQUEST" }, statusCode: 400);
-    if (query.Length > 256)
-        return Results.Json(new { type = "BAD_REQUEST" }, statusCode: 400);
-
-    var listing = await catalog.ListAsync(authentication, context.RequestAborted);
-    return listing.Accounts is null
-        ? Results.Json(new { type = listing.Error ?? "UPSTREAM_ERROR" }, statusCode: listing.Status)
-        : Results.Json(listing.Accounts.Select(x => x.Username)
-            .Where(x => string.IsNullOrEmpty(query) ||
-                x.Contains(query, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
-            .Take(limit).ToArray());
+    var filename = Path.Combine(environment.ContentRootPath, "spec", "directadmin.swagger.json");
+    return File.Exists(filename)
+        ? Results.File(filename, "application/json")
+        : Results.Problem("Pinned OpenAPI specification unavailable.", statusCode: 503);
 });
-
-// HostingPanel-specific view used to show the DirectAdmin creator relationship.
-// Creator and role are metadata, not a second authorization model.
-app.MapGet("/hosting/accounts", async (HttpContext context, AccountCatalogService catalog) =>
-{
-    if (!TryGetBasic(context, out var auth))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var result = await catalog.ListAsync(auth, context.RequestAborted);
-    return result.Accounts is null
-        ? Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
-        : Results.Json(new { accounts = result.Accounts });
-});
-
-app.MapGet("/hosting/domains/accessible", async (HttpContext context,
-    AccessibleDomainsService service) =>
-{
-    if (!TryGetBasic(context, out var auth))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var result = await service.ListAsync(auth, context.RequestAborted);
-    return result.Items is null
-        ? Results.Json(new { type = result.Warning ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
-        : Results.Json(new {
-            items = result.Items, domains = result.Items.Select(x => x.Domain).ToArray(),
-            warning = result.Warning
-        });
-});
-
-// Modern DirectAdmin user detail endpoints backed by a legacy read-only adapter.
-// The strict Swagger validator returns 501 if the old server lacks required fields.
-// This is preferable to plausible-looking but incorrect account state.
-app.MapGet("/api/users/{username}/config", (HttpContext context, string username,
-    LegacyUserDetailsService service) => ReadUserDetail(context, username, "config", service));
-app.MapGet("/api/users/{username}/usage", (HttpContext context, string username,
-    LegacyUserDetailsService service) => ReadUserDetail(context, username, "usage", service));
-
-static async Task<IResult> ReadUserDetail(HttpContext context, string username,
-    string kind, LegacyUserDetailsService service)
-{
-    if (!TryGetBasic(context, out var auth))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    if (username.Length is < 1 or > 64 || !username.All(c =>
-        char.IsAsciiLetterOrDigit(c) || c is '_' or '-'))
-        return Results.Json(new { type = "BAD_REQUEST" }, statusCode: 400);
-    var result = await service.GetAsync(username, kind, auth, context.RequestAborted);
-    return result.Result is not null
-        ? Results.Json(result.Result)
-        : Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status);
-}
-
-// Read-only validation of an administrator's delegated DirectAdmin identity.
-// This does not create a session, change privileges or disclose credentials.
-app.MapGet("/hosting/impersonation/check", async (HttpContext context,
-    ImpersonationService service) =>
-{
-    if (!TryGetBasic(context, out var auth))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var target = context.Request.Query["user"].ToString();
-    var result = await service.CheckAsync(auth, target, context.RequestAborted);
-    return result.Error is null
-        ? Results.Json(new { allowed = true, effectiveUsername = target })
-        : Results.Json(new { type = result.Error }, statusCode: result.Status);
-});
-
-// HostingPanel business view: available legacy account properties and the assigned package.
-// This is separate from the strict modern /api/users/{username}/config Swagger response.
-app.MapGet("/hosting/users/{username}/overview", async (HttpContext context,
-    string username, LegacyAccountOverviewService service) =>
-{
-    if (!TryGetBasic(context, out var auth))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    if (!LegacyAccountOverviewService.ValidUsername(username))
-        return Results.Json(new { type = "INVALID_USERNAME" }, statusCode: 400);
-    var result = await service.GetAsync(username, auth, context.RequestAborted);
-    return result.Config is null
-        ? Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
-        : Results.Json(new {
-            username, config = result.Config,
-            package = result.Package, packageSettings = result.PackageSettings,
-            packageError = result.Error, usage = result.Usage, usageError = result.UsageError
-        });
-});
-
-// Database management: legacy adapter exposed separately from strict modern Swagger.
-// No local account-ownership checks. DirectAdmin decides scope for delegated credentials.
-app.MapGet("/hosting/databases", async (HttpContext context, DatabaseManagementService service) =>
-{
-    if (!TryGetBasic(context, out var auth))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var result = await service.ListAsync(auth, context.RequestAborted);
-    return result.Databases is null
-        ? Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
-        : Results.Json(new { databases = result.Databases });
-});
-app.MapGet("/hosting/databases/{database}/users", async (HttpContext context,
-    string database, DatabaseManagementService service) =>
-{
-    if (!TryGetBasic(context, out var auth))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var result = await service.UsersAsync(database, auth, context.RequestAborted);
-    return result.Users is null
-        ? Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
-        : Results.Json(new { database, users = result.Users });
-});
-app.MapPost("/hosting/databases", async (HttpContext context,
-    DatabaseCreateRequest input, DatabaseManagementService service) =>
-{
-    if (!TryGetBasic(context, out var auth))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var result = await service.CreateAsync(input, auth, context.RequestAborted);
-    return result.Error is null
-        ? Results.Json(new { created = true })
-        : Results.Json(new { type = result.Error }, statusCode: result.Status);
-});
-app.MapDelete("/hosting/databases/{database}", async (HttpContext context,
-    string database, DatabaseDeleteRequest input, DatabaseManagementService service) =>
-{
-    if (!TryGetBasic(context, out var auth))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var result = await service.DeleteAsync(database, input.Confirmation, auth,
-        context.RequestAborted);
-    return result.Error is null
-        ? Results.Json(new { database, deleted = true })
-        : Results.Json(new { type = result.Error }, statusCode: result.Status);
-});
-
-// HostingPanel-specific business routes: not misrepresented as DirectAdmin Swagger routes.
-// Reads current-account domains, or (for authorized admins/resellers) a selected user's domains.
-app.MapGet("/hosting/domains", async (HttpContext context, DomainManagementService service) =>
-{
-    if (!TryGetBasic(context, out var auth))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var owner = context.Request.Query["user"].ToString();
-    var selected = string.IsNullOrWhiteSpace(owner) ? null : owner;
-    if (!DomainManagementService.ValidOwner(selected))
-        return Results.Json(new { type = "BAD_REQUEST" }, statusCode: 400);
-
-    var response = await service.ListAsync(selected, auth, context.RequestAborted);
-    return response.Domains is not null
-        ? Results.Json(new { owner = selected, domains = response.Domains })
-        : Results.Json(new { type = response.Error ?? "UPSTREAM_ERROR" }, statusCode: response.Status);
-});
-
-// Explicitly a preview. No POST requests are sent to DirectAdmin or to its file system.
-app.MapPost("/hosting/domains/preview", (HttpContext context, DomainCreatePreview input) =>
-{
-    if (!TryGetBasic(context, out _))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    if (!LegacyDomainsAdapter.IsValidDomain(input.Domain))
-        return Results.Json(new { type = "INVALID_DOMAIN" }, statusCode: 400);
-    return Results.Json(new {
-        domain = input.Domain.ToLowerInvariant(),
-        dryRun = true,
-        legacyEndpoint = "CMD_API_DOMAIN",
-        method = "POST",
-        form = LegacyDomainsAdapter.EncodeCreateForm(input.Domain.ToLowerInvariant(), input.Php, input.Ssl, input.Cgi),
-        executed = false
-    });
-});
-
-// Destructive actions retain explicit user confirmation; DirectAdmin decides authorization.
-app.MapPost("/hosting/domains/execute", async (HttpContext context,
-    DomainMutationRequest input, DomainManagementService service) =>
-{
-    if (!TryGetBasic(context, out var auth))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var result = await service.MutateAsync(input, auth, context.RequestAborted);
-    return result.Error is null
-        ? Results.Json(new { domain = input.Domain.ToLowerInvariant(), action = input.Action, executed = true })
-        : Results.Json(new { type = result.Error }, statusCode: result.Status);
-});
-
-// Read and update a single domain's DirectAdmin settings. Not part of the pinned
-// modern DirectAdmin Swagger: these are HostingPanel-owned business routes.
-app.MapGet("/hosting/domains/{domain}", async (HttpContext context,
-    string domain, DomainManagementService service) =>
-{
-    if (!TryGetBasic(context, out var auth))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var result = await service.GetDetailsAsync(domain, auth, context.RequestAborted);
-    return result.Settings is not null
-        ? Results.Json(new { domain, settings = result.Settings })
-        : Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status);
-});
-
-app.MapPut("/hosting/domains/{domain}/settings", async (HttpContext context, string domain,
-    DomainSettingRequest input, DomainManagementService service) =>
-{
-    if (!TryGetBasic(context, out var auth))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var result = await service.UpdateSettingAsync(domain, input.Setting, input.Value,
-        auth, context.RequestAborted);
-    return result.Error is null
-        ? Results.Json(new { domain, setting = input.Setting, updated = true })
-        : Results.Json(new { type = result.Error }, statusCode: result.Status);
-});
-
-// Administrator-level server-wide DNS zones, independent of hosting account ownership.
-// DirectAdmin itself verifies the original admin account on each request.
-app.MapGet("/hosting/dns/zones", async (HttpContext context, DnsZoneService service) =>
-{
-    if (!TryGetBasic(context, out var auth))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var rawPage = context.Request.Query["page"].ToString();
-    if (!int.TryParse(string.IsNullOrEmpty(rawPage) ? "1" : rawPage, out var page)
-        || page is < 1 or > 10000)
-        return Results.Json(new { type = "INVALID_PAGE" }, statusCode: 400);
-    var result = await service.ListAdminZonesAsync(auth, page, context.RequestAborted);
-    return result.Zones is null
-        ? Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
-        : Results.Json(new { zones = result.Zones, page });
-});
-
-// DNS management is a HostingPanel-owned interface because the pinned modern
-// DirectAdmin Swagger has no public DNS zone CRUD path.
-app.MapGet("/hosting/domains/{domain}/dns", async (HttpContext context,
-    string domain, DnsZoneService service) =>
-{
-    if (!TryGetBasic(context, out var auth))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var result = await service.ReadAsync(domain, auth, context.RequestAborted);
-    return result.Records is null
-        ? Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
-        : Results.Json(new { domain, records = result.Records });
-});
-
-app.MapPost("/hosting/domains/{domain}/dns", async (HttpContext context, string domain,
-    DnsChange input, DnsZoneService service) =>
-{
-    if (!TryGetBasic(context, out var auth))
-        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var result = await service.ChangeAsync(domain, input, auth, context.RequestAborted);
-    return result.Error is null
-        ? Results.Json(new { domain, action = input.Action, applied = true })
-        : Results.Json(new { type = result.Error }, statusCode: result.Status);
-});
-
-// Unimplemented modern paths are forwarded unchanged to the configured DirectAdmin
-// origin. The upstream decides support and authorization (including 401/403/404/501).
-// This is deliberately restricted to /api/*; never proxy arbitrary URLs or hosts.
-app.MapMethods("/api/{**path}", ["GET", "POST", "PUT", "PATCH", "DELETE"],
-    async (HttpContext context, IHttpClientFactory clients) =>
-    {
-        if (!TryGetBasic(context, out var auth))
-        {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return;
-        }
-
-        var rawPath = context.Request.Path.Value ?? "";
-        if (!rawPath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase)
-            || rawPath.Contains("..", StringComparison.Ordinal)
-            || rawPath.Contains('\\') || rawPath.Any(char.IsControl))
-        {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            return;
-        }
-
-        using var upstream = new HttpRequestMessage(
-            new HttpMethod(context.Request.Method), rawPath.TrimStart('/') + context.Request.QueryString);
-        upstream.Headers.Authorization = auth;
-        if (context.Request.ContentLength is > 0 || context.Request.Headers.ContainsKey("Transfer-Encoding"))
-        {
-            upstream.Content = new StreamContent(context.Request.Body);
-            if (!string.IsNullOrWhiteSpace(context.Request.ContentType))
-                upstream.Content.Headers.TryAddWithoutValidation("Content-Type", context.Request.ContentType);
-        }
-
-        try
-        {
-            using var response = await clients.CreateClient("legacy-directadmin")
-                .SendAsync(upstream, HttpCompletionOption.ResponseHeadersRead, context.RequestAborted);
-            context.Response.StatusCode = (int)response.StatusCode;
-            if (response.Content.Headers.ContentType is { } contentType)
-                context.Response.ContentType = contentType.ToString();
-            await response.Content.CopyToAsync(context.Response.Body, context.RequestAborted);
-        }
-        catch (TaskCanceledException) when (!context.RequestAborted.IsCancellationRequested)
-        {
-            context.Response.StatusCode = StatusCodes.Status504GatewayTimeout;
-        }
-        catch (HttpRequestException)
-        {
-            context.Response.StatusCode = StatusCodes.Status502BadGateway;
-        }
-    });
-
+app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
+app.MapControllers();
 app.Run();
-
-static bool TryGetBasic(HttpContext context, out AuthenticationHeaderValue authentication)
-{
-    authentication = null!;
-    if (!AuthenticationHeaderValue.TryParse(context.Request.Headers.Authorization.ToString(), out var value)
-        || !value.Scheme.Equals("Basic", StringComparison.OrdinalIgnoreCase)
-        || string.IsNullOrWhiteSpace(value.Parameter))
-    {
-        context.Response.Headers.WWWAuthenticate = "Basic realm=\"HostingPanel API\"";
-        return false;
-    }
-    authentication = value;
-    return true;
-}
