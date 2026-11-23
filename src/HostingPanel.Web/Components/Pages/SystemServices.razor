@@ -27,9 +27,18 @@ else
         <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(service) || confirmation != service)" @onclick="Execute">Actie uitvoeren</button>
         @if (outcome is not null) { <p role="status">@outcome</p> }
     </section>
+    <section class="card">
+        <h2>Service-watchdog</h2>
+        <p>Configureer of DirectAdmin de geselecteerde service bewaakt.</p>
+        <label>Watchdog</label>
+        <select @bind="watchdog"><option value="true">Inschakelen</option><option value="false">Uitschakelen</option></select>
+        <label>Typ de servicenaam ter bevestiging</label><input @bind="watchdogConfirmation" />
+        <button disabled="@(busy || !ValidService(service) || watchdogConfirmation != service)" @onclick="SetWatchdog">Watchdog bijwerken</button>
+    </section>
 }
 @code {
     private string service = "", action = "restart", confirmation = "";
+    private string watchdog = "true", watchdogConfirmation = "";
     private string services = "", details = "";
     private string? error, outcome;
     private bool busy;
@@ -65,6 +74,22 @@ else
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         { error = ex.Message; }
         finally { busy = false; }
+    }
+    private async Task SetWatchdog()
+    {
+        if (busy || !ValidService(service) || watchdogConfirmation != service) return;
+        busy = true; outcome = null;
+        try
+        {
+            var payload = watchdog == "true" ? """{"enable":true}""" : """{"enable":false}""";
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Put,
+                $"api/system-services-actions/service/{Uri.EscapeDataString(service)}/watchdog", payload);
+            outcome = status == 204 ? "DirectAdmin bevestigt de watchdogwijziging."
+                : $"Watchdog-operatie: backend HTTP {status}. {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { outcome = ex.Message; }
+        finally { busy = false; watchdogConfirmation = ""; }
     }
     private async Task Execute()
     {
