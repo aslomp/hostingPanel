@@ -1,6 +1,7 @@
 @page "/messages"
 @using System.Text.Json
 @inject DirectAdminSession Session
+@implements IDisposable
 <PageTitle>Berichten — HostingPanel</PageTitle>
 
 <div class="page-header"><div><div class="eyebrow">Ondersteuning / Berichten</div><h1>Berichten</h1>
@@ -52,7 +53,14 @@ else
         item.TryGetProperty(key, out var value) ? value.ToString() : "";
     private static bool Flag(JsonElement item, string key) =>
         item.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.True;
-    protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
+    private void OnTicketChanged() => _ = InvokeAsync(async () =>
+    {
+        await Load();
+        StateHasChanged();
+    });
+    public void Dispose() => Session.TicketInboxChanged -= OnTicketChanged;
+    protected override async Task OnInitializedAsync() { Session.TicketInboxChanged += OnTicketChanged;
+        if (Session.Connected) await Load(); }
     private async Task Load()
     {
         if (loading || !Session.Connected) return;
