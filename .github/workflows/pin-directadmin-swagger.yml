@@ -1,0 +1,45 @@
+name: Pin DirectAdmin OpenAPI snapshot
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/blazor-directadmin-api
+    paths:
+      - .github/workflows/pin-directadmin-swagger.yml
+permissions:
+  contents: write
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/blazor-directadmin-api
+          persist-credentials: true
+      - name: Download the static Swagger 2.0 document from DirectAdmin demo
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p src/HostingPanel.Api/spec
+          curl -fsSL --max-time 60 --retry 3 \
+            'https://demo.directadmin.com:2222/static/swagger.json' \
+            -o src/HostingPanel.Api/spec/directadmin.swagger.json
+          python3 - <<'PY'
+          import json
+          path="src/HostingPanel.Api/spec/directadmin.swagger.json"
+          with open(path, encoding="utf-8") as f: spec=json.load(f)
+          assert spec.get("swagger")=="2.0"
+          assert isinstance(spec.get("paths"), dict) and len(spec["paths"]) > 30
+          print("Pinned static DirectAdmin API routes:",len(spec["paths"]))
+          PY
+      - name: Commit snapshot to feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add src/HostingPanel.Api/spec/directadmin.swagger.json
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' \
+                -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+                commit -m 'Pin complete DirectAdmin demo Swagger 2.0 snapshot'
+            git push
+          fi
