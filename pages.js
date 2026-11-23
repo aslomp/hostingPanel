@@ -160,8 +160,9 @@ const targetForAction=(action)=>{
  return "Algemeen";
 };
 let pageTab="",pageMode="index",pageFilter="";
+
 const nativeRender=render,nativeGo=go;
-go=function(label){pageTab="";pageMode="index";pageFilter="";nativeGo(label);};
+go=function(label){pageTab="";pageMode="index";pageFilter="";flowView="overview";flowItem="";flowTab="";nativeGo(label);};
 function heading(title,description){return '<div class="heading"><div><div class="eyebrow">DirectAdmin / '+escapeHtml(role)+'</div><h1>'+escapeHtml(title)+'</h1><div class="subhead">'+escapeHtml(description)+'</div></div><div class="heading-actions"><button class="btn" data-go="Dashboard">← Dashboard</button></div></div>';}
 const hint='<span class="demo-hint">● Interfacevoorbeeld · geen backend</span>';
 function fieldHtml(field,index){
@@ -201,13 +202,123 @@ function secondary(title,record){
  '<div class="page-commands"><button class="btn" data-page-return>← Terug naar overzicht</button></div>'+
  formCard(fields,["Concept bewaren","Annuleren"],record);
 }
+
+/* Specific navigation flows for account, domain, DNS and server administration. */
+let flowView="overview",flowItem="",flowTab="";
+const flowGroups={
+ users:["Toon Alle Gebruikers","Mijn Gebruikers","Nieuwe Gebruiker Toevoegen","Resellers","Reseller Aanmaken","Administrators","Admin Aanmaken"],
+ packages:["Beheer gebruikers pakketten","Beheer Reseller Pakketten"],
+ domains:["Domeinbeheer"],
+ dns:["DNS Beheer"],
+ server:["Administrator instellingen","Aangepaste HTTPD configuraties","IP Beheer","Naam Servers","Multi Server Instellen","PHP Instellingen","Server TLS Certificaat","CustomBuild","Systeem Services"]
+};
+const flowUsers=[["demo","Gebruiker","demo@example.nl","basic","1","Actief"],["hosting","Gebruiker","hosting@example.nl","business","4","Actief"],["reseller-demo","Reseller","reseller@example.nl","reseller-business","9","Actief"],["admin","Admin","admin@example.nl","onbeperkt","38","Actief"]];
+const flowDomains=[["example.nl","demo","192.0.2.10","8.4","Actief"],["demo.example.nl","hosting","192.0.2.11","8.3","Actief"]];
+const flowZones=[["example.nl","demo","2026112301","3600","6"],["demo.example.nl","hosting","2026112302","3600","4"]];
+const flowRecords=[["A","@","192.0.2.10","3600","—"],["AAAA","@","2001:db8::10","3600","—"],["CNAME","www","example.nl.","3600","—"],["MX","@","mail.example.nl.","3600","10"],["TXT","@","v=spf1 mx -all","3600","—"],["NS","@","ns1.example.nl.","3600","—"]];
+const flowServers=[["hosting-01","Web / DNS","192.0.2.10","Actief"],["dns-02","DNS","192.0.2.11","Actief"]];
+const flowServices=[["Apache","httpd","Actief","115 MB"],["MariaDB","mariadb","Actief","312 MB"],["Exim","exim","Actief","28 MB"],["BIND","named","Actief","42 MB"]];
+function flowGroup(){return Object.keys(flowGroups).find(k=>flowGroups[k].includes(current));}
+function flowBtn(label,value,primary=false){return '<button class="btn '+(primary?'primary':'')+'" type="button" data-flow="'+escapeHtml(value)+'">'+escapeHtml(label)+'</button>';}
+function flowTabs(labels){const active=labels.includes(flowTab)?flowTab:labels[0];return '<div class="page-tabs" role="tablist">'+labels.map(t=>'<button type="button" role="tab" aria-selected="'+(t===active)+'" class="page-tab '+(t===active?'selected':'')+'" data-flow-tab="'+escapeHtml(t)+'">'+escapeHtml(t)+'</button>').join("")+'</div>';}
+function flowTable(head,rows,clickable=true){
+ return '<div class="panel"><div class="page-table-wrap"><table class="data-table"><thead><tr>'+head.map(h=>'<th>'+escapeHtml(h)+'</th>').join("")+(clickable?'<th></th>':'')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map((v,i)=>'<td>'+ (i===0?'<strong>'+escapeHtml(v)+'</strong>':escapeHtml(v))+'</td>').join("")+(clickable?'<td>'+flowBtn("Beheren","open:"+r[0])+'</td>':'')+'</tr>').join("")+'</tbody></table></div></div>';
+}
+function flowLayout(title,subtitle,actions,body){return heading(title,subtitle)+(actions?'<div class="page-commands">'+actions+'</div>':'')+body+'<div class="page-note">Frontend demonstratie met fictieve gegevens; er worden geen serverwijzigingen uitgevoerd.</div>';}
+function flowForm(title,fields){return formCard(fields,["Concept bekijken","Annuleren"],title);}
+function flowFieldsForUser(tab,record){
+ if(tab==="Account")return [F("Gebruikersnaam","text",record),F("E-mailadres","email",record?record+"@example.nl":""),F("Wachtwoord","password"),select("Accountniveau",["Gebruiker","Reseller","Admin"],"Gebruiker"),select("Eigenaar",["admin","reseller-demo"],"admin")];
+ if(tab==="Hosting")return [select("Pakket",["basic","business","reseller-business"],"basic"),F("Domeinnaam"),select("IP-adres",["192.0.2.10","192.0.2.11"],"192.0.2.10"),F("Schijfruimte (MB)","number","5120"),F("Dataverkeer (GB)","number","50"),F("Max. domeinen","number","5")];
+ return [check("Account actief"),check("Welkomstmail versturen"),check("DNS automatisch aanmaken"),check("Tweefactorauthenticatie","Uit"),check("SSH-toegang","Uit")];
+}
+function flowUsersPage(){
+ const isNew=flowView==="create"||/Toevoegen|Aanmaken/.test(current);
+ if(flowGroup()==="packages"){
+ const rows=[["basic","5 GB","50 GB","5","10"],["business","20 GB","200 GB","25","100"],["reseller-business","200 GB","2 TB","50","200"]];
+ if(flowView==="overview")return flowLayout(current,"Quota, services en pakketrechten.",flowBtn("＋ Nieuw pakket","create",true),flowTable(["Pakket","Opslag","Dataverkeer","Domeinen","Mailaccounts"],rows));
+ return flowLayout(flowView==="create"?"Nieuw pakket":"Pakket: "+flowItem,"Stel resources en toegestane diensten in.",flowBtn("← Pakketten","back"),flowTabs(["Limieten","Diensten"])+flowForm("Pakketgegevens",flowTab==="Diensten"?[check("FTP"),check("DNS"),check("E-mail"),check("SSL"),check("Cronjobs"),check("Back-ups")]:[F("Pakketnaam","text",flowItem),F("Opslag (MB)","number","5120"),F("Dataverkeer (GB)","number","50"),F("Maximaal aantal domeinen","number","5"),F("E-mailaccounts","number","10"),F("Databases","number","5")]));
+ }
+ if(isNew)return flowLayout(current,"Accountaanmaak met hostingconfiguratie en autorisaties.",flowBtn("← Gebruikersoverzicht","back"),flowTabs(["Account","Hosting","Rechten"])+flowForm("Nieuwe accountgegevens",flowFieldsForUser(["Account","Hosting","Rechten"].includes(flowTab)?flowTab:"Account","")));
+ if(flowView==="detail"){
+ const user=flowUsers.find(r=>r[0]===flowItem)||flowUsers[0];
+ const active=["Overzicht","Account","Hosting","Rechten"].includes(flowTab)?flowTab:"Overzicht";
+ const summary='<div class="panel side-panel"><h3>Accountoverzicht</h3><div class="wf-summary"><span>Gebruiker</span><strong>'+escapeHtml(user[0])+'</strong></div><div class="wf-summary"><span>Type</span><strong>'+escapeHtml(user[1])+'</strong></div><div class="wf-summary"><span>Pakket</span><strong>'+escapeHtml(user[3])+'</strong></div><div class="wf-summary"><span>Status</span><strong>'+escapeHtml(user[5])+'</strong></div></div>';
+ return flowLayout("Account: "+user[0],"Beheer account, toegewezen diensten en toegangsrechten.",flowBtn("← Overzicht","back")+flowBtn("Account schorsen","simulate"),flowTabs(["Overzicht","Account","Hosting","Rechten"])+(active==="Overzicht"?summary:flowForm(active,flowFieldsForUser(active,user[0]))));
+ }
+ const role=current==="Resellers"?"Reseller":current==="Administrators"?"Admin":null;
+ const filtered=flowUsers.filter(u=>(!role||u[1]===role)&&(current!=="Mijn Gebruikers"||u[1]==="Gebruiker"));
+ return flowLayout(current,"Selecteer een account voor de beheer- en detailpagina's.",flowBtn("＋ Account aanmaken","create",true)+flowBtn("Pakketten","packages"),flowTable(["Gebruiker","Rol","E-mail","Pakket","Domeinen","Status"],filtered));
+}
+function flowDomainsPage(){
+ if(flowView==="create")return flowLayout("Domein toevoegen","Hosting, webserver en automatische DNS/TLS-instellingen.",flowBtn("← Domeinen","back"),flowTabs(["Domein","Webserver","DNS & SSL"])+flowForm("Nieuw domein",flowTab==="Webserver"?[F("Document root","text","/domains/example.nl/public_html"),select("PHP-versie",["8.4","8.3","8.2"],"8.4"),select("Handler",["PHP-FPM","FastCGI"],"PHP-FPM"),check("CGI-toegang","Uit")]:flowTab==="DNS & SSL"?[check("DNS-zone aanmaken"),check("Let's Encrypt aanvragen"),check("Forceer HTTPS","Uit"),select("Nameserverprofiel",["Standaard","Aangepast"],"Standaard")]:[F("Domeinnaam"),select("Gebruiker",["demo","hosting"],"demo"),select("IP-adres",["192.0.2.10","192.0.2.11"],"192.0.2.10"),select("Type",["Domein","Subdomein","Alias"],"Domein")]));
+ if(flowView==="detail"){
+ const domain=flowDomains.find(r=>r[0]===flowItem)||flowDomains[0];
+ const active=["Overzicht","Webserver","PHP","SSL","Subdomeinen"].includes(flowTab)?flowTab:"Overzicht";
+ const body=active==="Overzicht"?flowTable(["Domein","Eigenaar","IP","PHP","SSL"],[domain],false):
+ active==="Subdomeinen"?flowTable(["Subdomein","Document root","SSL"],[["www","/public_html","Actief"],["app","/public_html/app","Actief"]],false):
+ flowForm(active,active==="Webserver"?[F("Document root","text","/domains/"+domain[0]+"/public_html"),select("Webserver",["Apache","Nginx"],"Apache"),check("Rewrite ondersteuning"),check("Access logs")]:active==="PHP"?[select("PHP-versie",["8.4","8.3","8.2"],domain[3]),select("Handler",["PHP-FPM","FastCGI"],"PHP-FPM"),F("memory_limit","text","256M"),F("max_execution_time","number","60")]:[check("HTTPS"),check("Forceer HTTPS"),check("Automatisch vernieuwen"),select("Certificaat",["Let's Encrypt","Eigen"],"Let's Encrypt")]);
+ return flowLayout("Domein: "+domain[0],"Afzonderlijke configuratie per website, PHP en certificaat.",flowBtn("← Domeinen","back")+flowBtn("DNS-zone openen","dns:"+domain[0])+flowBtn("Domein verwijderen","simulate"),flowTabs(["Overzicht","Webserver","PHP","SSL","Subdomeinen"])+body);
+ }
+ return flowLayout("Domeinbeheer","Gehoste domeinen met eigenaar, IP-adres, PHP en TLS.",flowBtn("＋ Domein toevoegen","create",true),flowTable(["Domein","Gebruiker","IP-adres","PHP","SSL"],flowDomains));
+}
+function flowDnsPage(){
+ if(flowView==="create")return flowLayout("Nieuwe DNS-zone","Configureer SOA, NS en standaardrecords.",flowBtn("← Zones","back"),flowForm("Zone toevoegen",[F("Domeinnaam"),select("Gebruiker",["demo","hosting"],"demo"),F("TTL","number","3600"),F("Primaire nameserver","text","ns1.example.nl"),F("Secundaire nameserver","text","ns2.example.nl"),check("Standaardrecords genereren")]));
+ if(flowView==="record-create"||flowView==="record-detail")return flowLayout(flowView==="record-create"?"DNS-record toevoegen":"DNS-record: "+flowItem,"Bewerk type, host, recordwaarde en TTL binnen de geselecteerde zone.",flowBtn("← Zone: "+flowItem.split("|")[0],"zone-back"),flowTabs(["Recordgegevens","Geavanceerd"])+flowForm("Resource record",flowTab==="Geavanceerd"?[F("Prioriteit (MX / SRV)","number","10"),F("Gewicht (SRV)","number","0"),F("Poort (SRV)","number","0"),F("TTL","number","3600")]:[select("Type",["A","AAAA","CNAME","MX","TXT","NS","CAA","SRV"],"A"),F("Hostnaam","text","@"),F("Waarde","text","192.0.2.10"),F("TTL","number","3600")]));
+ if(flowView==="detail"){
+ const zone=flowItem||"example.nl";const active=["Records","SOA & nameservers","Instellingen"].includes(flowTab)?flowTab:"Records";
+ const body=active==="Records"?'<div class="page-commands">'+flowBtn("＋ DNS-record toevoegen","record-create",true)+flowBtn("Zone controleren","simulate")+'</div>'+flowTable(["Type","Naam","Waarde","TTL","Prioriteit"],flowRecords):
+ flowForm(active,active==="SOA & nameservers"?[F("Primaire nameserver","text","ns1.example.nl"),F("Hostmaster","text","hostmaster.example.nl"),F("Serial","text","2026112301"),F("Refresh","number","14400"),F("Retry","number","3600"),F("Expire","number","1209600")]:[F("Domein","text",zone),F("Standaard TTL","number","3600"),check("DNSSEC","Uit"),check("Serial automatisch verhogen")]);
+ return flowLayout("DNS-zone: "+zone,"Recordset, SOA en zone-instellingen.",flowBtn("← DNS-zones","back"),flowTabs(["Records","SOA & nameservers","Instellingen"])+body);
+ }
+ return flowLayout("DNS Beheer","Zoneoverzicht met onderliggende DNS-records en SOA-instellingen.",flowBtn("＋ Nieuwe zone","create",true),flowTable(["Zone","Gebruiker","Serienummer","TTL","Records"],flowZones));
+}
+function flowServerPage(){
+ if(current==="Systeem Services"){
+ if(flowView==="detail"){const service=flowServices.find(r=>r[0]===flowItem)||flowServices[0];return flowLayout("Service: "+service[0],"Status, opstartgedrag en beheeracties.",flowBtn("← Services","back")+flowBtn("Starten","simulate")+flowBtn("Stoppen","simulate")+flowBtn("Herstarten","simulate"),flowTabs(["Status","Configuratie"])+(flowTab==="Configuratie"?flowForm("Service-instellingen",[F("Systemd unit","text",service[1]),select("Opstarttype",["Automatisch","Handmatig","Uit"],"Automatisch"),check("Automatisch herstarten")]):flowTable(["Naam","Unit","Status","Geheugen"],[service],false)));}
+ return flowLayout(current,"Gecontroleerde serviceacties (voorbeeldweergave).",flowBtn("Vernieuwen","simulate"),flowTable(["Service","Systemd unit","Status","Geheugen"],flowServices));
+ }
+ if(current==="IP Beheer"||current==="Multi Server Instellen"||current==="Aangepaste HTTPD configuraties"){
+ const data=current==="IP Beheer"?[["192.0.2.10","Gedeeld","admin","Actief"],["192.0.2.11","Dedicated","hosting","Actief"]]:current==="Multi Server Instellen"?flowServers:flowDomains.map(d=>[d[0],d[1],"Standaard","Actief"]);
+ if(flowView==="detail"||flowView==="create"){
+ const f=current==="IP Beheer"?[F("IP-adres","text",flowItem),select("Type",["Gedeeld","Dedicated"],"Gedeeld"),select("Gebruiker",["admin","demo","hosting"],"admin"),F("Interface","text","eth0")]:current==="Multi Server Instellen"?[F("Servernaam","text",flowItem),F("IP-adres","text","192.0.2.10"),F("API-poort","number","2222"),check("DNS repliceren"),check("TLS verbinding")]:[F("Domein","text",flowItem),textarea("Custom HTTPD directives"),check("Eigen HTTPD config inschakelen","Uit")];
+ return flowLayout(current+": "+(flowItem||"Nieuw"),"Geavanceerde instellingen voor deze resource.",flowBtn("← Overzicht","back"),flowTabs(["Configuratie","Geavanceerd"])+flowForm("Resource configureren",flowTab==="Geavanceerd"?[textarea("Aangepaste instellingen"),check("Validatie voor toepassen")]:f));
+ }
+ return flowLayout(current,"Kies een resource voor de specifieke configuratie.",flowBtn("＋ Toevoegen","create",true),flowTable(current==="IP Beheer"?["IP","Type","Gebruiker","Status"]:current==="Multi Server Instellen"?["Server","Rol","IP-adres","Status"]:["Domein","Gebruiker","HTTPD-config","Status"],data));
+ }
+ const def=catalog[current],active=def.tabs.includes(flowTab)?flowTab:def.tabs[0];
+ return flowLayout(current,"Serverinstellingen met aparte configuratietabs.",flowBtn("Configuratie controleren","simulate")+flowBtn("Wijzigingen bekijken","simulate"),flowTabs(def.tabs)+flowForm(active,def.fields[active]));
+}
+function renderSpecificFlow(){
+ const group=flowGroup();if(!group)return null;
+ if(group==="users"||group==="packages")return flowUsersPage();
+ if(group==="domains")return flowDomainsPage();
+ if(group==="dns")return flowDnsPage();
+ return flowServerPage();
+}
+
 function draw(){
  if(current==="Dashboard"||current==="Zoeken"){nativeRender();return;}
  renderSidebar();$("breadcrumb").textContent=current;$("roleButton").textContent=role+" ▾";
  const def=catalog[current];
- $("content").innerHTML=(def ? (pageMode==="index"?mainPage(current,def):secondary(current,pageMode)) : (visibleSections().some(s=>s.title===current)?categoryView(current):heading(current,"Scherm is opgenomen in de navigatie.")+formCard(modalFields.Algemeen,["Concept bewaren"],current)))+'<footer>HostingPanel · Compleet navigatieprototype · Geen live backendverbinding</footer>';
+ const specificFlow=renderSpecificFlow();
+ $("content").innerHTML=(specificFlow!==null?specificFlow:(def ? (pageMode==="index"?mainPage(current,def):secondary(current,pageMode)) : (visibleSections().some(s=>s.title===current)?categoryView(current):heading(current,"Scherm is opgenomen in de navigatie.")+formCard(modalFields.Algemeen,["Concept bewaren"],current))))+'<footer>HostingPanel · Compleet navigatieprototype · Geen live backendverbinding</footer>';
 }
 render=draw;
+document.addEventListener("click",function(e){
+ const tab=e.target.closest("[data-flow-tab]");
+ if(tab){flowTab=tab.dataset.flowTab;draw();return;}
+ const button=e.target.closest("[data-flow]");
+ if(!button)return;
+ const action=button.dataset.flow;
+ if(action==="simulate"){toast("Dit is uitsluitend een UI-actie; er is niets gewijzigd.");return;}
+ if(action==="packages"){go("Beheer gebruikers pakketten");return;}
+ if(action.startsWith("dns:")){go("DNS Beheer");flowView="detail";flowItem=action.slice(4);draw();return;}
+ if(action==="back"){flowView="overview";flowItem="";flowTab="";}
+ else if(action==="zone-back"){flowView="detail";flowItem=flowItem.split("|")[0];flowTab="Records";}
+ else if(action==="create"||action==="record-create"){if(action==="record-create"){flowItem=flowItem+"|new";}flowView=action;flowTab="";}
+ else if(action.startsWith("open:")){if(flowGroup()==="dns"&&flowView==="detail"){flowView="record-detail";flowItem=flowItem+"|"+action.slice(5);}else{flowView="detail";flowItem=action.slice(5);}flowTab="";}
+ draw();
+});
 document.addEventListener("click",function(e){
  const tab=e.target.closest("[data-page-tab]");if(tab){pageTab=tab.dataset.pageTab;draw();return;}
  const command=e.target.closest("[data-page-command]");if(command){const a=command.dataset.pageCommand;if(/vernieuw|filter|herstart|verwijderen|schorsen|download|test|controleren|inschakelen|opnieuw|configuratie|wijziging/i.test(a)&&!/toevoegen|maken|aanmaken|bewerken|aanpassen|wijzigen/.test(a)){toast("Actie '"+a+"' is een UI-demo. Er is niets gewijzigd.");return;}pageMode=a;draw();return;}
