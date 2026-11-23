@@ -43,6 +43,9 @@ app.Use(async (context, next) =>
     var preview = context.Request.Path.Equals(
         "/hosting/domains/preview", StringComparison.OrdinalIgnoreCase);
     if (mutating && !preview &&
+        AuthenticationHeaderValue.TryParse(context.Request.Headers.Authorization.ToString(), out var presented) &&
+        presented.Scheme.Equals("Basic", StringComparison.OrdinalIgnoreCase) &&
+        !string.IsNullOrWhiteSpace(presented.Parameter) &&
         !context.RequestServices.GetRequiredService<IConfiguration>()
             .GetValue<bool>("HostingPanel:EnableMutations"))
     {
