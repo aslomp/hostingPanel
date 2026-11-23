@@ -97,6 +97,11 @@ public sealed class UserController(IHostingBackend backend) : BackendController
                 });
     }
 
+    [HttpGet("/api/search/users-extended")]
+    [HttpGet("/api/users/list")]
+    [HttpGet("/api/users/{username}/login-history")]
+    public Task ForwardUserAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+
     static async Task<IResult> ReadUserDetail(HttpContext context, string username,
         string kind, LegacyUserDetailsService service)
     {
