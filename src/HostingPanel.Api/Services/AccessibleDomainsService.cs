@@ -7,6 +7,22 @@ namespace HostingPanel.Api.Services;
 public sealed class AccessibleDomainsService(
     AccountCatalogService accounts, DomainManagementService domains)
 {
+    private static string EffectiveAccount(AuthenticationHeaderValue authorization)
+    {
+        if (!authorization.Scheme.Equals("Basic", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrEmpty(authorization.Parameter)) return "";
+        try
+        {
+            var credentials = System.Text.Encoding.UTF8.GetString(
+                Convert.FromBase64String(authorization.Parameter));
+            var colon = credentials.IndexOf(':');
+            if (colon <= 0) return "";
+            var principal = credentials[..colon];
+            return principal.Contains('|') ? principal[(principal.LastIndexOf('|') + 1)..] : principal;
+        }
+        catch (FormatException) { return ""; }
+    }
+
     public async Task<VisibleDomainsResult> ListAsync(AuthenticationHeaderValue auth, CancellationToken ct)
     {
         var listed = await accounts.ListAsync(auth, ct);
@@ -35,11 +51,14 @@ public sealed class AccessibleDomainsService(
         var own = await domains.ListAsync(null, auth, ct);
         if (own.Domains is not null)
         {
-            // ListAsync(null) represents the authenticated effective user's own domains.
-            // Owner is taken from the first account only when it can be established.
-            // Avoid inventing ownership; caller can still see the domain name.
+            // CMD_API_SHOW_DOMAINS returns the authenticated effective account's own
+            // domains; the username is derived from its Basic credentials solely for
+            // presentation, never for authorization.
+            var effective = EffectiveAccount(auth);
+            var role = listed.Accounts.FirstOrDefault(x =>
+                x.Username.Equals(effective, StringComparison.OrdinalIgnoreCase))?.Role ?? "";
             foreach (var domain in own.Domains)
-                discovered.TryAdd(domain, new VisibleDomain(domain, "", ""));
+                discovered.TryAdd(domain, new VisibleDomain(domain, effective, role));
         }
         else if (own.Status is not (401 or 403 or 404))
             failedOwners.Add("current");
