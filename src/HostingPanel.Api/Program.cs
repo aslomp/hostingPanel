@@ -243,10 +243,7 @@ app.MapGet("/hosting/domains/{domain}/dns", async (HttpContext context,
 {
     if (!TryGetBasic(context, out var auth))
         return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var scope = context.Request.Query["scope"].ToString();
-    if (scope is not ("" or "user" or "admin"))
-        return Results.Json(new { type = "INVALID_SCOPE" }, statusCode: 400);
-    var result = await service.ReadAsync(domain, scope == "admin", auth, context.RequestAborted);
+    var result = await service.ReadAsync(domain, auth, context.RequestAborted);
     return result.Records is null
         ? Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
         : Results.Json(new { domain, records = result.Records });
@@ -257,10 +254,7 @@ app.MapPost("/hosting/domains/{domain}/dns", async (HttpContext context, string 
 {
     if (!TryGetBasic(context, out var auth))
         return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var scope = context.Request.Query["scope"].ToString();
-    if (scope is not ("" or "user" or "admin"))
-        return Results.Json(new { type = "INVALID_SCOPE" }, statusCode: 400);
-    var result = await service.ChangeAsync(domain, input, scope == "admin", auth, context.RequestAborted);
+    var result = await service.ChangeAsync(domain, input, auth, context.RequestAborted);
     return result.Error is null
         ? Results.Json(new { domain, action = input.Action, applied = true })
         : Results.Json(new { type = result.Error }, statusCode: result.Status);
