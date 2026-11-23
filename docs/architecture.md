@@ -57,24 +57,21 @@ De gepinde moderne DirectAdmin Swagger heeft **geen algemene create/update/delet
 
 - `GET /hosting/domains` — domeinen van het aangemelde DirectAdmin-account via `CMD_API_SHOW_DOMAINS`.
 - `GET /hosting/domains?user=... ` — domeinen van een geselecteerde gebruiker via `CMD_API_SHOW_USER_DOMAINS`; DirectAdmin controleert de toegangsrechten.
-- `POST /hosting/domains/preview` — uitsluitend veilige, niet-uitvoerende preview voor domeinen zoals `hosting-test.xyz1` en `web.demo.xyz1`; valideert invoer en toont de legacy-formgegevens die *later* voor aanmaak gebruikt kunnen worden. **Er wordt niets naar de DirectAdmin-server gepost.**
+- `POST /hosting/domains/preview` — niet-uitvoerende preview voor domeinen zoals `hosting-test.xyz1` en `web.demo.xyz1`; valideert invoer en toont de legacy-formgegevens die *later* voor aanmaak gebruikt kunnen worden. **Er wordt niets naar de DirectAdmin-server gepost.**
 
 `.xyz1` is een fictieve testextensie en wordt niet als echte DNS-TLD verondersteld. De daadwerkelijke lijst wordt live gelezen, niet door fixtures vervangen. Bestaande accounts en productiedomeinen worden niet gewijzigd.
 
-De volgende slice kan echte aanmaak, wijziging en verwijdering implementeren met afzonderlijke per-operatie autorisatie, bevestiging, rollback- en auditcontracten. De huidige preview is nadrukkelijk nog geen uitvoerende create-call.
+Echte aanmaak, wijziging en verwijdering verlopen via de apart bevestigde execute-route. De preview is nadrukkelijk geen uitvoerende create-call.
 
-## .xyz1 domain mutations (explicit opt-in)
 
-`POST /hosting/domains/execute` accepts JSON:
-`{"domain":"hosting-test.xyz1","action":"create","confirmation":"hosting-test.xyz1","php":true,"ssl":true,"cgi":false}`
+## Eén globale mutatieschakelaar
 
-Supported actions: `create`, `modify`, `delete`. The API always enforces the `.xyz1` suffix and exact typed-domain confirmation. It checks the current authenticated DirectAdmin account's domain list before performing a mutation. DirectAdmin applies its own permission checks through the caller's login key.
+`HostingPanel:EnableMutations` (omgevingsvariabele `HostingPanel__EnableMutations`) is de **enige** globale write-switch. Standaard `false`.
 
-**Default: mutations disabled.** To explicitly enable the test feature on the API process only, set `HostingPanel__EnableXyz1Mutations=true` (not on the Blazor process). This is intentionally not enabled in source or `appsettings.json`.
+- `false`: alle uitvoerende POST/PUT/PATCH/DELETE-verzoeken naar de API worden door middleware met HTTP 409 `MUTATIONS_DISABLED` geblokkeerd. Het niet-uitvoerende endpoint `POST /hosting/domains/preview` blijft toegankelijk.
+- `true`: de globale blokkade vervalt; elke geïmplementeerde mutatie kan worden uitgevoerd mits de authenticatie, DirectAdmin-rechten, invoervalidatie en eventuele expliciete bevestiging slagen. Niet-geïmplementeerde operaties blijven HTTP 501 retourneren.
+- De domeinnaamvalidator accepteert normale domeinen (bijvoorbeeld `example.com`, `customer.co.uk`) én fictieve `.xyz1`-testdomeinen. Alleen de geautomatiseerde testfixtures gebruiken standaard `.xyz1`.
+- `POST /hosting/domains/execute` verwerkt `create`, `modify` en `delete`. Wijzigen en verwijderen vereisen dat het domein al bij het aangemelde account bestaat; aanmaken vereist dat de naam nog niet in diens domeinlijst voorkomt. De exacte domeinnaam moet expliciet worden bevestigd.
+- De vlag verleent op zichzelf geen rechten. DirectAdmin blijft de authorisatie uitvoeren met de credentials van de aanroepende gebruiker.
 
-- Create: `CMD_API_DOMAIN` POST with `action=create`, PHP/SSL/CGI options and shared quota/bandwidth.
-- Modify: the same endpoint and parameters using `action=modify`.
-- Delete: `CMD_API_DOMAIN` POST with `delete=yes&confirmed=yes&select0=domain.xyz1`. Deleting an account domain may remove websites and related data; there is no automatic rollback.
-- The backend checks `error=0` in the legacy response before reporting success. No mutation requests are issued during CI. The tests use `.xyz1` fixture names and an API gate that must return HTTP 409 by default.
-
-Do **not** enable this test feature on a public-facing API. Keep it restricted to a controlled development network until persistent auditing, authentication, privilege management and domain-specific ownership controls are implemented. The test feature works only against the DirectAdmin account associated with the supplied credentials, not an arbitrary selected `user` query parameter.
+**Let op:** als de vlag aan staat, mogen alle bestaande geïmplementeerde mutaties ook **echte productiedomeinen** wijzigen. Zet de vlag uitsluitend aan in een passend afgeschermde omgeving.
