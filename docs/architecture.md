@@ -50,3 +50,15 @@ curl --fail-with-body -u 'YOUR_DA_USER:YOUR_LOGIN_KEY' \
 ```
 
 The complete static specification lives in `src/HostingPanel.Api/spec/directadmin.swagger.json`, pinned from the public DirectAdmin demo; changing the upstream legacy server does not change this modern public contract.
+
+## Domeinbeheer — HostingPanel business API
+
+De gepinde moderne DirectAdmin Swagger heeft **geen algemene create/update/delete domains API**. De bestaande moderne `/api/*`-namespace wordt daarom niet uitgebreid met fictieve DirectAdmin-routes.
+
+- `GET /hosting/domains` — domeinen van het aangemelde DirectAdmin-account via `CMD_API_SHOW_DOMAINS`.
+- `GET /hosting/domains?user=... ` — domeinen van een geselecteerde gebruiker via `CMD_API_SHOW_USER_DOMAINS`; DirectAdmin controleert de toegangsrechten.
+- `POST /hosting/domains/preview` — uitsluitend veilige, niet-uitvoerende preview voor domeinen zoals `hosting-test.xyz1` en `web.demo.xyz1`; valideert invoer en toont de legacy-formgegevens die *later* voor aanmaak gebruikt kunnen worden. **Er wordt niets naar de DirectAdmin-server gepost.**
+
+`.xyz1` is een fictieve testextensie en wordt niet als echte DNS-TLD verondersteld. De daadwerkelijke lijst wordt live gelezen, niet door fixtures vervangen. Bestaande accounts en productiedomeinen worden niet gewijzigd.
+
+De volgende slice kan echte aanmaak, wijziging en verwijdering implementeren met afzonderlijke per-operatie autorisatie, bevestiging, rollback- en auditcontracten. De huidige preview is nadrukkelijk nog geen uitvoerende create-call.
