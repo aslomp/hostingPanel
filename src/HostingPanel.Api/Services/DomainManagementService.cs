@@ -48,15 +48,8 @@ public sealed class DomainManagementService(IHttpClientFactory clients)
             return new(400, "CONFIRMATION_REQUIRED");
 
         var domain = input.Domain.ToLowerInvariant();
-        var before = await ListAsync(null, credentials, cancellationToken);
-        if (before.Domains is null)
-            return new(before.Status, before.Error ?? "PRECONDITION_FAILED");
-        var exists = before.Domains.Contains(domain, StringComparer.OrdinalIgnoreCase);
-        if (input.Action == "create" && exists)
-            return new(409, "DOMAIN_ALREADY_EXISTS");
-        if (input.Action is "modify" or "delete" && !exists)
-            return new(404, "DOMAIN_NOT_IN_CURRENT_ACCOUNT");
-
+        // Domain ownership and mutation permissions belong to DirectAdmin.
+        // Admins and resellers must not be blocked by a local current-account list.
         var form = input.Action switch
         {
             "create" => LegacyDomainsAdapter.EncodeCreateForm(domain, input.Php, input.Ssl, input.Cgi),
@@ -96,12 +89,8 @@ public sealed class DomainManagementService(IHttpClientFactory clients)
         if (!LegacyDomainsAdapter.IsValidDomain(domain))
             return new(400, null, "INVALID_DOMAIN");
 
-        // Only retrieve settings for domains visible to the authenticated account.
-        var owned = await ListAsync(null, credentials, cancellationToken);
-        if (owned.Domains is null) return new(owned.Status, null, owned.Error);
-        if (!owned.Domains.Contains(domain, StringComparer.OrdinalIgnoreCase))
-            return new(404, null, "DOMAIN_NOT_IN_CURRENT_ACCOUNT");
-
+        // Do not require membership in CMD_API_SHOW_DOMAINS (current user's
+        // domains). DirectAdmin authorizes admin/reseller access to other accounts.
         try
         {
             var client = clients.CreateClient("legacy-directadmin");
