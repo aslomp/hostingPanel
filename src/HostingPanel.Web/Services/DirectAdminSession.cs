@@ -15,6 +15,8 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
     private string? _impersonatedUsername;
     private string? _ticketChannel;
     public string? TicketChannel => _ticketChannel;
+    public event Action? Changed;
+    private void NotifyChanged() => Changed?.Invoke();
 
     public bool Connected => _loginKey is not null;
     public string Username => _impersonatedUsername ?? _username ?? "";
@@ -30,6 +32,7 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         _username = username.Trim();
         _loginKey = loginKey;
         _impersonatedUsername = null;
+        NotifyChanged();
     }
 
     public void Disconnect()
@@ -39,6 +42,7 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         _username = null;
         _loginKey = null;
         _impersonatedUsername = null;
+        NotifyChanged();
     }
 
     public async Task<(int Status, string Body)> GetRawAsync(string endpoint, CancellationToken cancellationToken = default)
@@ -123,6 +127,7 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         ticketChannels.Revoke(_ticketChannel);
         _ticketChannel = ticketChannels.Register();
         _impersonatedUsername = username;
+        NotifyChanged();
     }
 
     public void EndImpersonation()
@@ -130,6 +135,7 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         ticketChannels.Revoke(_ticketChannel);
         _ticketChannel = ticketChannels.Register();
         _impersonatedUsername = null;
+        NotifyChanged();
     }
 
     private static bool IsValidAccountName(string? username) =>
