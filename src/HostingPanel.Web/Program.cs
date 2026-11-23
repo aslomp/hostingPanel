@@ -10,6 +10,7 @@ builder.Services.AddHttpClient("hosting-api", client =>
     client.BaseAddress = new Uri(raw, UriKind.Absolute);
 });
 builder.Services.AddScoped<DirectAdminSession>();
+builder.Services.AddScoped<DirectAdminUserService>();
 
 // Support dotnet run in a non-Development environment without requiring dotnet publish.
 // This reads the generated static web asset manifest for framework and wwwroot assets.
