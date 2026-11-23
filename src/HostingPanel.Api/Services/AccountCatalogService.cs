@@ -41,6 +41,26 @@ public sealed class AccountCatalogService(IHttpClientFactory clients)
 
         try
         {
+            // Prove that the credentials authenticate with DirectAdmin before
+            // adding the caller to a visible account list. Otherwise failed
+            // lookups could make even an invalid username/key look connected.
+            using (var authenticationRequest = new HttpRequestMessage(
+                HttpMethod.Get, "CMD_API_SHOW_DOMAINS"))
+            {
+                authenticationRequest.Headers.Authorization = auth;
+                using var authenticationResponse = await clients
+                    .CreateClient("legacy-directadmin").SendAsync(authenticationRequest, ct);
+                if (authenticationResponse.StatusCode == HttpStatusCode.Unauthorized)
+                    return new(401, null, "UNAUTHORIZED");
+                if (authenticationResponse.StatusCode == HttpStatusCode.Forbidden)
+                    return new(403, null, "ACCESS_DENIED");
+                if (!authenticationResponse.IsSuccessStatusCode)
+                    return new(502, null, "UPSTREAM_ERROR");
+                // Legacy responses can signal errors inside HTTP 200.
+                _ = LegacyDomainsAdapter.ParseDomains(
+                    await authenticationResponse.Content.ReadAsStringAsync(ct));
+            }
+
             // Each operation is allowed or rejected by DirectAdmin. A 403 simply
             // means this caller cannot discover that category, not that a local
             // role-based filter should run.
