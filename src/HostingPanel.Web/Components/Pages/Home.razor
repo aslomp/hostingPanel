@@ -1,48 +1,63 @@
 @page "/"
 @inject DirectAdminSession Session
-@inject NavigationManager Nav
 
 <PageTitle>Dashboard — HostingPanel</PageTitle>
-<div class="page-header"><div><div class="eyebrow">Hosting administratiesysteem</div><h1>Controle Paneel</h1><p>Beheer bestaande DirectAdmin-accounts via de compatibele Web API.</p></div></div>
-<div class="banner"><h2>Welkom bij HostingPanel</h2><p>De businessapplicatie maakt verbinding met jouw bestaande DirectAdmin-server.</p></div>
+<div class="page-header">
+    <div><div class="eyebrow">Hosting administratiesysteem</div><h1>Controle Paneel</h1>
+        <p>Beheer bestaande DirectAdmin-accounts via een afzonderlijke, compatibele Web API.</p></div>
+</div>
+<div class="banner"><h2>Welkom bij HostingPanel</h2>
+    <p>De beheerinterface maakt verbinding met jouw bestaande DirectAdmin-server.</p></div>
 @if (!Session.Connected)
 {
-    <div class="card"><h2>DirectAdmin-verbinding</h2><p>Gebruik een beperkte DirectAdmin login key; credentials blijven alleen in deze interactieve serversessie.</p>
-        <label>Gebruikersnaam<input @bind="username" autocomplete="username" /></label>
-        <label>Login key<input type="password" @bind="key" autocomplete="off" /></label>
-        <button class="primary" @onclick="Connect">Verbinden</button>
-        @if (error is not null) { <p class="error">@error</p> }
+    <div class="card">
+        <h2>DirectAdmin-verbinding</h2>
+        <p>Gebruik een DirectAdmin-account met rechten om gebruikers op te vragen en bij voorkeur een beperkte login key.
+            De credentials blijven alleen in de interactieve serversessie.</p>
+        <form @onsubmit="Connect" @onsubmit:preventDefault>
+            <label for="daUser">Gebruikersnaam</label>
+            <input id="daUser" @bind="username" autocomplete="username" required />
+            <label for="daKey">Login key</label>
+            <input id="daKey" type="password" @bind="key" autocomplete="off" required />
+            <button type="submit" class="primary" disabled="@connecting">@(connecting ? "Verbinden…" : "Verbinden")</button>
+        </form>
+        @if (error is not null) { <p class="error" role="alert">@error</p> }
     </div>
 }
 else
 {
     <div class="tiles">
-      <a class="card tile" href="/users"><b>♙</b><span>Gebruikers beheren</span><small>Live gegevens uit DirectAdmin</small></a>
-      <a class="card tile" href="/api-browser"><b>⌘</b><span>API-verkenner</span><small>Originele DirectAdmin API-respons</small></a>
+        <a class="card tile" href="/users"><b>♙</b><span>Gebruikers beheren</span><small>Live gebruikers uit DirectAdmin</small></a>
+        <a class="card tile" href="/api-browser"><b>⌘</b><span>API-respons bekijken</span><small>Ongewijzigde DirectAdmin-antwoorden</small></a>
     </div>
+    <p>Verbonden als <strong>@Session.Username</strong>. Gebruikersendpoint: <code>CMD_API_SHOW_ALL_USERS?json=yes</code>.</p>
     <button @onclick="Disconnect">Verbinding verbreken</button>
 }
 @code {
     private string username = "";
     private string key = "";
     private string? error;
+    private bool connecting;
 
     private async Task Connect()
     {
+        if (connecting) return;
+        connecting = true;
         error = null;
         try
         {
             Session.SetCredentials(username, key);
-            var (status, _) = await Session.GetRawAsync("api/session");
-            if (status != 200)
-                throw new InvalidOperationException($"DirectAdmin authentication failed (HTTP {status}).");
+            // Authentication and read permission are checked against the exact first business use case.
+            await Session.GetUsersAsync();
             key = "";
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
+            or UnauthorizedAccessException or FormatException or ArgumentException)
         {
             Session.Disconnect();
             error = ex.Message;
         }
+        finally { connecting = false; }
     }
-    private void Disconnect() => Session.Disconnect();
+    private void Disconnect() { Session.Disconnect(); key = ""; }
 }
