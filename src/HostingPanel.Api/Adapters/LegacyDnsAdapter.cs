@@ -10,7 +10,7 @@ public sealed record DnsChange(string Action, DnsRecord Record, DnsRecord? Previ
 public static class LegacyDnsAdapter
 {
     public static readonly string[] Types =
-        ["A", "AAAA", "CNAME", "MX", "TXT", "SRV", "CAA", "NS", "PTR", "DS", "TLSA"];
+        ["A", "AAAA", "CNAME", "MX", "TXT", "SRV", "CAA", "NS", "PTR", "DS", "TLSA", "HTTPS", "SVCB"];
 
     public static IReadOnlyList<DnsRecord> ParseRecords(string body)
     {
@@ -79,6 +79,11 @@ public static class LegacyDnsAdapter
         };
         if (change.Previous is { } previous)
         {
+            // Legacy's compound selection value is ambiguous with embedded separators.
+            // Refuse such edits/deletions until tested against this DirectAdmin release.
+            if (previous.Name.Contains('&') || previous.Name.Contains('=') ||
+                previous.Value.Contains('&'))
+                throw new ArgumentException("Ambiguous legacy DNS selection.");
             var prefix = previous.Type.ToLowerInvariant() + "recs0";
             // The outer URL form encoder must escape the whole compound value.
             form[prefix] = "name=" + previous.Name + "&value=" + previous.Value;
