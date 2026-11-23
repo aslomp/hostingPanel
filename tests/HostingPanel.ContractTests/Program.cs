@@ -218,6 +218,7 @@ var checks = new List<(string Description, Action Test)>
     ("Backend is the sole source of admin reseller and enduser scopes", ScopeContractTests.Run),
     ("DNS forwards without role selection or read-gated writes", DnsForwardingContractTests.Run),
     ("Documented user/reseller and DNS mutations use exact forms and backend decisions", BackendMutationIntegrationTests.Run),
+    ("Hierarchical databases respect backend delegation and mark denied children incomplete", DatabaseInventoryIntegrationTests.Run),
     ("Database legacy list parses URL encoded and JSON fixtures", () =>
     {
         var form=LegacyDatabaseAdapter.ParseNames("list%5B%5D=demo_app&list%5B%5D=demo_test");
