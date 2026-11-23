@@ -8,6 +8,12 @@ De eerste versie is dependency-free: open `index.html` in een moderne browser. E
 
 Je kunt ook GitHub Pages inschakelen voor de `main`-branch, map `/`, om de interface te publiceren.
 
+## Schermdekking
+
+Alle 49 zichtbare navigatie-items in de bekeken DirectAdmin Evolution Admin-/Gebruiker-navigatie hebben een afzonderlijke UI-definitie in `pages.js`. Elke pagina toont relevante formulieren, tabellen of tabbladen op basis van het type scherm. Dit is een **functionele UI-schets**, geen pixel-perfecte reconstructie van elk intern DirectAdmin-scherm: alleen de dashboardnavigatie was direct geïnspecteerd, en de gedetailleerde velden zijn daarom op basis van hun functie gereconstrueerd.
+
+De pagina-opmaak staat in `pages.css`. Zowel `pages.js` als `pages.css` worden vanuit `index.html` geladen.
+
 ## Functies
 
 - Nederlandstalig dashboard, adminnavigatie en gebruikerweergave
@@ -20,7 +26,7 @@ Je kunt ook GitHub Pages inschakelen voor de `main`-branch, map `/`, om de inter
 
 ## Status
 
-**Frontendprototype.** Alle statistieken en records zijn voorbeeldgegevens. De formulieren hebben geen persistentie; de rollenwissel is slechts een UI-weergave en **geen autorisatie**. Er worden geen requests naar de DirectAdmin-server gestuurd.
+**Frontendprototype.** Alle statistieken en records zijn voorbeeldgegevens. De afzonderlijke paginaformulieren hebben geen persistentie; de rollenwissel is slechts een UI-weergave en **geen autorisatie**. Er worden geen requests naar de DirectAdmin-server gestuurd.
 
 ## Architectuur naar productie
 
