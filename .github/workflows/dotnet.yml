@@ -92,7 +92,7 @@ jobs:
             grep -q 'UNAUTHORIZED' /tmp/response
           done
 
-      - name: Validate .xyz1 dry-run endpoint without touching legacy server
+      - name: Validate read-only preview and global mutation gate
         shell: bash
         run: |
           set -euo pipefail
@@ -123,7 +123,7 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"domain":"production.com"}' \
             http://127.0.0.1:5091/hosting/domains/preview)
-          test "$status" = "400"
+          test "$status" = "200"
 
           # Mutations must be disabled by default, even with apparently valid Basic credentials.
           code=$(curl -sS -o /tmp/hp-disabled -w '%{http_code}' -X POST \
@@ -132,10 +132,10 @@ jobs:
             -d '{"domain":"hosting-test.xyz1","action":"create","confirmation":"hosting-test.xyz1"}' \
             http://127.0.0.1:5091/hosting/domains/execute)
           test "$code" = "409"
-          grep -q TEST_MUTATIONS_DISABLED /tmp/hp-disabled
+          grep -q MUTATIONS_DISABLED /tmp/hp-disabled
           code=$(curl -sS -o /tmp/hp-invalid -w '%{http_code}' -X POST \
             -H 'Authorization: Basic ZGVtbzpkZW1v' \
             -H 'Content-Type: application/json' \
             -d '{"domain":"example.com","action":"delete","confirmation":"example.com"}' \
             http://127.0.0.1:5091/hosting/domains/execute)
-          test "$code" = "400"
+          test "$code" = "409"
