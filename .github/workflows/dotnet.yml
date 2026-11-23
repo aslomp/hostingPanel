@@ -19,3 +19,18 @@ jobs:
         run: dotnet build src/HostingPanel.Web/HostingPanel.Web.csproj -c Release
       - name: Run contract tests
         run: dotnet run --project tests/HostingPanel.ContractTests -c Release
+      - name: Smoke test Blazor framework script
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASPNETCORE_URLS=http://127.0.0.1:5088 dotnet run --no-build -c Release --project src/HostingPanel.Web > /tmp/hosting-panel-web.log 2>&1 &
+          webpid=$!
+          trap 'kill "$webpid" 2>/dev/null || true' EXIT
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:5088/ -o /tmp/hostingpanel.html; then break; fi
+            sleep 1
+          done
+          grep -q '/_framework/blazor.web.js' /tmp/hostingpanel.html
+          curl --fail --silent --show-error -D /tmp/asset-headers.txt -o /tmp/blazor.web.js http://127.0.0.1:5088/_framework/blazor.web.js
+          test -s /tmp/blazor.web.js
+          grep -qi 'content-type:.*javascript' /tmp/asset-headers.txt
