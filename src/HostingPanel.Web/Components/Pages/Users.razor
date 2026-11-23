@@ -39,6 +39,7 @@ else if (accounts is not null)
         </tbody></table>
         @if (accounts.Count == 0) { <p>Geen accounts teruggegeven door DirectAdmin.</p> }
     </div>
+    <AccountActions Kind="user" />
 }
 @code {
     private sealed record Account(string Username, string Role, string? Creator);
