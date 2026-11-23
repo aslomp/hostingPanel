@@ -64,7 +64,7 @@ public static class NavigationParityContractTests
 
         Require(navigation.Contains("private static readonly NavSection[] AdminSections", StringComparison.Ordinal) &&
                 navigation.Contains("private static readonly NavSection[] UserSections", StringComparison.Ordinal) &&
-                navigation.Contains("navigationContext == \"user\" ? UserSections : AdminSections",
+                navigation.Contains("NavContext.Mode == \"user\" ? UserSections : AdminSections",
                     StringComparison.Ordinal),
             "Administrator and user navigation must be separate presentation contexts.");
         Require(navigation.Contains("SetContext", StringComparison.Ordinal) &&
