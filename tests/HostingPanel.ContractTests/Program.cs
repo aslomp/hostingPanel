@@ -1,6 +1,8 @@
 using HostingPanel.Web.Services;
 using HostingPanel.Api.Adapters;
 using HostingPanel.Api.Services;
+using System.Net.Http.Headers;
+using System.Text;
 
 var checks = new List<(string Description, Action Test)>
 {
@@ -167,6 +169,24 @@ var checks = new List<(string Description, Action Test)>
         Require(!LegacyDnsAdapter.Valid(new DnsRecord("A","www","192.0.2.1","2")));
         Require(!LegacyDnsAdapter.Valid(new DnsRecord("TXT","name&value=bad","hello")));
         Require(LegacyDnsAdapter.Valid(new DnsRecord("MX","@","10 mail.example.com.")));
+    }),
+    ("Impersonation accepts only original Basic credentials, never nested delegation", () =>
+    {
+        var valid = new AuthenticationHeaderValue("Basic",
+            Convert.ToBase64String(Encoding.UTF8.GetBytes("admin:my-key")));
+        Require(ImpersonationService.TryDecode(valid, out var who, out var secret));
+        Require(who == "admin" && secret == "my-key");
+        var delegated = new AuthenticationHeaderValue("Basic",
+            Convert.ToBase64String(Encoding.UTF8.GetBytes("admin|victim:my-key")));
+        Require(!ImpersonationService.TryDecode(delegated, out _, out _));
+    }),
+    ("Impersonation client refuses malformed account names", () =>
+    {
+        var session = new DirectAdminSession(new MockClientFactory(_ =>
+            new HttpResponseMessage(System.Net.HttpStatusCode.BadRequest)));
+        Throws<ArgumentException>(() => session.SetCredentials("admin|victim", "secret"));
+        session.SetCredentials("admin", "secret");
+        Require(session.Username == "admin" && !session.IsImpersonating);
     }),
     ("Empty list is valid", () => Require(DirectAdminUsersParser.Parse("[]").Count == 0)),
     ("Legacy error object is rejected", () =>
