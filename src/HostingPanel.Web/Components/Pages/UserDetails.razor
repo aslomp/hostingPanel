@@ -1,6 +1,7 @@
 @page "/users/{Username}"
 @using System.Text.Json
 @inject DirectAdminSession Session
+@inject NavigationManager Navigation
 
 <PageTitle>@Username — Accountbeheer</PageTitle>
 <div class="page-header">
@@ -9,8 +10,21 @@
         <h1>@Username</h1>
         <p>Accountinstellingen, toegewezen hostingpakket en pakketlimieten zoals beschikbaar in DirectAdmin.</p>
     </div>
-    <button @onclick="Load" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
+    <div>
+        <button @onclick="Load" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
+        @if (Session.Connected && !Session.IsImpersonating &&
+            !Username.Equals(Session.OriginalUsername, StringComparison.OrdinalIgnoreCase))
+        {
+            <button class="primary" @onclick="Impersonate" disabled="@switching">
+                @(switching ? "Bevoegdheid controleren…" : "Inloggen als deze gebruiker")
+            </button>
+        }
+    </div>
 </div>
+@if (impersonationError is not null)
+{
+    <div class="card error" role="alert">@impersonationError</div>
+}
 @if (!Session.Connected)
 {
     <div class="card">Verbind eerst via het <a href="/">dashboard</a>.</div>
@@ -108,6 +122,8 @@ else if (settings is not null)
     private string? packageError;
     private string? usageError;
     private bool loading;
+    private bool switching;
+    private string? impersonationError;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -148,6 +164,24 @@ else if (settings is not null)
             error = ex.Message;
         }
         finally { loading = false; }
+    }
+
+    private async Task Impersonate()
+    {
+        if (switching || Session.IsImpersonating) return;
+        switching = true;
+        impersonationError = null;
+        try
+        {
+            await Session.StartImpersonationAsync(Username);
+            Navigation.NavigateTo("/domains");
+        }
+        catch (Exception error) when (error is UnauthorizedAccessException or InvalidOperationException
+            or ArgumentException or HttpRequestException or JsonException)
+        {
+            impersonationError = error.Message;
+        }
+        finally { switching = false; }
     }
 
     private static Dictionary<string,string> ToFields(JsonElement element) =>
