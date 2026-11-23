@@ -38,3 +38,27 @@ jobs:
           grep -q '.sidebar' /tmp/site.css
           grep -qi 'content-type:.*css' /tmp/css-headers.txt
           grep -qi 'content-type:.*javascript' /tmp/asset-headers.txt
+
+      - name: Smoke test Production mode asset endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://127.0.0.1:5089 dotnet run --no-build -c Release --project src/HostingPanel.Web >/tmp/hp-prod.log 2>&1 &
+          pid=$!
+          trap 'cat /tmp/hp-prod.log; kill "$pid" 2>/dev/null || true' EXIT
+          for i in {1..40}; do
+            if curl -sS http://127.0.0.1:5089/ -o /tmp/hp-home; then break; fi
+            sleep 1
+          done
+          for path in site.css _framework/blazor.web.js; do
+            echo "Request: $path"
+            curl -sS -D /tmp/hp-headers -o /tmp/hp-body "http://127.0.0.1:5089/$path"
+            cat /tmp/hp-headers
+            wc -c /tmp/hp-body
+            head -c 200 /tmp/hp-body || true
+            echo
+          done
+          curl -fsS http://127.0.0.1:5089/site.css -o /tmp/hp-style
+          grep -q '.sidebar' /tmp/hp-style
+          curl -fsS http://127.0.0.1:5089/_framework/blazor.web.js -o /tmp/hp-script
+          test "$(wc -c </tmp/hp-script)" -gt 1000
