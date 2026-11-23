@@ -13,15 +13,33 @@ else
     <section class="card">
         <h2>ClamAV</h2>
         <p>Actieve scanprocessen</p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@clamav</pre>
-        <p>Scans starten en stoppen gebeurt via de backend; voor scanopties is het volledige ClamAV-requestcontract vereist.</p>
+        <h2>Scan starten</h2>
+        <p>Gebruik een pad dat de DirectAdmin-backend mag scannen. De backend valideert het pad en beslist over toegang.</p>
+        <label>Pad op de server</label><input @bind="scanPath" placeholder="/home/..." />
+        <label>Typ SCAN om te bevestigen</label><input @bind="scanConfirmation" />
+        <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(scanPath) || scanConfirmation != "SCAN")" @onclick="Scan">ClamAV-scan starten</button>
     </section>
     @if (feedback is not null) { <p role="status">@feedback</p> }
 }
 @code {
-    private string modsecurity = "", audit = "", clamav = "";
+    private string modsecurity = "", audit = "", clamav = "", scanPath = "", scanConfirmation = "";
     private string? feedback;
     private bool busy;
     protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
+    private async Task Scan()
+    {
+        if (busy || !Session.Connected || string.IsNullOrWhiteSpace(scanPath) || scanConfirmation != "SCAN") return;
+        busy = true; feedback = null;
+        try
+        {
+            var payload = System.Text.Json.JsonSerializer.Serialize(new { path = scanPath });
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post, "api/clamav", payload);
+            feedback = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { feedback = ex.Message; }
+        finally { busy = false; scanConfirmation = ""; }
+    }
     private async Task Load()
     {
         if (busy || !Session.Connected) return;
