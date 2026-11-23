@@ -18,7 +18,13 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 app.UseHttpsRedirection();
+
+// .NET 10 static web assets are endpoint-mapped. Without MapStaticAssets,
+// the framework boot script may return HTTP 404 and interactive components never start.
+app.MapStaticAssets();
 app.UseStaticFiles();
 app.UseAntiforgery();
-app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+app.MapRazorComponents<App>()
+   .AddInteractiveServerRenderMode()
+   .WithStaticAssets();
 app.Run();
