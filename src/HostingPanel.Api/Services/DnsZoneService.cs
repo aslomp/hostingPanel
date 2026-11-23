@@ -31,6 +31,55 @@ public sealed class DnsZoneService(IHttpClientFactory clients)
         { return new(504,null,"UPSTREAM_TIMEOUT"); }
     }
 
+    /// <summary>DirectAdmin standalone DNS-zone creation/deletion (legacy CMD_API_DNS_ADMIN).</summary>
+    public async Task<DnsChangeResult> CreateZoneAsync(DnsZoneCreate input,
+        AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        if (!LegacyDomainsAdapter.IsValidDomain(input.Domain) ||
+            !IPAddress.TryParse(input.Ip, out var ip) || ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork ||
+            !LegacyDomainsAdapter.IsValidDomain(input.Ns1) ||
+            !LegacyDomainsAdapter.IsValidDomain(input.Ns2))
+            return new(400, "INVALID_DNS_ZONE");
+        return await MutateZoneAsync(new Dictionary<string, string> {
+            ["action"] = "create", ["domain"] = input.Domain, ["ip"] = input.Ip,
+            ["ns1"] = input.Ns1, ["ns2"] = input.Ns2
+        }, auth, ct);
+    }
+
+    public async Task<DnsChangeResult> DeleteZoneAsync(string domain, string confirmation,
+        AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        if (!LegacyDomainsAdapter.IsValidDomain(domain) ||
+            !string.Equals(domain, confirmation, StringComparison.Ordinal))
+            return new(400, "CONFIRMATION_REQUIRED");
+        return await MutateZoneAsync(new Dictionary<string, string> {
+            ["action"] = "delete", ["select0"] = domain
+        }, auth, ct);
+    }
+
+    private async Task<DnsChangeResult> MutateZoneAsync(
+        IDictionary<string, string> form, AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "CMD_API_DNS_ADMIN");
+            request.Headers.Authorization = auth;
+            request.Content = new FormUrlEncodedContent(form);
+            using var response = await clients.CreateClient("legacy-directadmin")
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+            if (!response.IsSuccessStatusCode)
+                return new((int)response.StatusCode, "UPSTREAM_REJECTED_OPERATION");
+            LegacyDomainsAdapter.AssertMutationSucceeded(
+                await response.Content.ReadAsStringAsync(ct));
+            return new(200, null);
+        }
+        catch (LegacyApiException) { return new(422, "DIRECTADMIN_REJECTED_OPERATION"); }
+        catch (FormatException) { return new(502, "INVALID_LEGACY_RESPONSE"); }
+        catch (HttpRequestException) { return new(502, "UPSTREAM_UNAVAILABLE"); }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        { return new(504, "UPSTREAM_TIMEOUT"); }
+    }
+
     public async Task<DnsZoneResult> ReadAsync(string domain, AuthenticationHeaderValue auth,
         CancellationToken ct)
     {
@@ -124,3 +173,5 @@ public sealed record DnsZoneResult(int Status, IReadOnlyList<DnsRecord>? Records
 public sealed record DnsChangeResult(int Status, string? Error);
 
 public sealed record AdminDnsZoneListResult(int Status, IReadOnlyList<AdminDnsZone>? Zones, string? Error);
+
+public sealed record DnsZoneCreate(string Domain, string Ip, string Ns1, string Ns2);
