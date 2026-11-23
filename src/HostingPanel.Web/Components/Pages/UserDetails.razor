@@ -2,89 +2,161 @@
 @using System.Text.Json
 @inject DirectAdminSession Session
 
-<PageTitle>@Username — HostingPanel</PageTitle>
+<PageTitle>@Username — Accountbeheer</PageTitle>
 <div class="page-header">
-  <div>
-    <div class="eyebrow"><a href="/users">Accountbeheer</a> / Gebruikersdetails</div>
-    <h1>@Username</h1>
-    <p>Moderne DirectAdmin API: accountconfiguratie en resourceverbruik.</p>
-  </div>
-  <button @onclick="Load" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
+    <div>
+        <div class="eyebrow"><a href="/users">Accountbeheer</a> / Gebruikersdetails</div>
+        <h1>@Username</h1>
+        <p>Accountinstellingen, toegewezen hostingpakket en pakketlimieten zoals beschikbaar in DirectAdmin.</p>
+    </div>
+    <button @onclick="Load" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
 </div>
 @if (!Session.Connected)
 {
-  <div class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</div>
+    <div class="card">Verbind eerst via het <a href="/">dashboard</a>.</div>
 }
 else if (loading)
 {
-  <div class="card" role="status">Accountgegevens worden opgehaald…</div>
+    <div class="card" role="status">Account en pakketgegevens ophalen…</div>
 }
-else
+else if (error is not null)
 {
-  <div class="tiles">
-    <div class="card">
-      <h2>Accountconfiguratie</h2>
-      <p><code>GET /api/users/@Username/config</code></p>
-      @if (configError is not null) { <p class="error" role="alert">@configError</p> }
-      else if (config is not null) { <table><tbody>
-        @foreach(var entry in config) { <tr><th>@entry.Key</th><td>@entry.Value</td></tr> }
-      </tbody></table> }
+    <div class="card"><p class="error" role="alert">@error</p></div>
+}
+else if (settings is not null)
+{
+    <div class="tiles">
+        <section class="card">
+            <h2>Account</h2>
+            <p>Live accountgegevens van de legacy DirectAdmin-server.</p>
+            <table><tbody>
+                @foreach (var entry in new (string Label,string Key)[] {
+                    ("Gebruikersnaam","username"), ("Naam","name"), ("E-mailadres","email"),
+                    ("Accounttype","usertype"), ("Aangemaakt door","creator"),
+                    ("Hoofddomein","domain"), ("IP-adres","ip"), ("Pakket","package"),
+                    ("Geschorst","suspended"), ("Taal","language"), ("Skin","skin") })
+                {
+                    @if (settings.TryGetValue(entry.Key, out var value))
+                    {
+                        <tr><th>@entry.Label</th><td>@value</td></tr>
+                    }
+                }
+            </tbody></table>
+            <p><a href="@($"/domains?user={Uri.EscapeDataString(Username)}")">Domeinen van deze gebruiker bekijken</a></p>
+        </section>
+        <section class="card">
+            <h2>Hostingpakket</h2>
+            @if (package is not null)
+            {
+                <p>Toegewezen pakket: <strong>@package</strong></p>
+            }
+            else
+            {
+                <p>Geen pakketnaam gevonden in de accountconfiguratie.</p>
+            }
+            @if (packageError is not null)
+            {
+                <p class="error" role="status">Pakketgegevens niet beschikbaar: @packageError</p>
+            }
+            @if (packageSettings is not null)
+            {
+                <table><tbody>
+                    @foreach (var field in packageSettings.OrderBy(f => f.Key, StringComparer.OrdinalIgnoreCase))
+                    {
+                        <tr><th>@field.Key</th><td>@field.Value</td></tr>
+                    }
+                </tbody></table>
+            }
+            else if (packageError is null)
+            {
+                <p>Het pakket heeft geen aanvullende configuratievelden teruggegeven.</p>
+            }
+        </section>
     </div>
-    <div class="card">
-      <h2>Resourceverbruik</h2>
-      <p><code>GET /api/users/@Username/usage</code></p>
-      @if (usageError is not null) { <p class="error" role="alert">@usageError</p> }
-      else if (usage is not null) { <table><tbody>
-        @foreach(var entry in usage) { <tr><th>@entry.Key</th><td>@entry.Value</td></tr> }
-      </tbody></table> }
-    </div>
-  </div>
+    <section class="card">
+        <h2>Alle beschikbare gebruikersinstellingen</h2>
+        <p>De oorspronkelijke DirectAdmin-veldnamen, met vertrouwelijke waarden gefilterd.</p>
+        <table><thead><tr><th>Instelling</th><th>Waarde</th></tr></thead><tbody>
+            @foreach (var field in settings.OrderBy(f => f.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                <tr><th>@field.Key</th><td>@field.Value</td></tr>
+            }
+        </tbody></table>
+    </section>
+    <section class="card">
+        <h2>Resourceverbruik</h2>
+        <p>Strikt modern contract: <code>GET /api/users/@Username/usage</code>.</p>
+        @if (usageError is not null) { <p class="error" role="status">@usageError</p> }
+        else if (usage is not null)
+        {
+            <table><tbody>
+                @foreach (var field in usage.OrderBy(f => f.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    <tr><th>@field.Key</th><td>@field.Value</td></tr>
+                }
+            </tbody></table>
+        }
+    </section>
 }
 @code {
-  [Parameter] public string Username { get; set; } = "";
-  private Dictionary<string,string>? config;
-  private Dictionary<string,string>? usage;
-  private string? configError;
-  private string? usageError;
-  private bool loading;
+    [Parameter] public string Username { get; set; } = "";
+    private Dictionary<string,string>? settings;
+    private Dictionary<string,string>? packageSettings;
+    private Dictionary<string,string>? usage;
+    private string? package;
+    private string? error;
+    private string? packageError;
+    private string? usageError;
+    private bool loading;
 
-  protected override async Task OnParametersSetAsync()
-  {
-    if (Session.Connected) await Load();
-  }
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Session.Connected) await Load();
+    }
 
-  private async Task Load()
-  {
-    if (loading || !Session.Connected) return;
-    loading = true;
-    configError = null; usageError = null;
-    try
+    private async Task Load()
     {
-      (config, configError) = await Read("config");
-      (usage, usageError) = await Read("usage");
+        if (loading || !Session.Connected) return;
+        loading = true;
+        error = null; packageError = null; usageError = null;
+        settings = null; packageSettings = null; usage = null; package = null;
+        try
+        {
+            var (status, body) = await Session.GetAccountOverviewAsync(Username);
+            if (status != 200)
+            {
+                error = $"Gebruikersgegevens ophalen mislukt (HTTP {status}). Controleer de DirectAdmin-rechten.";
+                return;
+            }
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            settings = ToFields(root.GetProperty("config"));
+            if (root.TryGetProperty("package", out var p) && p.ValueKind == JsonValueKind.String)
+                package = p.GetString();
+            if (root.TryGetProperty("packageSettings", out var ps) && ps.ValueKind == JsonValueKind.Object)
+                packageSettings = ToFields(ps);
+            if (root.TryGetProperty("packageError", out var pe) && pe.ValueKind == JsonValueKind.String)
+                packageError = pe.GetString();
+            var (usageStatus, usageBody) = await Session.GetUserDetailAsync(Username, "usage");
+            if (usageStatus == 200)
+            {
+                using var usageJson = JsonDocument.Parse(usageBody);
+                usage = ToFields(usageJson.RootElement);
+            }
+            else if (usageStatus == 501)
+                usageError = "De legacy-server biedt niet alle verplichte velden uit het moderne usage-schema.";
+            else
+                usageError = $"Verbruik is niet beschikbaar (HTTP {usageStatus}).";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
+            or ArgumentException or FormatException or JsonException)
+        {
+            error = ex.Message;
+        }
+        finally { loading = false; }
     }
-    finally { loading = false; }
-  }
-  private async Task<(Dictionary<string,string>?,string?)> Read(string kind)
-  {
-    try
-    {
-      var (status, body) = await Session.GetUserDetailAsync(Username, kind);
-      if (status == 501)
-        return (null, "De legacy DirectAdmin-server levert nog niet alle verplichte gegevens uit het moderne Swagger-contract. Er worden geen fictieve waarden getoond.");
-      if (status != 200)
-        return (null, $"API-verzoek mislukt: HTTP {status}.");
-      using var json = JsonDocument.Parse(body);
-      if (json.RootElement.ValueKind != JsonValueKind.Object)
-        return (null, "Onverwacht responseformaat.");
-      var rows = json.RootElement.EnumerateObject()
-        .ToDictionary(p => p.Name, p => p.Value.ToString(), StringComparer.OrdinalIgnoreCase);
-      return (rows, null);
-    }
-    catch (Exception error) when (error is HttpRequestException or FormatException or
-        InvalidOperationException or ArgumentException or JsonException)
-    {
-      return (null,error.Message);
-    }
-  }
+
+    private static Dictionary<string,string> ToFields(JsonElement element) =>
+        element.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.ToString(),
+            StringComparer.OrdinalIgnoreCase);
 }
