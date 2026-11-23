@@ -29,10 +29,25 @@ else
         <button class="primary" disabled="@(busy || confirmation != "PATCH")" @onclick="Apply">Patch toepassen</button>
         @if (mutation is not null) { <p role="status">@mutation</p> }
     </section>
+    <section class="card">
+        <h2>Serverhostnaam wijzigen</h2>
+        <label>Nieuwe hostnaam</label><input @bind="hostname" placeholder="server.example.com" />
+        <label>Typ HOSTNAME om te bevestigen</label><input @bind="hostnameConfirmation" />
+        <button disabled="@(busy || string.IsNullOrWhiteSpace(hostname) || hostnameConfirmation != "HOSTNAME")" @onclick="ChangeHostname">Hostnaam wijzigen</button>
+    </section>
+    <section class="card">
+        <h2>Tijdzone wijzigen</h2>
+        <label>Tijdzone (IANA)</label><input @bind="timezone" placeholder="Europe/Amsterdam" />
+        <button disabled="@busy" @onclick="ListTimezones">Beschikbare tijdzones ophalen</button>
+        <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@timezones</pre>
+        <label>Typ TIMEZONE om te bevestigen</label><input @bind="timezoneConfirmation" />
+        <button disabled="@(busy || string.IsNullOrWhiteSpace(timezone) || timezoneConfirmation != "TIMEZONE")" @onclick="ChangeTimezone">Tijdzone wijzigen</button>
+    </section>
 }
 @code {
     private string endpoint = "api/server-settings/directadmin-conf/active";
     private string patch = "{}", confirmation = "", result = "";
+    private string hostname = "", hostnameConfirmation = "", timezone = "", timezoneConfirmation = "", timezones = "";
     private string? message, mutation;
     private bool busy;
     protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
@@ -49,6 +64,46 @@ else
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         { message = ex.Message; result = ""; }
         finally { busy = false; }
+    }
+    private async Task ListTimezones()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; mutation = null;
+        try
+        {
+            var (status, body) = await Session.GetRawAsync("api/server-settings/timezone/list");
+            timezones = $"HTTP {status}\\n{body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { mutation = ex.Message; }
+        finally { busy = false; }
+    }
+    private async Task ChangeHostname()
+    {
+        if (busy || hostnameConfirmation != "HOSTNAME" || string.IsNullOrWhiteSpace(hostname)) return;
+        busy = true; mutation = null;
+        try
+        {
+            var json = JsonSerializer.Serialize(new { hostname });
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post,
+                "api/server-settings/change-hostname", json);
+            mutation = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { mutation = ex.Message; }
+        finally { busy = false; hostnameConfirmation = ""; }
+    }
+    private async Task ChangeTimezone()
+    {
+        if (busy || timezoneConfirmation != "TIMEZONE" || string.IsNullOrWhiteSpace(timezone)) return;
+        busy = true; mutation = null;
+        try
+        {
+            var json = JsonSerializer.Serialize(new { tz = timezone });
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post,
+                "api/server-settings/timezone/set", json);
+            mutation = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { mutation = ex.Message; }
+        finally { busy = false; timezoneConfirmation = ""; }
     }
     private async Task Apply()
     {
