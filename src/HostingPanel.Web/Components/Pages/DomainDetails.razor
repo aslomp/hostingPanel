@@ -25,7 +25,7 @@ else if (error is not null)
     <div class="card">
         <h2>Gegevens niet beschikbaar</h2>
         <p class="error" role="alert">@error</p>
-        <p>DirectAdmin moet het domein kunnen tonen onder het aangemelde account. Bij beheer van een ander account zijn de bijbehorende gebruikersrechten vereist.</p>
+        <p>De domeininformatie is niet beschikbaar. DirectAdmin beoordeelt elke actie afzonderlijk.</p>
     </div>
 }
 else if (fields is not null)
@@ -50,31 +50,31 @@ else if (fields is not null)
         <section class="card">
             <h2>Domeininstellingen wijzigen</h2>
             <p>Instellingen worden afzonderlijk opgeslagen, zonder andere DirectAdmin-checkboxes te wijzigen.</p>
-            @if (fields.ContainsKey("php"))
+            @if (true)
             {
                 <label for="domainPhp">PHP</label>
                 <select id="domainPhp" @bind="php"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
                 <button disabled="@saving" @onclick="SavePhp">PHP opslaan</button>
             }
-            @if (fields.ContainsKey("ssl"))
+            @if (true)
             {
                 <label for="domainSsl">SSL / HTTPS</label>
                 <select id="domainSsl" @bind="ssl"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
                 <button disabled="@saving" @onclick="SaveSsl">SSL opslaan</button>
             }
-            @if (fields.ContainsKey("cgi"))
+            @if (true)
             {
                 <label for="domainCgi">CGI</label>
                 <select id="domainCgi" @bind="cgi"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
                 <button disabled="@saving" @onclick="SaveCgi">CGI opslaan</button>
             }
-            @if (fields.ContainsKey("bandwidth"))
+            @if (true)
             {
                 <label for="domainBandwidth">Bandbreedte (MiB of unlimited)</label>
                 <input id="domainBandwidth" @bind="bandwidth" />
                 <button disabled="@saving" @onclick="SaveBandwidth">Bandbreedte opslaan</button>
             }
-            @if (fields.ContainsKey("quota"))
+            @if (true)
             {
                 <label for="domainQuota">Schijfruimte (MiB of unlimited)</label>
                 <input id="domainQuota" @bind="quota" />
@@ -124,7 +124,7 @@ else if (fields is not null)
                 error = status switch
                 {
                     403 => "Je hebt geen toegang tot deze domeininstellingen.",
-                    404 => "Het domein hoort niet bij de huidige DirectAdmin-sessie.",
+                    404 => "DirectAdmin heeft het domein niet gevonden.",
                     _ => $"DirectAdmin kon deze domeininformatie niet ophalen (HTTP {status})."
                 };
                 return;
