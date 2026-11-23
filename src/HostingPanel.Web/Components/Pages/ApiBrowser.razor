@@ -1,0 +1,25 @@
+@page "/api-browser"
+@inject DirectAdminSession Session
+
+<PageTitle>API — HostingPanel</PageTitle>
+<div class="page-header"><div><div class="eyebrow">Integratie</div><h1>DirectAdmin API</h1><p>Bekijk de ongewijzigde API-antwoorden van DirectAdmin.</p></div></div>
+@if (!Session.Connected) { <div class="card">Verbind eerst via het <a href="/">dashboard</a>.</div> }
+else
+{
+    <div class="card">
+        <label>Endpoint<input @bind="endpoint" /></label>
+        <button class="primary" @onclick="Fetch">Ophalen</button>
+        <p>@status</p>
+        <pre>@body</pre>
+    </div>
+}
+@code {
+    private string endpoint = "CMD_API_SHOW_ALL_USERS?json=yes";
+    private string status = "";
+    private string body = "";
+    private async Task Fetch()
+    {
+        try { var result = await Session.GetRawAsync(endpoint); status = $"HTTP {result.Status}"; body = result.Body; }
+        catch (Exception ex) { status = ex.Message; body = ""; }
+    }
+}
