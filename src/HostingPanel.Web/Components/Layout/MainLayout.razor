@@ -1,0 +1,24 @@
+@inherits LayoutComponentBase
+@inject DirectAdminSession Session
+
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="/">◈ <span>HostingPanel<small>CONTROL CENTER</small></span></a>
+    <div class="nav-caption">Navigatie</div>
+    <NavLink href="/" Match="NavLinkMatch.All">▦ Dashboard</NavLink>
+    <details open>
+      <summary>Accountbeheer</summary>
+      <NavLink href="/users">Toon alle gebruikers</NavLink>
+      <NavLink href="/api-browser">DirectAdmin API</NavLink>
+    </details>
+    <details open>
+      <summary>Server Beheer</summary>
+      <NavLink href="/api-browser?endpoint=api/session">Server en sessie</NavLink>
+    </details>
+    <p class="nav-note">DirectAdmin-compatibele API<br />Business UI — eerste verticale slice</p>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><span>HostingPanel / beheer</span><span>@(Session.Connected ? Session.Username : "Niet verbonden")</span></header>
+    <main class="content">@Body</main>
+  </div>
+</div>
