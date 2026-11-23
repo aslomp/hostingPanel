@@ -1,6 +1,7 @@
 @page "/tickets/{Id:long}"
 @using System.Text.Json
 @inject DirectAdminSession Session
+@implements IDisposable
 @inject NavigationManager Navigation
 <PageTitle>Ticket #@Id — HostingPanel</PageTitle>
 <div class="page-header"><div><div class="eyebrow"><a href="/tickets">Ticketbeheer</a> / Ticket #@Id</div>
@@ -72,6 +73,13 @@ else
     private static string Text(JsonElement item, string name) =>
         item.TryGetProperty(name, out var value) ? value.ToString() : "";
 
+    private void OnTicketChanged() => _ = InvokeAsync(async () =>
+    {
+        await Load();
+        StateHasChanged();
+    });
+    public void Dispose() => Session.TicketInboxChanged -= OnTicketChanged;
+    protected override void OnInitialized() => Session.TicketInboxChanged += OnTicketChanged;
     protected override async Task OnParametersSetAsync() { if (Session.Connected) await Load(); }
     private async Task Load()
     {
