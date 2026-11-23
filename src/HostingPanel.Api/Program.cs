@@ -8,6 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<LegacyUserDetailsService>();
 builder.Services.AddScoped<LegacyAccountOverviewService>();
 builder.Services.AddScoped<DomainManagementService>();
+builder.Services.AddScoped<DnsZoneService>();
 builder.Services.AddHttpClient("legacy-directadmin", client =>
 {
     var configured = builder.Configuration["DirectAdmin:BaseUrl"]
@@ -202,6 +203,30 @@ app.MapPut("/hosting/domains/{domain}/settings", async (HttpContext context, str
         auth, context.RequestAborted);
     return result.Error is null
         ? Results.Json(new { domain, setting = input.Setting, updated = true })
+        : Results.Json(new { type = result.Error }, statusCode: result.Status);
+});
+
+// DNS management is a HostingPanel-owned interface because the pinned modern
+// DirectAdmin Swagger has no public DNS zone CRUD path.
+app.MapGet("/hosting/domains/{domain}/dns", async (HttpContext context,
+    string domain, DnsZoneService service) =>
+{
+    if (!TryGetBasic(context, out var auth))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    var result = await service.ReadAsync(domain, auth, context.RequestAborted);
+    return result.Records is null
+        ? Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
+        : Results.Json(new { domain, records = result.Records });
+});
+
+app.MapPost("/hosting/domains/{domain}/dns", async (HttpContext context, string domain,
+    DnsChange input, DnsZoneService service) =>
+{
+    if (!TryGetBasic(context, out var auth))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    var result = await service.ChangeAsync(domain, input, auth, context.RequestAborted);
+    return result.Error is null
+        ? Results.Json(new { domain, action = input.Action, applied = true })
         : Results.Json(new { type = result.Error }, statusCode: result.Status);
 });
 
