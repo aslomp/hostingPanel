@@ -11,12 +11,12 @@
            placeholder="Zoek naar pagina's..." @bind="navSearch" @bind:event="oninput" />
     <NavLink href="/" Match="NavLinkMatch.All">▦ Dashboard</NavLink>
     <nav class="sidebar-scroll" aria-label="Beheeronderdelen">
-      @foreach (var section in FilteredSections)
+      @foreach (var navGroup in FilteredSections)
       {
         <details class="nav-section" open>
-          <summary><span class="nav-icon" aria-hidden="true">@section.Icon</span>@section.Title</summary>
+          <summary><span class="nav-icon" aria-hidden="true">@navGroup.Icon</span>@navGroup.Title</summary>
           <div class="nav-section-items">
-            @foreach (var item in section.Items)
+            @foreach (var item in navGroup.Items)
             {
               <NavLink href="@item.Path" class="nav-item">
                 <span class="nav-icon" aria-hidden="true">@item.Icon</span>
