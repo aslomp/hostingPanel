@@ -1,4 +1,5 @@
 using HostingPanel.Web.Services;
+using HostingPanel.Api.Adapters;
 
 var checks = new List<(string Description, Action Test)>
 {
@@ -7,6 +8,18 @@ var checks = new List<(string Description, Action Test)>
         var users = DirectAdminUsersParser.Parse("[\"admin\",\"demo\"]");
         Require(users.Count == 2 && users[0] == "admin" && users[1] == "demo");
     }),
+    ("Legacy adapter converts modern search response", () =>
+    {
+        var names = LegacyUsersAdapter.ParseUsernames("[\\"demo\\",\\"admin\\",\\"demoadmin\\"]");
+        var filtered = LegacyUsersAdapter.SearchUsers(names, "demo", 1);
+        Require(filtered.Count == 1 && filtered[0] == "demo");
+    }),
+    ("Legacy adapter rejects error responses", () =>
+        Throws<LegacyApiException>(() => LegacyUsersAdapter.ParseUsernames("{\\"error\\":1,\\"text\\":\\"Denied\\"}"))),
+    ("Legacy adapter rejects invalid schema", () =>
+        Throws<FormatException>(() => LegacyUsersAdapter.ParseUsernames("{\\"users\\":[\\"admin\\"]}"))),
+    ("Legacy adapter validates search limits", () =>
+        Throws<ArgumentOutOfRangeException>(() => LegacyUsersAdapter.SearchUsers(["admin"], null, 0))),
     ("Empty list is valid", () => Require(DirectAdminUsersParser.Parse("[]").Count == 0)),
     ("Legacy error object is rejected", () =>
         Throws<InvalidOperationException>(() => DirectAdminUsersParser.Parse("{\"error\":1,\"text\":\"Access denied\"}"))),
