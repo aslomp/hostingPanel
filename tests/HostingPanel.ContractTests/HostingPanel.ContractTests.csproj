@@ -15,5 +15,6 @@
     <Compile Include="../../src/HostingPanel.Api/Adapters/LegacyDomainDetailsAdapter.cs" Link="LegacyDomainDetailsAdapter.cs" />
     <Compile Include="../../src/HostingPanel.Api/Adapters/LegacyUserDetailsAdapter.cs" Link="LegacyUserDetailsAdapter.cs" />
     <Compile Include="../../src/HostingPanel.Api/Services/LegacyAccountOverviewService.cs" Link="LegacyAccountOverviewService.cs" />
+    <Compile Include="../../src/HostingPanel.Api/Services/ImpersonationService.cs" Link="ImpersonationService.cs" />
   </ItemGroup>
 </Project>
