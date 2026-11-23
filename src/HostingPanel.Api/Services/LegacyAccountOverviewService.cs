@@ -37,17 +37,21 @@ public sealed class LegacyAccountOverviewService(IHttpClientFactory clients)
                 !username.Equals(reported, StringComparison.OrdinalIgnoreCase))
                 return new(502, null, null, null, "USERNAME_MISMATCH");
 
-            // Package name comes from the actual user configuration, not from a guessed default.
+            // Usage is a separate legacy read, not subject to the strict modern Swagger schema.
+            var usage = await Fetch("CMD_API_SHOW_USER_USAGE?user=" + Uri.EscapeDataString(username));
+
+            // Package name comes from the account's actual configured package.
             if (!user.Fields.TryGetValue("package", out var package) || string.IsNullOrWhiteSpace(package))
-                return new(200, user.Fields, null, null, "PACKAGE_NOT_ASSIGNED");
+                return new(200, user.Fields, null, null, "PACKAGE_NOT_ASSIGNED",
+                    usage.Fields, usage.Error);
 
             if (package.Length > 128 || package.Any(char.IsControl) || package.Contains('/') || package.Contains('\\'))
                 return new(502, null, null, null, "INVALID_PACKAGE_REFERENCE");
 
             var settings = await Fetch("CMD_API_PACKAGES_USER?package=" + Uri.EscapeDataString(package));
-            // A missing package must not conceal the rest of the user's valid account settings.
             return new(200, user.Fields, package, settings.Fields,
-                settings.Fields is null ? settings.Error ?? "PACKAGE_UNAVAILABLE" : null);
+                settings.Fields is null ? settings.Error ?? "PACKAGE_UNAVAILABLE" : null,
+                usage.Fields, usage.Error);
         }
         catch (LegacyApiException) { return new(403, null, null, null, "ACCESS_DENIED"); }
         catch (FormatException) { return new(502, null, null, null, "INVALID_LEGACY_RESPONSE"); }
@@ -68,4 +72,5 @@ public sealed class LegacyAccountOverviewService(IHttpClientFactory clients)
 
 public sealed record AccountOverviewResult(int Status,
     IReadOnlyDictionary<string,string>? Config, string? Package,
-    IReadOnlyDictionary<string,string>? PackageSettings, string? Error);
+    IReadOnlyDictionary<string,string>? PackageSettings, string? Error,
+    IReadOnlyDictionary<string,string>? Usage = null, string? UsageError = null);
