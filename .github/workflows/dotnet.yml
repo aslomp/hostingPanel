@@ -86,7 +86,7 @@ jobs:
           done
           curl -fsS http://127.0.0.1:5090/openapi/directadmin.json -o /tmp/hosted-swagger.json
           cmp src/HostingPanel.Api/spec/directadmin.swagger.json /tmp/hosted-swagger.json
-          for endpoint in /api/users/demo/config /api/users/demo/usage /hosting/domains /hosting/domains/demo.xyz1 /hosting/users/demo/overview /hosting/domains/demo.xyz1/dns /hosting/dns/zones /hosting/accounts /hosting/domains/accessible; do
+          for endpoint in /api/users/demo/config /api/users/demo/usage /hosting/domains /hosting/domains/demo.xyz1 /hosting/users/demo/overview /hosting/domains/demo.xyz1/dns /hosting/dns/zones /hosting/accounts /hosting/domains/accessible /hosting/databases /hosting/databases/demo_app/users; do
             status=$(curl -s -o /tmp/response -w '%{http_code}' "http://127.0.0.1:5090$endpoint")
             test "$status" = "401"
             grep -q 'UNAUTHORIZED' /tmp/response
@@ -124,5 +124,14 @@ jobs:
           code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X PATCH \
             http://127.0.0.1:5091/api/arbitrary/new-operation)
           test "$code" = "401"
+          for route in hosting/databases hosting/databases/demo_app; do
+            method=POST
+            if [[ "$route" == */demo_app ]]; then method=DELETE; fi
+            code=$(curl -sS -o /tmp/hp-db-disabled -w '%{http_code}' -X "$method" \
+              -H 'Authorization: Basic ZGVtbzpkZW1v' -H 'Content-Type: application/json' \
+              -d '{}' "http://127.0.0.1:5091/$route")
+            test "$code" = "409"
+            grep -q 'MUTATIONS_DISABLED' /tmp/hp-db-disabled
+          done
           # Intentionally no authenticated writes to the live demo server in CI.
           # Authorized writes and fallback behavior are verified with fake HTTP handlers.
