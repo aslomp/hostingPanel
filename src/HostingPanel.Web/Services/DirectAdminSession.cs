@@ -149,6 +149,28 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
             Uri.EscapeDataString(username), body, ct);
     }
 
+    public async Task<(int Status, string Body)> SetAccountLimitAsync(
+        string kind, string username, string field, string value, CancellationToken ct = default)
+    {
+        if (kind is not ("user" or "reseller") || !IsValidAccountName(username))
+            throw new ArgumentException("Invalid account.");
+        using var body = new StringContent(JsonSerializer.Serialize(new { field, value }),
+            Encoding.UTF8, "application/json");
+        return await SendAsync(HttpMethod.Put,
+            "hosting/" + (kind == "reseller" ? "resellers/" : "users/") +
+            Uri.EscapeDataString(username) + "/limit", body, ct);
+    }
+
+    public async Task<(int Status, string Body)> SetAccountSuspensionAsync(
+        string username, bool suspended, CancellationToken ct = default)
+    {
+        if (!IsValidAccountName(username)) throw new ArgumentException("Invalid account.");
+        using var body = new StringContent(JsonSerializer.Serialize(new { suspended }),
+            Encoding.UTF8, "application/json");
+        return await SendAsync(HttpMethod.Put,
+            "hosting/accounts/" + Uri.EscapeDataString(username) + "/suspension", body, ct);
+    }
+
     public async Task<(int Status, string Body)> CreateDnsZoneAsync(
         string domain, string ip, string ns1, string ns2, CancellationToken ct = default)
     {
