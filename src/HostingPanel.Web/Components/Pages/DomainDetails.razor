@@ -50,36 +50,21 @@ else
         <section class="card">
             <h2>Domeininstellingen wijzigen</h2>
             <p>Instellingen worden afzonderlijk opgeslagen, zonder andere DirectAdmin-checkboxes te wijzigen.</p>
-            @if (true)
-            {
-                <label for="domainPhp">PHP</label>
-                <select id="domainPhp" @bind="php"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
-                <button disabled="@saving" @onclick="SavePhp">PHP opslaan</button>
-            }
-            @if (true)
-            {
-                <label for="domainSsl">SSL / HTTPS</label>
-                <select id="domainSsl" @bind="ssl"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
-                <button disabled="@saving" @onclick="SaveSsl">SSL opslaan</button>
-            }
-            @if (true)
-            {
-                <label for="domainCgi">CGI</label>
-                <select id="domainCgi" @bind="cgi"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
-                <button disabled="@saving" @onclick="SaveCgi">CGI opslaan</button>
-            }
-            @if (true)
-            {
-                <label for="domainBandwidth">Bandbreedte (MiB of unlimited)</label>
-                <input id="domainBandwidth" @bind="bandwidth" />
-                <button disabled="@saving" @onclick="SaveBandwidth">Bandbreedte opslaan</button>
-            }
-            @if (true)
-            {
-                <label for="domainQuota">Schijfruimte (MiB of unlimited)</label>
-                <input id="domainQuota" @bind="quota" />
-                <button disabled="@saving" @onclick="SaveQuota">Quota opslaan</button>
-            }
+            <label for="domainPhp">PHP</label>
+            <select id="domainPhp" @bind="php"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
+            <button disabled="@saving" @onclick="SavePhp">PHP opslaan</button>
+            <label for="domainSsl">SSL / HTTPS</label>
+            <select id="domainSsl" @bind="ssl"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
+            <button disabled="@saving" @onclick="SaveSsl">SSL opslaan</button>
+            <label for="domainCgi">CGI</label>
+            <select id="domainCgi" @bind="cgi"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
+            <button disabled="@saving" @onclick="SaveCgi">CGI opslaan</button>
+            <label for="domainBandwidth">Bandbreedte (MiB of unlimited)</label>
+            <input id="domainBandwidth" @bind="bandwidth" />
+            <button disabled="@saving" @onclick="SaveBandwidth">Bandbreedte opslaan</button>
+            <label for="domainQuota">Schijfruimte (MiB of unlimited)</label>
+            <input id="domainQuota" @bind="quota" />
+            <button disabled="@saving" @onclick="SaveQuota">Quota opslaan</button>
             @if (saving) { <p role="status">Wijziging wordt opgeslagen…</p> }
             @if (saveMessage is not null) { <p role="status">@saveMessage</p> }
         </section>
