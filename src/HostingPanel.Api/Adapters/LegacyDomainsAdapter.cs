@@ -5,11 +5,10 @@ namespace HostingPanel.Api.Adapters;
 
 public static class LegacyDomainsAdapter
 {
-    // .xyz1 is deliberately reserved for local fixture and dry-run examples.
-    // This is not a public DNS TLD.
-    public static bool IsSafeTestDomain(string? domain) =>
+    // General domain validation. The .xyz1 suffix is only used in test fixtures.
+    public static bool IsValidDomain(string? domain) =>
         domain is not null && domain.Length <= 253 &&
-        Regex.IsMatch(domain, @"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+xyz1$",
+        Regex.IsMatch(domain, @"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     public static IReadOnlyList<string> ParseDomains(string payload)
