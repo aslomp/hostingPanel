@@ -6,9 +6,9 @@
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {
-    <section class="card"><h2>Certificaatstatus</h2><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@status</pre></section>
-    <section class="card"><h2>ACME-instellingen</h2><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@acme</pre></section>
-    <section class="card"><h2>Certificaatinformatie</h2><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@certificate</pre></section>
+    <section class="card"><h2>Certificaatstatus</h2><JsonOverview Json="@status" /></section>
+    <section class="card"><h2>ACME-instellingen</h2><JsonOverview Json="@acme" /></section>
+    <section class="card"><h2>Certificaatinformatie</h2><JsonOverview Json="@certificate" /></section>
     <section class="card">
         <h2>ACME-configuratie wijzigen</h2>
         <p>De configuratie bevat mogelijk gevoelige DNS-providerinstellingen. Alleen de backend bepaalt of opslaan toegestaan is.</p>
