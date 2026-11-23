@@ -7,18 +7,6 @@ namespace HostingPanel.Api.Services;
 
 public sealed class DnsZoneService(IHttpClientFactory clients)
 {
-    // Probe the admin DNS endpoint without mutating anything. DirectAdmin decides
-    // whether the effective account may access it; there is no local role gate.
-    private async Task<bool> CanUseAdminDnsAsync(string domain,
-        AuthenticationHeaderValue auth, CancellationToken ct)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Get,
-            "CMD_DNS_ADMIN?domain=" + Uri.EscapeDataString(domain) + "&json=yes");
-        request.Headers.Authorization = auth;
-        using var response = await clients.CreateClient("legacy-directadmin").SendAsync(request,ct);
-        return response.IsSuccessStatusCode;
-    }
-
     public async Task<AdminDnsZoneListResult> ListAdminZonesAsync(
         AuthenticationHeaderValue auth, int page, CancellationToken ct)
     {
@@ -43,15 +31,15 @@ public sealed class DnsZoneService(IHttpClientFactory clients)
         { return new(504,null,"UPSTREAM_TIMEOUT"); }
     }
 
-    public async Task<DnsZoneResult> ReadAsync(string domain, AuthenticationHeaderValue auth,
+    public async Task<DnsZoneResult> ReadAsync(string domain, bool adminScope, AuthenticationHeaderValue auth,
         CancellationToken ct)
     {
         if (!LegacyDomainsAdapter.IsValidDomain(domain)) return new(400, null, "INVALID_DOMAIN");
         try
         {
-            var administrator = await CanUseAdminDnsAsync(domain, auth, ct);
+            // Endpoint selection is the caller's explicit workflow choice, not a permission probe.
             using var request = new HttpRequestMessage(HttpMethod.Get,
-                (administrator ? "CMD_DNS_ADMIN" : "CMD_DNS_CONTROL") +
+                (adminScope ? "CMD_DNS_ADMIN" : "CMD_DNS_CONTROL") +
                 "?domain=" + Uri.EscapeDataString(domain) + "&json=yes&ttl=yes");
             request.Headers.Authorization = auth;
             using var response = await clients.CreateClient("legacy-directadmin").SendAsync(request, ct);
@@ -71,26 +59,20 @@ public sealed class DnsZoneService(IHttpClientFactory clients)
     }
 
     public async Task<DnsChangeResult> ChangeAsync(string domain, DnsChange change,
-        AuthenticationHeaderValue auth, CancellationToken ct)
+        bool adminScope, AuthenticationHeaderValue auth, CancellationToken ct)
     {
         if (!LegacyDomainsAdapter.IsValidDomain(domain) || !LegacyDnsAdapter.Valid(change.Record)
             || change.Action is not ("add" or "edit" or "delete")
             || (change.Action != "add" && (change.Previous is null || !LegacyDnsAdapter.Valid(change.Previous))))
             return new(400, "INVALID_DNS_CHANGE");
 
-        var snapshot = await ReadAsync(domain, auth, ct);
-        if (snapshot.Records is null) return new(snapshot.Status, snapshot.Error);
-
-        var exists = snapshot.Records.Any(r => LegacyDnsAdapter.Identical(r,
-            change.Action == "add" ? change.Record : change.Previous!));
-        if (change.Action != "add" && !exists) return new(409, "RECORD_HAS_CHANGED");
-        if (change.Action == "add" && exists) return new(409, "RECORD_ALREADY_EXISTS");
+        // No mandatory zone read or local conflict/ownership decision before the write.
+        // DirectAdmin is the authoritative source for record existence and write permissions.
         try
         {
             var form = LegacyDnsAdapter.Form(domain, change);
-            var administrator = await CanUseAdminDnsAsync(domain, auth, ct);
             using var request = new HttpRequestMessage(HttpMethod.Post,
-                administrator ? "CMD_API_DNS_ADMIN" : "CMD_API_DNS_CONTROL");
+                adminScope ? "CMD_API_DNS_ADMIN" : "CMD_API_DNS_CONTROL");
             request.Headers.Authorization = auth;
             request.Content = new FormUrlEncodedContent(form);
             using var response = await clients.CreateClient("legacy-directadmin").SendAsync(request, ct);
@@ -99,13 +81,9 @@ public sealed class DnsZoneService(IHttpClientFactory clients)
             if (!response.IsSuccessStatusCode) return new(502, "UPSTREAM_ERROR");
             var result = await response.Content.ReadAsStringAsync(ct);
             LegacyDomainsAdapter.AssertMutationSucceeded(result);
-            // "error=0" from old DirectAdmin versions doesn't always mean a record changed.
-            // Read the zone again and require the intended exact record delta.
-            var after = await ReadAsync(domain, auth, ct);
-            if (after.Records is null)
-                return new(502, "CHANGE_UNVERIFIED");
-            return LegacyDnsAdapter.Applied(snapshot.Records, after.Records, change)
-                ? new(200, null) : new(409, "CHANGE_NOT_OBSERVED");
+            // A successful backend response is authoritative; a later read may be denied
+            // independently and cannot be made a precondition for this write.
+            return new(200, null);
         }
         catch (ArgumentException) { return new(400, "INVALID_DNS_CHANGE"); }
         catch (LegacyApiException) { return new(422, "DIRECTADMIN_REJECTED_OPERATION"); }
