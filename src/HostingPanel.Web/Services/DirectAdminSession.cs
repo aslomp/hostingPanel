@@ -16,6 +16,8 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
     private string? _ticketChannel;
     public string? TicketChannel => _ticketChannel;
     public event Action? Changed;
+    public event Action? TicketInboxChanged;
+    public void NotifyTicketInboxChanged() => TicketInboxChanged?.Invoke();
     private void NotifyChanged() => Changed?.Invoke();
 
     public bool Connected => _loginKey is not null;
