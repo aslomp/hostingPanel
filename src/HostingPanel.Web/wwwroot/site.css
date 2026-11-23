@@ -41,3 +41,9 @@
   .sidebar{position:relative;top:auto;height:auto;max-height:55vh}
   .sidebar-scroll{overflow-y:auto}
 }
+
+
+.sidebar .sidebar-search-label{font-size:10px;color:#a9bdd5;margin:6px 12px 3px}
+.sidebar input.sidebar-search{width:calc(100% - 16px);max-width:none;margin:4px 8px 10px;padding:10px 12px;color:#eaf3ff;background:#ffffff0c;border:1px solid #ffffff26;border-radius:9px;font-size:12px}
+.sidebar input.sidebar-search::placeholder{color:#adc0d9}
+.sidebar input.sidebar-search:focus{outline:2px solid #7bb6ff}
