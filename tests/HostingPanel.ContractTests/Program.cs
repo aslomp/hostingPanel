@@ -74,6 +74,23 @@ var checks = new List<(string Description, Action Test)>
         Require(form.Contains("action=create") && form.Contains("domain=hosting-test.xyz1") &&
                 form.Contains("php=ON") && form.Contains("cgi=OFF"));
     }),
+    ("Domain modification form uses documented action", () =>
+    {
+        var body = LegacyDomainsAdapter.EncodeModifyForm("site-one.xyz1", true, false, false);
+        Require(body.Contains("action=modify") && body.Contains("ssl=OFF"));
+    }),
+    ("Domain deletion requires confirmed selection", () =>
+    {
+        var body = LegacyDomainsAdapter.EncodeDeleteForm("site-two.xyz1");
+        Require(body == "delete=yes&confirmed=yes&select0=site-two.xyz1");
+    }),
+    ("DirectAdmin mutation responses must indicate success", () =>
+    {
+        LegacyDomainsAdapter.AssertMutationSucceeded("error=0&text=Success");
+        Throws<LegacyApiException>(() => LegacyDomainsAdapter.AssertMutationSucceeded("error=1&text=Denied"));
+        Throws<FormatException>(() => LegacyDomainsAdapter.AssertMutationSucceeded("text=Unknown"));
+        Throws<FormatException>(() => LegacyDomainsAdapter.AssertMutationSucceeded(""));
+    }),
     ("Empty list is valid", () => Require(DirectAdminUsersParser.Parse("[]").Count == 0)),
     ("Legacy error object is rejected", () =>
         Throws<InvalidOperationException>(() => DirectAdminUsersParser.Parse("{\"error\":1,\"text\":\"Access denied\"}"))),
