@@ -10,6 +10,7 @@
     <Compile Include="../../src/HostingPanel.Web/Services/DirectAdminUsersParser.cs" Link="DirectAdminUsersParser.cs" />
     <Compile Include="../../src/HostingPanel.Web/Services/DirectAdminSession.cs" Link="DirectAdminSession.cs" />
     <Compile Include="../../src/HostingPanel.Api/Adapters/LegacyUsersAdapter.cs" Link="LegacyUsersAdapter.cs" />
+    <Compile Include="../../src/HostingPanel.Api/Adapters/LegacyAccountListParser.cs" Link="LegacyAccountListParser.cs" />
     <Compile Include="../../src/HostingPanel.Api/Adapters/LegacyDomainsAdapter.cs" Link="LegacyDomainsAdapter.cs" />
     <Compile Include="../../src/HostingPanel.Api/Adapters/LegacyDnsAdapter.cs" Link="LegacyDnsAdapter.cs" />
     <Compile Include="../../src/HostingPanel.Api/Adapters/AdminDnsZonesAdapter.cs" Link="AdminDnsZonesAdapter.cs" />
