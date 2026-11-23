@@ -23,13 +23,88 @@ else
         <label>Typ dezelfde PID om te bevestigen</label><input @bind="pidConfirmation" />
         <button disabled="@(busy || string.IsNullOrWhiteSpace(scanPid) || scanPid != pidConfirmation)" @onclick="CancelScan">Scan annuleren</button>
     </section>
+    <section class="card">
+        <h2>ModSecurity voor domein</h2>
+        <label>Hostnaam</label><input @bind="hostname" placeholder="example.com" />
+        <button disabled="@busy" @onclick="LoadHostConfig">Configuratie ophalen</button>
+        <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@hostConfig</pre>
+        <label>Nieuwe domeinconfiguratie (JSON)</label>
+        <textarea rows="6" @bind="configJson" spellcheck="false"></textarea>
+        <p>Vereist velden <code>engineEnabled</code> en <code>disabledRules</code>.</p>
+        <label>Typ de hostnaam ter bevestiging</label><input @bind="hostConfirmation" />
+        <button disabled="@(busy || hostname != hostConfirmation)" @onclick="SaveHostConfig">Configuratie vervangen</button>
+        <button disabled="@(busy || hostname != hostConfirmation)" @onclick="ResetHostConfig">Terug naar standaardconfiguratie</button>
+    </section>
     @if (feedback is not null) { <p role="status">@feedback</p> }
 }
 @code {
-    private string modsecurity = "", audit = "", clamav = "", scanPath = "", scanConfirmation = "", scanPid = "", pidConfirmation = "";
+    private string modsecurity = "", audit = "", clamav = "", scanPath = "", scanConfirmation = "", scanPid = "", pidConfirmation = "", hostname = "", hostConfirmation = "", configJson = "", hostConfig = "";
     private string? feedback;
     private bool busy;
     protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
+    private bool ValidHostname() =>
+        !string.IsNullOrWhiteSpace(hostname) && hostname.Length <= 253 &&
+        hostname.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-');
+    private async Task LoadHostConfig()
+    {
+        if (busy || !ValidHostname()) { feedback = "Ongeldige hostnaam."; return; }
+        busy = true; feedback = null;
+        try
+        {
+            var (status, body) = await Session.GetRawAsync(
+                "api/modsecurity/configs/" + Uri.EscapeDataString(hostname));
+            hostConfig = $"HTTP {status}\\n{body}";
+            if (status == 200)
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("engineEnabled", out var enabled)
+                    && doc.RootElement.TryGetProperty("disabledRules", out var rules))
+                    configJson = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        engineEnabled = enabled.GetBoolean(),
+                        disabledRules = rules.Clone()
+                    }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException)
+        { feedback = ex.Message; }
+        finally { busy = false; }
+    }
+    private async Task SaveHostConfig()
+    {
+        if (busy || !ValidHostname() || hostConfirmation != hostname) return;
+        busy = true; feedback = null;
+        try
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(configJson);
+            if (json.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                !json.RootElement.TryGetProperty("engineEnabled", out var enabled) ||
+                enabled.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False) ||
+                !json.RootElement.TryGetProperty("disabledRules", out var rules) ||
+                rules.ValueKind != System.Text.Json.JsonValueKind.Array)
+            { feedback = "JSON moet engineEnabled (bool) en disabledRules (array) bevatten."; return; }
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Put,
+                "api/modsecurity/configs/" + Uri.EscapeDataString(hostname), configJson);
+            feedback = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException)
+        { feedback = ex.Message; }
+        finally { busy = false; hostConfirmation = ""; }
+    }
+    private async Task ResetHostConfig()
+    {
+        if (busy || !ValidHostname() || hostConfirmation != hostname) return;
+        busy = true; feedback = null;
+        try
+        {
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Delete,
+                "api/modsecurity/configs/" + Uri.EscapeDataString(hostname));
+            feedback = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { feedback = ex.Message; }
+        finally { busy = false; hostConfirmation = ""; }
+    }
     private async Task CancelScan()
     {
         if (busy || !Session.Connected || string.IsNullOrWhiteSpace(scanPid) ||
