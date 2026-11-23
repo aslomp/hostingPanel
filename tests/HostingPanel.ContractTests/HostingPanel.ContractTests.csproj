@@ -18,5 +18,8 @@
     <Compile Include="../../src/HostingPanel.Api/Adapters/LegacyUserDetailsAdapter.cs" Link="LegacyUserDetailsAdapter.cs" />
     <Compile Include="../../src/HostingPanel.Api/Services/LegacyAccountOverviewService.cs" Link="LegacyAccountOverviewService.cs" />
     <Compile Include="../../src/HostingPanel.Api/Services/ImpersonationService.cs" Link="ImpersonationService.cs" />
+    <Compile Include="../../src/HostingPanel.Api/Services/AccountCatalogService.cs" Link="AccountCatalogService.cs" />
+    <Compile Include="../../src/HostingPanel.Api/Services/DomainManagementService.cs" Link="DomainManagementService.cs" />
+    <Compile Include="../../src/HostingPanel.Api/Services/AccessibleDomainsService.cs" Link="AccessibleDomainsService.cs" />
   </ItemGroup>
 </Project>
