@@ -47,7 +47,7 @@ else
             @if (Key == "file-manager")
             {
                 <label for="file-path">Directory</label>
-                <input id="file-path" @bind="directory" placeholder="/" />
+                <input id="file-path" @bind="directory" placeholder="." />
             }
             <button class="primary" disabled="@busy" @onclick="Load">Ophalen</button>
             @if (!string.IsNullOrEmpty(statusText))
@@ -66,7 +66,7 @@ else
     [Parameter] public string Key { get; set; } = "";
     private sealed record DataSource(string Label, string Path);
     private sealed record PageDefinition(string Title, string Category, string Description, DataSource[] Sources);
-    private string selected = "", resource = "", directory = "/";
+    private string selected = "", resource = "", directory = ".";
     private string? response, statusText;
     private bool busy;
     private string Title => Definition.Title;
@@ -100,8 +100,10 @@ else
             path = path.Replace(placeholder, Uri.EscapeDataString(resource.Trim()),
                 StringComparison.Ordinal);
         }
-        if (Key == "file-manager" && path == "api/filemanager/list")
+        if (Key == "file-manager" && (path == "api/filemanager/list" || path == "api/filemanager/tree"))
             path += "?path=" + Uri.EscapeDataString(directory);
+        if (path is "api/email-logs" or "api/email-logs-summary")
+            path += "?from=" + Uri.EscapeDataString(DateTimeOffset.UtcNow.AddDays(-1).ToString("O"));
         if (!DirectAdminSession.IsAllowedEndpoint(path))
         {
             statusText = "Ongeldig API-pad.";
