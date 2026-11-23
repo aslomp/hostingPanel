@@ -111,7 +111,7 @@
 
     private static NavItem Live(string label, string icon, string path) => new(label, icon, path);
     private static NavItem Planned(string label, string icon, string key) =>
-        new(label, icon, "/navigation/" + key, false);
+        new(label, icon, "/navigation/" + key);
 
     // Match the section and item order in the reference index.html.
     // All items remain visible for every account: DirectAdmin authorizes each request.
