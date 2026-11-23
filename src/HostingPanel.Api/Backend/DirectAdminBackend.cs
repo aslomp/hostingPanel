@@ -59,6 +59,16 @@ public abstract class BackendController : ControllerBase
     /// Forward an exact Swagger route without changing its method, URL, query,
     /// credentials, request content or upstream response status.
     /// </summary>
+    private static bool IsHopByHop(string header) =>
+        header.Equals("Connection", StringComparison.OrdinalIgnoreCase)
+        || header.Equals("Keep-Alive", StringComparison.OrdinalIgnoreCase)
+        || header.Equals("Proxy-Authenticate", StringComparison.OrdinalIgnoreCase)
+        || header.Equals("Proxy-Authorization", StringComparison.OrdinalIgnoreCase)
+        || header.Equals("TE", StringComparison.OrdinalIgnoreCase)
+        || header.Equals("Trailer", StringComparison.OrdinalIgnoreCase)
+        || header.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)
+        || header.Equals("Upgrade", StringComparison.OrdinalIgnoreCase);
+
     protected static async Task ForwardToBackendAsync(HttpContext context, IHttpClientFactory clients)
     {
         if (!TryGetBasic(context, out var auth))
@@ -80,10 +90,20 @@ public abstract class BackendController : ControllerBase
             new HttpMethod(context.Request.Method), rawPath.TrimStart('/') + context.Request.QueryString);
         request.Headers.Authorization = auth;
         if (context.Request.ContentLength is > 0 || context.Request.Headers.ContainsKey("Transfer-Encoding"))
-        {
             request.Content = new StreamContent(context.Request.Body);
-            if (!string.IsNullOrWhiteSpace(context.Request.ContentType))
-                request.Content.Headers.TryAddWithoutValidation("Content-Type", context.Request.ContentType);
+
+        // Preserve Swagger-defined request semantics, including Accept, Range and
+        // multipart upload headers. Exclude only hop-by-hop transport headers.
+        foreach (var (key, values) in context.Request.Headers)
+        {
+            if (key.Equals("Authorization", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("Host", StringComparison.OrdinalIgnoreCase)
+                || IsHopByHop(key)
+                || key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (!request.Headers.TryAddWithoutValidation(key, (IEnumerable<string>)values))
+                request.Content?.Headers.TryAddWithoutValidation(key, (IEnumerable<string>)values);
         }
 
         try
@@ -91,10 +111,12 @@ public abstract class BackendController : ControllerBase
             using var response = await clients.CreateClient("legacy-directadmin")
                 .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, context.RequestAborted);
             context.Response.StatusCode = (int)response.StatusCode;
-            if (response.Content.Headers.ContentType is { } contentType)
-                context.Response.ContentType = contentType.ToString();
-            if (response.Headers.Location is { } location)
-                context.Response.Headers.Location = location.ToString();
+            foreach (var (key, values) in response.Headers)
+                if (!IsHopByHop(key))
+                    context.Response.Headers[key] = values.ToArray();
+            foreach (var (key, values) in response.Content.Headers)
+                if (!IsHopByHop(key) && !key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
+                    context.Response.Headers[key] = values.ToArray();
             await response.Content.CopyToAsync(context.Response.Body, context.RequestAborted);
         }
         catch (TaskCanceledException) when (!context.RequestAborted.IsCancellationRequested)
