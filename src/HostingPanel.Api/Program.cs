@@ -8,6 +8,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<LegacyUserDetailsService>();
 builder.Services.AddScoped<LegacyAccountOverviewService>();
 builder.Services.AddScoped<DomainManagementService>();
+builder.Services.AddScoped<AccountCatalogService>();
+builder.Services.AddScoped<AccessibleDomainsService>();
 builder.Services.AddScoped<ImpersonationService>();
 builder.Services.AddScoped<DnsZoneService>();
 builder.Services.AddHttpClient("legacy-directadmin", client =>
@@ -56,42 +58,55 @@ app.MapGet("/openapi/directadmin.json", (IWebHostEnvironment environment) =>
         : Results.Problem("Pinned OpenAPI specification unavailable.", statusCode: 503);
 });
 
-// Public modern API contract: GET /api/search/users -> JSON array of usernames.
-// Internal legacy adapter: CMD_API_SHOW_ALL_USERS?json=yes.
-// Each request is authorized by the upstream DirectAdmin account; never use shared admin credentials.
-app.MapGet("/api/search/users", async (HttpContext context, IHttpClientFactory factory) =>
+// Modern DirectAdmin contract: GET /api/search/users returns a string array.
+// DirectAdmin itself decides which user, reseller and admin account lists are
+// accessible. HostingPanel does not duplicate its scope or privilege model.
+app.MapGet("/api/search/users", async (HttpContext context, AccountCatalogService catalog) =>
 {
-    if (!TryGetBasic(context, out var authentication)) return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-
-    var q = context.Request.Query["q"].ToString();
+    if (!TryGetBasic(context, out var authentication))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    var query = context.Request.Query["q"].ToString();
     var rawLimit = context.Request.Query["limit"].ToString();
     var limit = 50;
     if (rawLimit.Length > 0 && (!int.TryParse(rawLimit, out limit) || limit is < 1 or > 1000))
         return Results.Json(new { type = "BAD_REQUEST" }, statusCode: 400);
-    if (q.Length > 256)
+    if (query.Length > 256)
         return Results.Json(new { type = "BAD_REQUEST" }, statusCode: 400);
 
-    try
-    {
-        var client = factory.CreateClient("legacy-directadmin");
-        using var upstreamRequest = new HttpRequestMessage(HttpMethod.Get, "CMD_API_SHOW_ALL_USERS?json=yes");
-        upstreamRequest.Headers.Authorization = authentication;
-        using var response = await client.SendAsync(upstreamRequest, context.RequestAborted);
-        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-            return Results.Json(new { type = response.StatusCode == HttpStatusCode.Forbidden ? "ACCESS_DENIED" : "UNAUTHORIZED" },
-                statusCode: (int)response.StatusCode);
-        if (!response.IsSuccessStatusCode)
-            return Results.Json(new { type = "UPSTREAM_ERROR" }, statusCode: 502);
-        var payload = await response.Content.ReadAsStringAsync(context.RequestAborted);
-        var users = LegacyUsersAdapter.SearchUsers(LegacyUsersAdapter.ParseUsernames(payload), q, limit);
-        return Results.Json(users);
-    }
-    catch (LegacyApiException) { return Results.Json(new { type = "ACCESS_DENIED" }, statusCode: 403); }
-    catch (JsonException) { return Results.Json(new { type = "UPSTREAM_ERROR" }, statusCode: 502); }
-    catch (FormatException) { return Results.Json(new { type = "UPSTREAM_ERROR" }, statusCode: 502); }
-    catch (HttpRequestException) { return Results.Json(new { type = "UPSTREAM_UNAVAILABLE" }, statusCode: 502); }
-    catch (TaskCanceledException) when (!context.RequestAborted.IsCancellationRequested)
-    { return Results.Json(new { type = "UPSTREAM_TIMEOUT" }, statusCode: 504); }
+    var listing = await catalog.ListAsync(authentication, context.RequestAborted);
+    return listing.Accounts is null
+        ? Results.Json(new { type = listing.Error ?? "UPSTREAM_ERROR" }, statusCode: listing.Status)
+        : Results.Json(listing.Accounts.Select(x => x.Username)
+            .Where(x => string.IsNullOrEmpty(query) ||
+                x.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+            .Take(limit).ToArray());
+});
+
+// HostingPanel-specific view used to show the DirectAdmin creator relationship.
+// Creator and role are metadata, not a second authorization model.
+app.MapGet("/hosting/accounts", async (HttpContext context, AccountCatalogService catalog) =>
+{
+    if (!TryGetBasic(context, out var auth))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    var result = await catalog.ListAsync(auth, context.RequestAborted);
+    return result.Accounts is null
+        ? Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
+        : Results.Json(new { accounts = result.Accounts });
+});
+
+app.MapGet("/hosting/domains/accessible", async (HttpContext context,
+    AccessibleDomainsService service) =>
+{
+    if (!TryGetBasic(context, out var auth))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    var result = await service.ListAsync(auth, context.RequestAborted);
+    return result.Items is null
+        ? Results.Json(new { type = result.Warning ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
+        : Results.Json(new {
+            items = result.Items, domains = result.Items.Select(x => x.Domain).ToArray(),
+            warning = result.Warning
+        });
 });
 
 // Modern DirectAdmin user detail endpoints backed by a legacy read-only adapter.
