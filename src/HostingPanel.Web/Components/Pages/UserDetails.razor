@@ -85,7 +85,7 @@ else if (settings is not null)
     </section>
     <section class="card">
         <h2>Resourceverbruik</h2>
-        <p>Strikt modern contract: <code>GET /api/users/@Username/usage</code>.</p>
+        <p>Verbruik zoals DirectAdmin dit voor deze gebruiker retourneert.</p>
         @if (usageError is not null) { <p class="error" role="status">@usageError</p> }
         else if (usage is not null)
         {
@@ -137,16 +137,10 @@ else if (settings is not null)
                 packageSettings = ToFields(ps);
             if (root.TryGetProperty("packageError", out var pe) && pe.ValueKind == JsonValueKind.String)
                 packageError = pe.GetString();
-            var (usageStatus, usageBody) = await Session.GetUserDetailAsync(Username, "usage");
-            if (usageStatus == 200)
-            {
-                using var usageJson = JsonDocument.Parse(usageBody);
-                usage = ToFields(usageJson.RootElement);
-            }
-            else if (usageStatus == 501)
-                usageError = "De legacy-server biedt niet alle verplichte velden uit het moderne usage-schema.";
-            else
-                usageError = $"Verbruik is niet beschikbaar (HTTP {usageStatus}).";
+            if (root.TryGetProperty("usage", out var u) && u.ValueKind == JsonValueKind.Object)
+                usage = ToFields(u);
+            if (root.TryGetProperty("usageError", out var ue) && ue.ValueKind == JsonValueKind.String)
+                usageError = ue.GetString();
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
             or ArgumentException or FormatException or JsonException)
