@@ -1,0 +1,21 @@
+name: .NET build and contract tests
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - feature/blazor-directadmin-api
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build API
+        run: dotnet build src/HostingPanel.Api/HostingPanel.Api.csproj -c Release
+      - name: Build Blazor web
+        run: dotnet build src/HostingPanel.Web/HostingPanel.Web.csproj -c Release
+      - name: Run contract tests
+        run: dotnet run --project tests/HostingPanel.ContractTests -c Release
