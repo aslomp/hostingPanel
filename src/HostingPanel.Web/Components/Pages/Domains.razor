@@ -37,7 +37,7 @@ else
                 <tbody>
                 @foreach (var domain in domains.Where(d => d.Contains(filter, StringComparison.OrdinalIgnoreCase)))
                 {
-                    <tr><td>@domain</td><td>@(string.IsNullOrWhiteSpace(owner) ? Session.Username : owner)</td><td>DirectAdmin</td></tr>
+                    <tr><td><a href="@($"/domains/{Uri.EscapeDataString(domain)}")">@domain</a></td><td>@(string.IsNullOrWhiteSpace(owner) ? Session.Username : owner)</td><td>DirectAdmin</td></tr>
                 }
                 </tbody>
             </table>
