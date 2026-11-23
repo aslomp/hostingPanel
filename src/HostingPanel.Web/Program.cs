@@ -11,6 +11,10 @@ builder.Services.AddHttpClient("hosting-api", client =>
 });
 builder.Services.AddScoped<DirectAdminSession>();
 
+// Support dotnet run in a non-Development environment without requiring dotnet publish.
+// This reads the generated static web asset manifest for framework and wwwroot assets.
+builder.WebHost.UseStaticWebAssets();
+
 var app = builder.Build();
 if (!app.Environment.IsDevelopment())
 {
@@ -19,8 +23,7 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseHttpsRedirection();
 
-// .NET 10 static web assets are endpoint-mapped. Without MapStaticAssets,
-// the framework boot script may return HTTP 404 and interactive components never start.
+// Serve framework and application assets through the static web asset endpoints.
 app.MapStaticAssets();
 app.UseStaticFiles();
 app.UseAntiforgery();
