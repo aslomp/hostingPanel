@@ -35,7 +35,7 @@ else
         busy = true; error = null;
         try
         {
-            var (a, b) = await Session.GetAccessibleAccountsAsync();
+            var (a, b) = await Session.GetAccessibleResellerAccountsAsync();
             accounts = $"HTTP {a}\n{b}";
             var (p, q) = await Session.GetRawAsync("api/reseller-packages");
             packages = $"HTTP {p}\n{q}";
