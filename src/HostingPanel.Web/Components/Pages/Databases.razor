@@ -8,7 +8,10 @@
     <h1>Databasebeheer</h1>
     <p>Databases van jouw account en alle backend-toegankelijke onderliggende accounts.</p>
   </div>
-  <button disabled="@(loading || overallLoading)" @onclick="RefreshAll">Vernieuwen</button>
+  <div class="form-actions">
+    <a class="btn" href="#database-create">＋ Database aanmaken</a>
+    <button disabled="@(loading || overallLoading)" @onclick="RefreshAll">↻ Vernieuwen</button>
+  </div>
 </div>
 @if (!Session.Connected)
 {
@@ -17,7 +20,9 @@
 else
 {
   <section class="card">
-    <h2>Alle toegankelijke databases</h2>
+    <div class="dashboard-section-heading"><h2>Alle toegankelijke databases</h2>
+      @if (overall is not null) { <span class="status-pill @(overallWarnings.Count == 0 ? "good" : "warning")">@overall.Count gevonden</span> }
+    </div>
     <p>Inclusief databases van onderliggende accounts, voor zover DirectAdmin die toegankelijk maakt.</p>
     <button disabled="@overallLoading" @onclick="LoadOverall">Overzicht vernieuwen</button>
     @if (overallLoading) { <p role="status">Databases uit toegankelijke accounts ophalen…</p> }
@@ -25,15 +30,16 @@ else
     @if (overall is not null)
     {
       <p>@overall.Count databases gevonden. @(overallWarnings.Count == 0 ? "Volledige inventarisatie." : $"Onvolledig: {overallWarnings.Count} accounts konden niet worden uitgelezen.")</p>
-      <label for="overallDbFilter">Zoek op eigenaar of database</label>
-      <input id="overallDbFilter" @bind="overallSearch" @bind:event="oninput" />
+      <label for="overallDbFilter">Zoeken in databases</label>
+      <input id="overallDbFilter" type="search" @bind="overallSearch" @bind:event="oninput" placeholder="Database of eigenaar zoeken…" />
       <table><thead><tr><th>Eigenaar</th><th>Database</th><th>Tabellen</th><th>Gebruikers</th><th>Grootte (bytes)</th><th>Definer issues</th></tr></thead><tbody>
         @foreach (var item in overall.Where(x => x.Owner.Contains(overallSearch, StringComparison.OrdinalIgnoreCase) || x.Name.Contains(overallSearch, StringComparison.OrdinalIgnoreCase)))
         {
           <tr>
-            <td>@item.Owner</td><td>@item.Name</td>
-            <td>@item.TableCount</td><td>@item.UserCount</td>
-            <td>@item.SizeBytes</td><td>@item.DefinerIssues</td>
+            <td><a href="@($"/users/{Uri.EscapeDataString(item.Owner)}")">@item.Owner</a></td>
+            <td><strong>@item.Name</strong></td>
+            <td>@item.TableCount.ToString("N0")</td><td>@item.UserCount.ToString("N0")</td>
+            <td>@FormatBytes(item.SizeBytes)</td><td><span class="status-pill @(item.DefinerIssues == 0 ? "good" : "warning")">@item.DefinerIssues</span></td>
           </tr>
         }
       </tbody></table>
@@ -64,18 +70,21 @@ else
       @if(databases.Count==0) { <p>Geen databases gevonden.</p> }
     }
   </section>
-  <section class="card">
+  <section class="card" id="database-create">
     <h2>Database met gebruiker aanmaken</h2>
     <p>DirectAdmin voegt waar nodig de accountprefix toe. De exacte naam wordt na aanmaken opnieuw uit de backend opgehaald.</p>
-    <label for="databaseName">Databasenaam</label>
-    <input id="databaseName" @bind="newDatabase" autocomplete="off" placeholder="app" />
-    <label for="dbUsername">Databasegebruiker</label>
-    <input id="dbUsername" @bind="newUser" autocomplete="off" placeholder="app" />
-    <label for="dbPassword">Wachtwoord</label>
-    <input id="dbPassword" type="password" @bind="newPassword" autocomplete="new-password" />
-    <button class="primary" disabled="@creating" @onclick="Create">
+    <div class="form-grid">
+      <div><label for="databaseName">Databasenaam</label>
+        <input id="databaseName" @bind="newDatabase" autocomplete="off" placeholder="app" /></div>
+      <div><label for="dbUsername">Databasegebruiker</label>
+        <input id="dbUsername" @bind="newUser" autocomplete="off" placeholder="app" /></div>
+      <div><label for="dbPassword">Wachtwoord</label>
+        <input id="dbPassword" type="password" @bind="newPassword" autocomplete="new-password" /></div>
+    </div>
+    <div class="form-actions"><button class="primary" disabled="@creating" @onclick="Create">
       @(creating ? "Aanmaken…" : "Database aanmaken")
     </button>
+    </div>
     @if (createMessage is not null) { <p role="status">@createMessage</p> }
   </section>
 }
@@ -119,6 +128,15 @@ else
     catch(Exception e) when(e is HttpRequestException or JsonException or ArgumentException or InvalidOperationException)
     { error=e.Message; databases=null; }
     finally {loading=false;}
+  }
+  private static string FormatBytes(long value)
+  {
+    if (value < 1024) return value.ToString("N0") + " B";
+    var units = new[] { "KB", "MB", "GB", "TB", "PB" };
+    var size = (double)value;
+    var index = -1;
+    do { size /= 1024; index++; } while (size >= 1024 && index < units.Length - 1);
+    return size.ToString("N1") + " " + units[index];
   }
   private static long Number(JsonElement item, string property) =>
     item.TryGetProperty(property, out var value) && value.TryGetInt64(out var number)
