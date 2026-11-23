@@ -127,11 +127,8 @@ public sealed class DomainManagementService(IHttpClientFactory clients)
         if (!LegacyDomainDetailsAdapter.IsAllowedValue(setting, value))
             return new(400, "INVALID_SETTING");
 
-        var current = await GetDetailsAsync(domain, credentials, cancellationToken);
-        if (current.Settings is null) return new(current.Status, current.Error);
-        if (!current.Settings.ContainsKey(setting))
-            return new(409, "SETTING_NOT_AVAILABLE");
-
+        // Do not require read permission or a prior settings snapshot for a write.
+        // DirectAdmin independently authorizes this exact field update.
         try
         {
             var client = clients.CreateClient("legacy-directadmin");
