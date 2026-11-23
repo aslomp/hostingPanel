@@ -10,6 +10,22 @@ namespace HostingPanel.Api.Controllers;
 [ApiController]
 public sealed class DatabaseController(IHostingBackend backend) : BackendController
 {
+    [HttpGet("/hosting/databases/accessible")]
+    public async Task<IResult> ListAccessibleDatabases(CancellationToken ct)
+    {
+        if (!TryGetBasic(HttpContext, out var auth))
+            return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+
+        var inventory = await backend.AccessibleDatabases.ListAsync(auth, ct);
+        return inventory.Items is null
+            ? Results.Json(new { type = inventory.Error ?? "UPSTREAM_ERROR" }, statusCode: inventory.Status)
+            : Results.Json(new {
+                items = inventory.Items,
+                warnings = inventory.Warnings,
+                complete = inventory.Warnings?.Count == 0
+            });
+    }
+
     [HttpGet("/hosting/databases")]
     public async Task<IResult> hosting_databases_Get_10()
     {
