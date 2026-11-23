@@ -7,6 +7,17 @@ namespace HostingPanel.Api.Controllers;
 [ApiController]
 public sealed class ResellerController(IHostingBackend backend) : BackendController
 {
+    [HttpGet("/hosting/resellers/accessible")]
+    public async Task<IResult> ListAccessibleResellerAccounts(CancellationToken ct)
+    {
+        if (!TryGetBasic(HttpContext, out var auth))
+            return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+        var result = await backend.AccountCatalog.ListAsync(auth, ct);
+        return result.Accounts is null
+            ? Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
+            : Results.Json(new { accounts = result.Accounts });
+    }
+
     [HttpPut("/hosting/resellers/{username}/limit")]
     public async Task<IResult> SetResellerLimit([FromRoute] string username,
         [FromBody] AccountLimitChange input, CancellationToken ct)
