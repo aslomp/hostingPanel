@@ -124,3 +124,18 @@ jobs:
             -d '{"domain":"production.com"}' \
             http://127.0.0.1:5091/hosting/domains/preview)
           test "$status" = "400"
+
+          # Mutations must be disabled by default, even with apparently valid Basic credentials.
+          code=$(curl -sS -o /tmp/hp-disabled -w '%{http_code}' -X POST \
+            -H 'Authorization: Basic ZGVtbzpkZW1v' \
+            -H 'Content-Type: application/json' \
+            -d '{"domain":"hosting-test.xyz1","action":"create","confirmation":"hosting-test.xyz1"}' \
+            http://127.0.0.1:5091/hosting/domains/execute)
+          test "$code" = "409"
+          grep -q TEST_MUTATIONS_DISABLED /tmp/hp-disabled
+          code=$(curl -sS -o /tmp/hp-invalid -w '%{http_code}' -X POST \
+            -H 'Authorization: Basic ZGVtbzpkZW1v' \
+            -H 'Content-Type: application/json' \
+            -d '{"domain":"example.com","action":"delete","confirmation":"example.com"}' \
+            http://127.0.0.1:5091/hosting/domains/execute)
+          test "$code" = "400"
