@@ -80,6 +80,28 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
         return await SendAsync(HttpMethod.Post, "hosting/domains/execute", content, cancellationToken);
     }
 
+    public async Task<(int Status, string Body)> GetDomainDetailsAsync(
+        string domain, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(domain) || domain.Contains('/') || domain.Contains('\\')
+            || domain.Contains('?') || domain.Any(char.IsControl))
+            throw new ArgumentException("Invalid domain.", nameof(domain));
+        return await SendAsync(HttpMethod.Get,
+            "hosting/domains/" + Uri.EscapeDataString(domain), null, cancellationToken);
+    }
+
+    public async Task<(int Status, string Body)> SaveDomainSettingAsync(
+        string domain, string setting, string value, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(domain) || domain.Contains('/') || domain.Contains('\\')
+            || domain.Contains('?') || domain.Any(char.IsControl))
+            throw new ArgumentException("Invalid domain.", nameof(domain));
+        using var content = new StringContent(
+            JsonSerializer.Serialize(new { setting, value }), Encoding.UTF8, "application/json");
+        return await SendAsync(HttpMethod.Put,
+            "hosting/domains/" + Uri.EscapeDataString(domain) + "/settings", content, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<string>> GetUsersAsync(CancellationToken cancellationToken = default)
     {
         var (status, body) = await GetRawAsync("api/search/users?limit=1000", cancellationToken);
