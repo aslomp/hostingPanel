@@ -10,14 +10,14 @@ else
         <h2>Services</h2>
         @if (busy) { <p role="status">Ophalen…</p> }
         @if (error is not null) { <p class="error" role="alert">@error</p> }
-        <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@services</pre>
+        <JsonOverview Json="@services" />
     </section>
     <section class="card">
         <h2>Service inspecteren</h2>
         <label>Servicenaam</label>
         <input @bind="service" placeholder="bijvoorbeeld nginx" />
         <button disabled="@busy" @onclick="Details">Details en log ophalen</button>
-        <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@details</pre>
+        <JsonOverview Json="@details" />
     </section>
     <section class="card">
         <h2>Service beheren</h2>
