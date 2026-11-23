@@ -7,6 +7,19 @@ namespace HostingPanel.Api.Controllers;
 [ApiController]
 public sealed class ResellerController(IHostingBackend backend) : BackendController
 {
+    [HttpPut("/hosting/resellers/{username}/limit")]
+    public async Task<IResult> SetResellerLimit([FromRoute] string username,
+        [FromBody] AccountLimitChange input, CancellationToken ct)
+    {
+        if (!TryGetBasic(HttpContext, out var auth))
+            return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+        var result = await backend.AccountMutations.SetLimitAsync(
+            "reseller", username, input, auth, ct);
+        return result.Error is null
+            ? Results.Json(new { username, field = input.Field, updated = true })
+            : Results.Json(new { type = result.Error }, statusCode: result.Status);
+    }
+
     [HttpPost("/hosting/resellers")]
     public async Task<IResult> CreateReseller([FromBody] CreateHostingAccount input, CancellationToken ct)
     {
