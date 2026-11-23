@@ -57,6 +57,24 @@ else
             </div>
         }
     </section>
+    <section class="card">
+        <h2>Zelfstandige DNS-zone aanmaken</h2>
+        <p>Gebruik de gedocumenteerde DirectAdmin DNS-admin API. De backend controleert de bevoegdheden.</p>
+        <label>Domein</label><input @bind="zoneDomain" placeholder="example.com" />
+        <label>IPv4-adres</label><input @bind="zoneIp" placeholder="192.0.2.1" />
+        <label>Nameserver 1</label><input @bind="zoneNs1" placeholder="ns1.example.com" />
+        <label>Nameserver 2</label><input @bind="zoneNs2" placeholder="ns2.example.com" />
+        <button class="primary" disabled="@(changing || string.IsNullOrWhiteSpace(zoneDomain))" @onclick="CreateZone">DNS-zone aanmaken</button>
+    </section>
+    <section class="card">
+        <h2>Zelfstandige DNS-zone verwijderen</h2>
+        <p>Verwijder uitsluitend de opgegeven DNS-zone; dit is niet hetzelfde als het verwijderen van een hostingdomein.</p>
+        <label>Domein</label><input @bind="deleteDomain" />
+        <label>Typ de domeinnaam exact om te bevestigen</label><input @bind="zoneConfirmation" />
+        <button disabled="@(changing || string.IsNullOrWhiteSpace(deleteDomain) || deleteDomain != zoneConfirmation)"
+            @onclick="DeleteZone">DNS-zone verwijderen</button>
+    </section>
+    @if (zoneMessage is not null) { <p role="status">@zoneMessage</p> }
 }
 @code {
     private sealed record Zone(string Domain, string? Owner, bool? LocalData, bool? LocalMail);
@@ -65,7 +83,10 @@ else
     private string search = "", localDataFilter = "all", localMailFilter = "all";
     private string? error, warning;
     private int currentPage = 1;
-    private bool loading;
+    private bool loading, changing;
+    private string zoneDomain = "", zoneIp = "", zoneNs1 = "", zoneNs2 = "";
+    private string deleteDomain = "", zoneConfirmation = "";
+    private string? zoneMessage;
 
     private IReadOnlyList<Zone> Visible => (zones ?? [])
         .Where(z => z.Domain.Contains(search, StringComparison.OrdinalIgnoreCase) &&
@@ -112,6 +133,40 @@ else
         catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException)
         { error = e.Message; zones = null; }
         finally { loading = false; }
+    }
+    private async Task CreateZone()
+    {
+        if (changing || !Session.Connected || string.IsNullOrWhiteSpace(zoneDomain)) return;
+        changing = true; zoneMessage = null;
+        try
+        {
+            var (status, _) = await Session.CreateDnsZoneAsync(
+                zoneDomain.Trim(), zoneIp.Trim(), zoneNs1.Trim(), zoneNs2.Trim());
+            zoneMessage = status is >= 200 and < 300
+                ? "DirectAdmin heeft de DNS-zone aangemaakt."
+                : $"Aanmaken niet bevestigd: backend HTTP {status}.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        { zoneMessage = ex.Message; }
+        finally { changing = false; }
+        if (zoneMessage == "DirectAdmin heeft de DNS-zone aangemaakt.") await Reload();
+    }
+
+    private async Task DeleteZone()
+    {
+        if (changing || !Session.Connected || deleteDomain != zoneConfirmation) return;
+        changing = true; zoneMessage = null;
+        try
+        {
+            var (status, _) = await Session.DeleteDnsZoneAsync(deleteDomain, zoneConfirmation);
+            zoneMessage = status is >= 200 and < 300
+                ? "DirectAdmin heeft de DNS-zone verwijderd."
+                : $"Verwijderen niet bevestigd: backend HTTP {status}.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        { zoneMessage = ex.Message; }
+        finally { changing = false; zoneConfirmation = ""; }
+        if (zoneMessage == "DirectAdmin heeft de DNS-zone verwijderd.") await Reload();
     }
     private static bool? ReadFlag(JsonElement element, string key)
     {
