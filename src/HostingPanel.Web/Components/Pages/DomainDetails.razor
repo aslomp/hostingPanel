@@ -54,31 +54,31 @@ else if (fields is not null)
             {
                 <label for="domainPhp">PHP</label>
                 <select id="domainPhp" @bind="php"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
-                <button disabled="@saving" @onclick="() => SaveSetting("php", php)">PHP opslaan</button>
+                <button disabled="@saving" @onclick="SavePhp">PHP opslaan</button>
             }
             @if (fields.ContainsKey("ssl"))
             {
                 <label for="domainSsl">SSL / HTTPS</label>
                 <select id="domainSsl" @bind="ssl"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
-                <button disabled="@saving" @onclick="() => SaveSetting("ssl", ssl)">SSL opslaan</button>
+                <button disabled="@saving" @onclick="SaveSsl">SSL opslaan</button>
             }
             @if (fields.ContainsKey("cgi"))
             {
                 <label for="domainCgi">CGI</label>
                 <select id="domainCgi" @bind="cgi"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
-                <button disabled="@saving" @onclick="() => SaveSetting("cgi", cgi)">CGI opslaan</button>
+                <button disabled="@saving" @onclick="SaveCgi">CGI opslaan</button>
             }
             @if (fields.ContainsKey("bandwidth"))
             {
                 <label for="domainBandwidth">Bandbreedte (MiB of unlimited)</label>
                 <input id="domainBandwidth" @bind="bandwidth" />
-                <button disabled="@saving" @onclick="() => SaveSetting("bandwidth", bandwidth)">Bandbreedte opslaan</button>
+                <button disabled="@saving" @onclick="SaveBandwidth">Bandbreedte opslaan</button>
             }
             @if (fields.ContainsKey("quota"))
             {
                 <label for="domainQuota">Schijfruimte (MiB of unlimited)</label>
                 <input id="domainQuota" @bind="quota" />
-                <button disabled="@saving" @onclick="() => SaveSetting("quota", quota)">Quota opslaan</button>
+                <button disabled="@saving" @onclick="SaveQuota">Quota opslaan</button>
             }
             @if (saving) { <p role="status">Wijziging wordt opgeslagen…</p> }
             @if (saveMessage is not null) { <p role="status">@saveMessage</p> }
@@ -152,6 +152,12 @@ else if (fields is not null)
         ? (key is "php" or "ssl" or "cgi"
             ? (value.Equals("ON", StringComparison.OrdinalIgnoreCase) || value == "1" ? "ON" : "OFF")
             : value) : "";
+
+    private Task SavePhp() => SaveSetting("php", php);
+    private Task SaveSsl() => SaveSetting("ssl", ssl);
+    private Task SaveCgi() => SaveSetting("cgi", cgi);
+    private Task SaveBandwidth() => SaveSetting("bandwidth", bandwidth);
+    private Task SaveQuota() => SaveSetting("quota", quota);
 
     private async Task SaveSetting(string setting, string value)
     {
