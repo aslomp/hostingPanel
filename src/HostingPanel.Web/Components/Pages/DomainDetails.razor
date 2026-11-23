@@ -20,16 +20,16 @@ else if (loading)
 {
     <div class="card" role="status">Domeininformatie wordt opgehaald…</div>
 }
-else if (error is not null)
+else
 {
-    <div class="card">
-        <h2>Gegevens niet beschikbaar</h2>
-        <p class="error" role="alert">@error</p>
-        <p>De domeininformatie is niet beschikbaar. DirectAdmin beoordeelt elke actie afzonderlijk.</p>
-    </div>
-}
-else if (fields is not null)
-{
+    @if (error is not null)
+    {
+        <div class="card">
+            <h2>Gegevens niet beschikbaar</h2>
+            <p class="error" role="alert">@error</p>
+            <p>DirectAdmin beoordeelt lees- en schrijfacties afzonderlijk.</p>
+        </div>
+    }
     <div class="tiles">
         <section class="card">
             <h2>Algemeen</h2>
@@ -40,7 +40,7 @@ else if (fields is not null)
                     ("Subdomeinen", "subdomain"), ("Documentroot", "private_html"),
                     ("PHP-versie", "php1_ver"), ("PHP-handler", "php1_info") })
                 {
-                    @if (fields.TryGetValue(item.Key, out var value))
+                    @if (fields is not null && fields.TryGetValue(item.Key, out var value))
                     {
                         <tr><th>@item.Label</th><td>@value</td></tr>
                     }
@@ -88,7 +88,7 @@ else if (fields is not null)
         <h2>Overige DirectAdmin-instellingen</h2>
         <p>Alle beschikbare velden uit de legacy-domeinconfiguratie, zonder fictieve waarden.</p>
         <table><thead><tr><th>Instelling</th><th>Waarde</th></tr></thead><tbody>
-            @foreach (var item in fields.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
+            @foreach (var item in (fields ?? new Dictionary<string,string>()).OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
             {
                 <tr><th>@item.Key</th><td>@item.Value</td></tr>
             }
@@ -161,7 +161,7 @@ else if (fields is not null)
 
     private async Task SaveSetting(string setting, string value)
     {
-        if (saving || !Session.Connected || fields is null) return;
+        if (saving || !Session.Connected) return;
         saving = true;
         saveMessage = null;
         try
