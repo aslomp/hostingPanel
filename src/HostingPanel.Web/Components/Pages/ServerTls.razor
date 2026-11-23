@@ -1,0 +1,79 @@
+@page "/server-tls"
+@using System.Text.Json
+@inject DirectAdminSession Session
+<PageTitle>Server TLS — HostingPanel</PageTitle>
+<div class="page-header"><div><div class="eyebrow">Serverbeheer</div><h1>Server TLS</h1><p>Certificaatstatus en ACME-configuratie voor de DirectAdmin-server.</p></div><button disabled="@busy" @onclick="Load">Vernieuwen</button></div>
+@if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
+else
+{
+    <section class="card"><h2>Certificaatstatus</h2><JsonOverview Json="@status" /></section>
+    <section class="card"><h2>ACME-instellingen</h2><JsonOverview Json="@acme" /></section>
+    <section class="card"><h2>Certificaatinformatie</h2><JsonOverview Json="@certificate" /></section>
+    <section class="card">
+        <h2>ACME-configuratie wijzigen</h2>
+        <p>De configuratie bevat mogelijk gevoelige DNS-providerinstellingen. Alleen de backend bepaalt of opslaan toegestaan is.</p>
+        <textarea rows="10" @bind="acmeJson" spellcheck="false"></textarea>
+        <label>Typ ACME om de wijzigingen te bevestigen</label><input @bind="acmeConfirmation" />
+        <button disabled="@(busy || acmeConfirmation != "ACME")" @onclick="SaveAcme">ACME-configuratie opslaan</button>
+    </section>
+    <section class="card">
+        <h2>Certificaat verkrijgen</h2>
+        <p>Een nieuw servercertificaat aanvragen is een backendoperatie en kan de serverconfiguratie veranderen.</p>
+        <label>Typ OBTAIN om te bevestigen</label><input @bind="confirmation" />
+        <button class="primary" disabled="@(busy || confirmation != "OBTAIN")" @onclick="Obtain">Certificaat aanvragen</button>
+        @if (feedback is not null) { <p role="status">@feedback</p> }
+    </section>
+}
+@code {
+    private string status = "", acme = "", certificate = "", confirmation = "", acmeJson = "", acmeConfirmation = "";
+    private string? feedback;
+    private bool busy;
+    protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true;
+        try
+        {
+            var (s,b) = await Session.GetRawAsync("api/server-tls/status");
+            status = $"HTTP {s}\n{b}";
+            var (a,c) = await Session.GetRawAsync("api/server-tls/acme-config");
+            acme = $"HTTP {a}\n{c}";
+            var (d,e) = await Session.GetRawAsync("api/server-tls/certificate");
+            certificate = $"HTTP {d}\n{e}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }
+        finally { busy = false; }
+    }
+    private async Task SaveAcme()
+    {
+        if (busy || !Session.Connected || acmeConfirmation != "ACME") return;
+        busy = true; feedback = null;
+        try
+        {
+            using var json = JsonDocument.Parse(acmeJson);
+            if (json.RootElement.ValueKind != JsonValueKind.Object ||
+                !new[] { "account", "additionalDomains", "dnsEnvironment", "dnsProvider", "enabled", "keyType", "provider" }
+                    .All(key => json.RootElement.TryGetProperty(key, out _)))
+            { feedback = "ACME JSON mist een of meer verplichte contractvelden."; return; }
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Put,
+                "api/server-tls/acme-config", acmeJson);
+            feedback = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        { feedback = ex.Message; }
+        finally { busy = false; acmeConfirmation = ""; }
+    }
+    private async Task Obtain()
+    {
+        if (busy || confirmation != "OBTAIN") return;
+        busy = true; feedback = null;
+        try
+        {
+            var (s, b) = await Session.RequestApiAsync(HttpMethod.Post, "api/server-tls/obtain");
+            feedback = $"Backend HTTP {s}: {b}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }
+        finally { busy = false; confirmation = ""; }
+    }
+}

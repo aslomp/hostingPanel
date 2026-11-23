@@ -1,0 +1,178 @@
+@page "/databases"
+@using System.Text.Json
+@inject DirectAdminSession Session
+
+<PageTitle>Databasebeheer — HostingPanel</PageTitle>
+<div class="page-header">
+  <div><div class="eyebrow">Accountbeheer / Databases</div>
+    <h1>Databasebeheer</h1>
+    <p>Databases van jouw account en alle backend-toegankelijke onderliggende accounts.</p>
+  </div>
+  <button disabled="@(loading || overallLoading)" @onclick="RefreshAll">Vernieuwen</button>
+</div>
+@if (!Session.Connected)
+{
+  <section class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</section>
+}
+else
+{
+  <section class="card">
+    <h2>Alle toegankelijke databases</h2>
+    <p>Inclusief databases van onderliggende accounts, voor zover DirectAdmin die toegankelijk maakt.</p>
+    <button disabled="@overallLoading" @onclick="LoadOverall">Overzicht vernieuwen</button>
+    @if (overallLoading) { <p role="status">Databases uit toegankelijke accounts ophalen…</p> }
+    @if (overallError is not null) { <p class="error" role="alert">@overallError</p> }
+    @if (overall is not null)
+    {
+      <p>@overall.Count databases gevonden. @(overallWarnings.Count == 0 ? "Volledige inventarisatie." : $"Onvolledig: {overallWarnings.Count} accounts konden niet worden uitgelezen.")</p>
+      <label for="overallDbFilter">Zoek op eigenaar of database</label>
+      <input id="overallDbFilter" @bind="overallSearch" @bind:event="oninput" />
+      <table><thead><tr><th>Eigenaar</th><th>Database</th><th>Tabellen</th><th>Gebruikers</th><th>Grootte (bytes)</th><th>Definer issues</th></tr></thead><tbody>
+        @foreach (var item in overall.Where(x => x.Owner.Contains(overallSearch, StringComparison.OrdinalIgnoreCase) || x.Name.Contains(overallSearch, StringComparison.OrdinalIgnoreCase)))
+        {
+          <tr>
+            <td>@item.Owner</td><td>@item.Name</td>
+            <td>@item.TableCount</td><td>@item.UserCount</td>
+            <td>@item.SizeBytes</td><td>@item.DefinerIssues</td>
+          </tr>
+        }
+      </tbody></table>
+      @if (overall.Count == 0) { <p>De backend heeft geen databases teruggegeven voor de raadpleegbare accounts.</p> }
+      @foreach (var warning in overallWarnings)
+      {
+        <p class="error">@warning</p>
+      }
+    }
+  </section>
+  <section class="card">
+    <h2>Databases van de huidige sessie</h2>
+    <p>Beheer databases in de huidige sessie. Voor databases van een ander account gebruik je de backend-ondersteunde sessiewissel.</p>
+
+    @if (error is not null) { <p role="alert" class="error">@error</p> }
+    @if (loading) { <p role="status">Databases laden…</p> }
+    @if (databases is not null)
+    {
+      <label for="dbFilter">Zoek database (@databases.Count)</label>
+      <input id="dbFilter" @bind="search" @bind:event="oninput" placeholder="Databasenaam" />
+      <table><thead><tr><th>Database</th><th>Acties</th></tr></thead><tbody>
+        @foreach(var database in databases.Where(x => x.Contains(search,StringComparison.OrdinalIgnoreCase)))
+        {
+          <tr><td><a href="@($"/databases/{Uri.EscapeDataString(database)}")">@database</a></td>
+            <td><a href="@($"/databases/{Uri.EscapeDataString(database)}")">Gebruikers bekijken / verwijderen</a></td></tr>
+        }
+      </tbody></table>
+      @if(databases.Count==0) { <p>Geen databases gevonden.</p> }
+    }
+  </section>
+  <section class="card">
+    <h2>Database met gebruiker aanmaken</h2>
+    <p>DirectAdmin voegt waar nodig de accountprefix toe. De exacte naam wordt na aanmaken opnieuw uit de backend opgehaald.</p>
+    <label for="databaseName">Databasenaam</label>
+    <input id="databaseName" @bind="newDatabase" autocomplete="off" placeholder="app" />
+    <label for="dbUsername">Databasegebruiker</label>
+    <input id="dbUsername" @bind="newUser" autocomplete="off" placeholder="app" />
+    <label for="dbPassword">Wachtwoord</label>
+    <input id="dbPassword" type="password" @bind="newPassword" autocomplete="new-password" />
+    <button class="primary" disabled="@creating" @onclick="Create">
+      @(creating ? "Aanmaken…" : "Database aanmaken")
+    </button>
+    @if (createMessage is not null) { <p role="status">@createMessage</p> }
+  </section>
+}
+@code {
+  private sealed record OwnedDb(string Owner, string Name, long TableCount, long UserCount, long SizeBytes, long DefinerIssues);
+  private List<OwnedDb>? overall;
+  private List<string> overallWarnings = [];
+  private string? overallError;
+  private bool overallLoading;
+  private List<string>? databases;
+  private string search = "", overallSearch = "";
+  private string newDatabase = "app", newUser = "app", newPassword = "";
+  private string? error, createMessage;
+  private bool loading, creating;
+  protected override async Task OnInitializedAsync()
+  {
+    if (Session.Connected) await RefreshAll();
+  }
+  private async Task RefreshAll()
+  {
+    if (!Session.Connected) return;
+    await LoadOverall();
+    await Load();
+  }
+  private async Task Load()
+  {
+    if (loading || !Session.Connected) return;
+    loading = true; error = null;
+    try
+    {
+      var (status, body) = await Session.GetDatabasesAsync();
+      if(status!=200)
+      {
+        error=$"Databaseoverzicht niet beschikbaar (HTTP {status}).";
+        databases=null; return;
+      }
+      using var json=JsonDocument.Parse(body);
+      databases=json.RootElement.GetProperty("databases").EnumerateArray()
+        .Select(x=>x.GetString()??"").ToList();
+    }
+    catch(Exception e) when(e is HttpRequestException or JsonException or ArgumentException or InvalidOperationException)
+    { error=e.Message; databases=null; }
+    finally {loading=false;}
+  }
+  private static long Number(JsonElement item, string property) =>
+    item.TryGetProperty(property, out var value) && value.TryGetInt64(out var number)
+      ? number : 0;
+  private async Task LoadOverall()
+  {
+    if (overallLoading || !Session.Connected) return;
+    overallLoading = true; overallError = null; overall = null;
+    try
+    {
+      var (status, body) = await Session.GetAccessibleDatabasesAsync();
+      if (status != 200) { overallError = $"Overall databaseoverzicht: HTTP {status}."; return; }
+      using var doc = JsonDocument.Parse(body);
+      overall = doc.RootElement.GetProperty("items").EnumerateArray()
+        .Select(x => {
+          var db = x.GetProperty("database");
+          return new OwnedDb(
+            x.GetProperty("owner").GetString() ?? "",
+            db.GetProperty("database").GetString() ?? "",
+            Number(db, "tableCount"), Number(db, "userCount"),
+            Number(db, "sizeBytes"), Number(db, "definerIssues"));
+        }).ToList();
+      overallWarnings = [];
+      if (doc.RootElement.TryGetProperty("warnings", out var warnings)
+          && warnings.ValueKind == JsonValueKind.Array)
+        overallWarnings = warnings.EnumerateArray().Select(x => x.GetRawText()).ToList();
+    }
+    catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+    { overallError = ex.Message; }
+    finally { overallLoading = false; }
+  }
+  private async Task Create()
+  {
+    if (creating || !Session.Connected) return;
+    creating=true; createMessage=null;
+    try
+    {
+      var (status, body)=await Session.CreateDatabaseAsync(newDatabase.Trim(),newUser.Trim(),newPassword);
+      createMessage=status switch
+      {
+        200 => "Database aangemaakt. Het overzicht is bijgewerkt.",
+        409 => "Mutaties zijn uitgeschakeld of de wijziging kon niet worden bevestigd.",
+        400 => "Controleer de database- en gebruikersnaam en het wachtwoord.",
+        403 => "DirectAdmin weigert deze databasebewerking.",
+        _ => $"DirectAdmin heeft het aanmaken niet bevestigd (HTTP {status})."
+      };
+      if(status==200)
+      {
+        newPassword="";
+        await RefreshAll();
+      }
+    }
+    catch(Exception e) when(e is HttpRequestException or ArgumentException or InvalidOperationException)
+    { createMessage=e.Message; }
+    finally {creating=false;}
+  }
+}

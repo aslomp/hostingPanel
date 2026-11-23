@@ -1,0 +1,172 @@
+@page "/domains/{Domain}"
+@using System.Text.Json
+@inject DirectAdminSession Session
+
+<PageTitle>@Domain — Domeinbeheer</PageTitle>
+<div class="page-header">
+    <div>
+        <div class="eyebrow"><a href="/domains">Domeinbeheer</a> / Details</div>
+        <h1>@Domain</h1>
+        <p>Domeinconfiguratie en instellingen uit DirectAdmin. <a href="@($"/domains/{Uri.EscapeDataString(Domain)}/dns")">DNS-records beheren</a></p>
+    </div>
+    <button @onclick="Refresh" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
+</div>
+
+@if (!Session.Connected)
+{
+    <div class="card">Verbind eerst met DirectAdmin via het <a href="/">dashboard</a>.</div>
+}
+else if (loading)
+{
+    <div class="card" role="status">Domeininformatie wordt opgehaald…</div>
+}
+else
+{
+    @if (error is not null)
+    {
+        <div class="card">
+            <h2>Gegevens niet beschikbaar</h2>
+            <p class="error" role="alert">@error</p>
+            <p>DirectAdmin beoordeelt lees- en schrijfacties afzonderlijk.</p>
+        </div>
+    }
+    <div class="tiles">
+        <section class="card">
+            <h2>Algemeen</h2>
+            <table><tbody>
+                @foreach (var item in new (string Label, string Key)[] {
+                    ("Domein", "domain"), ("Gebruiker", "username"), ("IP-adres", "ip"),
+                    ("Standaarddomein", "defaultdomain"), ("Opgeschort", "suspended"),
+                    ("Subdomeinen", "subdomain"), ("Documentroot", "private_html"),
+                    ("PHP-versie", "php1_ver"), ("PHP-handler", "php1_info") })
+                {
+                    @if (fields is not null && fields.TryGetValue(item.Key, out var value))
+                    {
+                        <tr><th>@item.Label</th><td>@value</td></tr>
+                    }
+                }
+            </tbody></table>
+        </section>
+        <section class="card">
+            <h2>Domeininstellingen wijzigen</h2>
+            <p>Instellingen worden afzonderlijk opgeslagen, zonder andere DirectAdmin-checkboxes te wijzigen.</p>
+            <label for="domainPhp">PHP</label>
+            <select id="domainPhp" @bind="php"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
+            <button disabled="@saving" @onclick="SavePhp">PHP opslaan</button>
+            <label for="domainSsl">SSL / HTTPS</label>
+            <select id="domainSsl" @bind="ssl"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
+            <button disabled="@saving" @onclick="SaveSsl">SSL opslaan</button>
+            <label for="domainCgi">CGI</label>
+            <select id="domainCgi" @bind="cgi"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
+            <button disabled="@saving" @onclick="SaveCgi">CGI opslaan</button>
+            <label for="domainBandwidth">Bandbreedte (MiB of unlimited)</label>
+            <input id="domainBandwidth" @bind="bandwidth" />
+            <button disabled="@saving" @onclick="SaveBandwidth">Bandbreedte opslaan</button>
+            <label for="domainQuota">Schijfruimte (MiB of unlimited)</label>
+            <input id="domainQuota" @bind="quota" />
+            <button disabled="@saving" @onclick="SaveQuota">Quota opslaan</button>
+            @if (saving) { <p role="status">Wijziging wordt opgeslagen…</p> }
+            @if (saveMessage is not null) { <p role="status">@saveMessage</p> }
+        </section>
+    </div>
+    <section class="card">
+        <h2>Overige DirectAdmin-instellingen</h2>
+        <p>Alle beschikbare velden uit de legacy-domeinconfiguratie, zonder fictieve waarden.</p>
+        <table><thead><tr><th>Instelling</th><th>Waarde</th></tr></thead><tbody>
+            @foreach (var item in (fields ?? new Dictionary<string,string>()).OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                <tr><th>@item.Key</th><td>@item.Value</td></tr>
+            }
+        </tbody></table>
+    </section>
+}
+@code {
+    [Parameter] public string Domain { get; set; } = "";
+    private Dictionary<string, string>? fields;
+    private string? error;
+    private string? saveMessage;
+    private bool loading;
+    private bool saving;
+    private string php = "OFF", ssl = "OFF", cgi = "OFF";
+    private string bandwidth = "", quota = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Session.Connected) await Refresh();
+    }
+
+    private async Task Refresh()
+    {
+        if (loading || !Session.Connected) return;
+        loading = true;
+        error = null;
+        fields = null;
+        try
+        {
+            var (status, body) = await Session.GetDomainDetailsAsync(Domain);
+            if (status != 200)
+            {
+                error = status switch
+                {
+                    403 => "Je hebt geen toegang tot deze domeininstellingen.",
+                    404 => "DirectAdmin heeft het domein niet gevonden.",
+                    _ => $"DirectAdmin kon deze domeininformatie niet ophalen (HTTP {status})."
+                };
+                return;
+            }
+            using var doc = JsonDocument.Parse(body);
+            var settings = doc.RootElement.GetProperty("settings");
+            if (settings.ValueKind != JsonValueKind.Object) throw new FormatException("Invalid domain settings.");
+            fields = settings.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.ToString(),
+                StringComparer.OrdinalIgnoreCase);
+            php = Get("php");
+            ssl = Get("ssl");
+            cgi = Get("cgi");
+            bandwidth = Get("bandwidth");
+            quota = Get("quota");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
+            or ArgumentException or FormatException or JsonException)
+        {
+            error = ex.Message;
+        }
+        finally { loading = false; }
+    }
+
+    private string Get(string key) => fields is not null && fields.TryGetValue(key, out var value)
+        ? (key is "php" or "ssl" or "cgi"
+            ? (value.Equals("ON", StringComparison.OrdinalIgnoreCase) || value == "1" ? "ON" : "OFF")
+            : value) : "";
+
+    private Task SavePhp() => SaveSetting("php", php);
+    private Task SaveSsl() => SaveSetting("ssl", ssl);
+    private Task SaveCgi() => SaveSetting("cgi", cgi);
+    private Task SaveBandwidth() => SaveSetting("bandwidth", bandwidth);
+    private Task SaveQuota() => SaveSetting("quota", quota);
+
+    private async Task SaveSetting(string setting, string value)
+    {
+        if (saving || !Session.Connected) return;
+        saving = true;
+        saveMessage = null;
+        try
+        {
+            var (status, _) = await Session.SaveDomainSettingAsync(Domain, setting, value);
+            if (status == 200)
+            {
+                saveMessage = $"{setting} opgeslagen in DirectAdmin.";
+                await Refresh();
+            }
+            else
+                saveMessage = status == 409
+                    ? "Mutaties zijn uitgeschakeld of de instelling is niet beschikbaar."
+                    : $"Opslaan mislukt: HTTP {status}.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
+            or ArgumentException)
+        {
+            saveMessage = ex.Message;
+        }
+        finally { saving = false; }
+    }
+}

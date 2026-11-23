@@ -1,0 +1,154 @@
+@using System.Text.Json
+@inject DirectAdminSession Session
+
+<section class="card">
+    <h2>@(Kind == "reseller" ? "Reseller aanmaken" : "Gebruiker aanmaken")</h2>
+    <p>DirectAdmin controleert het pakket, het IP-adres en de bevoegdheden van de aangemelde identiteit.</p>
+    <label>Accountnaam</label><input @bind="username" autocomplete="off" />
+    <label>E-mailadres</label><input type="email" @bind="email" autocomplete="off" />
+    <label>Hoofddomein</label><input @bind="domain" placeholder="example.com" />
+    <label>Pakket</label><input @bind="package" autocomplete="off" />
+    <label>IP / toewijzing</label><input @bind="ip" placeholder="shared" />
+    <label>Nieuw wachtwoord</label><input type="password" @bind="password" autocomplete="new-password" />
+    <label>Wachtwoord bevestigen</label><input type="password" @bind="passwordConfirmation" autocomplete="new-password" />
+    <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(package) || password != passwordConfirmation || password.Length < 5)" @onclick="Create">
+        @(busy ? "Verwerken…" : "Account aanmaken")
+    </button>
+</section>
+<section class="card">
+    <h2>@(Kind == "reseller" ? "Reseller verwijderen" : "Gebruiker verwijderen")</h2>
+    <p>Dit verwijdert een account via DirectAdmin. Typ de accountnaam exact ter bevestiging.</p>
+    <label>Accountnaam</label><input @bind="deleteUsername" />
+    <label>Bevestig accountnaam</label><input @bind="deleteConfirmation" />
+    <button disabled="@(busy || string.IsNullOrWhiteSpace(deleteUsername) || deleteUsername != deleteConfirmation)"
+        @onclick="Delete">Account verwijderen</button>
+</section>
+@if (Kind == "user")
+{
+<section class="card">
+    <h2>Gebruikerspakket wijzigen</h2>
+    <p>Het pakket moet op de backend bestaan. De wijziging wordt na opslaan gecontroleerd via de gebruikersconfiguratie.</p>
+    <label>Gebruikersnaam</label><input @bind="packageUsername" />
+    <label>Nieuw pakket</label><input @bind="newPackage" />
+    <label>Typ de gebruikersnaam ter bevestiging</label><input @bind="packageConfirmation" />
+    <button disabled="@(busy || string.IsNullOrWhiteSpace(packageUsername) || packageConfirmation != packageUsername)"
+        @onclick="ChangePackage">Pakket wijzigen</button>
+</section>
+}
+<section class="card">
+    <h2>Accountlimiet aanpassen</h2>
+    <p>Wijzigt slechts één limiet. DirectAdmin past daarna zijn eigen pakket- en limietregels toe.</p>
+    <label>Accountnaam</label><input @bind="limitUsername" />
+    <label>Limiet</label>
+    <select @bind="limitField"><option value="bandwidth">Bandbreedte (MB)</option><option value="quota">Schijfruimte (MB)</option><option value="inode">Inodes</option></select>
+    <label>Nieuwe limiet (getal)</label><input @bind="limitValue" />
+    <label>Typ de accountnaam ter bevestiging</label><input @bind="limitConfirmation" />
+    <button disabled="@(busy || string.IsNullOrWhiteSpace(limitUsername) || limitConfirmation != limitUsername)" @onclick="SetLimit">Limiet wijzigen</button>
+</section>
+<section class="card">
+    <h2>Account schorsen of activeren</h2>
+    <label>Accountnaam</label><input @bind="suspensionUsername" />
+    <label>Actie</label><select @bind="suspend"><option value="true">Schorsen</option><option value="false">Activeren</option></select>
+    <label>Typ de accountnaam ter bevestiging</label><input @bind="suspensionConfirmation" />
+    <button disabled="@(busy || string.IsNullOrWhiteSpace(suspensionUsername) || suspensionConfirmation != suspensionUsername)"
+        @onclick="SetSuspended">Accountstatus wijzigen</button>
+</section>
+@if (result is not null) { <p role="status">@result</p> }
+
+@code {
+    [Parameter] public string Kind { get; set; } = "user";
+    private string username = "", email = "", domain = "", package = "", ip = "shared";
+    private string password = "", passwordConfirmation = "";
+    private string deleteUsername = "", deleteConfirmation = "";
+    private string limitUsername = "", limitField = "bandwidth", limitValue = "", limitConfirmation = "";
+    private string packageUsername = "", newPackage = "", packageConfirmation = "";
+    private string suspensionUsername = "", suspensionConfirmation = "", suspend = "true";
+    private bool busy;
+    private string? result;
+
+    private async Task ChangePackage()
+    {
+        if (busy || !Session.Connected || Kind != "user" ||
+            packageUsername != packageConfirmation) return;
+        busy = true; result = null;
+        try
+        {
+            var (status, _) = await Session.SetUserPackageAsync(packageUsername, newPackage);
+            result = status == 200
+                ? "DirectAdmin heeft het nieuwe gebruikerspakket bevestigd."
+                : $"Pakketwijziging niet bevestigd: backend HTTP {status}.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        { result = ex.Message; }
+        finally { busy = false; packageConfirmation = ""; }
+    }
+
+    private async Task SetLimit()
+    {
+        if (busy || !Session.Connected || limitUsername != limitConfirmation) return;
+        busy = true; result = null;
+        try
+        {
+            var (status, _) = await Session.SetAccountLimitAsync(
+                Kind, limitUsername, limitField, limitValue);
+            result = status == 200
+                ? "DirectAdmin heeft de nieuwe limiet bevestigd."
+                : $"Limiet niet bevestigd: backend HTTP {status}.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        { result = ex.Message; }
+        finally { busy = false; limitConfirmation = ""; }
+    }
+
+    private async Task SetSuspended()
+    {
+        if (busy || !Session.Connected || suspensionUsername != suspensionConfirmation) return;
+        busy = true; result = null;
+        try
+        {
+            var desired = suspend == "true";
+            var (status, _) = await Session.SetAccountSuspensionAsync(
+                suspensionUsername, desired);
+            result = status == 200
+                ? (desired ? "DirectAdmin bevestigt: account geschorst." :
+                    "DirectAdmin bevestigt: account geactiveerd.")
+                : $"Statuswijziging niet bevestigd: backend HTTP {status}.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        { result = ex.Message; }
+        finally { busy = false; suspensionConfirmation = ""; }
+    }
+
+    private async Task Create()
+    {
+        if (busy || !Session.Connected || password != passwordConfirmation || password.Length < 5) return;
+        busy = true; result = null;
+        try
+        {
+            var (status, _) = await Session.CreateHostingAccountAsync(
+                Kind, username, email, password, domain, package, ip);
+            result = status is >= 200 and < 300
+                ? $"DirectAdmin heeft het account '{username}' aangemaakt."
+                : $"Account niet aangemaakt: backend HTTP {status}.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        { result = ex.Message; }
+        finally { password = ""; passwordConfirmation = ""; busy = false; }
+    }
+    private async Task Delete()
+    {
+        if (busy || !Session.Connected || deleteUsername != deleteConfirmation) return;
+        busy = true; result = null;
+        try
+        {
+            var (status, _) = await Session.DeleteHostingAccountAsync(
+                Kind, deleteUsername, deleteConfirmation);
+            result = status is >= 200 and < 300
+                ? $"DirectAdmin heeft de verwijdering van '{deleteUsername}' bevestigd."
+                : $"Verwijdering niet bevestigd: backend HTTP {status}.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        { result = ex.Message; }
+        finally { deleteConfirmation = ""; busy = false; }
+    }
+}

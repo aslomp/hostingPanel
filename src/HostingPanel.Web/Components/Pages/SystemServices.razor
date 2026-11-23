@@ -1,0 +1,109 @@
+@page "/system-services"
+@using System.Text.Json
+@inject DirectAdminSession Session
+<PageTitle>Systeemservices — HostingPanel</PageTitle>
+<div class="page-header"><div><div class="eyebrow">Serverbeheer</div><h1>System Services</h1><p>Live servicelijst, details en beheeracties; de backend bepaalt welke operaties toegestaan zijn.</p></div><button disabled="@busy" @onclick="Load">Vernieuwen</button></div>
+@if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
+else
+{
+    <section class="card">
+        <h2>Services</h2>
+        @if (busy) { <p role="status">Ophalen…</p> }
+        @if (error is not null) { <p class="error" role="alert">@error</p> }
+        <JsonOverview Json="@services" />
+    </section>
+    <section class="card">
+        <h2>Service inspecteren</h2>
+        <label>Servicenaam</label>
+        <input @bind="service" placeholder="bijvoorbeeld nginx" />
+        <button disabled="@busy" @onclick="Details">Details en log ophalen</button>
+        <h3>Servicegegevens</h3><JsonOverview Json="@details" /><h3>Servicelog</h3><JsonOverview Json="@serviceLog" />
+    </section>
+    <section class="card">
+        <h2>Service beheren</h2>
+        <p>Selecteer een service en een exacte beheeractie. Er worden geen acties op basis van een lokale gebruikersrol verborgen.</p>
+        <select @bind="action"><option value="restart">Restart</option><option value="reload">Reload</option><option value="start">Start</option><option value="stop">Stop</option></select>
+        <label>Typ de servicenaam om de actie te bevestigen</label><input @bind="confirmation" />
+        <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(service) || confirmation != service)" @onclick="Execute">Actie uitvoeren</button>
+        @if (outcome is not null) { <p role="status">@outcome</p> }
+    </section>
+    <section class="card">
+        <h2>Service-watchdog</h2>
+        <p>Configureer of DirectAdmin de geselecteerde service bewaakt.</p>
+        <label>Watchdog</label>
+        <select @bind="watchdog"><option value="true">Inschakelen</option><option value="false">Uitschakelen</option></select>
+        <label>Typ de servicenaam ter bevestiging</label><input @bind="watchdogConfirmation" />
+        <button disabled="@(busy || !ValidService(service) || watchdogConfirmation != service)" @onclick="SetWatchdog">Watchdog bijwerken</button>
+    </section>
+}
+@code {
+    private string service = "", action = "restart", confirmation = "";
+    private string watchdog = "true", watchdogConfirmation = "";
+    private string services = "", details = "", serviceLog = "";
+    private string? error, outcome;
+    private bool busy;
+    protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
+    private static bool ValidService(string value) =>
+        !string.IsNullOrWhiteSpace(value) && value.Length <= 128 &&
+        value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.' or '@');
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; error = null;
+        try
+        {
+            var (status, body) = await Session.GetRawAsync("api/system-services/list");
+            services = $"HTTP {status}\n{body}";
+            if (status is < 200 or >= 300) error = $"Backend heeft het overzicht niet geleverd (HTTP {status}).";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { error = ex.Message; }
+        finally { busy = false; }
+    }
+    private async Task Details()
+    {
+        if (busy || !ValidService(service)) { error = "Ongeldige servicenaam."; return; }
+        busy = true; error = null;
+        try
+        {
+            var p = Uri.EscapeDataString(service);
+            var (s, b) = await Session.GetRawAsync($"api/system-services/service/{p}");
+            var (ls, lb) = await Session.GetRawAsync($"api/system-services/service/{p}/log");
+            details = $"HTTP {s}\n{b}";
+            serviceLog = $"HTTP {ls}\n{lb}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { error = ex.Message; }
+        finally { busy = false; }
+    }
+    private async Task SetWatchdog()
+    {
+        if (busy || !ValidService(service) || watchdogConfirmation != service) return;
+        busy = true; outcome = null;
+        try
+        {
+            var payload = watchdog == "true" ? """{"enable":true}""" : """{"enable":false}""";
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Put,
+                $"api/system-services-actions/service/{Uri.EscapeDataString(service)}/watchdog", payload);
+            outcome = status == 204 ? "DirectAdmin bevestigt de watchdogwijziging."
+                : $"Watchdog-operatie: backend HTTP {status}. {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { outcome = ex.Message; }
+        finally { busy = false; watchdogConfirmation = ""; }
+    }
+    private async Task Execute()
+    {
+        if (busy || !ValidService(service) || confirmation != service || action is not ("restart" or "reload" or "start" or "stop")) return;
+        busy = true; outcome = null;
+        try
+        {
+            var (s, b) = await Session.RequestApiAsync(HttpMethod.Post,
+                $"api/system-services-actions/service/{Uri.EscapeDataString(service)}/{action}");
+            outcome = $"Actie {action}: HTTP {s}. {b}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { outcome = ex.Message; }
+        finally { busy = false; confirmation = ""; }
+    }
+}

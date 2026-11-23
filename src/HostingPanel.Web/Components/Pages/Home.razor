@@ -1,0 +1,70 @@
+@page "/"
+@inject DirectAdminSession Session
+
+<PageTitle>Dashboard — HostingPanel</PageTitle>
+<div class="page-header">
+    <div><div class="eyebrow">Hosting administratiesysteem</div><h1>Controle Paneel</h1>
+        <p>Beheer bestaande DirectAdmin-accounts via een afzonderlijke, compatibele Web API.</p></div>
+</div>
+<div class="banner"><h2>Welkom bij HostingPanel</h2>
+    <p>De beheerinterface maakt verbinding met jouw bestaande DirectAdmin-server.</p></div>
+@if (!Session.Connected)
+{
+    <div class="card">
+        <h2>DirectAdmin-verbinding</h2>
+        <p>Gebruik een DirectAdmin-account met rechten om gebruikers op te vragen en bij voorkeur een beperkte login key.
+            De credentials blijven alleen in de interactieve serversessie.</p>
+        <form @onsubmit="Connect" @onsubmit:preventDefault>
+            <label for="daUser">Gebruikersnaam</label>
+            <input id="daUser" @bind="username" autocomplete="username" required />
+            <label for="daKey">Login key</label>
+            <input id="daKey" type="password" @bind="key" autocomplete="off" required />
+            <button type="submit" class="primary" disabled="@connecting">@(connecting ? "Verbinden…" : "Verbinden")</button>
+        </form>
+        @if (error is not null) { <p class="error" role="alert">@error</p> }
+    </div>
+}
+else
+{
+    <div class="tiles">
+        <a class="card tile" href="/users"><b>♙</b><span>Gebruikers beheren</span><small>Accounts en instellingen</small></a>
+        <a class="card tile" href="/domains"><b>◎</b><span>Domeinbeheer</span><small>Alle toegankelijke domeinen</small></a>
+        <a class="card tile" href="/dns-zones"><b>◈</b><span>DNS-beheer</span><small>Zones en records</small></a>
+        <a class="card tile" href="/databases"><b>▤</b><span>Databasebeheer</span><small>Databases van alle toegankelijke accounts</small></a>
+        <a class="card tile" href="/api-browser"><b>⌘</b><span>API-respons bekijken</span><small>Ongewijzigde DirectAdmin-antwoorden</small></a>
+    </div>
+    <p>Verbonden als <strong>@Session.Username</strong>. De backend bepaalt per resource welke gegevens toegankelijk zijn.</p>
+    <button @onclick="Disconnect">Verbinding verbreken</button>
+}
+@code {
+    private string username = "";
+    private string key = "";
+    private string? error;
+    private bool connecting;
+
+    private async Task Connect()
+    {
+        if (connecting) return;
+        connecting = true;
+        error = null;
+        try
+        {
+            Session.SetCredentials(username, key);
+            // Authenticate using the session endpoint, not permission to list users.
+            var (status, _) = await Session.GetRawAsync("api/session");
+            if (status is 401 or 403)
+                throw new UnauthorizedAccessException("DirectAdmin heeft de aanmelding geweigerd.");
+            if (status is < 200 or >= 300)
+                throw new HttpRequestException($"DirectAdmin sessiecontrole: HTTP {status}.");
+            key = "";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
+            or UnauthorizedAccessException or FormatException or ArgumentException)
+        {
+            Session.Disconnect();
+            error = ex.Message;
+        }
+        finally { connecting = false; }
+    }
+    private void Disconnect() { Session.Disconnect(); key = ""; }
+}

@@ -1,0 +1,181 @@
+@page "/dns-zones"
+@using System.Text.Json
+@inject DirectAdminSession Session
+
+<PageTitle>DNS Beheer — HostingPanel</PageTitle>
+<div class="page-header">
+    <div>
+        <div class="eyebrow">Serverbeheer / DNS</div>
+        <h1>DNS Beheer</h1>
+        <p>Alle DNS-zones die de backend via DirectAdmin beschikbaar stelt, inclusief zelfstandig beheerde DNS-zones.</p>
+    </div>
+    <button @onclick="Reload" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
+</div>
+@if (!Session.Connected)
+{
+    <section class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</section>
+}
+else
+{
+    <section class="card">
+        <label for="dnsSearch">Domeinen filteren</label>
+        <input id="dnsSearch" @bind="search" @bind:event="oninput" placeholder="Zoek op domeinnaam" />
+        <div class="domain-options">
+            <label for="localData">Lokale gegevens</label>
+            <select id="localData" @bind="localDataFilter">
+                <option value="all">Beide</option><option value="yes">Ingeschakeld</option>
+                <option value="no">Uitgeschakeld</option>
+            </select>
+            <label for="localMail">Lokale mail</label>
+            <select id="localMail" @bind="localMailFilter">
+                <option value="all">Beide</option><option value="yes">Ingeschakeld</option>
+                <option value="no">Uitgeschakeld</option>
+            </select>
+        </div>
+        @if (error is not null) { <p class="error" role="alert">@error</p> }
+        @if (loading) { <p role="status">DNS-zones ophalen…</p> }
+        @if (zones is not null)
+        {
+            <p>@Visible.Count DNS-zone(s) gevonden. @(warning is null ? "" : "Inventarisatie mogelijk onvolledig: " + warning)</p>
+            <table>
+                <thead><tr><th>Domein</th><th>Eigenaar</th><th>Lokale gegevens</th><th>Lokale mail</th></tr></thead>
+                <tbody>
+                @foreach (var zone in Visible.Skip((currentPage - 1) * PageSize).Take(PageSize))
+                {
+                    <tr>
+                        <td><a href="@($"/domains/{Uri.EscapeDataString(zone.Domain)}/dns")">@zone.Domain</a></td>
+                        <td>@(string.IsNullOrWhiteSpace(zone.Owner) ? "—" : zone.Owner)</td><td>@Display(zone.LocalData)</td>
+                        <td>@Display(zone.LocalMail)</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+            <div class="domain-options">
+                <button disabled="@(loading || currentPage == 1)" @onclick="Previous">Vorige pagina</button>
+                <span>Pagina @currentPage</span>
+                <button disabled="@(loading || currentPage * PageSize >= Visible.Count)" @onclick="Next">Volgende pagina</button>
+            </div>
+        }
+    </section>
+    <section class="card">
+        <h2>Zelfstandige DNS-zone aanmaken</h2>
+        <p>Gebruik de gedocumenteerde DirectAdmin DNS-admin API. De backend controleert de bevoegdheden.</p>
+        <label>Domein</label><input @bind="zoneDomain" placeholder="example.com" />
+        <label>IPv4-adres</label><input @bind="zoneIp" placeholder="192.0.2.1" />
+        <label>Nameserver 1</label><input @bind="zoneNs1" placeholder="ns1.example.com" />
+        <label>Nameserver 2</label><input @bind="zoneNs2" placeholder="ns2.example.com" />
+        <button class="primary" disabled="@(changing || string.IsNullOrWhiteSpace(zoneDomain))" @onclick="CreateZone">DNS-zone aanmaken</button>
+    </section>
+    <section class="card">
+        <h2>Zelfstandige DNS-zone verwijderen</h2>
+        <p>Verwijder uitsluitend de opgegeven DNS-zone; dit is niet hetzelfde als het verwijderen van een hostingdomein.</p>
+        <label>Domein</label><input @bind="deleteDomain" />
+        <label>Typ de domeinnaam exact om te bevestigen</label><input @bind="zoneConfirmation" />
+        <button disabled="@(changing || string.IsNullOrWhiteSpace(deleteDomain) || deleteDomain != zoneConfirmation)"
+            @onclick="DeleteZone">DNS-zone verwijderen</button>
+    </section>
+    @if (zoneMessage is not null) { <p role="status">@zoneMessage</p> }
+}
+@code {
+    private sealed record Zone(string Domain, string? Owner, bool? LocalData, bool? LocalMail);
+    private const int PageSize = 50;
+    private List<Zone>? zones;
+    private string search = "", localDataFilter = "all", localMailFilter = "all";
+    private string? error, warning;
+    private int currentPage = 1;
+    private bool loading, changing;
+    private string zoneDomain = "", zoneIp = "", zoneNs1 = "", zoneNs2 = "";
+    private string deleteDomain = "", zoneConfirmation = "";
+    private string? zoneMessage;
+
+    private IReadOnlyList<Zone> Visible => (zones ?? [])
+        .Where(z => z.Domain.Contains(search, StringComparison.OrdinalIgnoreCase) &&
+            Matches(z.LocalData, localDataFilter) && Matches(z.LocalMail, localMailFilter))
+        .ToArray();
+
+    private static bool Matches(bool? value, string filter) =>
+        filter == "all" || (value is not null && (filter == "yes") == value.Value);
+
+    private static string Display(bool? value) =>
+        value switch { true => "Ja", false => "Nee", null => "Niet beschikbaar" };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.Connected) await Reload();
+    }
+    private void Previous() { if (currentPage > 1) currentPage--; }
+    private void Next() { if (currentPage * PageSize < Visible.Count) currentPage++; }
+
+    private async Task Reload()
+    {
+        if (loading || !Session.Connected) return;
+        loading = true;
+        error = null;
+        try
+        {
+            var (status, body) = await Session.GetAccessibleDnsZonesAsync();
+            if (status != 200)
+            {
+                error = status == 403 ? "DirectAdmin heeft het serverbrede DNS-zoneoverzicht geweigerd."
+                    : $"DNS-zones niet beschikbaar (HTTP {status}).";
+                zones = null;
+                return;
+            }
+            using var doc = JsonDocument.Parse(body);
+            zones = doc.RootElement.GetProperty("zones").EnumerateArray()
+                .Select(x => new Zone(x.GetProperty("domain").GetString() ?? "",
+                    x.TryGetProperty("owner", out var o) && o.ValueKind == JsonValueKind.String ? o.GetString() : null,
+                    ReadFlag(x, "localData"), ReadFlag(x, "localMail"))).ToList();
+            warning = doc.RootElement.TryGetProperty("warning", out var w)
+                && w.ValueKind == JsonValueKind.String ? w.GetString() : null;
+            currentPage = 1;
+        }
+        catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException)
+        { error = e.Message; zones = null; }
+        finally { loading = false; }
+    }
+    private async Task CreateZone()
+    {
+        if (changing || !Session.Connected || string.IsNullOrWhiteSpace(zoneDomain)) return;
+        changing = true; zoneMessage = null;
+        try
+        {
+            var (status, _) = await Session.CreateDnsZoneAsync(
+                zoneDomain.Trim(), zoneIp.Trim(), zoneNs1.Trim(), zoneNs2.Trim());
+            zoneMessage = status is >= 200 and < 300
+                ? "DirectAdmin heeft de DNS-zone aangemaakt."
+                : $"Aanmaken niet bevestigd: backend HTTP {status}.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        { zoneMessage = ex.Message; }
+        finally { changing = false; }
+        if (zoneMessage == "DirectAdmin heeft de DNS-zone aangemaakt.") await Reload();
+    }
+
+    private async Task DeleteZone()
+    {
+        if (changing || !Session.Connected || deleteDomain != zoneConfirmation) return;
+        changing = true; zoneMessage = null;
+        try
+        {
+            var (status, _) = await Session.DeleteDnsZoneAsync(deleteDomain, zoneConfirmation);
+            zoneMessage = status is >= 200 and < 300
+                ? "DirectAdmin heeft de DNS-zone verwijderd."
+                : $"Verwijderen niet bevestigd: backend HTTP {status}.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        { zoneMessage = ex.Message; }
+        finally { changing = false; zoneConfirmation = ""; }
+        if (zoneMessage == "DirectAdmin heeft de DNS-zone verwijderd.") await Reload();
+    }
+    private static bool? ReadFlag(JsonElement element, string key)
+    {
+        if (!element.TryGetProperty(key, out var prop)) return null;
+        return prop.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => null
+        };
+    }
+}

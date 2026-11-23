@@ -1,0 +1,179 @@
+@page "/server-settings"
+@using System.Text.Json
+@inject DirectAdminSession Session
+<PageTitle>Serverinstellingen — HostingPanel</PageTitle>
+<div class="page-header"><div><div class="eyebrow">Serverbeheer</div><h1>Serverinstellingen</h1><p>DirectAdmin-configuratie en serverinstellingen via de officiële API.</p></div><button disabled="@busy" @onclick="Load">Vernieuwen</button></div>
+@if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
+else
+{
+    <section class="card">
+        <h2>Configuratiebron</h2>
+        <select @bind="endpoint">
+            <option value="api/server-settings/directadmin-conf/active">Actieve DirectAdmin-configuratie</option>
+            <option value="api/server-settings/directadmin-conf/default">Standaardconfiguratie</option>
+            <option value="api/server-settings/directadmin-conf/local">Lokale overrides</option>
+            <option value="api/server-settings/db-config">Databaseverbinding</option>
+            <option value="api/server-settings/email/config">E-mailserverconfiguratie</option>
+            <option value="api/server-settings/email/outbound-filter">Uitgaand mailfilter</option>
+            <option value="api/server-settings/timezone/current">Tijdzone</option>
+        </select>
+        <button disabled="@busy" @onclick="Load">Configuratie ophalen</button>
+        <p>@message</p>
+        <JsonOverview Json="@result" />
+    </section>
+    <section class="card">
+        <h2>Lokale DirectAdmin-overrides wijzigen</h2>
+        <p>Deze PATCH gebruikt uitsluitend <code>/api/server-settings/directadmin-conf/local</code>. Geef alleen velden op die je wilt aanpassen.</p>
+        <textarea rows="10" @bind="patch" spellcheck="false" placeholder="{}"></textarea>
+        <label>Typ PATCH om te bevestigen</label><input @bind="confirmation" />
+        <button class="primary" disabled="@(busy || confirmation != "PATCH")" @onclick="Apply">Patch toepassen</button>
+        @if (mutation is not null) { <p role="status">@mutation</p> }
+    </section>
+    <section class="card">
+        <h2>Databaseverbinding testen of wijzigen</h2>
+        <p>Vul het officiële DirectAdmin databaseconfiguratiecontract in. Een test slaat de instellingen niet op.</p>
+        <textarea rows="10" @bind="dbConfigJson" spellcheck="false"></textarea>
+        <button disabled="@busy" @onclick="TestDatabaseConfig">Verbinding testen</button>
+        <label>Typ SAVE DB om de databaseconfiguratie te vervangen</label>
+        <input @bind="dbConfirmation" />
+        <button disabled="@(busy || dbConfirmation != "SAVE DB")" @onclick="SaveDatabaseConfig">Databaseconfiguratie opslaan</button>
+    </section>
+    <section class="card">
+        <h2>Serverhostnaam wijzigen</h2>
+        <label>Nieuwe hostnaam</label><input @bind="hostname" placeholder="server.example.com" />
+        <label>Typ HOSTNAME om te bevestigen</label><input @bind="hostnameConfirmation" />
+        <button disabled="@(busy || string.IsNullOrWhiteSpace(hostname) || hostnameConfirmation != "HOSTNAME")" @onclick="ChangeHostname">Hostnaam wijzigen</button>
+    </section>
+    <section class="card">
+        <h2>Tijdzone wijzigen</h2>
+        <label>Tijdzone (IANA)</label><input @bind="timezone" placeholder="Europe/Amsterdam" />
+        <button disabled="@busy" @onclick="ListTimezones">Beschikbare tijdzones ophalen</button>
+        <JsonOverview Json="@timezones" />
+        <label>Typ TIMEZONE om te bevestigen</label><input @bind="timezoneConfirmation" />
+        <button disabled="@(busy || string.IsNullOrWhiteSpace(timezone) || timezoneConfirmation != "TIMEZONE")" @onclick="ChangeTimezone">Tijdzone wijzigen</button>
+    </section>
+}
+@code {
+    private string endpoint = "api/server-settings/directadmin-conf/active";
+    private string patch = "{}", confirmation = "", result = "";
+    private string hostname = "", hostnameConfirmation = "", timezone = "", timezoneConfirmation = "", timezones = "";
+    private string dbConfigJson = "", dbConfirmation = "";
+    private string? message, mutation;
+    private bool busy;
+    protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; message = null;
+        try
+        {
+            var (status, body) = await Session.GetRawAsync(endpoint);
+            message = $"HTTP {status}";
+            result = body;
+            if (endpoint == "api/server-settings/db-config" && status == 200) dbConfigJson = body;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { message = ex.Message; result = ""; }
+        finally { busy = false; }
+    }
+    private bool ValidDatabaseConfig()
+    {
+        using var json = JsonDocument.Parse(dbConfigJson);
+        var root = json.RootElement;
+        return root.ValueKind == JsonValueKind.Object &&
+            new[] { "address", "password", "tls", "tlsVerify", "unixSocket", "user" }
+                .All(key => root.TryGetProperty(key, out _));
+    }
+
+    private async Task TestDatabaseConfig()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; mutation = null;
+        try
+        {
+            if (!ValidDatabaseConfig())
+            { mutation = "Het databaseconfiguratiecontract is onvolledig."; return; }
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post,
+                "api/server-settings/db-config-test", dbConfigJson);
+            mutation = $"Test: backend HTTP {status}. {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        { mutation = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task SaveDatabaseConfig()
+    {
+        if (busy || !Session.Connected || dbConfirmation != "SAVE DB") return;
+        busy = true; mutation = null;
+        try
+        {
+            if (!ValidDatabaseConfig())
+            { mutation = "Het databaseconfiguratiecontract is onvolledig."; return; }
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Put,
+                "api/server-settings/db-config", dbConfigJson);
+            mutation = $"Opslaan: backend HTTP {status}. {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        { mutation = ex.Message; }
+        finally { busy = false; dbConfirmation = ""; }
+    }
+
+    private async Task ListTimezones()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; mutation = null;
+        try
+        {
+            var (status, body) = await Session.GetRawAsync("api/server-settings/timezone/list");
+            timezones = $"HTTP {status}\n{body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { mutation = ex.Message; }
+        finally { busy = false; }
+    }
+    private async Task ChangeHostname()
+    {
+        if (busy || hostnameConfirmation != "HOSTNAME" || string.IsNullOrWhiteSpace(hostname)) return;
+        busy = true; mutation = null;
+        try
+        {
+            var json = JsonSerializer.Serialize(new { hostname });
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post,
+                "api/server-settings/change-hostname", json);
+            mutation = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { mutation = ex.Message; }
+        finally { busy = false; hostnameConfirmation = ""; }
+    }
+    private async Task ChangeTimezone()
+    {
+        if (busy || timezoneConfirmation != "TIMEZONE" || string.IsNullOrWhiteSpace(timezone)) return;
+        busy = true; mutation = null;
+        try
+        {
+            var json = JsonSerializer.Serialize(new { tz = timezone });
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post,
+                "api/server-settings/timezone/set", json);
+            mutation = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { mutation = ex.Message; }
+        finally { busy = false; timezoneConfirmation = ""; }
+    }
+    private async Task Apply()
+    {
+        if (busy || confirmation != "PATCH") return;
+        busy = true; mutation = null;
+        try
+        {
+            using var json = JsonDocument.Parse(patch);
+            if (json.RootElement.ValueKind != JsonValueKind.Object)
+            { mutation = "De patch moet een JSON-object zijn."; return; }
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Patch,
+                "api/server-settings/directadmin-conf/local", patch);
+            mutation = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        { mutation = ex.Message; }
+        finally { busy = false; confirmation = ""; }
+    }
+}

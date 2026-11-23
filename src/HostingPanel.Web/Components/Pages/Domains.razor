@@ -1,0 +1,217 @@
+@page "/domains"
+@using System.Text.Json
+@inject DirectAdminSession Session
+@inject NavigationManager Navigation
+
+<PageTitle>Domeinbeheer — HostingPanel</PageTitle>
+<div class="page-header">
+    <div>
+        <div class="eyebrow">Accountbeheer / Domeinen</div>
+        <h1>Domeinbeheer</h1>
+        <p>Live domeinlijst via de HostingPanel-adapter naar DirectAdmin. Geautomatiseerde tests gebruiken fictieve .xyz1-domeinen; echte domeinen zijn eveneens toegestaan als mutaties ingeschakeld zijn.</p>
+    </div>
+    <button @onclick="Refresh" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
+</div>
+
+@if (!Session.Connected)
+{
+    <div class="card"><p>Verbind eerst via het <a href="/">dashboard</a>.</p></div>
+}
+else
+{
+    <div class="card">
+        <h2>Domeinen van een account</h2>
+        <p>Leeg laten voor alle door DirectAdmin toegankelijke domeinen (admin: serverbreed; reseller: eigen accounts; gebruiker: eigen domeinen). Vul een account in om gericht te filteren.</p>
+        <label for="owner">Gebruikersnaam (optioneel)</label>
+        <input id="owner" @bind="owner" placeholder="Bijvoorbeeld een bestaande gebruiker" />
+        <button class="primary" @onclick="Refresh" disabled="@loading">Ophalen</button>
+        @if (error is not null) { <p class="error" role="alert">@error</p> }
+        @if (warning is not null) { <p role="status">Niet alle accountgegevens zijn beschikbaar: @warning</p> }
+        else if (loading) { <p role="status">Domeinen worden opgehaald…</p> }
+        else if (domains is not null)
+        {
+            <p>@domains.Count domein(en) gevonden.</p>
+            <label for="domainFilter">Domeinen filteren</label>
+            <input id="domainFilter" @bind="filter" @bind:event="oninput" placeholder="Zoeken op domeinnaam" />
+            <table>
+                <thead><tr><th>Domein</th><th>Account</th><th>Bron</th></tr></thead>
+                <tbody>
+                @foreach (var domain in domains.Where(d => d.Contains(filter, StringComparison.OrdinalIgnoreCase)))
+                {
+                    <tr><td><a href="@($"/domains/{Uri.EscapeDataString(domain)}")">@domain</a> — <a href="@($"/domains/{Uri.EscapeDataString(domain)}/dns")">DNS</a></td><td>@(ownership.TryGetValue(domain, out var domainOwner) ? domainOwner : (string.IsNullOrWhiteSpace(owner) ? "—" : owner))</td><td>DirectAdmin</td></tr>
+                }
+                </tbody>
+            </table>
+            @if (domains.Count == 0) { <p>Geen domeinen gevonden voor dit account.</p> }
+        }
+    </div>
+
+    <div class="card">
+        <h2>Domeinbewerking voorbereiden</h2>
+        <p>Deze actie genereert uitsluitend een voorbeeld van de legacy-aanroep.
+            Er wordt <strong>geen domein aangemaakt of gewijzigd</strong> op de DirectAdmin-server.</p>
+        <label for="testDomain">Domeinnaam</label>
+        <input id="testDomain" @bind="testDomain" placeholder="hosting-test.xyz1" />
+        <div class="domain-options">
+            <label><input type="checkbox" @bind="php" /> PHP</label>
+            <label><input type="checkbox" @bind="ssl" /> SSL</label>
+            <label><input type="checkbox" @bind="cgi" /> CGI</label>
+        </div>
+        <button class="primary" disabled="@previewBusy" @onclick="Preview">
+            @(previewBusy ? "Controleren…" : "Testaanroep bekijken")
+        </button>
+        @if (previewError is not null) { <p class="error" role="alert">@previewError</p> }
+        @if (previewBody is not null)
+        {
+            <p><strong>Dry-run:</strong> alleen ter controle, niet uitgevoerd.</p>
+            <pre>@previewBody</pre>
+        }
+        <div class="card" style="margin-top:24px">
+            <h2>Domeinbewerking uitvoeren</h2>
+            <p>Gebruik eerst de preview hierboven. Deze actie wijzigt de echte DirectAdmin-server
+               uitsluitend wanneer de beheerder expliciet de algemene server-side mutatieschakelaar aanzet.
+               Verwijderen kan ook bestanden en mailgegevens verwijderen.</p>
+            <label for="domainAction">Actie</label>
+            <select id="domainAction" @bind="mutationAction">
+                <option value="create">Aanmaken</option>
+                <option value="modify">Wijzigen (PHP / SSL / CGI)</option>
+                <option value="delete">Verwijderen</option>
+            </select>
+            <label for="confirmDomain">Typ de exacte domeinnaam ter bevestiging: @testDomain</label>
+            <input id="confirmDomain" @bind="confirmation" autocomplete="off" />
+            <button disabled="@(mutationBusy || confirmation != testDomain || string.IsNullOrWhiteSpace(testDomain))"
+                    @onclick="ExecuteMutation">
+                @(mutationBusy ? "Uitvoeren…" : "Bevestig domeinbewerking")
+            </button>
+            @if (mutationStatus is not null)
+            {
+                <p role="status">@mutationStatus</p>
+            }
+        </div>
+    </div>
+}
+@code {
+    [SupplyParameterFromQuery(Name = "user")]
+    [Parameter] public string? User { get; set; }
+    private string owner = "";
+    private string filter = "";
+    private IReadOnlyList<string>? domains;
+    private Dictionary<string,string> ownership = new(StringComparer.OrdinalIgnoreCase);
+    private string? warning;
+    private string? error;
+    private bool loading;
+    private string testDomain = "hosting-test.xyz1";
+    private bool php = true;
+    private bool ssl = true;
+    private bool cgi;
+    private string mutationAction = "create";
+    private string confirmation = "";
+    private bool mutationBusy;
+    private string? mutationStatus;
+    private bool previewBusy;
+    private string? previewError;
+    private string? previewBody;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        owner = User ?? "";
+        if (Session.Connected) await Refresh();
+    }
+
+    private async Task Refresh()
+    {
+        if (loading || !Session.Connected) return;
+        loading = true;
+        error = null;
+        domains = null;
+        try
+        {
+            var allAccounts = string.IsNullOrWhiteSpace(owner);
+            var (status, body) = allAccounts
+                ? await Session.GetAccessibleDomainsAsync()
+                : await Session.GetDomainsAsync(owner.Trim());
+            if (status != 200)
+            {
+                error = $"Domeinlijst niet beschikbaar: HTTP {status}. Controleer de rechten van het DirectAdmin-account.";
+                return;
+            }
+            using var json = JsonDocument.Parse(body);
+            if (!json.RootElement.TryGetProperty("domains", out var array) ||
+                array.ValueKind != JsonValueKind.Array)
+                throw new FormatException("Onverwachte domeinlijst.");
+            domains = array.EnumerateArray().Select(e => e.GetString() ?? "").ToArray();
+            ownership.Clear();
+            warning = null;
+            if (allAccounts)
+            {
+                if (json.RootElement.TryGetProperty("warning", out var w) &&
+                    w.ValueKind == JsonValueKind.String) warning = w.GetString();
+                if (json.RootElement.TryGetProperty("items", out var items))
+                    foreach (var item in items.EnumerateArray())
+                    {
+                        var domain = item.GetProperty("domain").GetString() ?? "";
+                        var user = item.GetProperty("owner").GetString() ?? "";
+                        if (domain.Length > 0 && user.Length > 0) ownership[domain] = user;
+                    }
+            }
+        }
+        catch (Exception exception) when (exception is HttpRequestException or FormatException
+            or InvalidOperationException or ArgumentException or JsonException)
+        {
+            error = exception.Message;
+        }
+        finally { loading = false; }
+    }
+
+    private async Task Preview()
+    {
+        if (previewBusy || !Session.Connected) return;
+        previewBusy = true;
+        previewError = null;
+        previewBody = null;
+        try
+        {
+            var (status, body) = await Session.PreviewDomainAsync(testDomain.Trim(), php, ssl, cgi);
+            if (status != 200)
+            {
+                previewError = $"Testdomein geweigerd (HTTP {status}). Gebruik een geldige domeinnaam.";
+                return;
+            }
+            using var doc = JsonDocument.Parse(body);
+            previewBody = JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException
+            or ArgumentException or JsonException)
+        {
+            previewError = exception.Message;
+        }
+        finally { previewBusy = false; }
+    }
+    private async Task ExecuteMutation()
+    {
+        if (mutationBusy || !Session.Connected || confirmation != testDomain) return;
+        mutationBusy = true;
+        mutationStatus = null;
+        try
+        {
+            var (status, body) = await Session.ExecuteTestDomainAsync(
+                testDomain, mutationAction, confirmation, php, ssl, cgi);
+            mutationStatus = status switch
+            {
+                200 => "DirectAdmin heeft de domeinbewerking bevestigd. Vernieuw het domeinoverzicht.",
+                409 => "DirectAdmin meldt een conflict bij deze domeinbewerking.",
+                404 => "DirectAdmin heeft het betreffende domein niet gevonden.",
+                400 => "Ongeldige domeinnaam of bevestiging.",
+                _ => $"De domeinbewerking is niet bevestigd: HTTP {status}."
+            };
+            if (status == 200) { confirmation = ""; await Refresh(); }
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException
+            or ArgumentException)
+        {
+            mutationStatus = exception.Message;
+        }
+        finally { mutationBusy = false; }
+    }
+
+}

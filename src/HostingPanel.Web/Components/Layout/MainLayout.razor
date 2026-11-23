@@ -1,0 +1,57 @@
+@inherits LayoutComponentBase
+@inject DirectAdminSession Session
+@inject NavigationManager Navigation
+
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="/">◈ <span>HostingPanel<small>CONTROL CENTER</small></span></a>
+    <div class="nav-caption">Navigatie</div>
+    <NavLink href="/" Match="NavLinkMatch.All">▦ Dashboard</NavLink>
+    <details open>
+      <summary>Accountbeheer</summary>
+      <NavLink href="/users">Toon alle gebruikers</NavLink>
+      <NavLink href="/resellers">Resellers en pakketten</NavLink>
+      <NavLink href="/change-password">Wachtwoord wijzigen</NavLink>
+      <NavLink href="/domains">Domeinbeheer</NavLink>
+      <NavLink href="/databases">Databasebeheer</NavLink>
+      <NavLink href="/api-browser">DirectAdmin API</NavLink>
+    </details>
+    <details open>
+      <summary>Serverbeheer</summary>
+      <NavLink href="/dns-zones">DNS Beheer</NavLink>
+      <NavLink href="/system-info">Systeeminformatie</NavLink>
+      <NavLink href="/system-services">Services</NavLink>
+      <NavLink href="/server-settings">Serverinstellingen</NavLink>
+      <NavLink href="/server-tls">Server TLS</NavLink>
+      <NavLink href="/system-updates">Pakketten en updates</NavLink>
+      <NavLink href="/security">ModSecurity en ClamAV</NavLink>
+    </details>
+    <details open>
+      <summary>Sessies</summary>
+      <NavLink href="/sessions">Actieve sessies</NavLink>
+    </details>
+    <p class="nav-note">DirectAdmin-compatibele API<br />Business UI — eerste verticale slice</p>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><span>HostingPanel / beheer</span>
+      <span>@(Session.Connected ? Session.Username : "Niet verbonden")</span>
+    </header>
+    @if (Session.IsImpersonating)
+    {
+      <div class="impersonation-banner" role="status">
+        <span><strong>Impersonation actief:</strong> je werkt als <strong>@Session.Username</strong>
+        namens beheerder <strong>@Session.OriginalUsername</strong>.</span>
+        <button @onclick="ReturnToAdministrator">Terug naar beheerder</button>
+      </div>
+    }
+    <main class="content">@Body</main>
+  </div>
+</div>
+
+@code {
+    private void ReturnToAdministrator()
+    {
+        Session.EndImpersonation();
+        Navigation.NavigateTo("/");
+    }
+}

@@ -1,0 +1,167 @@
+name: .NET build and contract tests
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - feature/blazor-directadmin-api
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build API
+        run: dotnet build src/HostingPanel.Api/HostingPanel.Api.csproj -c Release
+      - name: Build Blazor web
+        run: dotnet build src/HostingPanel.Web/HostingPanel.Web.csproj -c Release
+      - name: Run contract tests
+        run: dotnet run --project tests/HostingPanel.ContractTests -c Release
+      - name: Run API forwarding integration tests (fake DirectAdmin)
+        run: dotnet run --project tests/HostingPanel.ApiIntegrationTests -c Release
+      - name: Smoke test Blazor framework script
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://127.0.0.1:5088 dotnet run --no-build -c Release --project src/HostingPanel.Web > /tmp/hosting-panel-web.log 2>&1 &
+          webpid=$!
+          trap 'cat /tmp/hosting-panel-web.log; kill "$webpid" 2>/dev/null || true' EXIT
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:5088/ -o /tmp/hostingpanel.html; then break; fi
+            sleep 1
+          done
+          grep -q '/_framework/blazor.web.js' /tmp/hostingpanel.html
+          curl --fail --silent --show-error -D /tmp/asset-headers.txt -o /tmp/blazor.web.js http://127.0.0.1:5088/_framework/blazor.web.js
+          test -s /tmp/blazor.web.js
+          curl --fail --silent --show-error -D /tmp/css-headers.txt -o /tmp/site.css http://127.0.0.1:5088/site.css
+          test -s /tmp/site.css
+          grep -q '.sidebar' /tmp/site.css
+          grep -qi 'content-type:.*css' /tmp/css-headers.txt
+          grep -qi 'content-type:.*javascript' /tmp/asset-headers.txt
+
+      - name: Smoke test Production mode asset endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://127.0.0.1:5089 dotnet run --no-build -c Release --project src/HostingPanel.Web >/tmp/hp-prod.log 2>&1 &
+          pid=$!
+          trap 'cat /tmp/hp-prod.log; kill "$pid" 2>/dev/null || true' EXIT
+          for i in {1..40}; do
+            if curl -sS http://127.0.0.1:5089/ -o /tmp/hp-home; then break; fi
+            sleep 1
+          done
+          for path in site.css _framework/blazor.web.js; do
+            echo "Request: $path"
+            curl -sS -D /tmp/hp-headers -o /tmp/hp-body "http://127.0.0.1:5089/$path"
+            cat /tmp/hp-headers
+            wc -c /tmp/hp-body
+            head -c 200 /tmp/hp-body || true
+            echo
+          done
+          curl -fsS http://127.0.0.1:5089/site.css -o /tmp/hp-style
+          grep -q '.sidebar' /tmp/hp-style
+          curl -fsS http://127.0.0.1:5089/_framework/blazor.web.js -o /tmp/hp-script
+          test "$(wc -c </tmp/hp-script)" -gt 1000
+          # All prioritized management pages must render without runtime exceptions.
+          for route in system-info system-services server-settings system-updates server-tls security sessions resellers change-password dns-zones; do
+            echo "Rendering /$route"
+            curl -fsS "http://127.0.0.1:5089/$route" -o "/tmp/hp-$route.html"
+            grep -qi 'HostingPanel' "/tmp/hp-$route.html"
+          done
+
+      - name: Validate pinned Swagger and static API endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          with open("src/HostingPanel.Api/spec/directadmin.swagger.json") as f:
+              spec=json.load(f)
+          assert spec["swagger"] == "2.0"
+          assert len(spec["paths"]) > 200
+          print("Swagger static endpoints:", len(spec["paths"]))
+          PY
+          ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://127.0.0.1:5090 \
+            DirectAdmin__BaseUrl=https://demo.directadmin.com:2222/ \
+            dotnet run --no-build -c Release --project src/HostingPanel.Api >/tmp/hp-api.log 2>&1 &
+          pid=$!
+          trap 'cat /tmp/hp-api.log; kill "$pid" 2>/dev/null || true' EXIT
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:5090/healthz >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:5090/openapi/directadmin.json -o /tmp/hosted-swagger.json
+          cmp src/HostingPanel.Api/spec/directadmin.swagger.json /tmp/hosted-swagger.json
+          curl -fsSL http://127.0.0.1:5090/swagger/index.html -o /tmp/swagger-ui.html
+          grep -qi 'swagger' /tmp/swagger-ui.html
+          curl -fsSL http://127.0.0.1:5090/swagger/swagger-ui-bundle.js -o /tmp/swagger-bundle.js
+          test "$(wc -c </tmp/swagger-bundle.js)" -gt 1000
+          curl -fsSL http://127.0.0.1:5090/swagger/index.js -o /tmp/swagger-init.js
+          grep -q '/openapi/directadmin.json' /tmp/swagger-init.js
+          python3 - <<'PY'
+          import json
+          with open("/tmp/hosted-swagger.json") as f:
+              paths=json.load(f)["paths"]
+          assert len(paths)==274
+          assert "/api/db-show/databases" in paths
+          assert "/api/db-manage/create-db-with-user" in paths
+          assert "/api/search/users" in paths
+          PY
+          for endpoint in /hosting/domains /hosting/domains/demo.xyz1 /hosting/users/demo/overview /hosting/domains/demo.xyz1/dns /hosting/dns/zones /hosting/accounts /hosting/domains/accessible /hosting/databases /hosting/databases/demo_app/users; do
+            status=$(curl -s -o /tmp/response -w '%{http_code}' "http://127.0.0.1:5090$endpoint")
+            test "$status" = "401"
+            grep -q 'UNAUTHORIZED' /tmp/response
+          done
+
+      - name: Validate preview and unauthenticated mutation boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://127.0.0.1:5091 \
+            DirectAdmin__BaseUrl=https://demo.directadmin.com:2222/ \
+            dotnet run --no-build -c Release --project src/HostingPanel.Api >/tmp/hp-domains.log 2>&1 &
+          pid=$!
+          trap 'cat /tmp/hp-domains.log; kill "$pid" 2>/dev/null || true' EXIT
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:5091/healthz >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          code=$(curl -sS -o /tmp/hp-preview -w '%{http_code}' -X POST \
+            -H 'Authorization: Basic ZGVtbzpkZW1v' -H 'Content-Type: application/json' \
+            -d '{"domain":"hosting-test.xyz1","php":true,"ssl":true}' \
+            http://127.0.0.1:5091/hosting/domains/preview)
+          test "$code" = "200"
+          grep -q '"dryRun":true' /tmp/hp-preview
+          # Supply valid DTOs: model validation otherwise returns 400 before
+          # the controller can reject the missing legacy credentials.
+          code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X POST \
+            -H 'Content-Type: application/json' \
+            -d '{"domain":"hosting-test.xyz1","action":"create","confirmation":"yes"}' \
+            http://127.0.0.1:5091/hosting/domains/execute)
+          test "$code" = "401"
+          code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X POST \
+            -H 'Content-Type: application/json' \
+            -d '{"action":"add","record":{"type":"A","name":"www","value":"192.0.2.1","ttl":"300"}}' \
+            http://127.0.0.1:5091/hosting/domains/hosting-test.xyz1/dns)
+          test "$code" = "401"
+          code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X PUT \
+            -H 'Content-Type: application/json' -d '{"setting":"ssl","value":"ON"}' \
+            http://127.0.0.1:5091/hosting/domains/hosting-test.xyz1/settings)
+          test "$code" = "401"
+          code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X PATCH \
+            http://127.0.0.1:5091/api/arbitrary/new-operation)
+          test "$code" = "404"
+          # Never submit authenticated mutations to the live DirectAdmin demo.
+          code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X POST \
+            -H 'Content-Type: application/json' \
+            -d '{"database":"app","dbUser":"app","password":"example"}' \
+            http://127.0.0.1:5091/hosting/databases)
+          test "$code" = "401"
+          code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X DELETE \
+            -H 'Content-Type: application/json' -d '{"confirmation":"yes"}' \
+            http://127.0.0.1:5091/hosting/databases/demo_app)
+          test "$code" = "401"
+          # Intentionally no authenticated writes to the live demo server in CI.
+          # Authorized writes and fallback behavior are verified with fake HTTP handlers.

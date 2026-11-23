@@ -1,0 +1,190 @@
+@page "/users/{Username}"
+@using System.Text.Json
+@inject DirectAdminSession Session
+@inject NavigationManager Navigation
+
+<PageTitle>@Username — Accountbeheer</PageTitle>
+<div class="page-header">
+    <div>
+        <div class="eyebrow"><a href="/users">Accountbeheer</a> / Gebruikersdetails</div>
+        <h1>@Username</h1>
+        <p>Accountinstellingen, toegewezen hostingpakket en pakketlimieten zoals beschikbaar in DirectAdmin.</p>
+    </div>
+    <div>
+        <button @onclick="Load" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
+        @if (Session.Connected && !Session.IsImpersonating &&
+            !Username.Equals(Session.OriginalUsername, StringComparison.OrdinalIgnoreCase))
+        {
+            <button class="primary" @onclick="Impersonate" disabled="@switching">
+                @(switching ? "Bevoegdheid controleren…" : "Inloggen als deze gebruiker")
+            </button>
+        }
+    </div>
+</div>
+@if (impersonationError is not null)
+{
+    <div class="card error" role="alert">@impersonationError</div>
+}
+@if (!Session.Connected)
+{
+    <div class="card">Verbind eerst via het <a href="/">dashboard</a>.</div>
+}
+else if (loading)
+{
+    <div class="card" role="status">Account en pakketgegevens ophalen…</div>
+}
+else if (error is not null)
+{
+    <div class="card"><p class="error" role="alert">@error</p></div>
+}
+else if (settings is not null)
+{
+    <div class="tiles">
+        <section class="card">
+            <h2>Account</h2>
+            <p>Live accountgegevens van de legacy DirectAdmin-server.</p>
+            <table><tbody>
+                @foreach (var entry in new (string Label,string Key)[] {
+                    ("Gebruikersnaam","username"), ("Naam","name"), ("E-mailadres","email"),
+                    ("Accounttype","usertype"), ("Aangemaakt door","creator"),
+                    ("Hoofddomein","domain"), ("IP-adres","ip"), ("Pakket","package"),
+                    ("Geschorst","suspended"), ("Taal","language"), ("Skin","skin") })
+                {
+                    @if (settings.TryGetValue(entry.Key, out var value))
+                    {
+                        <tr><th>@entry.Label</th><td>@value</td></tr>
+                    }
+                }
+            </tbody></table>
+            <p><a href="@($"/domains?user={Uri.EscapeDataString(Username)}")">Domeinen van deze gebruiker bekijken</a></p>
+        </section>
+        <section class="card">
+            <h2>Hostingpakket</h2>
+            @if (package is not null)
+            {
+                <p>Toegewezen pakket: <strong>@package</strong></p>
+            }
+            else
+            {
+                <p>Geen pakketnaam gevonden in de accountconfiguratie.</p>
+            }
+            @if (packageError is not null)
+            {
+                <p class="error" role="status">Pakketgegevens niet beschikbaar: @packageError</p>
+            }
+            @if (packageSettings is not null)
+            {
+                <table><tbody>
+                    @foreach (var field in packageSettings.OrderBy(f => f.Key, StringComparer.OrdinalIgnoreCase))
+                    {
+                        <tr><th>@field.Key</th><td>@field.Value</td></tr>
+                    }
+                </tbody></table>
+            }
+            else if (packageError is null)
+            {
+                <p>Het pakket heeft geen aanvullende configuratievelden teruggegeven.</p>
+            }
+        </section>
+    </div>
+    <section class="card">
+        <h2>Alle beschikbare gebruikersinstellingen</h2>
+        <p>De oorspronkelijke DirectAdmin-veldnamen, met vertrouwelijke waarden gefilterd.</p>
+        <table><thead><tr><th>Instelling</th><th>Waarde</th></tr></thead><tbody>
+            @foreach (var field in settings.OrderBy(f => f.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                <tr><th>@field.Key</th><td>@field.Value</td></tr>
+            }
+        </tbody></table>
+    </section>
+    <section class="card">
+        <h2>Resourceverbruik</h2>
+        <p>Verbruik zoals DirectAdmin dit voor deze gebruiker retourneert.</p>
+        @if (usageError is not null) { <p class="error" role="status">@usageError</p> }
+        else if (usage is not null)
+        {
+            <table><tbody>
+                @foreach (var field in usage.OrderBy(f => f.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    <tr><th>@field.Key</th><td>@field.Value</td></tr>
+                }
+            </tbody></table>
+        }
+    </section>
+}
+@code {
+    [Parameter] public string Username { get; set; } = "";
+    private Dictionary<string,string>? settings;
+    private Dictionary<string,string>? packageSettings;
+    private Dictionary<string,string>? usage;
+    private string? package;
+    private string? error;
+    private string? packageError;
+    private string? usageError;
+    private bool loading;
+    private bool switching;
+    private string? impersonationError;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Session.Connected) await Load();
+    }
+
+    private async Task Load()
+    {
+        if (loading || !Session.Connected) return;
+        loading = true;
+        error = null; packageError = null; usageError = null;
+        settings = null; packageSettings = null; usage = null; package = null;
+        try
+        {
+            var (status, body) = await Session.GetAccountOverviewAsync(Username);
+            if (status != 200)
+            {
+                error = $"Gebruikersgegevens ophalen mislukt (HTTP {status}). Controleer de DirectAdmin-rechten.";
+                return;
+            }
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            settings = ToFields(root.GetProperty("config"));
+            if (root.TryGetProperty("package", out var p) && p.ValueKind == JsonValueKind.String)
+                package = p.GetString();
+            if (root.TryGetProperty("packageSettings", out var ps) && ps.ValueKind == JsonValueKind.Object)
+                packageSettings = ToFields(ps);
+            if (root.TryGetProperty("packageError", out var pe) && pe.ValueKind == JsonValueKind.String)
+                packageError = pe.GetString();
+            if (root.TryGetProperty("usage", out var u) && u.ValueKind == JsonValueKind.Object)
+                usage = ToFields(u);
+            if (root.TryGetProperty("usageError", out var ue) && ue.ValueKind == JsonValueKind.String)
+                usageError = ue.GetString();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
+            or ArgumentException or FormatException or JsonException)
+        {
+            error = ex.Message;
+        }
+        finally { loading = false; }
+    }
+
+    private async Task Impersonate()
+    {
+        if (switching || Session.IsImpersonating) return;
+        switching = true;
+        impersonationError = null;
+        try
+        {
+            await Session.StartImpersonationAsync(Username);
+            Navigation.NavigateTo("/domains");
+        }
+        catch (Exception error) when (error is UnauthorizedAccessException or InvalidOperationException
+            or ArgumentException or HttpRequestException or JsonException)
+        {
+            impersonationError = error.Message;
+        }
+        finally { switching = false; }
+    }
+
+    private static Dictionary<string,string> ToFields(JsonElement element) =>
+        element.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.ToString(),
+            StringComparer.OrdinalIgnoreCase);
+}
