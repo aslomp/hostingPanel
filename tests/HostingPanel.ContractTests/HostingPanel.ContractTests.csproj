@@ -21,6 +21,8 @@
     <Compile Include="../../src/HostingPanel.Api/Services/LegacyAccountOverviewService.cs" Link="LegacyAccountOverviewService.cs" />
     <Compile Include="../../src/HostingPanel.Api/Services/ImpersonationService.cs" Link="ImpersonationService.cs" />
     <Compile Include="../../src/HostingPanel.Api/Services/AccountCatalogService.cs" Link="AccountCatalogService.cs" />
+    <Compile Include="../../src/HostingPanel.Api/Services/AccountMutationService.cs" Link="AccountMutationService.cs" />
+    <Compile Include="../../src/HostingPanel.Api/Services/AccessibleDatabasesService.cs" Link="AccessibleDatabasesService.cs" />
     <Compile Include="../../src/HostingPanel.Api/Services/DomainManagementService.cs" Link="DomainManagementService.cs" />
     <Compile Include="../../src/HostingPanel.Api/Services/DnsZoneService.cs" Link="DnsZoneService.cs" />
     <Compile Include="../../src/HostingPanel.Api/Services/AccessibleDomainsService.cs" Link="AccessibleDomainsService.cs" />
