@@ -9,5 +9,6 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <Compile Include="../../src/HostingPanel.Web/Services/DirectAdminUsersParser.cs" Link="DirectAdminUsersParser.cs" />
     <Compile Include="../../src/HostingPanel.Web/Services/DirectAdminSession.cs" Link="DirectAdminSession.cs" />
+    <Compile Include="../../src/HostingPanel.Api/Adapters/LegacyUsersAdapter.cs" Link="LegacyUsersAdapter.cs" />
   </ItemGroup>
 </Project>
