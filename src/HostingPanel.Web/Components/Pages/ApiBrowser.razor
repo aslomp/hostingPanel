@@ -12,7 +12,7 @@ else
         <label>Endpoint<input @bind="endpoint" /></label>
         <button class="primary" @onclick="Fetch">Ophalen</button>
         <p>@status</p>
-        <pre>@body</pre>
+        <JsonOverview Json="@body" />
     </div>
 }
 @code {
