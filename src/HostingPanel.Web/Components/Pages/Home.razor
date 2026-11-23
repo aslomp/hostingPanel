@@ -1,0 +1,48 @@
+@page "/"
+@inject DirectAdminSession Session
+@inject NavigationManager Nav
+
+<PageTitle>Dashboard — HostingPanel</PageTitle>
+<div class="page-header"><div><div class="eyebrow">Hosting administratiesysteem</div><h1>Controle Paneel</h1><p>Beheer bestaande DirectAdmin-accounts via de compatibele Web API.</p></div></div>
+<div class="banner"><h2>Welkom bij HostingPanel</h2><p>De businessapplicatie maakt verbinding met jouw bestaande DirectAdmin-server.</p></div>
+@if (!Session.Connected)
+{
+    <div class="card"><h2>DirectAdmin-verbinding</h2><p>Gebruik een beperkte DirectAdmin login key; credentials blijven alleen in deze interactieve serversessie.</p>
+        <label>Gebruikersnaam<input @bind="username" autocomplete="username" /></label>
+        <label>Login key<input type="password" @bind="key" autocomplete="off" /></label>
+        <button class="primary" @onclick="Connect">Verbinden</button>
+        @if (error is not null) { <p class="error">@error</p> }
+    </div>
+}
+else
+{
+    <div class="tiles">
+      <a class="card tile" href="/users"><b>♙</b><span>Gebruikers beheren</span><small>Live gegevens uit DirectAdmin</small></a>
+      <a class="card tile" href="/api-browser"><b>⌘</b><span>API-verkenner</span><small>Originele DirectAdmin API-respons</small></a>
+    </div>
+    <button @onclick="Disconnect">Verbinding verbreken</button>
+}
+@code {
+    private string username = "";
+    private string key = "";
+    private string? error;
+
+    private async Task Connect()
+    {
+        error = null;
+        try
+        {
+            Session.SetCredentials(username, key);
+            var (status, _) = await Session.GetRawAsync("api/session");
+            if (status != 200)
+                throw new InvalidOperationException($"DirectAdmin authentication failed (HTTP {status}).");
+            key = "";
+        }
+        catch (Exception ex)
+        {
+            Session.Disconnect();
+            error = ex.Message;
+        }
+    }
+    private void Disconnect() => Session.Disconnect();
+}
