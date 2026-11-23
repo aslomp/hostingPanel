@@ -86,7 +86,7 @@ jobs:
           done
           curl -fsS http://127.0.0.1:5090/openapi/directadmin.json -o /tmp/hosted-swagger.json
           cmp src/HostingPanel.Api/spec/directadmin.swagger.json /tmp/hosted-swagger.json
-          for endpoint in /api/users/demo/config /api/users/demo/usage /hosting/domains; do
+          for endpoint in /api/users/demo/config /api/users/demo/usage /hosting/domains /hosting/domains/demo.xyz1; do
             status=$(curl -s -o /tmp/response -w '%{http_code}' "http://127.0.0.1:5090$endpoint")
             test "$status" = "401"
             grep -q 'UNAUTHORIZED' /tmp/response
@@ -139,3 +139,23 @@ jobs:
             -d '{"domain":"example.com","action":"delete","confirmation":"example.com"}' \
             http://127.0.0.1:5091/hosting/domains/execute)
           test "$code" = "409"
+
+      - name: Check domain settings mutation is blocked globally
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://127.0.0.1:5092 \
+            DirectAdmin__BaseUrl=https://demo.directadmin.com:2222/ \
+            dotnet run --no-build -c Release --project src/HostingPanel.Api >/tmp/hp-domain-detail.log 2>&1 &
+          pid=$!
+          trap 'cat /tmp/hp-domain-detail.log; kill "$pid" 2>/dev/null || true' EXIT
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:5092/healthz >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          code=$(curl -sS -o /tmp/hp-settings-disabled -w '%{http_code}' -X PUT \
+            -H 'Authorization: Basic ZGVtbzpkZW1v' -H 'Content-Type: application/json' \
+            -d '{"setting":"ssl","value":"ON"}' \
+            http://127.0.0.1:5092/hosting/domains/demo.xyz1/settings)
+          test "$code" = "409"
+          grep -q MUTATIONS_DISABLED /tmp/hp-settings-disabled
