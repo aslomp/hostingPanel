@@ -9,7 +9,7 @@ public static class NavigationParityContractTests
         var navigation = File.ReadAllText(Path.Combine(root,
             "src/HostingPanel.Web/Components/Layout/MainLayout.razor"));
         var placeholder = File.ReadAllText(Path.Combine(root,
-            "src/HostingPanel.Web/Components/Pages/NavigationFeature.razor"));
+            "src/HostingPanel.Web/Components/Pages/NavigationPage.razor"));
         var pages = Path.Combine(root, "src/HostingPanel.Web/Components/Pages");
 
         // Exact reference sections, in reference order; no user-role inference.
@@ -41,6 +41,23 @@ public static class NavigationParityContractTests
             .SelectMany(path => Regex.Matches(File.ReadAllText(path),
                 @"@page ""(?<route>/[^""]+)""").Select(x => x.Groups["route"].Value))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // Parameter names are irrelevant for Blazor route matching:
+        // /navigation/{Key} and /navigation/{Feature} would be ambiguous.
+        var routeOwners = Directory.GetFiles(pages, "*.razor")
+            .SelectMany(file => Regex.Matches(File.ReadAllText(file),
+                @"@page ""(?<route>/[^""]+)""")
+                .Select(match => (File: Path.GetFileName(file),
+                    Route: match.Groups["route"].Value)))
+            .ToArray();
+        var ambiguities = routeOwners.GroupBy(entry =>
+            Regex.Replace(entry.Route.ToLowerInvariant(), @"\\{[^}]+\\}", "{}"))
+            .Where(group => group.Count() > 1)
+            .Select(group => string.Join(", ", group.Select(entry =>
+                entry.File + ": " + entry.Route)))
+            .ToArray();
+        Require(ambiguities.Length == 0, "Ambiguous Blazor routes: " +
+            string.Join(" | ", ambiguities));
 
         var hostingPanelExtras = new HashSet<string>(StringComparer.Ordinal)
         {
