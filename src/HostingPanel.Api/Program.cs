@@ -31,6 +31,17 @@ builder.Services.AddHttpClient("legacy-directadmin", client =>
 });
 
 var app = builder.Build();
+
+// Swagger UI assets are embedded in Swashbuckle; no browser-side CDN is required.
+// Serve the complete pinned upstream contract, not a generated subset of implemented routes.
+app.UseSwaggerUI(options =>
+{
+    options.RoutePrefix = "swagger";
+    options.SwaggerEndpoint("/openapi/directadmin.json", "DirectAdmin API — full pinned contract");
+    options.DocumentTitle = "HostingPanel | DirectAdmin API documentation";
+    options.DefaultModelsExpandDepth(-1);
+});
+app.MapGet("/swagger", () => Results.Redirect("/swagger/index.html"));
 app.UseHttpsRedirection();
 
 // Global write gate. Permission decisions for enabled operations remain with DirectAdmin.
