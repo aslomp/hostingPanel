@@ -6,6 +6,7 @@ using HostingPanel.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<LegacyUserDetailsService>();
+builder.Services.AddScoped<DomainManagementService>();
 builder.Services.AddHttpClient("legacy-directadmin", client =>
 {
     var configured = builder.Configuration["DirectAdmin:BaseUrl"]
@@ -95,6 +96,41 @@ static async Task<IResult> ReadUserDetail(HttpContext context, string username,
         ? Results.Json(result.Result)
         : Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status);
 }
+
+// HostingPanel-specific business routes: not misrepresented as DirectAdmin Swagger routes.
+// Reads current-account domains, or (for authorized admins/resellers) a selected user's domains.
+app.MapGet("/hosting/domains", async (HttpContext context, DomainManagementService service) =>
+{
+    if (!TryGetBasic(context, out var auth))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    var owner = context.Request.Query["user"].ToString();
+    var selected = string.IsNullOrWhiteSpace(owner) ? null : owner;
+    if (!DomainManagementService.ValidOwner(selected))
+        return Results.Json(new { type = "BAD_REQUEST" }, statusCode: 400);
+
+    var response = await service.ListAsync(selected, auth, context.RequestAborted);
+    return response.Domains is not null
+        ? Results.Json(new { owner = selected, domains = response.Domains })
+        : Results.Json(new { type = response.Error ?? "UPSTREAM_ERROR" }, statusCode: response.Status);
+});
+
+// Explicitly a preview. No POST requests are sent to DirectAdmin or to its file system.
+// Only fictitious .xyz1 domains can be used as fixtures.
+app.MapPost("/hosting/domains/preview", (HttpContext context, DomainCreatePreview input) =>
+{
+    if (!TryGetBasic(context, out _))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    if (!LegacyDomainsAdapter.IsSafeTestDomain(input.Domain))
+        return Results.Json(new { type = "INVALID_TEST_DOMAIN" }, statusCode: 400);
+    return Results.Json(new {
+        domain = input.Domain.ToLowerInvariant(),
+        dryRun = true,
+        legacyEndpoint = "CMD_API_DOMAIN",
+        method = "POST",
+        form = LegacyDomainsAdapter.EncodeCreateForm(input.Domain.ToLowerInvariant(), input.Php, input.Ssl, input.Cgi),
+        executed = false
+    });
+});
 
 // Do not blindly proxy modern routes to an older DirectAdmin installation:
 // that violates the pinned Swagger contract.
