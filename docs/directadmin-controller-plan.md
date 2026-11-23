@@ -3,6 +3,52 @@
 > Status: ontwerp/inventarisatie, **niet geïmplementeerd**. Inventarisatie op 2026-11-23, branch `feature/blazor-directadmin-api`.
 > Contractbron: `spec/swagger.json` (blob `d0728d2155edb2b38863418052820355787bfe99`), 274 paden / **326 HTTP-operaties**. Dit is een pinned snapshot; verifieer verschillen met de live Swagger bij elke sync. De legacy `CMD_*` / `CMD_API_*` endpoints vallen buiten deze Swagger.
 
+## Prioritaire productscope (besluit 2026-11-23)
+
+De volledige 326-operaties-inventarisatie onderaan blijft behouden als referentie, maar **niet** elke Swagger-functie is een implementatieprioriteit. De eerste productrelease richt zich op onderstaande subsystemen. *Email blijft expliciet niet geïmplementeerd*; geen stilzwijgende implementatie van EmailController.
+
+### P0 — Serveradministratie en sessie
+
+| Functie | Exacte moderne Swagger-routefamilie | Eigenaar | Opmerking |
+|---|---|---|---|
+| Server settings | `/api/server-settings/*` | ServerSettingsController | 16 operaties; lezen/wijzigen en testen |
+| Server TLS | `/api/server-tls/*` | TlsController (servergedeelte) | 8 operaties; certificaten, ACME en status |
+| Sessions | `/api/session*`, `/api/sessions*` | SessionController; AuthenticationController voor login/logout | sessie-info, sessiebeheer, switch active domain, login-as switch/return |
+| System info | `/api/system-info/*`, `/api/info` | SystemInfoController | CPU, FS, load, memory, services, uptime |
+| System packages | `/api/system-packages/*` | SystemUpdateController | 6 operaties; updates/history/log/SSE |
+| System services | `/api/system-services/*`, `/api/system-services-actions/*` | ServiceController | 8 operaties; list/status/log/start/stop/restart/reload/watchdog |
+| Reseller | `/api/resellers/{username}/config`, `/api/resellers/{username}/usage`, `/api/reseller-packages*` | ResellerController / PackageController | ook legacy reseller-accountbeheer inventariseren |
+| ModSecurity | `/api/modsecurity/*`, `/api/modsecurity-audit-log/*` | SecurityController (eventueel aparte ModSecurityController bij groei) | 9 operaties; configuratie en auditlogs |
+| Change password | `POST /api/change-password` | AuthenticationController | wachtwoordwijzigingen doorsturen, backend beslist |
+| ClamAV | `/api/clamav*` | SecurityController (eventueel ClamAvController bij groei) | 3 operaties; scan/process/cancel; *ClamAV*, niet claimav |
+| Login / logout | `POST /api/login`, `POST /api/login/url`, `POST /api/logout` | AuthenticationController | alle Swagger-login/logout endpoints exact behouden; aanvullende legacy loginflows apart |
+
+### P0 — Overkoepelende resourceoverzichten en beheer
+
+| Resource | Gewenste functionaliteit | Implementatieroute |
+|---|---|---|
+| DNS | **Overall list** van alle toegankelijke DNS-zones; volledige **CRUD** van zone/records waar backend dat toestaat; detail- en bewerkpagina | DnsController; voor deze snapshot geen moderne DNS-CRUD Swagger-routes: bestaande legacy `/hosting/dns/*`, `/hosting/domains/{domain}/dns` plus DirectAdmin legacy-adapter gebruiken. Geen verzonnen officiële routes |
+| Domains | **Overall list** van alle toegankelijke domeinen; details, instellingen en beschikbare mutaties | DomainController via legacy adapters, plus domein-TLS via TlsController; geen per-rol UI-keuze die scope beperkt |
+| Databases | **Overall list**, database-/gebruikerbeheer, create, edit/privileges, delete, import/export en onderhoud | DatabaseController; moderne `/api/db-manage/*`, `/api/db-show/*`, `/api/db-monitor/*`; aanvullende legacy flow waar nodig |
+| User management | **Overall list** van alle toegankelijke accounts; gebruikersdetails, configuratie, gebruik, package, beheer en impersonation | UserController + ResellerController + PackageController + SessionController; `/api/users*`, `/api/search/users*`, `/api/resellers*`, login-as en legacy accountadministratie |
+| Email | **NOT IMPLEMENTED** | Geen e-mailbeheer in deze implementatiefase; expliciet markeren als niet-ondersteund, niet als werkende UI presenteren |
+
+**Overall list-semantiek:** lijstresultaten moeten de volledige door de backend toegestane hiërarchie kunnen omvatten, zoals admin → resellers → eindgebruikers en hun domeinen/DNS-zones/databases. Een reseller ziet zijn backend-toegankelijke onderliggende gebruikers en resources; een eindgebruiker zijn backend-toegankelijke resources. HostingPanel maakt dit **niet** zelf op basis van de rol uit: backendverzoeken en resultaat zijn leidend; geen client-side of API-side role-filter, geen eigen 403/501 wegens aannames over bevoegdheden. Paginering, filters en zoekacties mogen het totaalbereik niet impliciet versmallen.
+
+### Concreet uitvoeringsplan voor deze prioriteit
+
+1. Test en borg eerst forwarding van login/logout/sessions/impersonation en backend-status/headers/cookies. Zowel browser- als API-laag mogen geen eigen rolpermissies bedenken.
+2. Bouw de P0 servercontrollers: settings, TLS, info, services, system packages. Houd streaming (SSE/logs) en binaire certificaatresponses intact.
+3. Implementeer reseller/user/account/package-details inclusief overall list over backend-toegankelijke hiërarchie en impersonation.
+4. Maak Domain/Dns/Database-overzichten en details consistent; voor DNS volledige CRUD via ondersteunde legacy-API's, met expliciete tests van create/read/update/delete en backendfoutpropagatie.
+5. Voeg ModSecurity, ClamAV en change-password toe; de generieke controller behoudt overige Swagger-routes tot afzonderlijke migratie.
+6. Automatiseer conformance: exact `method+path` voor alle 326 moderne Swagger-operaties, plus aparte legacy-/hosting-contracttests; geen dubbele routes en geen onbedoelde 501 aannames.
+7. Markeer Email expliciet als *not implemented* en houd niet-prioritaire controllers uit de eerste implementatiescope. Pas daarna fases voor overige Swagger-functies uitvoeren.
+
+**Belangrijk:** deze P0-scope is een prioritering van het eerder beschreven totale controllerlandschap. Bestaande `/api/*` routes mogen bij deze fasering niet verdwijnen. De contractmatrix hieronder blijft ongewijzigd.
+
+---
+
 ## Architectuur- en compatibiliteitsinvarianten
 
 1. **Exacte DirectAdmin-compatibiliteit**: behoud HTTP-method, volledig pad, query/path/body parameters, headers, content types, response/statuscodes, foutpayloads, streams/SSE en Swagger-schema's. Controllers groeperen code, maar introduceren geen nieuwe publieke `/api` routes.
