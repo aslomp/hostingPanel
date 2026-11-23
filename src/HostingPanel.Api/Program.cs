@@ -129,7 +129,7 @@ app.MapGet("/hosting/users/{username}/overview", async (HttpContext context,
         : Results.Json(new {
             username, config = result.Config,
             package = result.Package, packageSettings = result.PackageSettings,
-            packageError = result.Error
+            packageError = result.Error, usage = result.Usage, usageError = result.UsageError
         });
 });
 
