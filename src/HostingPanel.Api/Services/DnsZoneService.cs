@@ -88,7 +88,7 @@ public sealed class DnsZoneService(IHttpClientFactory clients)
         try
         {
             var form = LegacyDnsAdapter.Form(domain, change);
-            var administrator = await IsAdminAsync(auth, ct);
+            var administrator = await CanUseAdminDnsAsync(domain, auth, ct);
             using var request = new HttpRequestMessage(HttpMethod.Post,
                 administrator ? "CMD_API_DNS_ADMIN" : "CMD_API_DNS_CONTROL");
             request.Headers.Authorization = auth;
