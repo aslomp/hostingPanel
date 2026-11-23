@@ -126,7 +126,7 @@ else
         try
         {
             var (status, body) = await Session.GetRawAsync("api/server-settings/timezone/list");
-            timezones = $"HTTP {status}\\n{body}";
+            timezones = $"HTTP {status}\n{body}";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { mutation = ex.Message; }
         finally { busy = false; }
