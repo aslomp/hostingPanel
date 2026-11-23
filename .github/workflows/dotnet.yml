@@ -90,7 +90,7 @@ jobs:
           grep -qi 'swagger' /tmp/swagger-ui.html
           curl -fsSL http://127.0.0.1:5090/swagger/swagger-ui-bundle.js -o /tmp/swagger-bundle.js
           test "$(wc -c </tmp/swagger-bundle.js)" -gt 1000
-          curl -fsSL http://127.0.0.1:5090/swagger/swagger-initializer.js -o /tmp/swagger-init.js
+          curl -fsSL http://127.0.0.1:5090/swagger/index.js -o /tmp/swagger-init.js
           grep -q '/openapi/directadmin.json' /tmp/swagger-init.js
           python3 - <<'PY'
           import json
