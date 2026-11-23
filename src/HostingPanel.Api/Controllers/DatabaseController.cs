@@ -63,5 +63,34 @@ public sealed class DatabaseController(IHostingBackend backend) : BackendControl
                 : Results.Json(new { type = result.Error }, statusCode: result.Status);
     }
 
+    [HttpPost("/api/db-manage/clone-db")]
+    [HttpPost("/api/db-manage/clone-dbuser")]
+    [HttpPost("/api/db-manage/create-db")]
+    [HttpPost("/api/db-manage/create-db-with-user")]
+    [HttpPost("/api/db-manage/create-user")]
+    [HttpDelete("/api/db-manage/databases/{database}")]
+    [HttpPost("/api/db-manage/databases/{database}/check")]
+    [HttpGet("/api/db-manage/databases/{database}/export")]
+    [HttpGet("/api/db-manage/databases/{database}/export-definition")]
+    [HttpPost("/api/db-manage/databases/{database}/fix-definers")]
+    [HttpPost("/api/db-manage/databases/{database}/import")]
+    [HttpPost("/api/db-manage/databases/{database}/import-definition")]
+    [HttpPost("/api/db-manage/databases/{database}/optimize")]
+    [HttpPost("/api/db-manage/databases/{database}/repair")]
+    [HttpDelete("/api/db-manage/users/{dbuser}")]
+    [HttpPost("/api/db-manage/users/{dbuser}/change-hosts")]
+    [HttpPost("/api/db-manage/users/{dbuser}/change-password")]
+    [HttpPut("/api/db-manage/users/{dbuser}/databases/{database}/change-privs")]
+    [HttpGet("/api/db-monitor/processes")]
+    [HttpPost("/api/db-monitor/processes/{id}/kill")]
+    [HttpGet("/api/db-show/databases")]
+    [HttpGet("/api/db-show/databases/{database}")]
+    [HttpGet("/api/db-show/databases/{database}/users")]
+    [HttpGet("/api/db-show/info")]
+    [HttpGet("/api/db-show/users")]
+    [HttpGet("/api/db-show/users/{dbuser}")]
+    [HttpGet("/api/db-show/users/{dbuser}/databases")]
+    public Task ForwardDatabaseAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+
 
 }
