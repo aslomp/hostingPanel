@@ -14,7 +14,7 @@ public sealed class FileAccessController(IHostingBackend backend) : BackendContr
     [HttpGet("/hosting/file-access/ftp")]
     public async Task<IResult> ListFtp([FromQuery] string domain, CancellationToken ct)
     {
-        if (!TryGetBasic(HttpContext, out var auth)) return Unauthorized();
+        if (!TryGetBasic(HttpContext, out var auth)) return UnauthorizedResult();
         return Forward(await backend.FileAccess.ListFtpAsync(domain, auth, ct));
     }
 
@@ -22,14 +22,14 @@ public sealed class FileAccessController(IHostingBackend backend) : BackendContr
     public async Task<IResult> GetFtp([FromRoute] string user, [FromQuery] string domain,
         CancellationToken ct)
     {
-        if (!TryGetBasic(HttpContext, out var auth)) return Unauthorized();
+        if (!TryGetBasic(HttpContext, out var auth)) return UnauthorizedResult();
         return Forward(await backend.FileAccess.GetFtpAsync(domain, user, auth, ct));
     }
 
     [HttpPost("/hosting/file-access/ftp")]
     public async Task<IResult> CreateFtp([FromBody] FtpAccountRequest input, CancellationToken ct)
     {
-        if (!TryGetBasic(HttpContext, out var auth)) return Unauthorized();
+        if (!TryGetBasic(HttpContext, out var auth)) return UnauthorizedResult();
         return Forward(await backend.FileAccess.CreateFtpAsync(input, auth, ct));
     }
 
@@ -37,7 +37,7 @@ public sealed class FileAccessController(IHostingBackend backend) : BackendContr
     public async Task<IResult> UpdateFtp([FromRoute] string user,
         [FromBody] FtpAccountRequest input, CancellationToken ct)
     {
-        if (!TryGetBasic(HttpContext, out var auth)) return Unauthorized();
+        if (!TryGetBasic(HttpContext, out var auth)) return UnauthorizedResult();
         return Forward(await backend.FileAccess.UpdateFtpAsync(user, input, auth, ct));
     }
 
@@ -45,11 +45,11 @@ public sealed class FileAccessController(IHostingBackend backend) : BackendContr
     public async Task<IResult> DeleteFtp([FromRoute] string user, [FromQuery] string domain,
         CancellationToken ct)
     {
-        if (!TryGetBasic(HttpContext, out var auth)) return Unauthorized();
+        if (!TryGetBasic(HttpContext, out var auth)) return UnauthorizedResult();
         return Forward(await backend.FileAccess.DeleteFtpAsync(domain, user, auth, ct));
     }
 
-    private static IResult Unauthorized() =>
+    private static IResult UnauthorizedResult() =>
         Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
 
     private static IResult Forward(FileAccessService.UpstreamResult result) =>
