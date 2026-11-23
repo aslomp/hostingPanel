@@ -26,6 +26,22 @@ builder.Services.AddHttpClient("legacy-directadmin", client =>
 
 var app = builder.Build();
 app.UseHttpsRedirection();
+
+// One server-side, global write gate for all present and future API mutations.
+// Safe preview endpoint is intentionally excluded (it sends no write to DirectAdmin).
+app.Use(async (context, next) =>
+{
+    var mutating = context.Request.Method is "POST" or "PUT" or "PATCH" or "DELETE";
+    var preview = context.Request.Path.Equals("/hosting/domains/preview", StringComparison.OrdinalIgnoreCase);
+    if (mutating && !preview && !context.RequestServices.GetRequiredService<IConfiguration>()
+            .GetValue<bool>("HostingPanel:EnableMutations"))
+    {
+        context.Response.StatusCode = StatusCodes.Status409Conflict;
+        await context.Response.WriteAsJsonAsync(new { type = "MUTATIONS_DISABLED" });
+        return;
+    }
+    await next();
+});
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
 // Static published contract. The backend adapter is implemented incrementally.
@@ -115,13 +131,12 @@ app.MapGet("/hosting/domains", async (HttpContext context, DomainManagementServi
 });
 
 // Explicitly a preview. No POST requests are sent to DirectAdmin or to its file system.
-// Only fictitious .xyz1 domains can be used as fixtures.
 app.MapPost("/hosting/domains/preview", (HttpContext context, DomainCreatePreview input) =>
 {
     if (!TryGetBasic(context, out _))
         return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    if (!LegacyDomainsAdapter.IsSafeTestDomain(input.Domain))
-        return Results.Json(new { type = "INVALID_TEST_DOMAIN" }, statusCode: 400);
+    if (!LegacyDomainsAdapter.IsValidDomain(input.Domain))
+        return Results.Json(new { type = "INVALID_DOMAIN" }, statusCode: 400);
     return Results.Json(new {
         domain = input.Domain.ToLowerInvariant(),
         dryRun = true,
@@ -132,7 +147,7 @@ app.MapPost("/hosting/domains/preview", (HttpContext context, DomainCreatePrevie
     });
 });
 
-// Opt-in test-domain mutation boundary. A caller must explicitly confirm the exact .xyz1 name.
+// Domain mutations require exact-name confirmation and the global EnableMutations gate.
 // DirectAdmin still enforces permissions for each authenticated account.
 app.MapPost("/hosting/domains/execute", async (HttpContext context,
     DomainMutationRequest input, DomainManagementService service) =>
