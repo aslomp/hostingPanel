@@ -90,6 +90,86 @@ public sealed class DomainManagementService(IHttpClientFactory clients)
         { return new(504, "UPSTREAM_TIMEOUT"); }
     }
 
+    public async Task<DomainDetailResult> GetDetailsAsync(string domain,
+        AuthenticationHeaderValue credentials, CancellationToken cancellationToken)
+    {
+        if (!LegacyDomainsAdapter.IsValidDomain(domain))
+            return new(400, null, "INVALID_DOMAIN");
+
+        // Only retrieve settings for domains visible to the authenticated account.
+        var owned = await ListAsync(null, credentials, cancellationToken);
+        if (owned.Domains is null) return new(owned.Status, null, owned.Error);
+        if (!owned.Domains.Contains(domain, StringComparer.OrdinalIgnoreCase))
+            return new(404, null, "DOMAIN_NOT_IN_CURRENT_ACCOUNT");
+
+        try
+        {
+            var client = clients.CreateClient("legacy-directadmin");
+            using var request = new HttpRequestMessage(HttpMethod.Get,
+                "CMD_API_ADDITIONAL_DOMAINS?action=view&domain=" + Uri.EscapeDataString(domain));
+            request.Headers.Authorization = credentials;
+            using var response = await client.SendAsync(request, cancellationToken);
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+                return new(401, null, "UNAUTHORIZED");
+            if (response.StatusCode == HttpStatusCode.Forbidden)
+                return new(403, null, "ACCESS_DENIED");
+            if (!response.IsSuccessStatusCode)
+                return new(502, null, "UPSTREAM_ERROR");
+            var data = LegacyDomainDetailsAdapter.Parse(
+                await response.Content.ReadAsStringAsync(cancellationToken));
+            if (!data.TryGetValue("domain", out var reported) ||
+                !domain.Equals(reported, StringComparison.OrdinalIgnoreCase))
+                return new(502, null, "DOMAIN_MISMATCH");
+            return new(200, data, null);
+        }
+        catch (LegacyApiException) { return new(403, null, "ACCESS_DENIED"); }
+        catch (FormatException) { return new(502, null, "INVALID_LEGACY_RESPONSE"); }
+        catch (JsonException) { return new(502, null, "INVALID_LEGACY_RESPONSE"); }
+        catch (HttpRequestException) { return new(502, null, "UPSTREAM_UNAVAILABLE"); }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        { return new(504, null, "UPSTREAM_TIMEOUT"); }
+    }
+
+    public async Task<DomainMutationResult> UpdateSettingAsync(string domain, string setting,
+        string value, AuthenticationHeaderValue credentials, CancellationToken cancellationToken)
+    {
+        if (!LegacyDomainsAdapter.IsValidDomain(domain))
+            return new(400, "INVALID_DOMAIN");
+        if (!LegacyDomainDetailsAdapter.IsAllowedValue(setting, value))
+            return new(400, "INVALID_SETTING");
+
+        var current = await GetDetailsAsync(domain, credentials, cancellationToken);
+        if (current.Settings is null) return new(current.Status, current.Error);
+        if (!current.Settings.ContainsKey(setting))
+            return new(409, "SETTING_NOT_AVAILABLE");
+
+        try
+        {
+            var client = clients.CreateClient("legacy-directadmin");
+            using var request = new HttpRequestMessage(HttpMethod.Post, "CMD_API_DOMAIN");
+            request.Headers.Authorization = credentials;
+            request.Content = new StringContent(
+                LegacyDomainDetailsAdapter.EncodeSetting(domain, setting, value),
+                System.Text.Encoding.UTF8, "application/x-www-form-urlencoded");
+            using var response = await client.SendAsync(request, cancellationToken);
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+                return new(401, "UNAUTHORIZED");
+            if (response.StatusCode == HttpStatusCode.Forbidden)
+                return new(403, "ACCESS_DENIED");
+            if (!response.IsSuccessStatusCode)
+                return new(502, "UPSTREAM_ERROR");
+            LegacyDomainsAdapter.AssertMutationSucceeded(
+                await response.Content.ReadAsStringAsync(cancellationToken));
+            return new(200, null);
+        }
+        catch (LegacyApiException) { return new(422, "DIRECTADMIN_REJECTED_OPERATION"); }
+        catch (FormatException) { return new(502, "INVALID_LEGACY_RESPONSE"); }
+        catch (JsonException) { return new(502, "INVALID_LEGACY_RESPONSE"); }
+        catch (HttpRequestException) { return new(502, "UPSTREAM_UNAVAILABLE"); }
+        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        { return new(504, "UPSTREAM_TIMEOUT"); }
+    }
+
     public static bool ValidOwner(string? user) =>
         user is null || (user.Length is > 0 and <= 64 &&
                          user.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-'));
@@ -102,3 +182,7 @@ public sealed record DomainCreatePreview(string Domain, bool Php = true, bool Ss
 public sealed record DomainMutationRequest(string Domain, string Action, string Confirmation,
     bool Php = true, bool Ssl = true, bool Cgi = false);
 public sealed record DomainMutationResult(int Status, string? Error);
+
+public sealed record DomainDetailResult(int Status,
+    IReadOnlyDictionary<string,string>? Settings, string? Error);
+public sealed record DomainSettingRequest(string Setting, string Value);
