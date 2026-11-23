@@ -14,10 +14,16 @@ else
         <button class="primary" disabled="@(busy || confirmation != "DESTROY")" @onclick="DestroyOthers">Alle andere sessies beëindigen</button>
         @if (feedback is not null) { <p role="status">@feedback</p> }
     </section>
+    <section class="card">
+        <h2>Eén sessie beëindigen</h2>
+        <label>Public session ID</label><input @bind="publicId" />
+        <label>Typ dezelfde ID ter bevestiging</label><input @bind="sessionConfirmation" />
+        <button disabled="@(busy || string.IsNullOrWhiteSpace(publicId) || sessionConfirmation != publicId)" @onclick="DestroySession">Sessie beëindigen</button>
+    </section>
     @if (busy) { <p role="status">Verwerken…</p> }
 }
 @code {
-    private string current = "", all = "", confirmation = "";
+    private string current = "", all = "", confirmation = "", publicId = "", sessionConfirmation = "";
     private string? feedback;
     private bool busy;
     protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
@@ -34,6 +40,23 @@ else
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }
         finally { busy = false; }
+    }
+    private async Task DestroySession()
+    {
+        if (busy || !Session.Connected || string.IsNullOrWhiteSpace(publicId)
+            || publicId.Length > 128 || publicId.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_'))
+            || sessionConfirmation != publicId) return;
+        busy = true; feedback = null;
+        try
+        {
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post,
+                "api/sessions/destroy/" + Uri.EscapeDataString(publicId));
+            feedback = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { feedback = ex.Message; }
+        finally { busy = false; publicId = ""; sessionConfirmation = ""; }
+        await Load();
     }
     private async Task DestroyOthers()
     {
