@@ -1,0 +1,57 @@
+@page "/navigation/{Feature}"
+<PageTitle>@Title — HostingPanel</PageTitle>
+<div class="page-header">
+  <div>
+    <div class="eyebrow">DirectAdmin / navigatie</div>
+    <h1>@Title</h1>
+    <p>Dit onderdeel staat in de oorspronkelijke DirectAdmin Evolution-navigatie, maar heeft nog geen eigen HostingPanel-beheerscherm.</p>
+  </div>
+</div>
+<section class="card">
+  <h2>Nog niet geïmplementeerd</h2>
+  <p>De menuoptie is opgenomen om de navigatie met de <code>index.html</code>-referentie overeen te laten komen. Er worden geen voorbeeldgegevens als live gegevens getoond en er worden geen beheeracties gesimuleerd.</p>
+  <p>De officiële DirectAdmin Swagger-endpoints die al worden doorgestuurd, blijven bereikbaar via de API. Of een functie wordt toegestaan, bepaalt uitsluitend de aangesloten backend.</p>
+  <p><a href="/api-browser">Bekijk de DirectAdmin API</a> · <a href="/">Terug naar dashboard</a></p>
+</section>
+@code {
+    [Parameter] public string Feature { get; set; } = "";
+    private static readonly IReadOnlyDictionary<string, string> Names =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["move-users"] = "Verplaats Gebruikers tussen Resellers",
+            ["message-templates"] = "Berichtsjablonen",
+            ["create-admin"] = "Admin Aanmaken",
+            ["httpd-config"] = "Aangepaste HTTPD configuraties",
+            ["ip-management"] = "IP Beheer",
+            ["name-servers"] = "Naam Servers",
+            ["multi-server"] = "Multi Server Instellen",
+            ["php-settings"] = "PHP Instellingen",
+            ["custombuild"] = "CustomBuild",
+            ["backup-restore"] = "Back-up en herstel",
+            ["brute-force-monitor"] = "Brute Force Monitor",
+            ["process-monitor"] = "Proces Monitor",
+            ["mail-queue"] = "Beheer van e-mail wachtrij",
+            ["system-backup"] = "Systeem Backup",
+            ["cpanel-import"] = "cPanel Importeren",
+            ["broadcast"] = "Bericht aan Alle Gebruikers",
+            ["themes"] = "Thema’s",
+            ["evolution-theme"] = "Evolution Thema Aanpassen",
+            ["maintenance"] = "Onderhoud",
+            ["global-cron"] = "Cron Taken van alle Gebruikers",
+            ["system-file-editor"] = "Systeem bestand editor",
+            ["system-logs"] = "Bekijk Logboek",
+            ["plugin-manager"] = "Plugin Beheer",
+            ["csf"] = "ConfigServer Security & Firewall",
+            ["tickets"] = "Beheer Tickets",
+            ["new-ticket"] = "Ticket Aanmaken",
+            ["licensing"] = "Licensering",
+            ["email-accounts"] = "E-mailaccounts",
+            ["file-manager"] = "Bestandsbeheer",
+            ["cron-jobs"] = "Cron Taken",
+            ["user-backups"] = "Back-ups",
+            ["domain-ssl"] = "SSL certificaten"
+        };
+
+    private string Title => Names.TryGetValue(Feature, out var name)
+        ? name : "Onderdeel niet gevonden";
+}
