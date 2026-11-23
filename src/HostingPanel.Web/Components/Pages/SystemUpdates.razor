@@ -58,7 +58,7 @@ else
         {
             var (status, body) = await Session.GetRawAsync(
                 "api/system-packages/history/" + Uri.EscapeDataString(transactionId) + "/log");
-            transactionLog = $"HTTP {status}\\n{body}";
+            transactionLog = $"HTTP {status}\n{body}";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         { feedback = ex.Message; }
