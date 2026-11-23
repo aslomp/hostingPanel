@@ -124,6 +124,10 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
         !string.IsNullOrWhiteSpace(username) && username.Length <= 64 &&
         username.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
 
+    public Task<(int Status, string Body)> GetAccessibleDatabasesAsync(
+        CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Get, "hosting/databases/accessible", null, ct);
+
     public Task<(int Status, string Body)> GetDatabasesAsync(
         CancellationToken ct = default) =>
         SendAsync(HttpMethod.Get, "hosting/databases", null, ct);
