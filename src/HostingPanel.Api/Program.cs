@@ -32,21 +32,6 @@ builder.Services.AddHttpClient("legacy-directadmin", client =>
 var app = builder.Build();
 app.UseHttpsRedirection();
 
-// One server-side, global write gate for all present and future API mutations.
-// Safe preview endpoint is intentionally excluded (it sends no write to DirectAdmin).
-app.Use(async (context, next) =>
-{
-    var mutating = context.Request.Method is "POST" or "PUT" or "PATCH" or "DELETE";
-    var preview = context.Request.Path.Equals("/hosting/domains/preview", StringComparison.OrdinalIgnoreCase);
-    if (mutating && !preview && !context.RequestServices.GetRequiredService<IConfiguration>()
-            .GetValue<bool>("HostingPanel:EnableMutations"))
-    {
-        context.Response.StatusCode = StatusCodes.Status409Conflict;
-        await context.Response.WriteAsJsonAsync(new { type = "MUTATIONS_DISABLED" });
-        return;
-    }
-    await next();
-});
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
 // Static published contract. The backend adapter is implemented incrementally.
@@ -198,8 +183,7 @@ app.MapPost("/hosting/domains/preview", (HttpContext context, DomainCreatePrevie
     });
 });
 
-// Domain mutations require exact-name confirmation and the global EnableMutations gate.
-// DirectAdmin still enforces permissions for each authenticated account.
+// Destructive actions retain explicit user confirmation; DirectAdmin decides authorization.
 app.MapPost("/hosting/domains/execute", async (HttpContext context,
     DomainMutationRequest input, DomainManagementService service) =>
 {
@@ -259,7 +243,10 @@ app.MapGet("/hosting/domains/{domain}/dns", async (HttpContext context,
 {
     if (!TryGetBasic(context, out var auth))
         return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var result = await service.ReadAsync(domain, auth, context.RequestAborted);
+    var scope = context.Request.Query["scope"].ToString();
+    if (scope is not ("" or "user" or "admin"))
+        return Results.Json(new { type = "INVALID_SCOPE" }, statusCode: 400);
+    var result = await service.ReadAsync(domain, scope == "admin", auth, context.RequestAborted);
     return result.Records is null
         ? Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
         : Results.Json(new { domain, records = result.Records });
@@ -270,19 +257,64 @@ app.MapPost("/hosting/domains/{domain}/dns", async (HttpContext context, string 
 {
     if (!TryGetBasic(context, out var auth))
         return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-    var result = await service.ChangeAsync(domain, input, auth, context.RequestAborted);
+    var scope = context.Request.Query["scope"].ToString();
+    if (scope is not ("" or "user" or "admin"))
+        return Results.Json(new { type = "INVALID_SCOPE" }, statusCode: 400);
+    var result = await service.ChangeAsync(domain, input, scope == "admin", auth, context.RequestAborted);
     return result.Error is null
         ? Results.Json(new { domain, action = input.Action, applied = true })
         : Results.Json(new { type = result.Error }, statusCode: result.Status);
 });
 
-// Do not blindly proxy modern routes to an older DirectAdmin installation:
-// that violates the pinned Swagger contract.
+// Unimplemented modern paths are forwarded unchanged to the configured DirectAdmin
+// origin. The upstream decides support and authorization (including 401/403/404/501).
+// This is deliberately restricted to /api/*; never proxy arbitrary URLs or hosts.
 app.MapMethods("/api/{**path}", ["GET", "POST", "PUT", "PATCH", "DELETE"],
-    (HttpContext context) =>
-        TryGetBasic(context, out _)
-            ? Results.Json(new { type = "NOT_IMPLEMENTED" }, statusCode: 501)
-            : Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401));
+    async (HttpContext context, IHttpClientFactory clients) =>
+    {
+        if (!TryGetBasic(context, out var auth))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+
+        var rawPath = context.Request.Path.Value ?? "";
+        if (!rawPath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase)
+            || rawPath.Contains("..", StringComparison.Ordinal)
+            || rawPath.Contains('\\') || rawPath.Any(char.IsControl))
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
+        using var upstream = new HttpRequestMessage(
+            new HttpMethod(context.Request.Method), rawPath.TrimStart('/') + context.Request.QueryString);
+        upstream.Headers.Authorization = auth;
+        if (context.Request.ContentLength is > 0 || context.Request.Headers.ContainsKey("Transfer-Encoding"))
+        {
+            upstream.Content = new StreamContent(context.Request.Body);
+            if (!string.IsNullOrWhiteSpace(context.Request.ContentType))
+                upstream.Content.Headers.TryAddWithoutValidation("Content-Type", context.Request.ContentType);
+        }
+
+        try
+        {
+            using var response = await clients.CreateClient("legacy-directadmin")
+                .SendAsync(upstream, HttpCompletionOption.ResponseHeadersRead, context.RequestAborted);
+            context.Response.StatusCode = (int)response.StatusCode;
+            if (response.Content.Headers.ContentType is { } contentType)
+                context.Response.ContentType = contentType.ToString();
+            await response.Content.CopyToAsync(context.Response.Body, context.RequestAborted);
+        }
+        catch (TaskCanceledException) when (!context.RequestAborted.IsCancellationRequested)
+        {
+            context.Response.StatusCode = StatusCodes.Status504GatewayTimeout;
+        }
+        catch (HttpRequestException)
+        {
+            context.Response.StatusCode = StatusCodes.Status502BadGateway;
+        }
+    });
 
 app.Run();
 
