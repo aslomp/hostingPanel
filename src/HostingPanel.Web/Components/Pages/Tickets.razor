@@ -1,6 +1,7 @@
 @page "/tickets"
 @using System.Text.Json
 @inject DirectAdminSession Session
+@implements IDisposable
 <PageTitle>Tickets — HostingPanel</PageTitle>
 
 <div class="page-header">
@@ -85,8 +86,15 @@ else
                t.From.Contains(search, StringComparison.OrdinalIgnoreCase) ||
                t.FromName.Contains(search, StringComparison.OrdinalIgnoreCase))).ToArray();
 
+    private void OnTicketChanged() => _ = InvokeAsync(async () =>
+    {
+        await Load();
+        StateHasChanged();
+    });
+    public void Dispose() => Session.TicketInboxChanged -= OnTicketChanged;
     protected override async Task OnInitializedAsync()
     {
+        Session.TicketInboxChanged += OnTicketChanged;
         if (Session.Connected) await Load();
     }
 
