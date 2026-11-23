@@ -182,7 +182,7 @@ var checks = new List<(string Description, Action Test)>
     }),
     ("Impersonation client refuses malformed account names", () =>
     {
-        var session = new DirectAdminSession(null!);
+        var session = new DirectAdminSession(null!, new HostingPanel.Web.Realtime.TicketChannelRegistry());
         Throws<ArgumentException>(() => session.SetCredentials("admin|victim", "secret"));
         session.SetCredentials("admin", "secret");
         Require(session.Username == "admin" && !session.IsImpersonating);
