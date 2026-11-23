@@ -15,6 +15,24 @@
 
 ---
 
+## P0-implementatie uitbreiding — 2026-11-23, vervolgronde
+
+**Resourcecontrollers (geen centrale AdminController):**
+
+- `DatabaseController`: `GET /hosting/databases/accessible` combineert accountinventarisatie met per identiteit door DirectAdmin geverifieerde delegatie en `GET /api/db-show/databases?no-size=true`; retourneert owner + volledige upstream database-entry, partial-result warnings en `complete`-status. Maximaal vier gelijktijdige databaseopvragingen. Dit endpoint is *HostingPanel-only*, niet een nieuwe officiële DirectAdmin Swagger-operatie.
+- `UserController`: `POST /hosting/users`, `DELETE /hosting/users/{username}`, `PUT /hosting/users/{username}/limit`, `PUT /hosting/users/{username}/package`, `PUT /hosting/accounts/{username}/suspension`. Backend valideert bevoegdheden; write-acties met statusverandering controleren de nieuwe waarde via backend-configuratie.
+- `ResellerController`: `POST /hosting/resellers`, `DELETE /hosting/resellers/{username}`, `PUT /hosting/resellers/{username}/limit`. Schorsen/activeren verloopt via de gedeelde accountstatusroute.
+- `DnsController`: `POST /hosting/dns/zones`, `DELETE /hosting/dns/zones/{domain}`, bestaande record-read/add/edit/delete en overkoepelende zoneinventarisatie. Zone-CRUD gebruikt het gedocumenteerde `CMD_API_DNS_ADMIN`, record-CRUD de bestaande legacy DNS-adapter. Geen zelfbedachte officiële Swagger-routes.
+- De nieuwe Blazor-workflows zijn ingebouwd in Users, Resellers, Databases en DNS-zones.
+
+**Serverbeheer verder uitgewerkt:** service-watchdog, pakketselectie bij update-simulatie en uitvoering, opvragen van update-transactielogs, testen en vervangen van databaseverbindingconfiguratie. Bestaande TLS, sessie, ModSecurity, ClamAV, hostname en timezone workflows behouden.
+
+**Regressiedekking:** `BackendMutationIntegrationTests` gebruikt uitsluitend een fake HTTP-backend om user/reseller- en DNS-zonewrites, geweigerde operaties, HTTP 200 met `error=1`, mismatched confirmations, quota, pakketwijzigingen en suspend/activate met read-after-write te testen. `DatabaseInventoryIntegrationTests` test hiërarchische toegang en partial warnings bij backendweigering. `HostingPanel.ApiIntegrationTests` test echte forwardingcode met fake transport op authorization, cookies, query, JSON request, binary, SSE en upstream 501. CI voert alle suites en production smoke-tests uit.
+
+**Openstaande validatiegrens:** moderne Swagger-method/pad-dekking betekent niet dat iedere API-methode een eigen uitgewerkte Blazor-workflow heeft. Legacy DirectAdmin-responses kunnen per versie variëren; succesvolle writes zijn in CI deterministisch getest tegen fake backends, niet live tegen een productie-DirectAdmin-server. Niet-gedocumenteerde varianten van resellerpakketwijzigingen worden bewust niet als werkend gepresenteerd. E-mailbeheer blijft niet geïmplementeerd.
+
+---
+
 ## Prioritaire productscope (besluit 2026-11-23)
 
 De volledige 326-operaties-inventarisatie onderaan blijft behouden als referentie, maar **niet** elke Swagger-functie is een implementatieprioriteit. De eerste productrelease richt zich op onderstaande subsystemen. *Email blijft expliciet niet geïmplementeerd*; geen stilzwijgende implementatie van EmailController.
