@@ -36,10 +36,11 @@ public static class LegacyDomainsAdapter
                 return Normalized(list.EnumerateArray().Select(e =>
                     e.ValueKind == JsonValueKind.String ? e.GetString() ?? "" :
                     throw new FormatException("Invalid domain list item.")));
-            // Some legacy versions encode lists as "0":"example.tld".
+            // CMD_API_SHOW_USER_DOMAINS uses domain names as keys with colon-separated statistics.
             return Normalized(root.EnumerateObject()
-                .Where(p => p.Name.All(char.IsAsciiDigit) && p.Value.ValueKind == JsonValueKind.String)
-                .Select(p => p.Value.GetString() ?? ""));
+                .Where(p => (p.Name.All(char.IsAsciiDigit) && p.Value.ValueKind == JsonValueKind.String)
+                    || (p.Name.Contains('.') && !p.Name.StartsWith("pointer_", StringComparison.OrdinalIgnoreCase)))
+                .Select(p => p.Name.Contains('.') ? p.Name : p.Value.GetString() ?? ""));
         }
 
         var domains = new List<string>();
@@ -54,6 +55,8 @@ public static class LegacyDomainsAdapter
                 (key.StartsWith("list[", StringComparison.OrdinalIgnoreCase) && key.EndsWith(']')) ||
                 key.All(char.IsAsciiDigit))
                 domains.Add(value);
+            else if (key.Contains('.') && !key.StartsWith("pointer_", StringComparison.OrdinalIgnoreCase))
+                domains.Add(key);
             else errors[key] = value;
         }
         if (errors.TryGetValue("error", out var err) && err is "1" or "true")
