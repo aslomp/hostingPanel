@@ -18,14 +18,33 @@ else
         <label>Pad op de server</label><input @bind="scanPath" placeholder="/home/..." />
         <label>Typ SCAN om te bevestigen</label><input @bind="scanConfirmation" />
         <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(scanPath) || scanConfirmation != "SCAN")" @onclick="Scan">ClamAV-scan starten</button>
+        <h2>Scan annuleren</h2>
+        <label>ClamAV-proces-ID (PID)</label><input @bind="scanPid" />
+        <label>Typ dezelfde PID om te bevestigen</label><input @bind="pidConfirmation" />
+        <button disabled="@(busy || string.IsNullOrWhiteSpace(scanPid) || scanPid != pidConfirmation)" @onclick="CancelScan">Scan annuleren</button>
     </section>
     @if (feedback is not null) { <p role="status">@feedback</p> }
 }
 @code {
-    private string modsecurity = "", audit = "", clamav = "", scanPath = "", scanConfirmation = "";
+    private string modsecurity = "", audit = "", clamav = "", scanPath = "", scanConfirmation = "", scanPid = "", pidConfirmation = "";
     private string? feedback;
     private bool busy;
     protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
+    private async Task CancelScan()
+    {
+        if (busy || !Session.Connected || string.IsNullOrWhiteSpace(scanPid) ||
+            !scanPid.All(char.IsAsciiDigit) || scanPid != pidConfirmation) return;
+        busy = true; feedback = null;
+        try
+        {
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Delete,
+                "api/clamav/" + Uri.EscapeDataString(scanPid));
+            feedback = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { feedback = ex.Message; }
+        finally { busy = false; scanPid = ""; pidConfirmation = ""; }
+    }
     private async Task Scan()
     {
         if (busy || !Session.Connected || string.IsNullOrWhiteSpace(scanPath) || scanConfirmation != "SCAN") return;
