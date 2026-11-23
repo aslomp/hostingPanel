@@ -23,6 +23,24 @@
     <button disabled="@(busy || string.IsNullOrWhiteSpace(deleteUsername) || deleteUsername != deleteConfirmation)"
         @onclick="Delete">Account verwijderen</button>
 </section>
+<section class="card">
+    <h2>Accountlimiet aanpassen</h2>
+    <p>Wijzigt slechts één limiet. DirectAdmin past daarna zijn eigen pakket- en limietregels toe.</p>
+    <label>Accountnaam</label><input @bind="limitUsername" />
+    <label>Limiet</label>
+    <select @bind="limitField"><option value="bandwidth">Bandbreedte (MB)</option><option value="quota">Schijfruimte (MB)</option><option value="inode">Inodes</option></select>
+    <label>Nieuwe limiet (getal)</label><input @bind="limitValue" />
+    <label>Typ de accountnaam ter bevestiging</label><input @bind="limitConfirmation" />
+    <button disabled="@(busy || string.IsNullOrWhiteSpace(limitUsername) || limitConfirmation != limitUsername)" @onclick="SetLimit">Limiet wijzigen</button>
+</section>
+<section class="card">
+    <h2>Account schorsen of activeren</h2>
+    <label>Accountnaam</label><input @bind="suspensionUsername" />
+    <label>Actie</label><select @bind="suspend"><option value="true">Schorsen</option><option value="false">Activeren</option></select>
+    <label>Typ de accountnaam ter bevestiging</label><input @bind="suspensionConfirmation" />
+    <button disabled="@(busy || string.IsNullOrWhiteSpace(suspensionUsername) || suspensionConfirmation != suspensionUsername)"
+        @onclick="SetSuspended">Accountstatus wijzigen</button>
+</section>
 @if (result is not null) { <p role="status">@result</p> }
 
 @code {
@@ -30,8 +48,46 @@
     private string username = "", email = "", domain = "", package = "", ip = "shared";
     private string password = "", passwordConfirmation = "";
     private string deleteUsername = "", deleteConfirmation = "";
+    private string limitUsername = "", limitField = "bandwidth", limitValue = "", limitConfirmation = "";
+    private string suspensionUsername = "", suspensionConfirmation = "", suspend = "true";
     private bool busy;
     private string? result;
+
+    private async Task SetLimit()
+    {
+        if (busy || !Session.Connected || limitUsername != limitConfirmation) return;
+        busy = true; result = null;
+        try
+        {
+            var (status, _) = await Session.SetAccountLimitAsync(
+                Kind, limitUsername, limitField, limitValue);
+            result = status == 200
+                ? "DirectAdmin heeft de nieuwe limiet bevestigd."
+                : $"Limiet niet bevestigd: backend HTTP {status}.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        { result = ex.Message; }
+        finally { busy = false; limitConfirmation = ""; }
+    }
+
+    private async Task SetSuspended()
+    {
+        if (busy || !Session.Connected || suspensionUsername != suspensionConfirmation) return;
+        busy = true; result = null;
+        try
+        {
+            var desired = suspend == "true";
+            var (status, _) = await Session.SetAccountSuspensionAsync(
+                suspensionUsername, desired);
+            result = status == 200
+                ? (desired ? "DirectAdmin bevestigt: account geschorst." :
+                    "DirectAdmin bevestigt: account geactiveerd.")
+                : $"Statuswijziging niet bevestigd: backend HTTP {status}.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        { result = ex.Message; }
+        finally { busy = false; suspensionConfirmation = ""; }
+    }
 
     private async Task Create()
     {
