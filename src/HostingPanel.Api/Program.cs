@@ -132,6 +132,19 @@ app.MapPost("/hosting/domains/preview", (HttpContext context, DomainCreatePrevie
     });
 });
 
+// Opt-in test-domain mutation boundary. A caller must explicitly confirm the exact .xyz1 name.
+// DirectAdmin still enforces permissions for each authenticated account.
+app.MapPost("/hosting/domains/execute", async (HttpContext context,
+    DomainMutationRequest input, DomainManagementService service) =>
+{
+    if (!TryGetBasic(context, out var auth))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    var result = await service.MutateAsync(input, auth, context.RequestAborted);
+    return result.Error is null
+        ? Results.Json(new { domain = input.Domain.ToLowerInvariant(), action = input.Action, executed = true })
+        : Results.Json(new { type = result.Error }, statusCode: result.Status);
+});
+
 // Do not blindly proxy modern routes to an older DirectAdmin installation:
 // that violates the pinned Swagger contract.
 app.MapMethods("/api/{**path}", ["GET", "POST", "PUT", "PATCH", "DELETE"],
