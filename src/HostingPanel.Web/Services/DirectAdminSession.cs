@@ -68,6 +68,18 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
         return await SendAsync(HttpMethod.Post, "hosting/domains/preview", content, cancellationToken);
     }
 
+    public async Task<(int Status, string Body)> ExecuteTestDomainAsync(
+        string domain, string action, string confirmation, bool php, bool ssl, bool cgi,
+        CancellationToken cancellationToken = default)
+    {
+        if (action is not ("create" or "modify" or "delete"))
+            throw new ArgumentException("Unknown domain operation.", nameof(action));
+        using var content = new StringContent(
+            JsonSerializer.Serialize(new { domain, action, confirmation, php, ssl, cgi }),
+            Encoding.UTF8, "application/json");
+        return await SendAsync(HttpMethod.Post, "hosting/domains/execute", content, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<string>> GetUsersAsync(CancellationToken cancellationToken = default)
     {
         var (status, body) = await GetRawAsync("api/search/users?limit=1000", cancellationToken);
