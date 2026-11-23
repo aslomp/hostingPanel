@@ -1,0 +1,154 @@
+@page "/domains/{Domain}/dns"
+@using System.Text.Json
+@inject DirectAdminSession Session
+
+<PageTitle>DNS — @Domain</PageTitle>
+<div class="page-header">
+    <div>
+        <div class="eyebrow"><a href="/domains">Domeinen</a> / <a href="@($"/domains/{Uri.EscapeDataString(Domain)}")">@Domain</a> / DNS</div>
+        <h1>DNS-beheer</h1>
+        <p>Zone: <strong>@Domain</strong> — rechtstreeks uit DirectAdmin.</p>
+    </div>
+    <button @onclick="Load" disabled="@busy">Vernieuwen</button>
+</div>
+@if (!Session.Connected)
+{
+    <div class="card">Verbind eerst via het <a href="/">dashboard</a>.</div>
+}
+else
+{
+    <section class="card">
+        <h2>DNS-records</h2>
+        @if (error is not null) { <p class="error" role="alert">@error</p> }
+        @if (busy) { <p role="status">DNS-zone laden…</p> }
+        @if (records is not null)
+        {
+            <p>@records.Count records gevonden.</p>
+            <table>
+                <thead><tr><th>Type</th><th>Naam</th><th>Waarde</th><th>TTL</th><th>Beheer</th></tr></thead>
+                <tbody>
+                @foreach (var record in records)
+                {
+                    <tr>
+                        <td>@record.Type</td><td>@record.Name</td><td>@record.Value</td><td>@record.Ttl</td>
+                        <td>
+                            <button disabled="@busy" @onclick="() => Edit(record)">Bewerken</button>
+                            <button disabled="@busy" @onclick="() => Remove(record)">Verwijderen</button>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </section>
+    <section class="card">
+        <h2>@(action == "add" ? "DNS-record toevoegen" : action == "edit" ? "DNS-record wijzigen" : "DNS-record verwijderen")</h2>
+        <p>De wijziging wordt pas doorgevoerd als de globale mutatieschakelaar aan staat.</p>
+        <label for="dnsType">Type</label>
+        <select id="dnsType" @bind="type" disabled="@(action == "delete")">
+            @foreach (var item in new [] {"A","AAAA","CNAME","MX","TXT","SRV","CAA","NS","PTR","DS","TLSA"})
+            { <option value="@item">@item</option> }
+        </select>
+        <label for="dnsName">Naam</label>
+        <input id="dnsName" @bind="name" disabled="@(action == "delete")" placeholder="www" />
+        <label for="dnsValue">Waarde</label>
+        <textarea id="dnsValue" @bind="value" disabled="@(action == "delete")" rows="3" />
+        <label for="dnsTtl">TTL (optioneel, 60–604800 seconden)</label>
+        <input id="dnsTtl" @bind="ttl" disabled="@(action == "delete")" />
+        @if (action == "delete")
+        {
+            <p>Bevestig het verwijderen van uitsluitend dit record door de naam exact te typen: <strong>@original?.Name</strong></p>
+            <input @bind="confirmation" placeholder="Exacte recordnaam" autocomplete="off" />
+        }
+        <div class="domain-options">
+            <button class="primary" disabled="@(busy || action == "delete" && confirmation != original?.Name)" @onclick="Save">
+                @(busy ? "Bezig…" : action == "add" ? "Toevoegen" : action == "edit" ? "Wijziging opslaan" : "Verwijderen bevestigen")
+            </button>
+            <button disabled="@busy" @onclick="Reset">Nieuw record</button>
+        </div>
+        @if (message is not null) { <p role="status">@message</p> }
+    </section>
+}
+@code {
+    [Parameter] public string Domain { get; set; } = "";
+    private sealed record ZoneRecord(string Type, string Name, string Value, string? Ttl);
+    private List<ZoneRecord>? records;
+    private string? error, message, originalDomain;
+    private string action = "add", type = "A", name = "", value = "", ttl = "", confirmation = "";
+    private ZoneRecord? original;
+    private bool busy;
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Session.Connected) await Load();
+    }
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true;
+        error = null;
+        try
+        {
+            var (status, body) = await Session.GetDnsZoneAsync(Domain);
+            if (status != 200)
+            {
+                error = $"DNS-zone niet beschikbaar: HTTP {status}. Controleer de domeinrechten.";
+                records = null;
+                return;
+            }
+            using var doc = JsonDocument.Parse(body);
+            var array = doc.RootElement.GetProperty("records");
+            records = array.EnumerateArray().Select(x => new ZoneRecord(
+                x.GetProperty("type").GetString() ?? "",
+                x.GetProperty("name").GetString() ?? "",
+                x.GetProperty("value").GetString() ?? "",
+                x.TryGetProperty("ttl", out var t) && t.ValueKind != JsonValueKind.Null ? t.ToString() : null)).ToList();
+        }
+        catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException or ArgumentException)
+        { error = e.Message; }
+        finally { busy = false; }
+    }
+    private void Edit(ZoneRecord r)
+    {
+        original = r; action = "edit"; type = r.Type; name = r.Name; value = r.Value;
+        ttl = r.Ttl ?? ""; confirmation = ""; message = null;
+    }
+    private void Remove(ZoneRecord r)
+    {
+        original = r; action = "delete"; type = r.Type; name = r.Name;
+        value = r.Value; ttl = r.Ttl ?? ""; confirmation = ""; message = null;
+    }
+    private void Reset()
+    {
+        original = null; action = "add"; type = "A"; name = ""; value = "";
+        ttl = ""; confirmation = ""; message = null;
+    }
+    private async Task Save()
+    {
+        if (busy || (action == "delete" && confirmation != original?.Name)) return;
+        busy = true;
+        message = null;
+        try
+        {
+            var (status, body) = await Session.ChangeDnsRecordAsync(Domain, action,
+                type, name, value, string.IsNullOrWhiteSpace(ttl) ? null : ttl,
+                original?.Type, original?.Name, original?.Value);
+            message = status switch {
+                200 => "DNS-zone is bijgewerkt en de wijziging is gecontroleerd.",
+                409 => "Wijzigingen uitgeschakeld, of de zone is ondertussen veranderd. Vernieuw de pagina.",
+                400 => "Ongeldige DNS-recordgegevens.",
+                403 => "Geen toestemming om de DNS-zone te wijzigen.",
+                _ => $"DNS-wijziging niet bevestigd (HTTP {status})."
+            };
+            if (status == 200)
+            {
+                Reset();
+                message = "DNS-zone is bijgewerkt en de wijziging is gecontroleerd.";
+            }
+        }
+        catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException or ArgumentException)
+        { message = e.Message; }
+        finally { busy = false; }
+        if (message?.StartsWith("DNS-zone is bijgewerkt", StringComparison.Ordinal) == true)
+            await Load();
+    }
+}
