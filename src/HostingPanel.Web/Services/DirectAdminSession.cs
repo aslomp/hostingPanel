@@ -149,6 +149,16 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
             Uri.EscapeDataString(username), body, ct);
     }
 
+    public async Task<(int Status, string Body)> SetUserPackageAsync(
+        string username, string package, CancellationToken ct = default)
+    {
+        if (!IsValidAccountName(username)) throw new ArgumentException("Invalid account.");
+        using var body = new StringContent(JsonSerializer.Serialize(new { package }),
+            Encoding.UTF8, "application/json");
+        return await SendAsync(HttpMethod.Put,
+            "hosting/users/" + Uri.EscapeDataString(username) + "/package", body, ct);
+    }
+
     public async Task<(int Status, string Body)> SetAccountLimitAsync(
         string kind, string username, string field, string value, CancellationToken ct = default)
     {
