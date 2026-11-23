@@ -30,7 +30,7 @@ else
         <a class="card tile" href="/users"><b>♙</b><span>Gebruikers beheren</span><small>Live gebruikers uit DirectAdmin</small></a>
         <a class="card tile" href="/api-browser"><b>⌘</b><span>API-respons bekijken</span><small>Ongewijzigde DirectAdmin-antwoorden</small></a>
     </div>
-    <p>Verbonden als <strong>@Session.Username</strong>. Gebruikersendpoint: <code>CMD_API_SHOW_ALL_USERS?json=yes</code>.</p>
+    <p>Verbonden als <strong>@Session.Username</strong>. Gebruikersendpoint: <code>GET /api/search/users</code>.</p>
     <button @onclick="Disconnect">Verbinding verbreken</button>
 }
 @code {
