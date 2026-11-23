@@ -10,6 +10,31 @@ namespace HostingPanel.Api.Controllers;
 [ApiController]
 public sealed class UserController(IHostingBackend backend) : BackendController
 {
+    [HttpPost("/hosting/users")]
+    public async Task<IResult> CreateHostingUser([FromBody] CreateHostingAccount input, CancellationToken ct)
+    {
+        if (!TryGetBasic(HttpContext, out var auth))
+            return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+        if (input.Kind != "user")
+            return Results.Json(new { type = "INVALID_ACCOUNT_KIND" }, statusCode: 400);
+        var result = await backend.AccountMutations.CreateAsync(input, auth, ct);
+        return result.Error is null
+            ? Results.Json(new { username = input.Username, created = true })
+            : Results.Json(new { type = result.Error }, statusCode: result.Status);
+    }
+
+    [HttpDelete("/hosting/users/{username}")]
+    public async Task<IResult> DeleteHostingUser(
+        [FromRoute] string username, [FromBody] AccountDeletion input, CancellationToken ct)
+    {
+        if (!TryGetBasic(HttpContext, out var auth))
+            return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+        var result = await backend.AccountMutations.DeleteAsync(username, input.Confirmation, auth, ct);
+        return result.Error is null
+            ? Results.Json(new { username, deleted = true })
+            : Results.Json(new { type = result.Error }, statusCode: result.Status);
+    }
+
     [HttpGet("/hosting/accounts")]
     public async Task<IResult> hosting_accounts_Get_4()
     {
