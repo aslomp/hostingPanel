@@ -86,7 +86,7 @@ jobs:
           done
           curl -fsS http://127.0.0.1:5090/openapi/directadmin.json -o /tmp/hosted-swagger.json
           cmp src/HostingPanel.Api/spec/directadmin.swagger.json /tmp/hosted-swagger.json
-          for endpoint in /api/users/demo/config /api/users/demo/usage /hosting/domains /hosting/domains/demo.xyz1 /hosting/users/demo/overview; do
+          for endpoint in /api/users/demo/config /api/users/demo/usage /hosting/domains /hosting/domains/demo.xyz1 /hosting/users/demo/overview /hosting/domains/demo.xyz1/dns; do
             status=$(curl -s -o /tmp/response -w '%{http_code}' "http://127.0.0.1:5090$endpoint")
             test "$status" = "401"
             grep -q 'UNAUTHORIZED' /tmp/response
@@ -159,3 +159,23 @@ jobs:
             http://127.0.0.1:5092/hosting/domains/demo.xyz1/settings)
           test "$code" = "409"
           grep -q MUTATIONS_DISABLED /tmp/hp-settings-disabled
+
+      - name: DNS mutation respects global read-only mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://127.0.0.1:5093 \
+            DirectAdmin__BaseUrl=https://demo.directadmin.com:2222/ \
+            dotnet run --no-build -c Release --project src/HostingPanel.Api >/tmp/hp-dns.log 2>&1 &
+          pid=$!
+          trap 'cat /tmp/hp-dns.log; kill "$pid" 2>/dev/null || true' EXIT
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:5093/healthz >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          code=$(curl -sS -o /tmp/hp-dns-disabled -w '%{http_code}' -X POST \
+            -H 'Authorization: Basic ZGVtbzpkZW1v' -H 'Content-Type: application/json' \
+            -d '{"action":"add","record":{"type":"A","name":"www","value":"192.0.2.10"}}' \
+            http://127.0.0.1:5093/hosting/domains/hosting-test.xyz1/dns)
+          test "$code" = "409"
+          grep -q MUTATIONS_DISABLED /tmp/hp-dns-disabled
