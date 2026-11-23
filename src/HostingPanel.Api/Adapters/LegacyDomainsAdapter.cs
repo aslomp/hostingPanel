@@ -75,6 +75,48 @@ public static class LegacyDomainsAdapter
             "cgi=" + (cgi ? "ON" : "OFF")
         });
 
+    public static string EncodeModifyForm(string domain, bool php, bool ssl, bool cgi) =>
+        EncodeCreateForm(domain, php, ssl, cgi).Replace("action=create", "action=modify", StringComparison.Ordinal);
+
+    public static string EncodeDeleteForm(string domain) =>
+        "delete=yes&confirmed=yes&select0=" + Uri.EscapeDataString(domain);
+
+    public static void AssertMutationSucceeded(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            throw new FormatException("DirectAdmin returned an empty mutation response.");
+
+        var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (body.TrimStart().StartsWith('{'))
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                throw new FormatException("Expected an object response.");
+            foreach (var item in doc.RootElement.EnumerateObject())
+                if (item.Value.ValueKind is not (JsonValueKind.Array or JsonValueKind.Object))
+                    fields[item.Name] = item.Value.ToString();
+        }
+        else
+        {
+            foreach (var pair in body.Split('&', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var i = pair.IndexOf('=');
+                if (i < 1) throw new FormatException("Unexpected DirectAdmin mutation response.");
+                fields[System.Net.WebUtility.UrlDecode(pair[..i])] =
+                    System.Net.WebUtility.UrlDecode(pair[(i + 1)..]);
+            }
+        }
+
+        if (!fields.TryGetValue("error", out var error))
+            throw new FormatException("DirectAdmin did not return a success indicator.");
+
+        if (error is "1" or "true" or "True")
+            throw new LegacyApiException("DirectAdmin rejected the requested domain operation.");
+
+        if (error is not ("0" or "false" or "False"))
+            throw new FormatException("Unexpected DirectAdmin success indicator.");
+    }
+
     private static IReadOnlyList<string> Normalized(IEnumerable<string> domains)
     {
         var result = new List<string>();
