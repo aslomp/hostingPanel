@@ -35,6 +35,19 @@ public sealed class UserController(IHostingBackend backend) : BackendController
             : Results.Json(new { type = result.Error }, statusCode: result.Status);
     }
 
+    [HttpPut("/hosting/users/{username}/package")]
+    public async Task<IResult> ChangeUserPackage([FromRoute] string username,
+        [FromBody] AccountPackageChange input, CancellationToken ct)
+    {
+        if (!TryGetBasic(HttpContext, out var auth))
+            return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+        var result = await backend.AccountMutations.SetPackageAsync(
+            username, input.Package, auth, ct);
+        return result.Error is null
+            ? Results.Json(new { username, package = input.Package, updated = true })
+            : Results.Json(new { type = result.Error }, statusCode: result.Status);
+    }
+
     [HttpPut("/hosting/users/{username}/limit")]
     public async Task<IResult> SetUserLimit([FromRoute] string username,
         [FromBody] AccountLimitChange input, CancellationToken ct)
@@ -117,3 +130,5 @@ public sealed class UserController(IHostingBackend backend) : BackendController
 
 
 }
+
+public sealed record AccountPackageChange(string Package);
