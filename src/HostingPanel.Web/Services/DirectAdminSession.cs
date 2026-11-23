@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 
 namespace HostingPanel.Web.Services;
 
@@ -49,6 +50,17 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
         if (status is < 200 or >= 300)
             throw new HttpRequestException($"DirectAdmin reageert met HTTP {status}.");
         return DirectAdminUsersParser.Parse(body);
+    }
+
+    public async Task<(int Status, string Body)> GetUserDetailAsync(
+        string username, string kind, CancellationToken cancellationToken = default)
+    {
+        if (kind is not ("config" or "usage"))
+            throw new ArgumentException("Invalid user detail type.", nameof(kind));
+        if (username.Length is < 1 or > 64 ||
+            !username.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-'))
+            throw new ArgumentException("Invalid username.", nameof(username));
+        return await GetRawAsync($"api/users/{Uri.EscapeDataString(username)}/{kind}", cancellationToken);
     }
 
     // Reject absolute URLs, path traversal and cross-endpoint ambiguity at the UI boundary.
