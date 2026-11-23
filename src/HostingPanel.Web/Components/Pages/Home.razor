@@ -1,5 +1,6 @@
 @page "/"
 @inject DirectAdminSession Session
+@inject NavigationContextState NavContext
 
 <PageTitle>Controle Paneel — HostingPanel</PageTitle>
 <div class="page-header">
@@ -44,7 +45,40 @@
       <section class="card">
         <h2>Over het controlepaneel</h2>
         <p>HostingPanel gebruikt dezelfde beheergroepen als de DirectAdmin Evolution-interface. De rechten en beschikbare resources komen volledig van de backend.</p>
-        <p>De navigatie blijft voor iedere identiteit gelijk; beschikbare backendoperaties bepalen het resultaat.</p>
+        <p>Je kiest zelf de beheerders- of gebruikersweergave. DirectAdmin blijft verantwoordelijk voor toegangsrechten.</p>
+      </section>
+    </aside>
+  </div>
+}
+else if (NavContext.Mode == "user")
+{
+  <div class="dashboard-layout">
+    <div>
+      <section class="card">
+        <div class="dashboard-section-heading"><h2>Mijn hosting</h2><small>Gebruikersfuncties</small></div>
+        <div class="dashboard-links">
+          <a href="/domains"><span class="glyph">◎</span>Domeinbeheer</a>
+          <a href="/dns-zones"><span class="glyph">◇</span>DNS Beheer</a>
+          <a href="/databases"><span class="glyph">▦</span>Databases</a>
+          <a href="/change-password"><span class="glyph">⚿</span>Wachtwoord wijzigen</a>
+        </div>
+      </section>
+      <section class="card">
+        <div class="dashboard-section-heading"><h2>Ondersteuning en berichten</h2><small>Live meldingen via SignalR</small></div>
+        <div class="dashboard-links">
+          <a href="/tickets"><span class="glyph">☏</span>Mijn tickets</a>
+          <a href="/tickets/new"><span class="glyph">✉</span>Ticket aanmaken</a>
+          <a href="/messages"><span class="glyph">✉</span>Berichten</a>
+        </div>
+      </section>
+    </div>
+    <aside class="dashboard-aside">
+      <section class="card">
+        <h2>Account</h2>
+        <div class="state-row"><span class="state-dot connected"></span>Verbonden met DirectAdmin</div>
+        <h3>@Session.Username</h3>
+        <p>De gebruikersnavigatie is een weergavemodus. De backend bepaalt de toegang.</p>
+        <button @onclick="Disconnect">Verbinding verbreken</button>
       </section>
     </aside>
   </div>
