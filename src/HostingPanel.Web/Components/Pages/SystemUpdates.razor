@@ -6,8 +6,8 @@
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {
-    <section class="card"><h2>Beschikbare upgrades</h2><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@updates</pre></section>
-    <section class="card"><h2>Updatehistorie</h2><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@history</pre></section>
+    <section class="card"><h2>Beschikbare upgrades</h2><JsonOverview Json="@updates" /></section>
+    <section class="card"><h2>Updatehistorie</h2><JsonOverview Json="@history" /></section>
     <section class="card">
         <h2>Updates controleren</h2><p>Laat DirectAdmin zijn updatecontrole uitvoeren zonder pakketten te installeren.</p>
         <label>Pakketten (komma-gescheiden, leeg betekent alle updates)</label>
@@ -23,7 +23,7 @@ else
         <h2>Update-transactielog</h2>
         <label>Transactie-ID uit de updatehistorie</label><input @bind="transactionId" />
         <button disabled="@(busy || string.IsNullOrWhiteSpace(transactionId))" @onclick="FetchLog">Log ophalen</button>
-        <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@transactionLog</pre>
+        <JsonOverview Json="@transactionLog" />
     </section>
     @if (busy) { <p role="status">Verwerken…</p> }
 }
