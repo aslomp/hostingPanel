@@ -86,3 +86,10 @@ Echte aanmaak, wijziging en verwijdering verlopen via de apart bevestigde execut
 - The detail endpoint is scoped to the authenticated account. When an admin lists another user's domains, the original credentials must also have user-level access to that domain for detail calls; separate impersonation support is future work.
 
 No production mutations occur in CI; contract tests use `hosting-test.xyz1`.
+
+## User details and assigned package
+
+- `GET /hosting/users/{username}/overview` composes a practical user detail response using `CMD_API_SHOW_USER_CONFIG?user=...`, `CMD_API_SHOW_USER_USAGE?user=...`, and `CMD_API_PACKAGES_USER?package=...` (the package name comes from the actual user config).
+- The page `/users/{username}` displays the account settings, assigned hosting package, package limits and usage from the adapter, without depending on a fully populated strict `web.userConfig` or `web.userUsage` schema. Missing optional data is shown as unavailable rather than replacing the entire page with HTTP 501.
+- The pinned modern `/api/users/{username}/config` and `/usage` contracts remain separate; contract completeness is evaluated there, not applied as a UI rendering prerequisite.
+- The API strips fields with credential-related names from the account, usage and package details. Package and usage fetch failures do not hide successfully loaded account settings.
