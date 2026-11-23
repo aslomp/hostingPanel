@@ -154,6 +154,16 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
             "hosting/domains/" + Uri.EscapeDataString(domain) + "/settings", content, cancellationToken);
     }
 
+    public Task<(int Status, string Body)> GetAdminDnsZonesAsync(int page = 1,
+        CancellationToken cancellationToken = default)
+    {
+        if (page is < 1 or > 10000)
+            throw new ArgumentOutOfRangeException(nameof(page));
+        return SendAsync(HttpMethod.Get, "hosting/dns/zones?page=" +
+            page.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            null, cancellationToken);
+    }
+
     public Task<(int Status, string Body)> GetDnsZoneAsync(string domain,
         CancellationToken cancellationToken = default)
     {
