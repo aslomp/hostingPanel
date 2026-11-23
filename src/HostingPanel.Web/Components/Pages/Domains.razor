@@ -21,11 +21,12 @@ else
 {
     <div class="card">
         <h2>Domeinen van een account</h2>
-        <p>Leeg laten voor domeinen van de huidige DirectAdmin-gebruiker. Vul een gebruikersnaam in als je beheerrechten hebt voor dat account.</p>
+        <p>Leeg laten voor alle door DirectAdmin toegankelijke domeinen (admin: serverbreed; reseller: eigen accounts; gebruiker: eigen domeinen). Vul een account in om gericht te filteren.</p>
         <label for="owner">Gebruikersnaam (optioneel)</label>
         <input id="owner" @bind="owner" placeholder="Bijvoorbeeld een bestaande gebruiker" />
         <button class="primary" @onclick="Refresh" disabled="@loading">Ophalen</button>
         @if (error is not null) { <p class="error" role="alert">@error</p> }
+        @if (warning is not null) { <p role="status">Niet alle accountgegevens zijn beschikbaar: @warning</p> }
         else if (loading) { <p role="status">Domeinen worden opgehaald…</p> }
         else if (domains is not null)
         {
@@ -37,7 +38,7 @@ else
                 <tbody>
                 @foreach (var domain in domains.Where(d => d.Contains(filter, StringComparison.OrdinalIgnoreCase)))
                 {
-                    <tr><td><a href="@($"/domains/{Uri.EscapeDataString(domain)}")">@domain</a> — <a href="@($"/domains/{Uri.EscapeDataString(domain)}/dns")">DNS</a></td><td>@(string.IsNullOrWhiteSpace(owner) ? Session.Username : owner)</td><td>DirectAdmin</td></tr>
+                    <tr><td><a href="@($"/domains/{Uri.EscapeDataString(domain)}")">@domain</a> — <a href="@($"/domains/{Uri.EscapeDataString(domain)}/dns")">DNS</a></td><td>@(ownership.TryGetValue(domain, out var domainOwner) ? domainOwner : (string.IsNullOrWhiteSpace(owner) ? "—" : owner))</td><td>DirectAdmin</td></tr>
                 }
                 </tbody>
             </table>
@@ -95,6 +96,8 @@ else
     private string owner = "";
     private string filter = "";
     private IReadOnlyList<string>? domains;
+    private Dictionary<string,string> ownership = new(StringComparer.OrdinalIgnoreCase);
+    private string? warning;
     private string? error;
     private bool loading;
     private string testDomain = "hosting-test.xyz1";
@@ -123,8 +126,10 @@ else
         domains = null;
         try
         {
-            var (status, body) = await Session.GetDomainsAsync(
-                string.IsNullOrWhiteSpace(owner) ? null : owner.Trim());
+            var allAccounts = string.IsNullOrWhiteSpace(owner);
+            var (status, body) = allAccounts
+                ? await Session.GetAccessibleDomainsAsync()
+                : await Session.GetDomainsAsync(owner.Trim());
             if (status != 200)
             {
                 error = $"Domeinlijst niet beschikbaar: HTTP {status}. Controleer de rechten van het DirectAdmin-account.";
@@ -135,6 +140,20 @@ else
                 array.ValueKind != JsonValueKind.Array)
                 throw new FormatException("Onverwachte domeinlijst.");
             domains = array.EnumerateArray().Select(e => e.GetString() ?? "").ToArray();
+            ownership.Clear();
+            warning = null;
+            if (allAccounts)
+            {
+                if (json.RootElement.TryGetProperty("warning", out var w) &&
+                    w.ValueKind == JsonValueKind.String) warning = w.GetString();
+                if (json.RootElement.TryGetProperty("items", out var items))
+                    foreach (var item in items.EnumerateArray())
+                    {
+                        var domain = item.GetProperty("domain").GetString() ?? "";
+                        var user = item.GetProperty("owner").GetString() ?? "";
+                        if (domain.Length > 0 && user.Length > 0) ownership[domain] = user;
+                    }
+            }
         }
         catch (Exception exception) when (exception is HttpRequestException or FormatException
             or InvalidOperationException or ArgumentException or JsonException)
