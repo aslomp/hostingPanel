@@ -89,6 +89,29 @@ public sealed class DnsController(IHostingBackend backend) : BackendController
         });
     }
 
+    [HttpPost("/hosting/dns/zones")]
+    public async Task<IResult> CreateDnsZone([FromBody] DnsZoneCreate input, CancellationToken ct)
+    {
+        if (!TryGetBasic(HttpContext, out var auth))
+            return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+        var result = await backend.Dns.CreateZoneAsync(input, auth, ct);
+        return result.Error is null
+            ? Results.Json(new { domain = input.Domain, created = true })
+            : Results.Json(new { type = result.Error }, statusCode: result.Status);
+    }
+
+    [HttpDelete("/hosting/dns/zones/{domain}")]
+    public async Task<IResult> DeleteDnsZone([FromRoute] string domain,
+        [FromBody] DnsZoneDeletion input, CancellationToken ct)
+    {
+        if (!TryGetBasic(HttpContext, out var auth))
+            return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+        var result = await backend.Dns.DeleteZoneAsync(domain, input.Confirmation, auth, ct);
+        return result.Error is null
+            ? Results.Json(new { domain, deleted = true })
+            : Results.Json(new { type = result.Error }, statusCode: result.Status);
+    }
+
     [HttpGet("/hosting/dns/zones")]
     public async Task<IResult> hosting_dns_zones_Get_19()
     {
@@ -136,3 +159,5 @@ public sealed class DnsController(IHostingBackend backend) : BackendController
 }
 
 public sealed record AccessibleDnsZone(string Domain, bool? LocalData, bool? LocalMail, string? Owner);
+
+public sealed record DnsZoneDeletion(string Confirmation);
