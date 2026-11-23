@@ -7,7 +7,7 @@
     <div>
         <div class="eyebrow">Serverbeheer / DNS</div>
         <h1>DNS Beheer</h1>
-        <p>Alle DNS-zones op de DirectAdmin-server, onafhankelijk van de hostinggebruiker.</p>
+        <p>Alle DNS-zones die de backend via DirectAdmin beschikbaar stelt, inclusief zelfstandig beheerde DNS-zones.</p>
     </div>
     <button @onclick="Reload" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
 </div>
@@ -36,15 +36,15 @@ else
         @if (loading) { <p role="status">DNS-zones ophalen…</p> }
         @if (zones is not null)
         {
-            <p>@Visible.Count zone(s) in het huidige resultaat.</p>
+            <p>@Visible.Count DNS-zone(s) gevonden. @(warning is null ? "" : "Inventarisatie mogelijk onvolledig: " + warning)</p>
             <table>
-                <thead><tr><th>Domein</th><th>Lokale gegevens</th><th>Lokale mail</th></tr></thead>
+                <thead><tr><th>Domein</th><th>Eigenaar</th><th>Lokale gegevens</th><th>Lokale mail</th></tr></thead>
                 <tbody>
-                @foreach (var zone in Visible)
+                @foreach (var zone in Visible.Skip((currentPage - 1) * PageSize).Take(PageSize))
                 {
                     <tr>
                         <td><a href="@($"/domains/{Uri.EscapeDataString(zone.Domain)}/dns")">@zone.Domain</a></td>
-                        <td>@Display(zone.LocalData)</td>
+                        <td>@(string.IsNullOrWhiteSpace(zone.Owner) ? "—" : zone.Owner)</td><td>@Display(zone.LocalData)</td>
                         <td>@Display(zone.LocalMail)</td>
                     </tr>
                 }
@@ -53,16 +53,17 @@ else
             <div class="domain-options">
                 <button disabled="@(loading || currentPage == 1)" @onclick="Previous">Vorige pagina</button>
                 <span>Pagina @currentPage</span>
-                <button disabled="@(loading || zones.Count == 0)" @onclick="Next">Volgende pagina</button>
+                <button disabled="@(loading || currentPage * PageSize >= Visible.Count)" @onclick="Next">Volgende pagina</button>
             </div>
         }
     </section>
 }
 @code {
-    private sealed record Zone(string Domain, bool? LocalData, bool? LocalMail);
+    private sealed record Zone(string Domain, string? Owner, bool? LocalData, bool? LocalMail);
+    private const int PageSize = 50;
     private List<Zone>? zones;
     private string search = "", localDataFilter = "all", localMailFilter = "all";
-    private string? error;
+    private string? error, warning;
     private int currentPage = 1;
     private bool loading;
 
@@ -81,8 +82,8 @@ else
     {
         if (Session.Connected) await Reload();
     }
-    private async Task Previous() { if (currentPage > 1) { currentPage--; await Reload(); } }
-    private async Task Next() { currentPage++; await Reload(); }
+    private void Previous() { if (currentPage > 1) currentPage--; }
+    private void Next() { if (currentPage * PageSize < Visible.Count) currentPage++; }
 
     private async Task Reload()
     {
@@ -91,7 +92,7 @@ else
         error = null;
         try
         {
-            var (status, body) = await Session.GetAdminDnsZonesAsync(currentPage);
+            var (status, body) = await Session.GetAccessibleDnsZonesAsync();
             if (status != 200)
             {
                 error = status == 403 ? "DirectAdmin heeft het serverbrede DNS-zoneoverzicht geweigerd."
@@ -102,7 +103,11 @@ else
             using var doc = JsonDocument.Parse(body);
             zones = doc.RootElement.GetProperty("zones").EnumerateArray()
                 .Select(x => new Zone(x.GetProperty("domain").GetString() ?? "",
+                    x.TryGetProperty("owner", out var o) && o.ValueKind == JsonValueKind.String ? o.GetString() : null,
                     ReadFlag(x, "localData"), ReadFlag(x, "localMail"))).ToList();
+            warning = doc.RootElement.TryGetProperty("warning", out var w)
+                && w.ValueKind == JsonValueKind.String ? w.GetString() : null;
+            currentPage = 1;
         }
         catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException)
         { error = e.Message; zones = null; }
