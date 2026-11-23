@@ -14,6 +14,17 @@ Alle 49 zichtbare navigatie-items in de bekeken DirectAdmin Evolution Admin-/Geb
 
 De pagina-opmaak staat in `pages.css`. Zowel `pages.js` als `pages.css` worden vanuit `index.html` geladen.
 
+## Verfijnde workflows
+
+De vier prioriteitsgebieden hebben nu eigen schermstromen in plaats van uitsluitend generieke formulieren:
+
+- **Gebruikersbeheer:** gebruikersoverzicht, accountdetails, rollen, hostinglimieten, beveiliging, nieuwe accounts en pakketten.
+- **Domeinbeheer:** overzicht, toevoegen, document root, PHP, HTTPS/SSL en subdomeinen.
+- **DNS:** zones, records (A, AAAA, CNAME, MX, TXT en NS), records toevoegen/bewerken, SOA en nameservers.
+- **Serverbeheer:** IP-beheer, HTTPD-configuraties, multi-server, services en configuratietabbladen voor PHP, TLS en andere serverinstellingen.
+
+Alle weergegeven records zijn synthetisch. Formulieren en serviceacties hebben bewust **geen** opslag, backendconnectie of productie-effect. Dit zijn inhoudelijke UI-reconstructies; nog geen pixel-perfecte kopieën van alle oorspronkelijke DirectAdmin-pagina's.
+
 ## Functies
 
 - Nederlandstalig dashboard, adminnavigatie en gebruikerweergave
