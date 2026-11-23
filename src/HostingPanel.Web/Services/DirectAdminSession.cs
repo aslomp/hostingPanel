@@ -2,15 +2,19 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
+using HostingPanel.Web.Realtime;
+
 namespace HostingPanel.Web.Services;
 
 // Credentials are held only for an interactive Blazor Server circuit.
 // Never persist or log login keys. Always deploy behind HTTPS.
-public sealed class DirectAdminSession(IHttpClientFactory clients)
+public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannelRegistry ticketChannels)
 {
     private string? _username;
     private string? _loginKey;
     private string? _impersonatedUsername;
+    private string? _ticketChannel;
+    public string? TicketChannel => _ticketChannel;
 
     public bool Connected => _loginKey is not null;
     public string Username => _impersonatedUsername ?? _username ?? "";
@@ -21,6 +25,8 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
     {
         if (string.IsNullOrWhiteSpace(loginKey) || !IsValidAccountName(username))
             throw new ArgumentException("Geldige gebruikersnaam en login key zijn verplicht.");
+        ticketChannels.Revoke(_ticketChannel);
+        _ticketChannel = ticketChannels.Register();
         _username = username.Trim();
         _loginKey = loginKey;
         _impersonatedUsername = null;
@@ -28,6 +34,8 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
 
     public void Disconnect()
     {
+        ticketChannels.Revoke(_ticketChannel);
+        _ticketChannel = null;
         _username = null;
         _loginKey = null;
         _impersonatedUsername = null;
@@ -112,11 +120,15 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
             !response.RootElement.TryGetProperty("effectiveUsername", out var actual) ||
             !username.Equals(actual.GetString(), StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("De doelidentiteit kon niet worden bevestigd.");
+        ticketChannels.Revoke(_ticketChannel);
+        _ticketChannel = ticketChannels.Register();
         _impersonatedUsername = username;
     }
 
     public void EndImpersonation()
     {
+        ticketChannels.Revoke(_ticketChannel);
+        _ticketChannel = ticketChannels.Register();
         _impersonatedUsername = null;
     }
 
