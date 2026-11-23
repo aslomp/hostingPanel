@@ -8,7 +8,7 @@ namespace HostingPanel.Web.Services;
 
 // Credentials are held only for an interactive Blazor Server circuit.
 // Never persist or log login keys. Always deploy behind HTTPS.
-public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannelRegistry ticketChannels)
+public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannelRegistry ticketChannels) : IDisposable
 {
     private string? _username;
     private string? _loginKey;
@@ -45,6 +45,15 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         _loginKey = null;
         _impersonatedUsername = null;
         NotifyChanged();
+    }
+
+    public void Dispose()
+    {
+        ticketChannels.Revoke(_ticketChannel);
+        _ticketChannel = null;
+        _username = null;
+        _loginKey = null;
+        _impersonatedUsername = null;
     }
 
     public async Task<(int Status, string Body)> GetRawAsync(string endpoint, CancellationToken cancellationToken = default)
