@@ -102,5 +102,20 @@ public sealed class DomainController(IHostingBackend backend) : BackendControlle
                 : Results.Json(new { type = result.Error }, statusCode: result.Status);
     }
 
+    [HttpGet("/api/domain-tls/domains")]
+    [HttpGet("/api/domain-tls/domains/{domain}/acme-config")]
+    [HttpPut("/api/domain-tls/domains/{domain}/acme-config")]
+    [HttpGet("/api/domain-tls/domains/{domain}/acme-logs")]
+    [HttpGet("/api/domain-tls/domains/{domain}/acme-logs/{log_id}")]
+    [HttpGet("/api/domain-tls/domains/{domain}/certs")]
+    [HttpDelete("/api/domain-tls/domains/{domain}/certs/{id}")]
+    [HttpPost("/api/domain-tls/domains/{domain}/certs/{id}/create-csr")]
+    [HttpGet("/api/domain-tls/domains/{domain}/certs/{id}/files")]
+    [HttpPut("/api/domain-tls/domains/{domain}/certs/{id}/files")]
+    [HttpPost("/api/domain-tls/domains/{domain}/certs/{id}/install-self-signed")]
+    [HttpPost("/api/domain-tls/domains/{domain}/provision-certs")]
+    [HttpPost("/api/domain-tls/domains/{domain}/provision-certs-dry-run")]
+    public Task ForwardDomainAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+
 
 }
