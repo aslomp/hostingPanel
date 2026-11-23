@@ -43,7 +43,7 @@ else
     </section>
     <section class="card">
         <h2>@(action == "add" ? "DNS-record toevoegen" : action == "edit" ? "DNS-record wijzigen" : "DNS-record verwijderen")</h2>
-        <p>De wijziging wordt pas doorgevoerd als de globale mutatieschakelaar aan staat.</p>
+        <p>DirectAdmin beslist of de wijziging is toegestaan.</p>
         <label for="dnsType">Type</label>
         <select id="dnsType" @bind="type" disabled="@(action == "delete")">
             @foreach (var item in new [] {"A","AAAA","CNAME","MX","TXT","SRV","CAA","NS","PTR","DS","TLSA"})
@@ -133,8 +133,8 @@ else
                 type, name, value, string.IsNullOrWhiteSpace(ttl) ? null : ttl,
                 original?.Type, original?.Name, original?.Value);
             message = status switch {
-                200 => "DNS-zone is bijgewerkt en de wijziging is gecontroleerd.",
-                409 => "Wijzigingen uitgeschakeld, of de zone is ondertussen veranderd. Vernieuw de pagina.",
+                200 => "DirectAdmin heeft de DNS-wijziging bevestigd.",
+                409 => "DirectAdmin meldt een conflict bij deze DNS-wijziging.",
                 400 => "Ongeldige DNS-recordgegevens.",
                 403 => "Geen toestemming om de DNS-zone te wijzigen.",
                 _ => $"DNS-wijziging niet bevestigd (HTTP {status})."
@@ -142,13 +142,13 @@ else
             if (status == 200)
             {
                 Reset();
-                message = "DNS-zone is bijgewerkt en de wijziging is gecontroleerd.";
+                message = "DirectAdmin heeft de DNS-wijziging bevestigd.";
             }
         }
         catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException or ArgumentException)
         { message = e.Message; }
         finally { busy = false; }
-        if (message?.StartsWith("DNS-zone is bijgewerkt", StringComparison.Ordinal) == true)
+        if (message?.StartsWith("DirectAdmin heeft de DNS-wijziging bevestigd", StringComparison.Ordinal) == true)
             await Load();
     }
 }
