@@ -1,5 +1,6 @@
 @page "/api-browser"
 @inject DirectAdminSession Session
+@inject IConfiguration Configuration
 
 <PageTitle>API — HostingPanel</PageTitle>
 <div class="page-header"><div><div class="eyebrow">Integratie</div><h1>DirectAdmin API</h1><p>Bekijk de moderne DirectAdmin-compatibele API-antwoorden van HostingPanel.</p></div></div>
@@ -7,6 +8,8 @@
 else
 {
     <div class="card">
+        <p><a href="@SwaggerUrl" target="_blank" rel="noopener noreferrer">Volledige Swagger-documentatie (274 API-paden)</a></p>
+        <p>Dit is de volledige vastgepinde DirectAdmin Swagger. Niet alle operaties zijn al beschikbaar via de legacy-adapter.</p>
         <label>Endpoint<input @bind="endpoint" /></label>
         <button class="primary" @onclick="Fetch">Ophalen</button>
         <p>@status</p>
@@ -14,6 +17,9 @@ else
     </div>
 }
 @code {
+    private string SwaggerUrl => new Uri(
+        new Uri(Configuration["HostingPanel:ApiBaseUrl"] ?? "https://localhost:7101/"),
+        "swagger/index.html").AbsoluteUri;
     private string endpoint = "api/search/users?limit=1000";
     private string status = "";
     private string body = "";
