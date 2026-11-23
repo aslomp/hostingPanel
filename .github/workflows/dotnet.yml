@@ -62,3 +62,27 @@ jobs:
           grep -q '.sidebar' /tmp/hp-style
           curl -fsS http://127.0.0.1:5089/_framework/blazor.web.js -o /tmp/hp-script
           test "$(wc -c </tmp/hp-script)" -gt 1000
+
+      - name: Validate pinned Swagger and static API endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          with open("src/HostingPanel.Api/spec/directadmin.swagger.json") as f:
+              spec=json.load(f)
+          assert spec["swagger"] == "2.0"
+          assert len(spec["paths"]) > 200
+          print("Swagger static endpoints:", len(spec["paths"]))
+          PY
+          ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://127.0.0.1:5090 \
+            DirectAdmin__BaseUrl=https://demo.directadmin.com:2222/ \
+            dotnet run --no-build -c Release --project src/HostingPanel.Api >/tmp/hp-api.log 2>&1 &
+          pid=$!
+          trap 'cat /tmp/hp-api.log; kill "$pid" 2>/dev/null || true' EXIT
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:5090/healthz >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:5090/openapi/directadmin.json -o /tmp/hosted-swagger.json
+          cmp src/HostingPanel.Api/spec/directadmin.swagger.json /tmp/hosted-swagger.json
