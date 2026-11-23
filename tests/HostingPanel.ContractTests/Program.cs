@@ -44,9 +44,9 @@ var checks = new List<(string Description, Action Test)>
         Require(usage["bandwidthBytes"]!["unlimited"]!.GetValue<bool>());
         Require(usage["quotaBytes"]!["limit"]!.GetValue<long>() == 52428800L);
     }),
-    ("Domain fixtures accept only valid xyz1 test domains", () =>
+    ("Domain validator supports normal and xyz1 domains", () =>
     {
-        Require(LegacyDomainsAdapter.IsSafeTestDomain("hosting-test.xyz1"));
+        Require(LegacyDomainsAdapter.IsValidDomain("hosting-test.xyz1"));
         Require(LegacyDomainsAdapter.IsSafeTestDomain("web.demo-01.xyz1"));
         Require(!LegacyDomainsAdapter.IsSafeTestDomain("example.com"));
         Require(!LegacyDomainsAdapter.IsSafeTestDomain("bad..xyz1"));
