@@ -20,6 +20,30 @@ var checks = new List<(string Description, Action Test)>
         Throws<FormatException>(() => LegacyUsersAdapter.ParseUsernames("{\"users\":[\"admin\"]}"))),
     ("Legacy adapter validates search limits", () =>
         Throws<ArgumentOutOfRangeException>(() => LegacyUsersAdapter.SearchUsers(["admin"], null, 0))),
+    ("Legacy detail parser preserves URL-decoded fields", () =>
+    {
+        var v = LegacyUserDetailsAdapter.Parse("username=demo&email=a%2Bb%40example.net&ssh=ON");
+        Require(v["email"] == "a+b@example.net" && v["ssh"] == "ON");
+    }),
+    ("Legacy config maps field types without inventing other fields", () =>
+    {
+        var parsed = LegacyUserDetailsAdapter.Parse("username=demo&usertype=user&ssh=ON&suspended=no&quota=unlimited&nemails=5");
+        var config = LegacyUserDetailsAdapter.ConvertConfig(parsed);
+        Require(config["ssh"]!.GetValue<bool>() == true);
+        Require(config["suspended"]!.GetValue<bool>() == false);
+        Require(config["emailAccountsLim"]!.GetValue<long>() == 5);
+        Require(!config.ContainsKey("wordpress"));
+        Require(LegacyUserDetailsAdapter.MissingRequired(config, ["wordpress"]).Length == 1);
+    }),
+    ("Legacy usage converts MiB accurately", () =>
+    {
+        var used = LegacyUserDetailsAdapter.Parse("bandwidth=1.5&quota=20&nemails=2");
+        var limits = LegacyUserDetailsAdapter.Parse("bandwidth=unlimited&quota=50&nemails=5");
+        var usage = LegacyUserDetailsAdapter.ConvertUsage(used, limits);
+        Require(usage["bandwidthBytes"]!["usage"]!.GetValue<long>() == 1572864L);
+        Require(usage["bandwidthBytes"]!["unlimited"]!.GetValue<bool>());
+        Require(usage["quotaBytes"]!["limit"]!.GetValue<long>() == 52428800L);
+    }),
     ("Empty list is valid", () => Require(DirectAdminUsersParser.Parse("[]").Count == 0)),
     ("Legacy error object is rejected", () =>
         Throws<InvalidOperationException>(() => DirectAdminUsersParser.Parse("{\"error\":1,\"text\":\"Access denied\"}"))),
