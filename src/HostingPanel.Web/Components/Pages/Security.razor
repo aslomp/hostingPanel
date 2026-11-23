@@ -1,0 +1,41 @@
+@page "/security"
+@inject DirectAdminSession Session
+<PageTitle>Beveiliging — HostingPanel</PageTitle>
+<div class="page-header"><div><div class="eyebrow">Serverbeheer</div><h1>Beveiliging</h1><p>ModSecurity en ClamAV via de officiële DirectAdmin API.</p></div><button disabled="@busy" @onclick="Load">Vernieuwen</button></div>
+@if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
+else
+{
+    <section class="card">
+        <h2>ModSecurity</h2>
+        <label>Configuratieoverzicht</label><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@modsecurity</pre>
+        <label>Auditlogs — samenvatting</label><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@audit</pre>
+    </section>
+    <section class="card">
+        <h2>ClamAV</h2>
+        <p>Actieve scanprocessen</p><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@clamav</pre>
+        <p>Scans starten en stoppen gebeurt via de backend; voor scanopties is het volledige ClamAV-requestcontract vereist.</p>
+    </section>
+    @if (feedback is not null) { <p role="status">@feedback</p> }
+}
+@code {
+    private string modsecurity = "", audit = "", clamav = "";
+    private string? feedback;
+    private bool busy;
+    protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; feedback = null;
+        try
+        {
+            var (ms, mb) = await Session.GetRawAsync("api/modsecurity/all-configs");
+            modsecurity = $"HTTP {ms}\n{mb}";
+            var (asCode, ab) = await Session.GetRawAsync("api/modsecurity-audit-log/summary");
+            audit = $"HTTP {asCode}\n{ab}";
+            var (cs, cb) = await Session.GetRawAsync("api/clamav");
+            clamav = $"HTTP {cs}\n{cb}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }
+        finally { busy = false; }
+    }
+}
