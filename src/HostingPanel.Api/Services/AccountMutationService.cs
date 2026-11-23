@@ -8,6 +8,8 @@ public sealed record CreateHostingAccount(
     string Kind, string Username, string Email, string Password,
     string Domain, string Package, string Ip = "shared", bool Notify = false);
 public sealed record AccountDeletion(string Confirmation);
+public sealed record AccountLimitChange(string Field, string Value);
+public sealed record AccountSuspension(bool Suspended);
 public sealed record AccountOperationResult(int Status, string? Error);
 
 /// <summary>
@@ -75,6 +77,87 @@ public sealed class AccountMutationService(IHttpClientFactory clients)
         try { form = DeleteForm(username, confirmation); }
         catch (ArgumentException) { return new(400, "CONFIRMATION_REQUIRED"); }
         return await PostAsync("CMD_API_SELECT_USERS", form, auth, ct);
+    }
+
+    /// <summary>
+    /// Change a single resource limit without overwriting unrelated account settings.
+    /// The backend remains authoritative for authorization and effective values.
+    /// </summary>
+    public async Task<AccountOperationResult> SetLimitAsync(string kind, string username,
+        AccountLimitChange change, AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        if (kind is not ("user" or "reseller") || !ValidUsername(username) ||
+            change.Field is not ("bandwidth" or "quota" or "inode") ||
+            !long.TryParse(change.Value, out var amount) || amount < 0)
+            return new(400, "INVALID_LIMIT");
+        var endpoint = kind == "reseller" ? "CMD_API_MODIFY_RESELLER" : "CMD_API_MODIFY_USER";
+        var form = new Dictionary<string, string> {
+            ["action"] = "single", ["user"] = username, [change.Field] = change.Value
+        };
+        return await PostAndVerifyAsync(endpoint, form, username, change.Field,
+            change.Value, auth, ct);
+    }
+
+    /// <summary>
+    /// Suspend/activate explicitly; no toggle of unknown prior state.
+    /// Re-read the backend's authoritative account configuration after POST.
+    /// </summary>
+    public async Task<AccountOperationResult> SetSuspendedAsync(string username,
+        bool suspended, AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        if (!ValidUsername(username))
+            return new(400, "INVALID_USERNAME");
+        var form = new Dictionary<string, string> {
+            ["location"] = "CMD_SELECT_USERS",
+            ["suspend"] = suspended ? "Suspend" : "Unsuspend",
+            ["select0"] = username
+        };
+        return await PostAndVerifyAsync("CMD_API_SELECT_USERS", form,
+            username, "suspended", suspended ? "yes" : "no", auth, ct);
+    }
+
+    private async Task<AccountOperationResult> PostAndVerifyAsync(string endpoint,
+        IDictionary<string, string> form, string username, string field, string expected,
+        AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+            request.Headers.Authorization = auth;
+            request.Content = new FormUrlEncodedContent(form);
+            using var response = await clients.CreateClient("legacy-directadmin")
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+
+            // DirectAdmin may redirect after a mutation. A redirect is not proof
+            // of success, but a subsequent independent GET can confirm the state.
+            if (!response.IsSuccessStatusCode &&
+                (int)response.StatusCode is not (301 or 302 or 303))
+                return new((int)response.StatusCode, "UPSTREAM_REJECTED_OPERATION");
+
+            var body = await response.Content.ReadAsStringAsync(ct);
+            if (body.Contains("error=1", StringComparison.OrdinalIgnoreCase))
+                return new(422, "DIRECTADMIN_REJECTED_OPERATION");
+
+            using var verify = new HttpRequestMessage(HttpMethod.Get,
+                "CMD_API_SHOW_USER_CONFIG?user=" + Uri.EscapeDataString(username));
+            verify.Headers.Authorization = auth;
+            using var verification = await clients.CreateClient("legacy-directadmin")
+                .SendAsync(verify, ct);
+            if (!verification.IsSuccessStatusCode)
+                return new((int)verification.StatusCode, "CHANGE_UNVERIFIED");
+
+            var current = LegacyUserDetailsAdapter.Parse(
+                await verification.Content.ReadAsStringAsync(ct));
+            if (!current.TryGetValue(field, out var actual) ||
+                !string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
+                return new(409, "CHANGE_NOT_OBSERVED");
+            return new(200, null);
+        }
+        catch (LegacyApiException) { return new(422, "DIRECTADMIN_REJECTED_OPERATION"); }
+        catch (FormatException) { return new(502, "INVALID_LEGACY_RESPONSE"); }
+        catch (HttpRequestException) { return new(502, "UPSTREAM_UNAVAILABLE"); }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        { return new(504, "UPSTREAM_TIMEOUT"); }
     }
 
     private async Task<AccountOperationResult> PostAsync(string endpoint,
