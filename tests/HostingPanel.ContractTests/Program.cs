@@ -25,9 +25,9 @@ var checks = new List<(string Description, Action Test)>
         Throws<InvalidOperationException>(() => DirectAdminUsersParser.Parse("{\"error\":1,\"text\":\"Access denied\"}"))),
     ("Malformed response is rejected", () => Throws<System.Text.Json.JsonException>(() => DirectAdminUsersParser.Parse("error=1"))),
     ("Wrong JSON structure is rejected", () => Throws<FormatException>(() => DirectAdminUsersParser.Parse("\"admin\""))),
-    ("API endpoints are accepted", () =>
+    ("Only modern API endpoints are accepted", () =>
     {
-        Require(DirectAdminSession.IsAllowedEndpoint("CMD_API_SHOW_ALL_USERS?json=yes"));
+        Require(!DirectAdminSession.IsAllowedEndpoint("CMD_API_SHOW_ALL_USERS?json=yes"));
         Require(DirectAdminSession.IsAllowedEndpoint("api/db-show/databases"));
     }),
     ("Unsafe and non-API paths are rejected", () =>
