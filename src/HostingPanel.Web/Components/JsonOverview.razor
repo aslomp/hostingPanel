@@ -1,0 +1,115 @@
+@using System.Text.Json
+
+@if (Root is null)
+{
+    <p class="muted">Nog geen gegevens opgehaald.</p>
+}
+else if (Root.Value.ValueKind == JsonValueKind.Array)
+{
+    var rows = Root.Value.EnumerateArray().ToArray();
+    if (rows.Length == 0) { <p class="muted">Geen resultaten.</p> }
+    else if (rows.All(x => x.ValueKind == JsonValueKind.Object))
+    {
+        var columns = rows.SelectMany(x => x.EnumerateObject().Select(p => p.Name))
+            .Distinct(StringComparer.Ordinal).ToArray();
+        <div class="overview-scroll"><table class="overview-table">
+            <thead><tr>@foreach (var column in columns) { <th>@Label(column)</th> }</tr></thead>
+            <tbody>
+                @foreach (var row in rows)
+                {
+                    <tr>
+                        @foreach (var column in columns)
+                        {
+                            <td><JsonOverview Value="@Field(row, column)" Depth="@(Depth + 1)" /></td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table></div>
+    }
+    else
+    {
+        <div class="overview-scroll"><table class="overview-table">
+            <thead><tr><th>Waarde</th></tr></thead>
+            <tbody>@foreach (var row in rows) { <tr><td><JsonOverview Value="@row" Depth="@(Depth + 1)" /></td></tr> }</tbody>
+        </table></div>
+    }
+}
+else if (Root.Value.ValueKind == JsonValueKind.Object)
+{
+    var properties = Root.Value.EnumerateObject().ToArray();
+    if (properties.Length == 0) { <p class="muted">Geen gegevens.</p> }
+    else
+    {
+        <div class="overview-scroll"><table class="overview-table">
+            <thead><tr><th>Eigenschap</th><th>Waarde</th></tr></thead>
+            <tbody>
+                @foreach (var property in properties)
+                {
+                    <tr><th scope="row">@Label(property.Name)</th>
+                        <td><JsonOverview Value="@property.Value" Depth="@(Depth + 1)" /></td></tr>
+                }
+            </tbody>
+        </table></div>
+    }
+}
+else
+{
+    <span class="overview-value">@Scalar(Root.Value)</span>
+}
+@if (!string.IsNullOrWhiteSpace(Prefix) && Depth == 0)
+{
+    <small class="muted">@Prefix</small>
+}
+
+@code {
+    [Parameter] public string? Json { get; set; }
+    [Parameter] public JsonElement? Value { get; set; }
+    [Parameter] public int Depth { get; set; }
+
+    private JsonElement? Root;
+    private string? Prefix;
+
+    protected override void OnParametersSet()
+    {
+        Root = Value;
+        Prefix = null;
+        if (Value.HasValue) return;
+        if (string.IsNullOrWhiteSpace(Json)) return;
+        var body = Json.Trim();
+        if (body.StartsWith("HTTP ", StringComparison.OrdinalIgnoreCase))
+        {
+            var separator = body.IndexOf('\n');
+            if (separator >= 0)
+            {
+                Prefix = body[..separator].Trim();
+                body = body[(separator + 1)..].Trim();
+            }
+        }
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            Root = document.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            Root = JsonSerializer.SerializeToElement(body);
+        }
+    }
+
+    private static JsonElement? Field(JsonElement row, string name) =>
+        row.TryGetProperty(name, out var value) ? value : null;
+
+    private static string Scalar(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.String => value.GetString() ?? "—",
+        JsonValueKind.True => "Ja",
+        JsonValueKind.False => "Nee",
+        JsonValueKind.Null or JsonValueKind.Undefined => "—",
+        _ => value.ToString()
+    };
+
+    private static string Label(string name) =>
+        System.Text.RegularExpressions.Regex.Replace(name.Replace('_', ' '),
+            "([a-z0-9])([A-Z])", "$1 $2");
+}
