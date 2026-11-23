@@ -31,9 +31,12 @@ public static class NavigationParityContractTests
         var declared = Regex.Matches(navigation,
             @"(?:Live|Planned)\(""(?<label>[^""]+)"",\s*""[^""]+"",\s*""(?<path>[^""]+)""\)");
         Require(declared.Count >= 50, "Expected all reference navigation entries");
-        var referenceSectionText = reference[
-            reference.IndexOf("const sections =", StringComparison.Ordinal)..
-            reference.IndexOf("const sampleRows =", StringComparison.Ordinal)];
+        var sectionStart = reference.IndexOf("const sections =", StringComparison.Ordinal);
+        var sectionEnd = reference.IndexOf("const expandedNavGroups =", StringComparison.Ordinal);
+        if (sectionEnd < 0) sectionEnd = reference.Length;
+        Require(sectionStart >= 0 && sectionEnd > sectionStart,
+            "Reference index.html has no recognizable section definition");
+        var referenceSectionText = reference[sectionStart..sectionEnd];
         var paths = Directory.GetFiles(pages, "*.razor")
             .SelectMany(path => Regex.Matches(File.ReadAllText(path),
                 @"@page ""(?<route>/[^""]+)""").Select(x => x.Groups["route"].Value))
