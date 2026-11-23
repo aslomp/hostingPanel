@@ -35,6 +35,26 @@ else
     }
   </section>
   <section class="card">
+    <h2>Alle toegankelijke databases (overall)</h2>
+    <p>De backend bepaalt welke gedelegeerde accounts benaderbaar zijn. Resultaten van geweigerde accounts worden niet als lege databases weergegeven.</p>
+    <button disabled="@overallLoading" @onclick="LoadOverall">Alle accounts doorzoeken</button>
+    @if (overallError is not null) { <p class="error" role="alert">@overallError</p> }
+    @if (overall is not null)
+    {
+      <p>@overall.Count databases gevonden. @(overallWarnings.Count == 0 ? "Volledige inventarisatie." : $"Onvolledig: {overallWarnings.Count} accounts konden niet worden uitgelezen.")</p>
+      <table><thead><tr><th>Eigenaar</th><th>Database (backend)</th></tr></thead><tbody>
+        @foreach (var item in overall)
+        {
+          <tr><td>@item.Owner</td><td><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@item.Database</pre></td></tr>
+        }
+      </tbody></table>
+      @foreach (var warning in overallWarnings)
+      {
+        <p class="error">@warning</p>
+      }
+    }
+  </section>
+  <section class="card">
     <h2>Database met gebruiker aanmaken</h2>
     <p>DirectAdmin voegt waar nodig de accountprefix toe. De exacte naam wordt na aanmaken opnieuw uit de backend opgehaald.</p>
     <label for="databaseName">Databasenaam</label>
@@ -50,6 +70,11 @@ else
   </section>
 }
 @code {
+  private sealed record OwnedDb(string Owner, string Database);
+  private List<OwnedDb>? overall;
+  private List<string> overallWarnings = [];
+  private string? overallError;
+  private bool overallLoading;
   private List<string>? databases;
   private string search = "";
   private string newDatabase = "app", newUser = "app", newPassword = "";
@@ -78,6 +103,28 @@ else
     catch(Exception e) when(e is HttpRequestException or JsonException or ArgumentException or InvalidOperationException)
     { error=e.Message; databases=null; }
     finally {loading=false;}
+  }
+  private async Task LoadOverall()
+  {
+    if (overallLoading || !Session.Connected) return;
+    overallLoading = true; overallError = null; overall = null;
+    try
+    {
+      var (status, body) = await Session.GetAccessibleDatabasesAsync();
+      if (status != 200) { overallError = $"Overall databaseoverzicht: HTTP {status}."; return; }
+      using var doc = JsonDocument.Parse(body);
+      overall = doc.RootElement.GetProperty("items").EnumerateArray()
+        .Select(x => new OwnedDb(
+          x.GetProperty("owner").GetString() ?? "",
+          x.GetProperty("database").GetRawText())).ToList();
+      overallWarnings = [];
+      if (doc.RootElement.TryGetProperty("warnings", out var warnings)
+          && warnings.ValueKind == JsonValueKind.Array)
+        overallWarnings = warnings.EnumerateArray().Select(x => x.GetRawText()).ToList();
+    }
+    catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+    { overallError = ex.Message; }
+    finally { overallLoading = false; }
   }
   private async Task Create()
   {
