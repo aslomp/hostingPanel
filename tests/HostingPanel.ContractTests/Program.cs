@@ -214,6 +214,7 @@ var checks = new List<(string Description, Action Test)>
     }),
     ("Legacy account list rejects invalid account names", () =>
         Throws<FormatException>(() => LegacyAccountListParser.Parse("""["valid","../invalid"]"""))),
+    ("All pinned Swagger routes have exactly one specialized or generic controller owner", SwaggerRouteContractTests.Run),
     ("Backend is the sole source of admin reseller and enduser scopes", ScopeContractTests.Run),
     ("DNS forwards without role selection or read-gated writes", DnsForwardingContractTests.Run),
     ("Database legacy list parses URL encoded and JSON fixtures", () =>
