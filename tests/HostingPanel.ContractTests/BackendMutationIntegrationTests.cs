@@ -77,6 +77,33 @@ public static class BackendMutationIntegrationTests
         Require(denied.Status == 302 && denied.Error is not null,
             "Redirect must not be treated as success");
 
+        backend.Status = HttpStatusCode.OK;
+        backend.ConfigBody = "bandwidth=250&suspended=yes";
+        var changedLimit = accounts.SetLimitAsync("user", "alice",
+            new("bandwidth", "250"), auth, CancellationToken.None).GetAwaiter().GetResult();
+        Require(changedLimit.Status == 200 && changedLimit.Error is null,
+            "Single-field account quota change must be confirmed by independent GET");
+        Require(backend.Writes.Last().Path == "CMD_API_MODIFY_USER" &&
+            backend.Writes.Last().Form["action"] == "single" &&
+            backend.Writes.Last().Form["bandwidth"] == "250", "Quota update form");
+
+        backend.ConfigBody = "bandwidth=100&suspended=no";
+        var unverified = accounts.SetLimitAsync("reseller", "reseller1",
+            new("bandwidth", "250"), auth, CancellationToken.None).GetAwaiter().GetResult();
+        Require(unverified.Status == 409 && backend.Writes.Last().Path == "CMD_API_MODIFY_RESELLER",
+            "Unobserved reseller quota change is not a success");
+
+        backend.ConfigBody = "bandwidth=250&suspended=yes";
+        var suspended = accounts.SetSuspendedAsync("alice", true, auth, CancellationToken.None)
+            .GetAwaiter().GetResult();
+        Require(suspended.Status == 200 && backend.Writes.Last().Form["suspend"] == "Suspend",
+            "Explicit account suspension verified");
+        backend.ConfigBody = "bandwidth=250&suspended=no";
+        var activated = accounts.SetSuspendedAsync("alice", false, auth, CancellationToken.None)
+            .GetAwaiter().GetResult();
+        Require(activated.Status == 200 && backend.Writes.Last().Form["suspend"] == "Unsuspend",
+            "Explicit account activation verified");
+
         // This test client intentionally never makes a network request.
     }
 
@@ -98,6 +125,7 @@ public static class BackendMutationIntegrationTests
         public readonly List<(string Path, Dictionary<string, string> Form)> Writes = [];
         public HttpStatusCode Status = HttpStatusCode.OK;
         public string ResultBody = "error=0&text=OK";
+        public string ConfigBody = "bandwidth=250&suspended=yes";
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -106,6 +134,11 @@ public static class BackendMutationIntegrationTests
             var fields = System.Web.HttpUtility.ParseQueryString(form);
             var parsed = fields.AllKeys.Where(k => k is not null)
                 .ToDictionary(k => k!, k => fields[k!] ?? "");
+            if (request.Method == HttpMethod.Get &&
+                request.RequestUri!.AbsolutePath.EndsWith("CMD_API_SHOW_USER_CONFIG", StringComparison.Ordinal))
+                return new HttpResponseMessage(HttpStatusCode.OK) {
+                    Content = new StringContent(ConfigBody, Encoding.UTF8, "text/plain")
+                };
             Writes.Add((request.RequestUri!.AbsolutePath.TrimStart('/'), parsed));
             return new HttpResponseMessage(Status) {
                 Content = new StringContent(ResultBody, Encoding.UTF8, "text/plain")
