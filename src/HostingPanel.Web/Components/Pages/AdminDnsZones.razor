@@ -51,8 +51,8 @@ else
                 </tbody>
             </table>
             <div class="domain-options">
-                <button disabled="@(loading || page == 1)" @onclick="Previous">Vorige pagina</button>
-                <span>Pagina @page</span>
+                <button disabled="@(loading || currentPage == 1)" @onclick="Previous">Vorige pagina</button>
+                <span>Pagina @currentPage</span>
                 <button disabled="@(loading || zones.Count == 0)" @onclick="Next">Volgende pagina</button>
             </div>
         }
@@ -63,7 +63,7 @@ else
     private List<Zone>? zones;
     private string search = "", localDataFilter = "all", localMailFilter = "all";
     private string? error;
-    private int page = 1;
+    private int currentPage = 1;
     private bool loading;
 
     private IReadOnlyList<Zone> Visible => (zones ?? [])
@@ -81,8 +81,8 @@ else
     {
         if (Session.Connected) await Reload();
     }
-    private async Task Previous() { if (page > 1) { page--; await Reload(); } }
-    private async Task Next() { page++; await Reload(); }
+    private async Task Previous() { if (currentPage > 1) { currentPage--; await Reload(); } }
+    private async Task Next() { currentPage++; await Reload(); }
 
     private async Task Reload()
     {
@@ -91,7 +91,7 @@ else
         error = null;
         try
         {
-            var (status, body) = await Session.GetAdminDnsZonesAsync(page);
+            var (status, body) = await Session.GetAdminDnsZonesAsync(currentPage);
             if (status != 200)
             {
                 error = status == 403 ? "Alleen een administrator kan de serverbrede DNS-zones ophalen."
