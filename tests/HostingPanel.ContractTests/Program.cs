@@ -182,8 +182,7 @@ var checks = new List<(string Description, Action Test)>
     }),
     ("Impersonation client refuses malformed account names", () =>
     {
-        var session = new DirectAdminSession(new MockClientFactory(_ =>
-            new HttpResponseMessage(System.Net.HttpStatusCode.BadRequest)));
+        var session = new DirectAdminSession(null!);
         Throws<ArgumentException>(() => session.SetCredentials("admin|victim", "secret"));
         session.SetCredentials("admin", "secret");
         Require(session.Username == "admin" && !session.IsImpersonating);
