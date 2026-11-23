@@ -25,8 +25,14 @@ public sealed class LegacyAccountOverviewService(IHttpClientFactory clients)
             if (response.StatusCode == HttpStatusCode.Forbidden) return (403, null, "ACCESS_DENIED");
             if (response.StatusCode == HttpStatusCode.NotFound) return (404, null, "NOT_FOUND");
             if (!response.IsSuccessStatusCode) return (502, null, "UPSTREAM_ERROR");
-            var fields = LegacyUserDetailsAdapter.Parse(await response.Content.ReadAsStringAsync(ct));
-            return (200, Redact(fields), null);
+            try
+            {
+                var fields = LegacyUserDetailsAdapter.Parse(await response.Content.ReadAsStringAsync(ct));
+                return (200, Redact(fields), null);
+            }
+            catch (LegacyApiException) { return (403, null, "ACCESS_DENIED"); }
+            catch (FormatException) { return (502, null, "INVALID_LEGACY_RESPONSE"); }
+            catch (JsonException) { return (502, null, "INVALID_LEGACY_RESPONSE"); }
         }
 
         try
