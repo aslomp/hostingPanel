@@ -169,3 +169,34 @@ nav.sidebar-scroll{padding-bottom:28px}
 @media(max-width:850px){.topbar{padding:0 18px}.content{padding:26px 18px 45px}.dashboard-aside{grid-template-columns:1fr}.page-header{flex-wrap:wrap}}
 @media(max-width:580px){.dashboard-links{grid-template-columns:repeat(2,minmax(0,1fr))}.sidebar{width:100%}.topbar .session-identity small{display:none}.card{padding:17px 15px}.tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}h1{font-size:23px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+
+
+/* Independent DirectAdmin navigation contexts: visual only, never authorization. */
+.nav-context-switch{display:flex;align-items:center;gap:4px;padding:4px;margin:5px 8px 13px;
+ background:#0d213b;border:1px solid #385371;border-radius:10px}
+.nav-context-switch button{flex:1;min-height:35px;margin:0;padding:8px 6px;font-size:11px;
+ color:#a9bdd6;border:0;background:transparent;border-radius:7px;white-space:nowrap}
+.nav-context-switch button.active{background:#3582db;color:#fff;box-shadow:0 1px 6px #0a192e44}
+.nav-context-switch button:hover:not(.active){background:#ffffff12;color:#fff}
+.notification-link{display:inline-flex;gap:8px;align-items:center;position:relative;color:#526d8a;
+ border-radius:9px;padding:7px 10px;text-decoration:none;font-weight:650}
+.notification-link:hover{background:#eff5fd;color:#267bc6;text-decoration:none}
+.notification-icon{font-size:20px}
+.notification-count{position:absolute;top:-2px;left:23px;display:grid;place-items:center;
+ min-width:18px;height:18px;background:#cf454d;color:#fff;font-size:10px;font-weight:800;
+ border-radius:30px;border:2px solid white}
+.ticket-notifications{position:relative}
+.notification-toast{position:absolute;top:40px;right:0;z-index:50;width:min(345px,92vw);display:grid;
+ gap:6px;background:white;border:1px solid #dce7f3;border-radius:12px;padding:16px 40px 16px 17px;
+ box-shadow:0 14px 32px #20395430;font-size:12px;color:#54728b}
+.notification-toast strong{font-size:13px;color:#2e496e}
+.notification-toast a{color:#2076bf;font-weight:750}
+.notification-toast button{position:absolute;right:6px;top:6px;border:0;background:none;
+ font-size:21px;min-height:28px;padding:2px 9px}
+.ticket-message{white-space:pre-wrap;overflow-wrap:anywhere;color:#354c68;font-size:13px;line-height:1.75}
+.ticket-reply{border:1px solid #e7edf5;border-radius:9px;padding:17px 18px;margin:14px 0;background:#fafcff}
+.ticket-reply>header{display:flex;gap:10px;justify-content:space-between;align-items:center;
+ border-bottom:1px solid #eaf0f7;padding-bottom:10px;font-size:12px}
+.ticket-reply>header strong{color:#2a517d}
+.ticket-reply>header span{color:#8a9bab}
+@media(max-width:650px){.notification-link>span:last-child{display:none}}
