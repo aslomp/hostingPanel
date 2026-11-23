@@ -86,8 +86,41 @@ jobs:
           done
           curl -fsS http://127.0.0.1:5090/openapi/directadmin.json -o /tmp/hosted-swagger.json
           cmp src/HostingPanel.Api/spec/directadmin.swagger.json /tmp/hosted-swagger.json
-          for endpoint in /api/users/demo/config /api/users/demo/usage; do
+          for endpoint in /api/users/demo/config /api/users/demo/usage /hosting/domains; do
             status=$(curl -s -o /tmp/response -w '%{http_code}' "http://127.0.0.1:5090$endpoint")
             test "$status" = "401"
             grep -q 'UNAUTHORIZED' /tmp/response
           done
+
+      - name: Validate .xyz1 dry-run endpoint without touching legacy server
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://127.0.0.1:5091 \
+            DirectAdmin__BaseUrl=https://demo.directadmin.com:2222/ \
+            dotnet run --no-build -c Release --project src/HostingPanel.Api >/tmp/hp-domains.log 2>&1 &
+          pid=$!
+          trap 'cat /tmp/hp-domains.log; kill "$pid" 2>/dev/null || true' EXIT
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:5091/healthz >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          status=$(curl -sS -o /tmp/hp-domain-preview -w '%{http_code}' -X POST \
+            -H 'Authorization: Basic ZGVtbzpkZW1v' \
+            -H 'Content-Type: application/json' \
+            -d '{"domain":"hosting-test.xyz1","php":true,"ssl":true,"cgi":false}' \
+            http://127.0.0.1:5091/hosting/domains/preview)
+          test "$status" = "200"
+          python3 - <<'PY'
+          import json
+          doc=json.load(open("/tmp/hp-domain-preview"))
+          assert doc["domain"] == "hosting-test.xyz1"
+          assert doc["dryRun"] is True and doc["executed"] is False
+          assert doc["legacyEndpoint"] == "CMD_API_DOMAIN"
+          PY
+          status=$(curl -sS -o /tmp/hp-invalid-domain -w '%{http_code}' -X POST \
+            -H 'Authorization: Basic ZGVtbzpkZW1v' \
+            -H 'Content-Type: application/json' \
+            -d '{"domain":"production.com"}' \
+            http://127.0.0.1:5091/hosting/domains/preview)
+          test "$status" = "400"
