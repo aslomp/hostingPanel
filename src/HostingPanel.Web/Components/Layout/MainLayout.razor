@@ -6,9 +6,12 @@
   <aside class="sidebar" aria-label="Hoofdnavigatie">
     <a class="brand" href="/">◈ <span>HostingPanel<small>CONTROL CENTER</small></span></a>
     <div class="nav-caption">Navigatie</div>
+    <label class="sidebar-search-label" for="hosting-nav-search">Zoek naar pagina's</label>
+    <input id="hosting-nav-search" class="sidebar-search" type="search"
+           placeholder="Zoek naar pagina's..." @bind="navSearch" @bind:event="oninput" />
     <NavLink href="/" Match="NavLinkMatch.All">▦ Dashboard</NavLink>
     <nav class="sidebar-scroll" aria-label="Beheeronderdelen">
-      @foreach (var section in Sections)
+      @foreach (var section in FilteredSections)
       {
         <details class="nav-section" open>
           <summary><span class="nav-icon" aria-hidden="true">@section.Icon</span>@section.Title</summary>
@@ -48,6 +51,16 @@
 </div>
 
 @code {
+    private string navSearch = "";
+    private IEnumerable<NavSection> FilteredSections => string.IsNullOrWhiteSpace(navSearch)
+        ? Sections
+        : Sections.Select(section => section with {
+            Items = section.Title.Contains(navSearch, StringComparison.OrdinalIgnoreCase)
+                ? section.Items
+                : section.Items.Where(item => item.Label.Contains(navSearch,
+                    StringComparison.OrdinalIgnoreCase)).ToArray()
+        }).Where(section => section.Items.Length > 0);
+
     private sealed record NavItem(string Label, string Icon, string Path, bool Implemented = true);
     private sealed record NavSection(string Title, string Icon, NavItem[] Items);
 
