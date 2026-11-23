@@ -23,9 +23,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ASPNETCORE_URLS=http://127.0.0.1:5088 dotnet run --no-build -c Release --project src/HostingPanel.Web > /tmp/hosting-panel-web.log 2>&1 &
+          ASPNETCORE_ENVIRONMENT=Development ASPNETCORE_URLS=http://127.0.0.1:5088 dotnet run --no-build -c Release --project src/HostingPanel.Web > /tmp/hosting-panel-web.log 2>&1 &
           webpid=$!
-          trap 'kill "$webpid" 2>/dev/null || true' EXIT
+          trap 'cat /tmp/hosting-panel-web.log; kill "$webpid" 2>/dev/null || true' EXIT
           for i in {1..40}; do
             if curl -fsS http://127.0.0.1:5088/ -o /tmp/hostingpanel.html; then break; fi
             sleep 1
