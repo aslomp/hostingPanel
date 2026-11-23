@@ -98,6 +98,21 @@ public sealed class AccountMutationService(IHttpClientFactory clients)
             change.Value, auth, ct);
     }
 
+    public async Task<AccountOperationResult> SetPackageAsync(string username,
+        string package, AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        if (!ValidUsername(username) || string.IsNullOrWhiteSpace(package) ||
+            package.Length > 128 ||
+            package.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.')))
+            return new(400, "INVALID_PACKAGE");
+
+        var form = new Dictionary<string, string> {
+            ["action"] = "package", ["user"] = username, ["package"] = package
+        };
+        return await PostAndVerifyAsync("CMD_API_MODIFY_USER", form,
+            username, "package", package, auth, ct);
+    }
+
     /// <summary>
     /// Suspend/activate explicitly; no toggle of unknown prior state.
     /// Re-read the backend's authoritative account configuration after POST.
