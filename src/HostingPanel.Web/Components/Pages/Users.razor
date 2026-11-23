@@ -1,10 +1,11 @@
 @page "/users"
+@using System.Text.Json
 @inject DirectAdminSession Session
 
-<PageTitle>Gebruikers — HostingPanel</PageTitle>
+<PageTitle>Accountboom — HostingPanel</PageTitle>
 <div class="page-header">
-    <div><div class="eyebrow">Accountbeheer</div><h1>Toon alle gebruikers</h1>
-        <p>Gegevens van <code>GET /api/search/users</code>, opgehaald via HostingPanel.Api.</p></div>
+    <div><div class="eyebrow">Accountbeheer</div><h1>Accounts</h1>
+        <p>Alle accounts die DirectAdmin aan de huidige sessie beschikbaar stelt, inclusief resellers en hun gebruikers.</p></div>
     <button @onclick="Load" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
 </div>
 @if (!Session.Connected)
@@ -17,28 +18,66 @@ else if (error is not null)
 }
 else if (loading)
 {
-    <div class="card" role="status">Gebruikers laden…</div>
+    <div class="card" role="status">Accountboom laden…</div>
 }
-else if (users is not null)
+else if (accounts is not null)
 {
     <div class="card">
-        <label for="userFilter">Gebruikers filteren (@users.Count totaal)</label>
-        <input id="userFilter" @bind="search" @bind:event="oninput" placeholder="Zoek op gebruikersnaam" />
-        <table><thead><tr><th>Gebruikersnaam</th><th>Bron</th><th>Domeinen</th></tr></thead>
+        <label for="userFilter">Accounts filteren (@accounts.Count totaal)</label>
+        <input id="userFilter" @bind="search" @bind:event="oninput" placeholder="Zoek op gebruikersnaam of eigenaar" />
+        <table><thead><tr><th>Account</th><th>Rol</th><th>Aangemaakt door</th><th>Domeinen</th></tr></thead>
         <tbody>
-        @foreach (var user in users.Where(x => x.Contains(search, StringComparison.OrdinalIgnoreCase)))
+        @foreach (var item in Visible)
         {
-            <tr><td><a href="@($"/users/{Uri.EscapeDataString(user)}")">@user</a></td><td>DirectAdmin</td><td><a href="@($"/domains?user={Uri.EscapeDataString(user)}")">Bekijk domeinen</a></td></tr>
+            <tr>
+                <td><span style="@($"padding-left:{item.Depth * 18}px")">@(item.Depth > 0 ? "↳ " : "")<a href="@($"/users/{Uri.EscapeDataString(item.Account.Username)}")">@item.Account.Username</a></span></td>
+                <td>@item.Account.Role</td>
+                <td>@(item.Account.Creator ?? "—")</td>
+                <td><a href="@($"/domains?user={Uri.EscapeDataString(item.Account.Username)}")">Bekijk domeinen</a></td>
+            </tr>
         }
         </tbody></table>
-        @if (users.Count == 0) { <p>Geen gebruikers gevonden.</p> }
+        @if (accounts.Count == 0) { <p>Geen accounts teruggegeven door DirectAdmin.</p> }
     </div>
 }
 @code {
-    private IReadOnlyList<string>? users;
+    private sealed record Account(string Username, string Role, string? Creator);
+    private sealed record TreeItem(Account Account, int Depth);
+    private List<Account>? accounts;
     private string search = "";
     private string? error;
     private bool loading;
+
+    private IEnumerable<TreeItem> Visible => Ordered().Where(item =>
+        item.Account.Username.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+        (item.Account.Creator?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    private IEnumerable<TreeItem> Ordered()
+    {
+        if (accounts is null) yield break;
+        var byName = accounts.ToDictionary(x => x.Username, StringComparer.OrdinalIgnoreCase);
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var roots = accounts.Where(x => x.Creator is null ||
+            !byName.ContainsKey(x.Creator) ||
+            x.Creator.Equals(x.Username, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x.Role == "admin" ? 0 : x.Role == "reseller" ? 1 : 2)
+            .ThenBy(x => x.Username, StringComparer.OrdinalIgnoreCase);
+        foreach (var root in roots)
+            foreach (var item in Descendants(root, 0)) yield return item;
+        foreach (var remaining in accounts)
+            foreach (var item in Descendants(remaining, 0)) yield return item;
+
+        IEnumerable<TreeItem> Descendants(Account parent, int depth)
+        {
+            if (!visited.Add(parent.Username)) yield break;
+            yield return new(parent, depth);
+            foreach (var child in accounts.Where(x => x.Creator is not null &&
+                x.Creator.Equals(parent.Username, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(x => x.Username, StringComparer.OrdinalIgnoreCase))
+                foreach (var item in Descendants(child, depth + 1))
+                    yield return item;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -49,12 +88,25 @@ else if (users is not null)
         if (loading || !Session.Connected) return;
         loading = true;
         error = null;
-        try { users = await Session.GetUsersAsync(); }
+        try
+        {
+            var (status, body) = await Session.GetAccessibleAccountsAsync();
+            if (status != 200)
+                throw new HttpRequestException($"DirectAdmin reageert met HTTP {status}.");
+            using var json = JsonDocument.Parse(body);
+            accounts = json.RootElement.GetProperty("accounts").EnumerateArray()
+                .Select(x => new Account(
+                    x.GetProperty("username").GetString() ?? "",
+                    x.GetProperty("role").GetString() ?? "user",
+                    x.TryGetProperty("creator", out var creator) &&
+                        creator.ValueKind == JsonValueKind.String ? creator.GetString() : null))
+                .ToList();
+        }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
-            or UnauthorizedAccessException or FormatException)
+            or UnauthorizedAccessException or FormatException or JsonException)
         {
             error = ex.Message;
-            users = null;
+            accounts = null;
         }
         finally { loading = false; }
     }
