@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject DirectAdminSession Session
+@inject NavigationContextState NavContext
 @inject NavigationManager Navigation
 
 <div class="shell">
@@ -8,14 +9,14 @@
     <a class="brand" href="/">◈ <span>HostingPanel<small>CONTROL CENTER</small></span></a>
     <div class="nav-caption">Navigatiecontext</div>
     <div class="nav-context-switch" role="group" aria-label="Navigatiecontext">
-      <button type="button" class="@(navigationContext == "admin" ? "active" : "")"
-              aria-pressed="@(navigationContext == "admin")"
+      <button type="button" class="@(NavContext.Mode == "admin" ? "active" : "")"
+              aria-pressed="@(NavContext.Mode == "admin")"
               @onclick='() => SetContext("admin")'>Beheerder</button>
-      <button type="button" class="@(navigationContext == "user" ? "active" : "")"
-              aria-pressed="@(navigationContext == "user")"
+      <button type="button" class="@(NavContext.Mode == "user" ? "active" : "")"
+              aria-pressed="@(NavContext.Mode == "user")"
               @onclick='() => SetContext("user")'>Gebruiker</button>
     </div>
-    <div class="nav-caption">@(navigationContext == "admin" ? "Beheerdersfuncties" : "Gebruikersfuncties")</div>
+    <div class="nav-caption">@(NavContext.Mode == "admin" ? "Beheerdersfuncties" : "Gebruikersfuncties")</div>
     <label class="sidebar-search-label" for="hosting-nav-search">Zoek naar pagina's</label>
     <input id="hosting-nav-search" class="sidebar-search" type="search"
            placeholder="Zoek naar pagina's..." @bind="navSearch" @bind:event="oninput" />
@@ -73,15 +74,19 @@
     protected override void OnInitialized()
     {
         Session.Changed += OnSessionChanged;
+        NavContext.Changed += OnSessionChanged;
     }
     private void OnSessionChanged() => _ = InvokeAsync(StateHasChanged);
-    public void Dispose() => Session.Changed -= OnSessionChanged;
+    public void Dispose()
+    {
+        Session.Changed -= OnSessionChanged;
+        NavContext.Changed -= OnSessionChanged;
+    }
 
     private string navSearch = "";
-    private string navigationContext = "admin";
     private void SetContext(string value)
     {
-        navigationContext = value == "user" ? "user" : "admin";
+        NavContext.Select(value);
         navSearch = "";
     }
     private string CurrentPage
@@ -96,7 +101,7 @@
         }
     }
     private IEnumerable<NavSection> CurrentSections =>
-        navigationContext == "user" ? UserSections : AdminSections;
+        NavContext.Mode == "user" ? UserSections : AdminSections;
     private IEnumerable<NavSection> FilteredSections => string.IsNullOrWhiteSpace(navSearch)
         ? CurrentSections
         : CurrentSections.Select(section => section with {
