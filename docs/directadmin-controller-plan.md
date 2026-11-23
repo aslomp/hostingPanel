@@ -1,7 +1,19 @@
 # DirectAdmin Swagger – controllerverdeling en implementatieplan
 
-> Status: ontwerp/inventarisatie, **niet geïmplementeerd**. Inventarisatie op 2026-11-23, branch `feature/blazor-directadmin-api`.
+> Status: inventarisatie en actieve implementatie (P0 in uitvoering). Inventarisatie op 2026-11-23, branch `feature/blazor-directadmin-api`.
 > Contractbron: `spec/swagger.json` (blob `d0728d2155edb2b38863418052820355787bfe99`), 274 paden / **326 HTTP-operaties**. Dit is een pinned snapshot; verifieer verschillen met de live Swagger bij elke sync. De legacy `CMD_*` / `CMD_API_*` endpoints vallen buiten deze Swagger.
+
+## Implementatiestatus — 2026-11-23
+
+**Gevalideerd:** GitHub Actions .NET 10, API/Blazor builds, contracttests en production smoke-tests op commit `cf4a4aa3` (run #497) geslaagd.
+
+**Gebouwd:** gespecialiseerde P0-forwardingcontrollers voor server settings, server TLS, sessions, system info, packages, services, resellers, reseller packages, security en auth; Blazor-pagina's voor de bijbehorende beheerfuncties; overkoepelende DNS-zoneinventarisatie uit zelfstandige DNS-zones en backend-toegankelijke domeinen, inclusief onvolledigheidswaarschuwingen; ModSecurity-hostconfig read/replace/reset, ClamAV scan/cancel, sessiebeëindiging, hostname/tijdzone, ACME-configuratie, certificaatverkrijging en update-taken.
+
+**Nog te implementeren / uitbreiden:** volledig hiërarchisch overall **database**-overzicht; alle gebruikers- en reselleraccountmutaties; DNS-zonecreatie/-verwijdering indien backend ondersteund; rijkere uitwerking van serverconfiguratievelden, pakketselectie en system-updategeschiedenis; betrouwbare integratietests met testbackend voor write-operaties, SSE en binaire responses; OAuth-authenticatiemodule. Emailbeheer blijft bewust niet geïmplementeerd. P0-controllers tonen backend-antwoorden, maar volledige UX-afwerking per endpoint is niet gelijk aan alleen route-dekking.
+
+**Invariant:** 326/326 officiële Swagger-operaties blijven gerouteerd, nog niet-gemigreerde routes via `DirectAdminController`; geen bevoegdheidsfilter op basis van lokaal gekozen accountrol.
+
+---
 
 ## Prioritaire productscope (besluit 2026-11-23)
 
