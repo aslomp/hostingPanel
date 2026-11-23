@@ -7,7 +7,7 @@
     <div>
         <div class="eyebrow"><a href="/domains">Domeinbeheer</a> / Details</div>
         <h1>@Domain</h1>
-        <p>Domeinconfiguratie en instellingen uit DirectAdmin.</p>
+        <p>Domeinconfiguratie en instellingen uit DirectAdmin. <a href="@($"/domains/{Uri.EscapeDataString(Domain)}/dns")">DNS-records beheren</a></p>
     </div>
     <button @onclick="Refresh" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
 </div>
