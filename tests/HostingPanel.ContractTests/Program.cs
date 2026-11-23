@@ -142,12 +142,15 @@ var checks = new List<(string Description, Action Test)>
     }),
     ("DNS delete selects one exact value", () =>
     {
-        var previous = new DnsRecord("TXT","_acme-challenge","token=&value=other");
+        var previous = new DnsRecord("TXT","_acme-challenge","test-token");
         var form = LegacyDnsAdapter.Form("hosting-test.xyz1",
             new DnsChange("delete",previous,previous));
         Require(form["action"] == "select");
-        Require(form["txtrecs0"] == "name=_acme-challenge&value=token=&value=other");
+        Require(form["txtrecs0"] == "name=_acme-challenge&value=test-token");
         Require(!form.ContainsKey("value"));
+        var unsafeRecord = previous with { Value = "token=&value=other" };
+        Throws<ArgumentException>(() => LegacyDnsAdapter.Form(
+            "hosting-test.xyz1", new DnsChange("delete", unsafeRecord,unsafeRecord)));
     }),
     ("DNS edits require existing record and observe exact delta", () =>
     {
