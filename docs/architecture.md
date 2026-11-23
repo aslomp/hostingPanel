@@ -1,42 +1,49 @@
-# HostingPanel — DirectAdmin-compatible control plane
+# HostingPanel architecture
 
-## Invariants
+## Contract boundary
 
-1. Blazor is a user interface, not the authority for hosting state.
-2. The HTTP API is the compatibility boundary. DirectAdmin client integrations may continue using `/CMD_API_*` and `/api/*`.
-3. Phase 1: transparent pass-through to a pinned HTTPS DirectAdmin server; upstream performs authentication, permission checks and business actions.
-4. Phase 2: endpoint-by-endpoint migration to a Kubernetes-native implementation *behind the same API routes*; the frontend doesn't change.
-5. For every migrated operation, retain HTTP status, request semantics, output encoding, JSON shape, and error behavior as observable contracts. Version-specific and undocumented DirectAdmin behavior requires contract tests against the actual target server.
-6. Treat admin / reseller / user account boundaries and DirectAdmin login keys as security contracts. Never map the entire API to a shared administrator credential.
-7. Prevent SSRF: upstream is configured on the server; callers cannot supply arbitrary URLs.
-8. Never use `DangerousAcceptAnyServerCertificateValidator` or log credentials.
+**Public:** HostingPanel.Api publishes the pinned modern DirectAdmin Swagger 2.0 contract from `src/HostingPanel.Api/spec/directadmin.swagger.json` on `GET /openapi/directadmin.json`.
 
-## Current implementation
+**Adapter:** The API implements each modern /api/* operation behind a provider boundary. The first implementation translates `GET /api/search/users` into the existing legacy DirectAdmin call `CMD_API_SHOW_ALL_USERS?json=yes` and converts the legacy JSON list into the modern string-array response. The public API does not expose legacy CMD_API_* routes.
 
-- `src/HostingPanel.Api`: HTTP pass-through for DirectAdmin API routes. Preserves upstream body, status and content type; forwards client Basic credentials. Requests without Basic credentials receive HTTP 401.
-- `src/HostingPanel.Web`: interactive-server Blazor UI, containing live user listing and an API browser, styled after the existing HTML prototype.
-- Original `index.html`, `pages.js` and `pages.css` remain unchanged on main and in the branch.
+**Legacy backend:** A fixed TLS-protected DirectAdmin origin receives per-user Basic credentials/login keys. Legacy-specific protocols and encoding never leak through a modern endpoint. No shared administrator credential is configured.
 
-This is a first vertical slice, **not** full DirectAdmin replacement. Modern JSON endpoints and legacy endpoint behavior beyond the audited sample still need conformance tests. Cookie/session APIs are not yet supported by the proxy. API security and UI authentication need hardening prior to public exposure.
+**Blazor:** HostingPanel.Web connects only to HostingPanel.Api using modern routes; it does not call DirectAdmin directly. User names are provided by GET /api/search/users?limit=1000.
 
-## Running locally
+## Implemented and missing
 
-Requires .NET 10 SDK and a trusted TLS certificate for the DirectAdmin server.
+- GET /healthz — service status.
+- GET /openapi/directadmin.json — complete pinned Swagger spec.
+- GET /api/search/users — modern JSON array, search query `q` and `limit` (default 50, cap 1000); legacy adapter.
+- Other /api/* routes — **501 NOT_IMPLEMENTED** instead of forwarding incompatible requests to legacy endpoints.
+- Existing Blazor dashboard and users page use modern endpoint.
+- Account modification, user details, DNS, hosting packages, TLS, databases, etc. are **not implemented yet**.
+
+## Compatibility invariants
+
+1. Each route's HTTP method, JSON field names, response codes, permission scopes and validation must match the pinned modern Swagger contract.
+2. An endpoint is advertised by the pinned full specification even before our implementation is available; use explicit 501 for unimplemented operations. Track implementation coverage separately.
+3. Do not return fake responses or silently proxy a modern endpoint to the old DirectAdmin.
+4. The legacy adapter must preserve upstream authorization boundaries; never call as a shared administrator.
+5. Do not log login keys or embed them in static assets or repository.
+6. Before publishing publicly, implement authentication/rate limiting/audit logging, restrict upstream egress and validate operations against legacy production behavior.
+7. Swapping the legacy adapter for a Kubernetes-native adapter must not change the public contract.
+
+## Run
 
 ```bash
+export DirectAdmin__BaseUrl='https://your-existing-directadmin:2222/'
 dotnet run --project src/HostingPanel.Api --urls https://localhost:7101
+# In another terminal:
+export HostingPanel__ApiBaseUrl='https://localhost:7101/'
 dotnet run --project src/HostingPanel.Web --urls https://localhost:7201
 ```
 
-Set `DirectAdmin__BaseUrl` for API, e.g. `https://da.internal.example:2222/`. Set `HostingPanel__ApiBaseUrl` for UI to the API HTTPS origin. On development machines use configured localhost development certificates (`dotnet dev-certs https --trust`); don't turn off TLS validation.
+Use development-only trusted certificates. For modern search directly through the API:
 
-**Production:** run both apps behind TLS, restrict API ingress and authentication, protect against brute-force requests, enforce authorization and logging without secrets, and use stable deployments. The web circuit stores entered login-key credentials only in scoped server memory, with no persistence. This implementation has not been compiled or integration-tested in this environment.
+```bash
+curl --fail-with-body -u 'YOUR_DA_USER:YOUR_LOGIN_KEY' \
+  'https://localhost:7101/api/search/users?limit=50'
+```
 
-## Migration roadmap
-
-1. Snapshot Swagger from `/static/swagger.json` on the actual DirectAdmin build.
-2. Capture and compare status/content-types/response formats for each used legacy endpoint.
-3. Implement Domain, Account, Package, DNS, Database, PHP-FPM and TLS as individual business use cases.
-4. Introduce provider interfaces under the API so a Kubernetes native adapter can replace the legacy provider.
-5. Implement audit events, optimistic concurrency and rollback for mutation operations.
-6. Replace the HTML prototype navigation completely with Blazor components after parity testing.
+The complete static specification lives in `src/HostingPanel.Api/spec/directadmin.swagger.json`, pinned from the public DirectAdmin demo; changing the upstream legacy server does not change this modern public contract.
