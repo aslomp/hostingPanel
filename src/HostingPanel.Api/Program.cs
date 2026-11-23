@@ -12,6 +12,7 @@ builder.Services.AddScoped<AccountCatalogService>();
 builder.Services.AddScoped<AccessibleDomainsService>();
 builder.Services.AddScoped<ImpersonationService>();
 builder.Services.AddScoped<DnsZoneService>();
+builder.Services.AddScoped<DatabaseManagementService>();
 builder.Services.AddHttpClient("legacy-directadmin", client =>
 {
     var configured = builder.Configuration["DirectAdmin:BaseUrl"]
@@ -31,6 +32,27 @@ builder.Services.AddHttpClient("legacy-directadmin", client =>
 
 var app = builder.Build();
 app.UseHttpsRedirection();
+
+// Global write gate. Permission decisions for enabled operations remain with DirectAdmin.
+app.Use(async (context, next) =>
+{
+    var mutating = HttpMethods.IsPost(context.Request.Method) ||
+        HttpMethods.IsPut(context.Request.Method) ||
+        HttpMethods.IsPatch(context.Request.Method) ||
+        HttpMethods.IsDelete(context.Request.Method);
+    var preview = context.Request.Path.Equals(
+        "/hosting/domains/preview", StringComparison.OrdinalIgnoreCase);
+    if (mutating && !preview &&
+        !context.RequestServices.GetRequiredService<IConfiguration>()
+            .GetValue<bool>("HostingPanel:EnableMutations"))
+    {
+        context.Response.StatusCode = StatusCodes.Status409Conflict;
+        await context.Response.WriteAsJsonAsync(new { type = "MUTATIONS_DISABLED" });
+        return;
+    }
+    await next();
+});
+
 
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
@@ -147,6 +169,49 @@ app.MapGet("/hosting/users/{username}/overview", async (HttpContext context,
             package = result.Package, packageSettings = result.PackageSettings,
             packageError = result.Error, usage = result.Usage, usageError = result.UsageError
         });
+});
+
+// Database management: legacy adapter exposed separately from strict modern Swagger.
+// No local account-ownership checks. DirectAdmin decides scope for delegated credentials.
+app.MapGet("/hosting/databases", async (HttpContext context, DatabaseManagementService service) =>
+{
+    if (!TryGetBasic(context, out var auth))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    var result = await service.ListAsync(auth, context.RequestAborted);
+    return result.Databases is null
+        ? Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
+        : Results.Json(new { databases = result.Databases });
+});
+app.MapGet("/hosting/databases/{database}/users", async (HttpContext context,
+    string database, DatabaseManagementService service) =>
+{
+    if (!TryGetBasic(context, out var auth))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    var result = await service.UsersAsync(database, auth, context.RequestAborted);
+    return result.Users is null
+        ? Results.Json(new { type = result.Error ?? "UPSTREAM_ERROR" }, statusCode: result.Status)
+        : Results.Json(new { database, users = result.Users });
+});
+app.MapPost("/hosting/databases", async (HttpContext context,
+    DatabaseCreateRequest input, DatabaseManagementService service) =>
+{
+    if (!TryGetBasic(context, out var auth))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    var result = await service.CreateAsync(input, auth, context.RequestAborted);
+    return result.Error is null
+        ? Results.Json(new { created = true })
+        : Results.Json(new { type = result.Error }, statusCode: result.Status);
+});
+app.MapDelete("/hosting/databases/{database}", async (HttpContext context,
+    string database, DatabaseDeleteRequest input, DatabaseManagementService service) =>
+{
+    if (!TryGetBasic(context, out var auth))
+        return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
+    var result = await service.DeleteAsync(database, input.Confirmation, auth,
+        context.RequestAborted);
+    return result.Error is null
+        ? Results.Json(new { database, deleted = true })
+        : Results.Json(new { type = result.Error }, statusCode: result.Status);
 });
 
 // HostingPanel-specific business routes: not misrepresented as DirectAdmin Swagger routes.
