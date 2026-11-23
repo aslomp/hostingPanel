@@ -243,6 +243,10 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
         !string.IsNullOrWhiteSpace(name) && name.Length <= 64 &&
         name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_');
 
+    public Task<(int Status, string Body)> GetAccessibleResellerAccountsAsync(
+        CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Get, "hosting/resellers/accessible", null, ct);
+
     public Task<(int Status, string Body)> GetAccessibleAccountsAsync(
         CancellationToken cancellationToken = default) =>
         SendAsync(HttpMethod.Get, "hosting/accounts", null, cancellationToken);
