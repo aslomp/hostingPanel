@@ -5,8 +5,8 @@
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {
-    <section class="card"><h2>Huidige sessie</h2><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@current</pre></section>
-    <section class="card"><h2>Actieve sessies</h2><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@all</pre></section>
+    <section class="card"><h2>Huidige sessie</h2><JsonOverview Json="@current" /></section>
+    <section class="card"><h2>Actieve sessies</h2><JsonOverview Json="@all" /></section>
     <section class="card">
         <h2>Andere sessies beëindigen</h2>
         <p>De backend bepaalt welke sessies mogen worden beëindigd. De huidige sessie blijft bij deze operatie bestaan.</p>
