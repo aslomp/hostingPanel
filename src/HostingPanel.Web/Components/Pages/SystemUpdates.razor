@@ -1,0 +1,54 @@
+@page "/system-updates"
+@inject DirectAdminSession Session
+<PageTitle>Systeemupdates — HostingPanel</PageTitle>
+<div class="page-header"><div><div class="eyebrow">Serverbeheer</div><h1>Systeempakketten</h1><p>Beschikbare updates en updatehistorie rechtstreeks uit de backend.</p></div><button disabled="@busy" @onclick="Load">Vernieuwen</button></div>
+@if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
+else
+{
+    <section class="card"><h2>Beschikbare upgrades</h2><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@updates</pre></section>
+    <section class="card"><h2>Updatehistorie</h2><pre style="white-space:pre-wrap;overflow-wrap:anywhere">@history</pre></section>
+    <section class="card">
+        <h2>Updates controleren</h2><p>Laat DirectAdmin zijn updatecontrole uitvoeren zonder pakketten te installeren.</p>
+        <button disabled="@busy" @onclick="Check">Update-test starten</button>
+        <h2>Update uitvoeren</h2>
+        <p>Dit kan systeemsoftware daadwerkelijk veranderen. Bevestig expliciet.</p>
+        <label>Typ UPDATE om te bevestigen</label><input @bind="confirmation" />
+        <button class="primary" disabled="@(busy || confirmation != "UPDATE")" @onclick="Run">Updates starten</button>
+        @if (feedback is not null) { <p role="status">@feedback</p> }
+    </section>
+    @if (busy) { <p role="status">Verwerken…</p> }
+}
+@code {
+    private string updates = "", history = "", confirmation = "";
+    private string? feedback;
+    private bool busy;
+    protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true;
+        try
+        {
+            var (us, ub) = await Session.GetRawAsync("api/system-packages/updates");
+            updates = $"HTTP {us}\n{ub}";
+            var (hs, hb) = await Session.GetRawAsync("api/system-packages/history");
+            history = $"HTTP {hs}\n{hb}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }
+        finally { busy = false; }
+    }
+    private Task Check() => Action("api/system-packages/update-test");
+    private Task Run() => confirmation == "UPDATE" ? Action("api/system-packages/update-run") : Task.CompletedTask;
+    private async Task Action(string endpoint)
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; feedback = null;
+        try
+        {
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post, endpoint);
+            feedback = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }
+        finally { busy = false; confirmation = ""; }
+    }
+}
