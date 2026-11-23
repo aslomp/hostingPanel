@@ -22,6 +22,32 @@ public sealed class DnsZoneService(IHttpClientFactory clients)
             role.Equals("admin", StringComparison.OrdinalIgnoreCase);
     }
 
+    public async Task<AdminDnsZoneListResult> ListAdminZonesAsync(
+        AuthenticationHeaderValue auth, int page, CancellationToken ct)
+    {
+        if (page is < 1 or > 10000) return new(400, null, "INVALID_PAGE");
+        try
+        {
+            if (!await IsAdminAsync(auth, ct))
+                return new(403, null, "ADMIN_ACCESS_REQUIRED");
+            using var request = new HttpRequestMessage(HttpMethod.Get,
+                "CMD_DNS_ADMIN?json=yes&page=" + page.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            request.Headers.Authorization = auth;
+            using var response = await clients.CreateClient("legacy-directadmin").SendAsync(request,ct);
+            if (response.StatusCode == HttpStatusCode.Unauthorized) return new(401,null,"UNAUTHORIZED");
+            if (response.StatusCode == HttpStatusCode.Forbidden) return new(403,null,"ACCESS_DENIED");
+            if (!response.IsSuccessStatusCode) return new(502,null,"UPSTREAM_ERROR");
+            var zones = AdminDnsZonesAdapter.Parse(await response.Content.ReadAsStringAsync(ct));
+            return new(200,zones,null);
+        }
+        catch (LegacyApiException) { return new(403,null,"ACCESS_DENIED"); }
+        catch (JsonException) { return new(502,null,"INVALID_LEGACY_RESPONSE"); }
+        catch (FormatException) { return new(502,null,"INVALID_LEGACY_RESPONSE"); }
+        catch (HttpRequestException) { return new(502,null,"UPSTREAM_UNAVAILABLE"); }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        { return new(504,null,"UPSTREAM_TIMEOUT"); }
+    }
+
     public async Task<DnsZoneResult> ReadAsync(string domain, AuthenticationHeaderValue auth,
         CancellationToken ct)
     {
@@ -98,3 +124,5 @@ public sealed class DnsZoneService(IHttpClientFactory clients)
 
 public sealed record DnsZoneResult(int Status, IReadOnlyList<DnsRecord>? Records, string? Error);
 public sealed record DnsChangeResult(int Status, string? Error);
+
+public sealed record AdminDnsZoneListResult(int Status, IReadOnlyList<AdminDnsZone>? Zones, string? Error);
