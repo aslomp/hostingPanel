@@ -1,0 +1,92 @@
+@using HostingPanel.Web.Realtime
+@using Microsoft.AspNetCore.SignalR.Client
+@inject DirectAdminSession Session
+@inject TicketLiveMonitor Monitor
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+<div class="ticket-notifications" aria-live="polite">
+    @if (Session.Connected)
+    {
+        <a href="/tickets" class="notification-link" title="Tickets en berichten">
+            <span class="notification-icon" aria-hidden="true">✉</span>
+            @if (newCount > 0) { <span class="notification-count">@newCount</span> }
+            <span>Tickets</span>
+        </a>
+        @if (lastNotice is not null)
+        {
+            <div class="notification-toast" role="status">
+                <strong>Nieuw @(lastNotice.Kind == "message" ? "bericht" : "ticketantwoord")</strong>
+                <span>@lastNotice.Subject</span>
+                <a href="/tickets" @onclick="Clear">Open tickets</a>
+                <button type="button" aria-label="Melding sluiten" @onclick="Clear">×</button>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private HubConnection? connection;
+    private string? joinedChannel;
+    private TicketSignal? lastNotice;
+    private int newCount;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) Monitor.Start();
+        var channel = Session.TicketChannel;
+        if (channel == joinedChannel) return;
+
+        if (connection is not null)
+        {
+            await connection.DisposeAsync();
+            connection = null;
+        }
+        joinedChannel = null;
+        lastNotice = null;
+        newCount = 0;
+        if (!Session.Connected || channel is null) return;
+
+        var hub = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/hubs/tickets"))
+            .WithAutomaticReconnect()
+            .Build();
+        hub.On<TicketSignal>("InboxChanged", notice => _ = InvokeAsync(() =>
+        {
+            if (joinedChannel != channel) return;
+            newCount++;
+            lastNotice = notice;
+            StateHasChanged();
+        }));
+        hub.Reconnected += async _ =>
+        {
+            if (joinedChannel == channel)
+                await hub.InvokeAsync("Join", channel);
+        };
+        try
+        {
+            await hub.StartAsync();
+            await hub.InvokeAsync("Join", channel);
+            connection = hub;
+            joinedChannel = channel;
+            StateHasChanged();
+        }
+        catch
+        {
+            await hub.DisposeAsync();
+            // The normal tickets page still works if the live hub is unavailable.
+        }
+    }
+
+    private void Clear()
+    {
+        newCount = 0;
+        lastNotice = null;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (connection is not null)
+            await connection.DisposeAsync();
+    }
+}
