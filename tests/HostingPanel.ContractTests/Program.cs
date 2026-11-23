@@ -1,5 +1,6 @@
 using HostingPanel.Web.Services;
 using HostingPanel.Api.Adapters;
+using HostingPanel.Api.Services;
 
 var checks = new List<(string Description, Action Test)>
 {
@@ -112,6 +113,19 @@ var checks = new List<(string Description, Action Test)>
         Require(!LegacyDomainDetailsAdapter.IsAllowedValue("quota", "-1"));
         Require(!LegacyDomainDetailsAdapter.IsAllowedValue("php", "ignored"));
         Require(LegacyDomainDetailsAdapter.IsAllowedValue("bandwidth", "unlimited"));
+    }),
+    ("Account package overview filters credential-like keys", () =>
+    {
+        var fields = LegacyUserDetailsAdapter.Parse(
+            "username=demo&package=starter&bandwidth=2000&password=hidden&login_key=hidden&ssh=ON");
+        var filtered = LegacyAccountOverviewService.Redact(fields);
+        Require(filtered["package"] == "starter" && filtered["bandwidth"] == "2000");
+        Require(!filtered.ContainsKey("password") && !filtered.ContainsKey("login_key"));
+    }),
+    ("Account overview validates username", () =>
+    {
+        Require(LegacyAccountOverviewService.ValidUsername("customer_01"));
+        Require(!LegacyAccountOverviewService.ValidUsername("../root"));
     }),
     ("Empty list is valid", () => Require(DirectAdminUsersParser.Parse("[]").Count == 0)),
     ("Legacy error object is rejected", () =>
