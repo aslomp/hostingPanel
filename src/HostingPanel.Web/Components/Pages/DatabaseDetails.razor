@@ -1,0 +1,93 @@
+@page "/databases/{Database}"
+@using System.Text.Json
+@inject DirectAdminSession Session
+@inject NavigationManager Navigation
+
+<PageTitle>@Database — Databasebeheer</PageTitle>
+<div class="page-header">
+  <div><div class="eyebrow"><a href="/databases">Databasebeheer</a> / Details</div>
+    <h1>@Database</h1>
+    <p>Databasegebruikers en beheeracties via DirectAdmin.</p>
+  </div>
+  <button disabled="@loading" @onclick="Load">Vernieuwen</button>
+</div>
+@if(!Session.Connected)
+{
+  <section class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</section>
+}
+else
+{
+  <section class="card">
+    <h2>Databasegebruikers</h2>
+    @if(error is not null) { <p class="error" role="alert">@error</p> }
+    @if(loading) { <p role="status">Gebruikers laden…</p> }
+    @if(users is not null)
+    {
+      <table><thead><tr><th>Gebruikersnaam</th></tr></thead>
+      <tbody>@foreach(var username in users){<tr><td>@username</td></tr>}</tbody></table>
+      @if(users.Count==0) { <p>Geen gebruikers door DirectAdmin geretourneerd.</p> }
+    }
+  </section>
+  <section class="card">
+    <h2>Database verwijderen</h2>
+    <p>Dit verwijdert de database en kan onomkeerbaar dataverlies veroorzaken. Typ de exacte databasenaam om te bevestigen.</p>
+    <label for="dbConfirmation">Typ @Database ter bevestiging</label>
+    <input id="dbConfirmation" @bind="confirmation" autocomplete="off" />
+    <button disabled="@(deleting || confirmation != Database)" @onclick="Delete">Database definitief verwijderen</button>
+    @if(deleteMessage is not null) { <p role="status">@deleteMessage</p> }
+  </section>
+}
+@code {
+  [Parameter] public string Database { get; set; } = "";
+  private List<string>? users;
+  private string? error, deleteMessage;
+  private string confirmation="";
+  private bool loading, deleting;
+  protected override async Task OnParametersSetAsync()
+  {
+    if(Session.Connected) await Load();
+  }
+  private async Task Load()
+  {
+    if(loading || !Session.Connected) return;
+    loading=true; error=null;
+    try
+    {
+      var (status,body)=await Session.GetDatabaseUsersAsync(Database);
+      if(status!=200)
+      {
+        error=$"Databasegebruikers niet beschikbaar (HTTP {status}).";
+        users=null;return;
+      }
+      using var doc=JsonDocument.Parse(body);
+      users=doc.RootElement.GetProperty("users").EnumerateArray()
+        .Select(x=>x.GetString()??"").ToList();
+    }
+    catch(Exception e) when(e is HttpRequestException or JsonException or ArgumentException or InvalidOperationException)
+    { error=e.Message; users=null; }
+    finally { loading=false; }
+  }
+  private async Task Delete()
+  {
+    if(deleting || confirmation!=Database || !Session.Connected) return;
+    deleting=true; deleteMessage=null;
+    try
+    {
+      var (status,body)=await Session.DeleteDatabaseAsync(Database,confirmation);
+      if(status==200)
+      {
+        confirmation="";
+        Navigation.NavigateTo("/databases");
+        return;
+      }
+      deleteMessage=status switch {
+        409 => "Mutaties zijn uitgeschakeld of de wijziging kon niet worden bevestigd.",
+        403 => "DirectAdmin staat verwijderen niet toe.",
+        _ => $"Database is niet bevestigd verwijderd (HTTP {status})."
+      };
+    }
+    catch(Exception e) when(e is HttpRequestException or ArgumentException or InvalidOperationException)
+    {deleteMessage=e.Message;}
+    finally {deleting=false;}
+  }
+}
