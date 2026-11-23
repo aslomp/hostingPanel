@@ -225,6 +225,10 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
             "hosting/domains/" + Uri.EscapeDataString(domain) + "/settings", content, cancellationToken);
     }
 
+    public Task<(int Status, string Body)> GetAccessibleDnsZonesAsync(
+        CancellationToken cancellationToken = default) =>
+        SendAsync(HttpMethod.Get, "hosting/dns/zones/accessible", null, cancellationToken);
+
     public Task<(int Status, string Body)> GetAdminDnsZonesAsync(int page = 1,
         CancellationToken cancellationToken = default)
     {
