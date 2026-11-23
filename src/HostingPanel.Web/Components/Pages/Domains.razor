@@ -1,0 +1,145 @@
+@page "/domains"
+@using System.Text.Json
+@inject DirectAdminSession Session
+@inject NavigationManager Navigation
+
+<PageTitle>Domeinbeheer — HostingPanel</PageTitle>
+<div class="page-header">
+    <div>
+        <div class="eyebrow">Accountbeheer / Domeinen</div>
+        <h1>Domeinbeheer</h1>
+        <p>Live domeinlijst via de HostingPanel-adapter naar DirectAdmin. Testacties gebruiken uitsluitend de fictieve extensie .xyz1.</p>
+    </div>
+    <button @onclick="Refresh" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
+</div>
+
+@if (!Session.Connected)
+{
+    <div class="card"><p>Verbind eerst via het <a href="/">dashboard</a>.</p></div>
+}
+else
+{
+    <div class="card">
+        <h2>Domeinen van een account</h2>
+        <p>Leeg laten voor domeinen van de huidige DirectAdmin-gebruiker. Vul een gebruikersnaam in als je beheerrechten hebt voor dat account.</p>
+        <label for="owner">Gebruikersnaam (optioneel)</label>
+        <input id="owner" @bind="owner" placeholder="Bijvoorbeeld een bestaande gebruiker" />
+        <button class="primary" @onclick="Refresh" disabled="@loading">Ophalen</button>
+        @if (error is not null) { <p class="error" role="alert">@error</p> }
+        else if (loading) { <p role="status">Domeinen worden opgehaald…</p> }
+        else if (domains is not null)
+        {
+            <p>@domains.Count domein(en) gevonden.</p>
+            <label for="domainFilter">Domeinen filteren</label>
+            <input id="domainFilter" @bind="filter" @bind:event="oninput" placeholder="Zoeken op domeinnaam" />
+            <table>
+                <thead><tr><th>Domein</th><th>Account</th><th>Bron</th></tr></thead>
+                <tbody>
+                @foreach (var domain in domains.Where(d => d.Contains(filter, StringComparison.OrdinalIgnoreCase)))
+                {
+                    <tr><td>@domain</td><td>@(string.IsNullOrWhiteSpace(owner) ? Session.Username : owner)</td><td>DirectAdmin</td></tr>
+                }
+                </tbody>
+            </table>
+            @if (domains.Count == 0) { <p>Geen domeinen gevonden voor dit account.</p> }
+        }
+    </div>
+
+    <div class="card">
+        <h2>Testdomein voorbereiden</h2>
+        <p>Deze actie genereert uitsluitend een voorbeeld van de legacy-aanroep.
+            Er wordt <strong>geen domein aangemaakt of gewijzigd</strong> op de DirectAdmin-server.</p>
+        <label for="testDomain">Domeinnaam (.xyz1)</label>
+        <input id="testDomain" @bind="testDomain" placeholder="hosting-test.xyz1" />
+        <div class="domain-options">
+            <label><input type="checkbox" @bind="php" /> PHP</label>
+            <label><input type="checkbox" @bind="ssl" /> SSL</label>
+            <label><input type="checkbox" @bind="cgi" /> CGI</label>
+        </div>
+        <button class="primary" disabled="@previewBusy" @onclick="Preview">
+            @(previewBusy ? "Controleren…" : "Testaanroep bekijken")
+        </button>
+        @if (previewError is not null) { <p class="error" role="alert">@previewError</p> }
+        @if (previewBody is not null)
+        {
+            <p><strong>Dry-run:</strong> alleen ter controle, niet uitgevoerd.</p>
+            <pre>@previewBody</pre>
+        }
+    </div>
+}
+@code {
+    [SupplyParameterFromQuery(Name = "user")]
+    [Parameter] public string? User { get; set; }
+    private string owner = "";
+    private string filter = "";
+    private IReadOnlyList<string>? domains;
+    private string? error;
+    private bool loading;
+    private string testDomain = "hosting-test.xyz1";
+    private bool php = true;
+    private bool ssl = true;
+    private bool cgi;
+    private bool previewBusy;
+    private string? previewError;
+    private string? previewBody;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        owner = User ?? "";
+        if (Session.Connected) await Refresh();
+    }
+
+    private async Task Refresh()
+    {
+        if (loading || !Session.Connected) return;
+        loading = true;
+        error = null;
+        domains = null;
+        try
+        {
+            var (status, body) = await Session.GetDomainsAsync(
+                string.IsNullOrWhiteSpace(owner) ? null : owner.Trim());
+            if (status != 200)
+            {
+                error = $"Domeinlijst niet beschikbaar: HTTP {status}. Controleer de rechten van het DirectAdmin-account.";
+                return;
+            }
+            using var json = JsonDocument.Parse(body);
+            if (!json.RootElement.TryGetProperty("domains", out var array) ||
+                array.ValueKind != JsonValueKind.Array)
+                throw new FormatException("Onverwachte domeinlijst.");
+            domains = array.EnumerateArray().Select(e => e.GetString() ?? "").ToArray();
+        }
+        catch (Exception exception) when (exception is HttpRequestException or FormatException
+            or InvalidOperationException or ArgumentException or JsonException)
+        {
+            error = exception.Message;
+        }
+        finally { loading = false; }
+    }
+
+    private async Task Preview()
+    {
+        if (previewBusy || !Session.Connected) return;
+        previewBusy = true;
+        previewError = null;
+        previewBody = null;
+        try
+        {
+            var (status, body) = await Session.PreviewDomainAsync(testDomain.Trim(), php, ssl, cgi);
+            if (status != 200)
+            {
+                previewError = $"Testdomein geweigerd (HTTP {status}). Alleen geldige .xyz1-namen zijn toegestaan.";
+                return;
+            }
+            using var doc = JsonDocument.Parse(body);
+            previewBody = JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException
+            or ArgumentException or JsonException)
+        {
+            previewError = exception.Message;
+        }
+        finally { previewBusy = false; }
+    }
+}
