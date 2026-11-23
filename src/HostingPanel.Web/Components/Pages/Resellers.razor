@@ -22,6 +22,7 @@ else
         <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@packages</pre>
     </section>
     @if (error is not null) { <p class="error" role="alert">@error</p> }
+    <AccountActions Kind="reseller" />
 }
 @code {
     private string accounts = "", details = "", packages = "", username = "";
