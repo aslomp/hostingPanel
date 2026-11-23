@@ -13,6 +13,7 @@ builder.Services.AddScoped<LegacyUserDetailsService>();
 builder.Services.AddScoped<LegacyAccountOverviewService>();
 builder.Services.AddScoped<DomainManagementService>();
 builder.Services.AddScoped<AccountCatalogService>();
+builder.Services.AddScoped<AccountMutationService>();
 builder.Services.AddScoped<AccessibleDomainsService>();
 builder.Services.AddScoped<ImpersonationService>();
 builder.Services.AddScoped<DnsZoneService>();
