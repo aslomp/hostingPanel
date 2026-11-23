@@ -59,6 +59,7 @@ public sealed class TicketLiveMonitor(
     private async Task RunAsync(CancellationToken ct)
     {
         var known = new Dictionary<string, string>(StringComparer.Ordinal);
+        var baselineReady = false;
         string? currentChannel = null;
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(15));
         try
@@ -72,9 +73,10 @@ public sealed class TicketLiveMonitor(
                 {
                     currentChannel = channel;
                     known.Clear();
+                    baselineReady = false;
                 }
                 if (session.Connected && channel is not null)
-                    await ObserveAsync(channel, known, ct);
+                    baselineReady = await ObserveAsync(channel, known, baselineReady, ct);
             } while (await timer.WaitForNextTickAsync(ct));
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
@@ -84,12 +86,12 @@ public sealed class TicketLiveMonitor(
         }
     }
 
-    private async Task ObserveAsync(string channel, Dictionary<string, string> known, CancellationToken ct)
+    private async Task<bool> ObserveAsync(string channel, Dictionary<string, string> known, bool baselineReady, CancellationToken ct)
     {
         try
         {
             var (status, body) = await session.GetRawAsync("hosting/tickets/inbox", ct);
-            if (status != 200) return; // Backend retains scope and denial semantics.
+            if (status != 200) return baselineReady; // Backend retains scope and denial semantics.
             using var json = JsonDocument.Parse(body);
             var root = json.RootElement;
             var observed = new Dictionary<string, (string Signature, string Kind, long Id, string Subject)>();
@@ -112,7 +114,7 @@ public sealed class TicketLiveMonitor(
             }
 
             // Initial snapshot must not announce historical messages as new.
-            if (known.Count > 0)
+            if (baselineReady)
             {
                 foreach (var (key, value) in observed)
                     if (!known.TryGetValue(key, out var before) || before != value.Signature)
@@ -124,12 +126,14 @@ public sealed class TicketLiveMonitor(
             }
             known.Clear();
             foreach (var (key, value) in observed) known[key] = value.Signature;
+            return true;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
         catch (Exception e) when (e is HttpRequestException or InvalidOperationException or JsonException)
         {
             logger.LogDebug("Ticket inventory unavailable: {Type}", e.GetType().Name);
         }
+        return baselineReady;
     }
 
     public async ValueTask DisposeAsync()
