@@ -216,6 +216,7 @@ var checks = new List<(string Description, Action Test)>
         Throws<FormatException>(() => LegacyAccountListParser.Parse("""["valid","../invalid"]"""))),
     ("All pinned Swagger routes have exactly one specialized or generic controller owner", SwaggerRouteContractTests.Run),
     ("Blazor sidebar mirrors index.html navigation and every entry has a destination", NavigationParityContractTests.Run),
+    ("Ticket backend and SignalR channel isolation with fake DirectAdmin", TicketIntegrationTests.Run),
     ("Backend is the sole source of admin reseller and enduser scopes", ScopeContractTests.Run),
     ("DNS forwards without role selection or read-gated writes", DnsForwardingContractTests.Run),
     ("Documented user/reseller and DNS mutations use exact forms and backend decisions", BackendMutationIntegrationTests.Run),
