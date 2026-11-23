@@ -104,6 +104,18 @@ public static class BackendMutationIntegrationTests
         Require(activated.Status == 200 && backend.Writes.Last().Form["suspend"] == "Unsuspend",
             "Explicit account activation verified");
 
+        backend.ConfigBody = "package=gold&bandwidth=250&suspended=no";
+        var updatedPackage = accounts.SetPackageAsync("alice", "gold", auth, CancellationToken.None)
+            .GetAwaiter().GetResult();
+        Require(updatedPackage.Status == 200 && updatedPackage.Error is null &&
+            backend.Writes.Last().Form["action"] == "package" &&
+            backend.Writes.Last().Form["package"] == "gold",
+            "User package change must be confirmed by backend config");
+        backend.ConfigBody = "package=old&bandwidth=250&suspended=no";
+        updatedPackage = accounts.SetPackageAsync("alice", "gold", auth, CancellationToken.None)
+            .GetAwaiter().GetResult();
+        Require(updatedPackage.Status == 409, "Unobserved package change is not success");
+
         // This test client intentionally never makes a network request.
     }
 
