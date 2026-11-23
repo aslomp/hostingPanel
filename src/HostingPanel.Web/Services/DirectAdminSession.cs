@@ -62,6 +62,7 @@ public sealed class DirectAdminSession(IHttpClientFactory clients)
 
         var path = endpoint.Split('?', 2)[0];
         return path.StartsWith("CMD_API_", StringComparison.Ordinal)
-               || path.StartsWith("api/", StringComparison.Ordinal);
+               || path.StartsWith("api/", StringComparison.Ordinal)
+               || path.Equals("static/swagger.json", StringComparison.Ordinal);
     }
 }
