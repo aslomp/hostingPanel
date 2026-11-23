@@ -7,19 +7,16 @@ namespace HostingPanel.Api.Services;
 
 public sealed class DnsZoneService(IHttpClientFactory clients)
 {
-    /// <summary>Determine whether DirectAdmin authenticated this request as a real admin.
-    /// A delegated admin|user login is not treated as an administrator.</summary>
-    private async Task<bool> IsAdminAsync(AuthenticationHeaderValue auth, CancellationToken ct)
+    // Probe the admin DNS endpoint without mutating anything. DirectAdmin decides
+    // whether the effective account may access it; there is no local role gate.
+    private async Task<bool> CanUseAdminDnsAsync(string domain,
+        AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        if (!ImpersonationService.TryDecode(auth, out var username, out _)) return false;
         using var request = new HttpRequestMessage(HttpMethod.Get,
-            "CMD_API_SHOW_USER_CONFIG?user=" + Uri.EscapeDataString(username));
+            "CMD_DNS_ADMIN?domain=" + Uri.EscapeDataString(domain) + "&json=yes");
         request.Headers.Authorization = auth;
-        using var response = await clients.CreateClient("legacy-directadmin").SendAsync(request, ct);
-        if (!response.IsSuccessStatusCode) return false;
-        var config = LegacyUserDetailsAdapter.Parse(await response.Content.ReadAsStringAsync(ct));
-        return config.TryGetValue("usertype", out var role) &&
-            role.Equals("admin", StringComparison.OrdinalIgnoreCase);
+        using var response = await clients.CreateClient("legacy-directadmin").SendAsync(request,ct);
+        return response.IsSuccessStatusCode;
     }
 
     public async Task<AdminDnsZoneListResult> ListAdminZonesAsync(
@@ -28,8 +25,6 @@ public sealed class DnsZoneService(IHttpClientFactory clients)
         if (page is < 1 or > 10000) return new(400, null, "INVALID_PAGE");
         try
         {
-            if (!await IsAdminAsync(auth, ct))
-                return new(403, null, "ADMIN_ACCESS_REQUIRED");
             using var request = new HttpRequestMessage(HttpMethod.Get,
                 "CMD_DNS_ADMIN?json=yes&page=" + page.ToString(System.Globalization.CultureInfo.InvariantCulture));
             request.Headers.Authorization = auth;
@@ -54,7 +49,7 @@ public sealed class DnsZoneService(IHttpClientFactory clients)
         if (!LegacyDomainsAdapter.IsValidDomain(domain)) return new(400, null, "INVALID_DOMAIN");
         try
         {
-            var administrator = await IsAdminAsync(auth, ct);
+            var administrator = await CanUseAdminDnsAsync(domain, auth, ct);
             using var request = new HttpRequestMessage(HttpMethod.Get,
                 (administrator ? "CMD_DNS_ADMIN" : "CMD_DNS_CONTROL") +
                 "?domain=" + Uri.EscapeDataString(domain) + "&json=yes&ttl=yes");
