@@ -1,0 +1,62 @@
+@page "/resellers"
+@using System.Text.Json
+@inject DirectAdminSession Session
+<PageTitle>Resellers — HostingPanel</PageTitle>
+<div class="page-header"><div><div class="eyebrow">Accountbeheer</div><h1>Resellerbeheer</h1><p>Backend-toegankelijke accounts en resellerconfiguratie, zonder rolfilter in de UI.</p></div><button disabled="@busy" @onclick="Load">Vernieuwen</button></div>
+@if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
+else
+{
+    <section class="card">
+        <h2>Accountoverzicht</h2>
+        <p>Het overzicht omvat de accounts die DirectAdmin voor de huidige identiteit beschikbaar stelt.</p>
+        <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@accounts</pre>
+    </section>
+    <section class="card">
+        <h2>Reseller-details</h2>
+        <label>Gebruikersnaam</label><input @bind="username" placeholder="reseller" />
+        <button disabled="@busy" @onclick="LoadDetails">Configuratie en gebruik ophalen</button>
+        <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@details</pre>
+    </section>
+    <section class="card">
+        <h2>Reseller-pakketten</h2>
+        <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@packages</pre>
+    </section>
+    @if (error is not null) { <p class="error" role="alert">@error</p> }
+}
+@code {
+    private string accounts = "", details = "", packages = "", username = "";
+    private string? error;
+    private bool busy;
+    protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; error = null;
+        try
+        {
+            var (a, b) = await Session.GetAccessibleAccountsAsync();
+            accounts = $"HTTP {a}\n{b}";
+            var (p, q) = await Session.GetRawAsync("api/reseller-packages");
+            packages = $"HTTP {p}\n{q}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException)
+        { error = ex.Message; }
+        finally { busy = false; }
+    }
+    private async Task LoadDetails()
+    {
+        if (busy || username.Length is < 1 or > 64 ||
+            !username.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-'))
+        { error = "Ongeldige gebruikersnaam."; return; }
+        busy = true; error = null;
+        try
+        {
+            var path = Uri.EscapeDataString(username);
+            var (c, d) = await Session.GetRawAsync($"api/resellers/{path}/config");
+            var (u, v) = await Session.GetRawAsync($"api/resellers/{path}/usage");
+            details = $"Configuratie HTTP {c}\n{d}\n\nGebruik HTTP {u}\n{v}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { error = ex.Message; }
+        finally { busy = false; }
+    }
+}
