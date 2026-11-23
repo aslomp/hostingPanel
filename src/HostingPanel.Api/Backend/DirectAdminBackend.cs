@@ -8,6 +8,7 @@ namespace HostingPanel.Api;
 public interface IHostingBackend
 {
     AccountCatalogService AccountCatalog { get; }
+    AccountMutationService AccountMutations { get; }
     AccessibleDomainsService AccessibleDomains { get; }
     LegacyUserDetailsService LegacyUserDetails { get; }
     LegacyAccountOverviewService LegacyAccountOverview { get; }
@@ -22,6 +23,7 @@ public interface IHostingBackend
 
 public sealed class DirectAdminBackend(
     AccountCatalogService accountCatalog,
+    AccountMutationService accountMutations,
     AccessibleDomainsService accessibleDomains,
     LegacyUserDetailsService legacyUserDetails,
     LegacyAccountOverviewService legacyAccountOverview,
@@ -34,6 +36,7 @@ public sealed class DirectAdminBackend(
     IHttpClientFactory clients) : IHostingBackend
 {
     public AccountCatalogService AccountCatalog => accountCatalog;
+    public AccountMutationService AccountMutations => accountMutations;
     public AccessibleDomainsService AccessibleDomains => accessibleDomains;
     public LegacyUserDetailsService LegacyUserDetails => legacyUserDetails;
     public LegacyAccountOverviewService LegacyAccountOverview => legacyAccountOverview;
