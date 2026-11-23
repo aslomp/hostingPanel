@@ -187,6 +187,17 @@ var checks = new List<(string Description, Action Test)>
         session.SetCredentials("admin", "secret");
         Require(session.Username == "admin" && !session.IsImpersonating);
     }),
+    ("Admin DNS list includes all zones independent of hosting owner", () =>
+    {
+        var zones = AdminDnsZonesAdapter.Parse(
+            """{"0":{"domain":"hosting-test.xyz1","local_data":"yes","local_mail":"no"},"1":{"domain":"customer-test.xyz1","local_data":"yes","local_mail":"yes"},"info":{"dns_ns":"2"}}""");
+        Require(zones.Count == 2);
+        Require(zones[0].Domain == "customer-test.xyz1" && zones[0].LocalMail == true);
+        Require(zones[1].Domain == "hosting-test.xyz1" && zones[1].LocalMail == false);
+    }),
+    ("Admin DNS list rejects invalid domains", () =>
+        Throws<FormatException>(() => AdminDnsZonesAdapter.Parse(
+            """{"0":{"domain":"bad..xyz1"}}"""))),
     ("Empty list is valid", () => Require(DirectAdminUsersParser.Parse("[]").Count == 0)),
     ("Legacy error object is rejected", () =>
         Throws<InvalidOperationException>(() => DirectAdminUsersParser.Parse("{\"error\":1,\"text\":\"Access denied\"}"))),
