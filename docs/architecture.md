@@ -108,3 +108,16 @@ HostingPanel business endpoints:
 - CI verifies fake `.xyz1` DNS fixtures, validates mutation encoding, and checks that actual write calls are blocked by default. It does not contact the configured legacy server for mutations.
 
 DNS record changes are production-impacting once mutations are enabled. DNSSEC and multi-server propagation are not implemented by this slice. Actual wire-format conformance must still be confirmed against the user's DirectAdmin installation.
+
+## DNS beheer op administratorniveau
+
+DirectAdmin heeft afzonderlijke admin- en user-endpoints. HostingPanel moet die scheiding behouden:
+
+- `GET /hosting/dns/zones?page=1` leest het **serverbrede** zoneoverzicht uit `CMD_DNS_ADMIN?json=yes&page=1`. Een administrator ziet zones onafhankelijk van de eigenaar van het hostingaccount.
+- `GET /hosting/domains/{domain}/dns` gebruikt voor administrators `CMD_DNS_ADMIN?domain=...&json=yes&ttl=yes`; op gebruikersniveau `CMD_DNS_CONTROL`.
+- `POST /hosting/domains/{domain}/dns` gebruikt voor administrators `CMD_API_DNS_ADMIN`; op gebruikersniveau `CMD_API_DNS_CONTROL`, altijd onder de globale mutatieschakelaar.
+- `/dns-zones` toont de serverbrede DNS-administratie met domeinnaam, lokale gegevens, lokale mail en filtering. Klikken opent `/domains/{domain}/dns`.
+- De adapter controleert het daadwerkelijke administrator-account via DirectAdmin. Dit is **niet** hetzelfde als impersonation: admins hoeven niet eerst als een hostinggebruiker in te loggen om diens DNS-zone te lezen of te beheren.
+- Voor geïmpersoneerde sessies wordt de effectieve gebruiker gebruikt en niet het administratorniveau van de oorspronkelijke account.
+
+Legacy admin-JSON-tabelrijen zijn numeriek geïndexeerd; metadata als `info` wordt genegeerd. `local_data`/`local_mail` zijn nullable omdat oude releases velden kunnen weglaten.
