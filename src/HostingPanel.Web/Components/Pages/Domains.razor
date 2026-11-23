@@ -199,8 +199,8 @@ else
             mutationStatus = status switch
             {
                 200 => "DirectAdmin heeft de domeinbewerking bevestigd. Vernieuw het domeinoverzicht.",
-                409 => "Mutaties zijn uitgeschakeld of het domein bestaat al. Controleer de API-configuratie.",
-                404 => "Het testdomein behoort niet tot de domeinen van het huidige account.",
+                409 => "DirectAdmin meldt een conflict bij deze domeinbewerking.",
+                404 => "DirectAdmin heeft het betreffende domein niet gevonden.",
                 400 => "Ongeldige domeinnaam of bevestiging.",
                 _ => $"De domeinbewerking is niet bevestigd: HTTP {status}."
             };
