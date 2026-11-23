@@ -126,3 +126,15 @@ differences are internal.
 The aggregate catalog is not a backup of account ownership; it is derived from
 live DirectAdmin responses. Empty or inaccessible categories remain distinct
 from connection/protocol errors, which must be reported.
+
+## Swagger UI — volledige DirectAdmin-specificatie
+
+De API levert de **volledige statisch vastgepinde** DirectAdmin Swagger 2.0 uit
+`src/HostingPanel.Api/spec/directadmin.swagger.json` (274 routes):
+
+- `GET /openapi/directadmin.json`: originele volledige JSON, byte-identiek aan de repository.
+- `GET /swagger` en `GET /swagger/index.html`: zelfgehoste Swagger UI met alle routes, parameters, modellen en responsecontracten. De UI laadt **uitsluitend** de gepinde JSON; er wordt niets uit de live demo gedownload en er is geen externe CDN nodig.
+- **HostingPanel.Web → DirectAdmin API** toont de link naar de Swagger UI van de API-host, ook zonder ingelogde sessie.
+- De UI laat zien wat het **beoogde API-contract** is, niet wat al in de legacy-adapter is gerealiseerd. Niet-geïmplementeerde `/api/*`-operaties geven voorlopig `501` terug.
+
+De interactieve Swagger UI is publiek bereikbaar zoals de JSON-specificatie. Bescherm de API-host bij internetpublicatie met passende infrastructuurbeveiliging. Het document bevat geen credentials.
