@@ -9,17 +9,17 @@ else
     <section class="card">
         <h2>Accountoverzicht</h2>
         <p>Het overzicht omvat de accounts die DirectAdmin voor de huidige identiteit beschikbaar stelt.</p>
-        <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@accounts</pre>
+        <JsonOverview Json="@accounts" />
     </section>
     <section class="card">
         <h2>Reseller-details</h2>
         <label>Gebruikersnaam</label><input @bind="username" placeholder="reseller" />
         <button disabled="@busy" @onclick="LoadDetails">Configuratie en gebruik ophalen</button>
-        <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@details</pre>
+        <JsonOverview Json="@details" />
     </section>
     <section class="card">
         <h2>Reseller-pakketten</h2>
-        <pre style="white-space:pre-wrap;overflow-wrap:anywhere">@packages</pre>
+        <JsonOverview Json="@packages" />
     </section>
     @if (error is not null) { <p class="error" role="alert">@error</p> }
     <AccountActions Kind="reseller" />
