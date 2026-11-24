@@ -14,7 +14,7 @@ namespace HostingPanel.Api;
 /// no legacy command calls and no implicit fallback to DirectAdmin.
 /// Reconciliation with the cluster is deliberately a separate responsibility.
 /// </summary>
-public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings) :
+public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, WebsiteReadiness? readiness = null) :
     IHostingBackend, IAccountCatalog, IAccountMutations, IAccessibleDomains,
     IUserDetails, IAccountOverview, IImpersonation, IDatabases,
     IAccessibleDatabases, IDomains, IFileAccess, ITickets, IBackendSettingsAccess
@@ -309,7 +309,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         var pending = await db.ReconciliationOperations.AsNoTracking().AnyAsync(x =>
             x.ResourceType == "website" && x.ResourceId == id && x.Status == "pending", ct);
         return new(result.Status, new WebsiteInfo(name, result.Settings,
-            pending ? WebsiteProvisioningState.Pending : WebsiteProvisioningState.Unknown), result.Error);
+            pending ? WebsiteProvisioningState.Pending : result.Settings.GetValueOrDefault("provisioning") switch { "Ready" => WebsiteProvisioningState.Ready, "Failed" => WebsiteProvisioningState.Failed, "Starting" => WebsiteProvisioningState.Pending, _ => WebsiteProvisioningState.Unknown }), result.Error);
     }
 
     public Task<WebsiteMutationResult> CreateWebsiteAsync(WebsiteConfiguration website, AuthenticationHeaderValue auth, CancellationToken ct) =>
@@ -386,6 +386,16 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         settings["username"] = await db.Accounts.Where(x => x.Id == row.OwnerId).Select(x => x.Username).SingleAsync(ct);
         var operations = await db.ReconciliationOperations.AsNoTracking().Where(x => x.ResourceType == "website" && x.ResourceId == row.Id).ToListAsync(ct);
         settings["provisioning"] = operations.Any(x => x.Status == "pending" && x.Attempts > 0) ? "Retrying" : operations.Any(x => x.Status == "pending") ? "Pending" : operations.Any(x => x.Status == "completed") ? "Configuration applied" : "Unknown";
+        var observed = readiness?.Get(row.Id);
+        if (observed is not null)
+        {
+            settings["apache_readiness"] = observed.Apache;
+            settings["php_readiness"] = observed.Php;
+            settings["route_readiness"] = observed.Route;
+            if (settings["provisioning"] == "Configuration applied")
+                settings["provisioning"] = observed.Ready ? "Ready" :
+                    observed.Apache == "Failed" || observed.Php == "Failed" || observed.Route == "Failed" ? "Failed" : "Starting";
+        }
         return new(200, settings, null);
     }
 
