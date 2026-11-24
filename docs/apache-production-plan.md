@@ -1,6 +1,6 @@
 # Production-grade shared Apache hosting — implementation plan
 
-Status: proposed; implementation and runtime acceptance pending.
+Status: P0 implementation started; runtime acceptance pending.
 Scope: Kubernetes backend only. Preserve DirectAdmin API compatibility and existing /home/<account>/domains/<domain>/public_html layout.
 
 ## Architecture decisions
@@ -16,6 +16,8 @@ Scope: Kubernetes backend only. Preserve DirectAdmin API compatibility and exist
 - [ ] Define and verify PHP execution and network isolation; refuse untrusted tenancy until acceptance. Assess separate account-scoped PHP execution as an option, not an Apache deployment change.
 - [ ] Ensure unknown hosts fail closed; define explicit alias and sensitive-file policies, PHP-disabled behavior and source-code protection.
 Acceptance: real httpd config validation, positive HTTP/PHP tests and controlled synthetic tenant-isolation regression tests; no production readiness claim until gates pass.
+
+P0 initial changes: deny unmatched hosts on the public listener, separate pod probes from the public HTTP Service, disable forward proxy and TRACE, reduce server signature, deny sensitive files and non-supported PHP-like filenames, and omit PHP index handling when PHP is disabled. Aliases remain explicit-only; no automatic www alias. Hidden directories are denied except the conventional .well-known directory. These rules reduce accidental exposure but do not replace tenant isolation or application-specific secret management. The shared PHP opt-in remains trusted-only. Effective image/MPM validation, storage and identity review, and controlled isolation acceptance remain open.
 
 ## Phase 1 — predictable Apache capacity (P1)
 - [ ] Configure replicas, resource requests/limits and event MPM globally through Helm. Validate relationships among ServerLimit, ThreadLimit, ThreadsPerChild, MaxRequestWorkers and spare threads.
