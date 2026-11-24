@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using HostingPanel.Providers.CertManager;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -11,10 +11,9 @@ using Microsoft.Extensions.Logging;
 
 namespace HostingPanel.Api;
 
-// A single active reconciler per SQLite database. kubectl uses the configured
-// kubeconfig or the in-cluster service account; no shell interpolation.
+// A single active reconciler per SQLite database. Uses the Kubernetes SDK.
 public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguration configuration,
-    ILogger<WebsiteReconciler> logger, NfsDirectoryProvisioner storage, HostingOperationNotifications notifications) : BackgroundService
+    ILogger<WebsiteReconciler> logger, NfsDirectoryProvisioner storage, HostingOperationNotifications notifications, KubernetesResourceClient resources) : BackgroundService
 {
     private string? appliedRuntimeHash;
     private bool migrated;
@@ -85,13 +84,16 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 var domain = await db.Domains.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
                 var name = "site-" + id.ToString("N");
                 if (domain is null)
-                    await KubectlAsync(null, ct, "delete", "httproute,configmap", name, "--ignore-not-found=true");
+                    {
+                    await resources.DeleteAsync("gateway.networking.k8s.io", "v1", Namespace, "httproutes", name, ct);
+                    await resources.DeleteConfigMapAsync(Namespace, name, ct);
+                }
                 else
                 {
                     if (storageErrors.TryGetValue(domain.Id, out var storageError))
                         throw new InvalidOperationException("Website storage unavailable.", storageError);
                     var manifest = BuildManifest(domain, accounts[domain.OwnerId].Username, identities[domain.OwnerId], listenerSet.Length > 0);
-                    await KubectlAsync(manifest, ct, "apply", "--server-side", "--field-manager=hostingpanel", "-f", "-");
+                    await resources.ApplyAsync(manifest, Namespace, "hostingpanel", ct);
                 }
                 completed.AddRange(group);
             }
@@ -117,7 +119,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(manifest)));
             if (hash != appliedRuntimeHash)
             {
-                await KubectlAsync(manifest, ct, "apply", "--server-side", "--field-manager=hostingpanel", "-f", "-");
+                await resources.ApplyAsync(manifest, Namespace, "hostingpanel", ct);
                 appliedRuntimeHash = hash;
             }
         }
@@ -154,13 +156,13 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 if (marker is null) throw new InvalidOperationException("Missing deletion authorization.");
                 if (configuration.GetValue<bool>("CertManager:Enabled"))
                 {
-                    var client = KubernetesBackend.CertificateClient(configuration);
+                    var client = new CertManagerClient(resources, Namespace);
                     var certName = HostingPanel.Providers.CertManager.CertManagerClient.Name(operation.ResourceId);
                     using var certs = JsonDocument.Parse(await client.ListAsync(ct));
                     if (certs.RootElement.GetProperty("items").EnumerateArray().Any(x => x.GetProperty("metadata").GetProperty("name").GetString() == certName))
                         continue;
                     var routeName = "hp-tls-" + operation.ResourceId.ToString("N");
-                    await KubectlAsync(null, ct, "delete", "httproute", routeName, "--ignore-not-found=true");
+                    await resources.DeleteAsync("gateway.networking.k8s.io", "v1", Namespace, "httproutes", routeName, ct);
                     // TLS Secrets are removed by cert-manager's certificate owner reference
                     // when enabled by the cluster administrator.
                 }
@@ -317,7 +319,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
     private async Task<Dictionary<Guid, string[]>> GetApacheSourcesAsync(
         IReadOnlyList<HostedDomain> domains, CancellationToken ct)
     {
-        var json = await KubectlAsync(null, ct, "get", "pods", "-l", "app.kubernetes.io/name=apache-baseline", "-o", "json");
+        var json = await resources.ListPodsAsync(Namespace, "app.kubernetes.io/name=apache-baseline", ct);
         using var doc = JsonDocument.Parse(json);
         var sources = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var pod in doc.RootElement.GetProperty("items").EnumerateArray())
@@ -333,30 +335,4 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         return domains.Select(x => x.OwnerId).Distinct().ToDictionary(x => x, _ => sources.ToArray());
     }
 
-    private async Task<string> KubectlAsync(string? manifest, CancellationToken ct, params string[] args)
-    {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(60));
-        var token = timeout.Token;
-        var start = new ProcessStartInfo(configuration["KubernetesHosting:KubectlPath"] ?? "kubectl") {
-            RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false
-        };
-        start.ArgumentList.Add("--namespace");
-        start.ArgumentList.Add(Namespace);
-        foreach (var arg in args) start.ArgumentList.Add(arg);
-        using var process = Process.Start(start) ?? throw new InvalidOperationException("Cannot start kubectl");
-        try
-        {
-            var stdout = process.StandardOutput.ReadToEndAsync(token);
-            var stderr = process.StandardError.ReadToEndAsync(token);
-            if (manifest is not null) await process.StandardInput.WriteAsync(manifest.AsMemory(), token);
-            process.StandardInput.Close();
-            await process.WaitForExitAsync(token);
-            var output = await stdout;
-            var error = await stderr;
-            if (process.ExitCode != 0) throw new InvalidOperationException("kubectl failed: " + error);
-            return output;
-        }
-        finally { if (!process.HasExited) process.Kill(entireProcessTree: true); }
-    }
 }

@@ -1,6 +1,6 @@
 using HostingPanel.Providers.CertManager;
 namespace HostingPanel.Api;
-public sealed partial class KubernetesBackend
+public sealed partial class KubernetesCertificateProvider
 {
     private async Task<CertificateSnapshot> ReadCertificateSnapshotAsync(CancellationToken ct)
     {

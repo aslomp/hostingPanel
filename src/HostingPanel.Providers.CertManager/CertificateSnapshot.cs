@@ -21,9 +21,9 @@ public sealed class CertificateSnapshot(JsonElement[] certificates, JsonElement[
     {
         static JsonElement[] Parse(string json) { using var doc=JsonDocument.Parse(json); return ArrayOf(doc.RootElement,"items").Select(x=>x.Clone()).ToArray(); }
         return new(Parse(await client.ListAsync(ct)),
-            Parse(await client.ExecuteAsync(null,ct,"get","certificaterequests.cert-manager.io","-o","json")),
-            Parse(await client.ExecuteAsync(null,ct,"get","orders.acme.cert-manager.io","-o","json")),
-            Parse(await client.ExecuteAsync(null,ct,"get","challenges.acme.cert-manager.io","-o","json")));
+            Parse(await client.ListRequestsAsync(ct)),
+            Parse(await client.ListOrdersAsync(ct)),
+            Parse(await client.ListChallengesAsync(ct)));
     }
     public CertificateInfo? Find(Guid id)
     {
