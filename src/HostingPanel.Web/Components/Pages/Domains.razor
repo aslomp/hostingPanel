@@ -61,7 +61,6 @@ else
     private IReadOnlyList<string>? domains;
     private Dictionary<string,string> ownership = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string,string> provisioning = new(StringComparer.OrdinalIgnoreCase);
-    private bool refreshingStatus;
     private string? warning;
     private string? error;
     private bool loading;
@@ -90,9 +89,23 @@ else
     }
 
     private bool disposed;
-    protected override void OnInitialized() => Operations.Changed += OperationChanged;
+    protected override void OnInitialized()
+    {
+        Operations.Changed += OperationChanged;
+        Session.Changed += SessionChanged;
+    }
+    private void SessionChanged() => _ = InvokeAsync(async () =>
+    {
+        if (disposed) return;
+        domains = null;
+        ownership.Clear();
+        provisioning.Clear();
+        warning = error = null;
+        await Refresh();
+        if (!disposed) StateHasChanged();
+    });
     private void OperationChanged() { if (!disposed) _ = InvokeAsync(RefreshOperationState); }
-    public void Dispose() { disposed = true; Operations.Changed -= OperationChanged; }
+    public void Dispose() { disposed = true; Operations.Changed -= OperationChanged; Session.Changed -= SessionChanged; }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -100,67 +113,81 @@ else
         if (Session.Connected) await Refresh();
     }
 
-    private async Task RefreshOperationState()
-    {
-        if (disposed || refreshingStatus || !Session.Connected || domains is null) return;
-        refreshingStatus = true;
-        try
-        {
-            var current = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var domain in domains.ToArray())
-            {
-                if (disposed || !Session.Connected) return;
-                var state = await DomainOps.GetProvisioningStatusAsync(domain);
-                if (state is not null) current[domain] = state;
-            }
-            if (!disposed) { provisioning = current; StateHasChanged(); }
-        }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or OperationCanceledException) { }
-        finally { refreshingStatus = false; }
-    }
+    private Task RefreshOperationState() => Refresh();
 
     private async Task Refresh()
     {
-        if (loading || !Session.Connected) return;
+        if (disposed || !Session.Connected) return;
+        if (loading) { refreshRequested = true; return; }
         loading = true;
-        error = null;
-        domains = null;
+        var channel = Session.TicketChannel;
+        var selected = owner.Trim();
         try
         {
-            var allAccounts = string.IsNullOrWhiteSpace(owner);
-            ownership.Clear();
-            warning = null;
-            if (allAccounts)
+            error = null;
+            IReadOnlyList<string> nextDomains;
+            var nextOwnership = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+            IReadOnlyDictionary<string,string>? nextStatus;
+            string? nextWarning = null;
+            if (selected.Length == 0)
             {
                 var result = await DomainOps.ListAccessibleAsync();
+                if (disposed || Session.TicketChannel != channel || !Session.Connected || owner.Trim() != selected) return;
                 if (result.Status != 200 || result.Items is null)
                 {
                     error = L["Domain list unavailable: HTTP {0}.", result.Status].Value;
+                    domains = null;
                     return;
                 }
-                domains = result.Items.Select(x => x.Domain).ToArray();
-                warning = result.Warning;
-                foreach (var item in result.Items) ownership[item.Domain] = item.Owner;
+                nextDomains = result.Items.Select(x => x.Domain).ToArray();
+                nextWarning = result.Warning;
+                nextStatus = result.Provisioning;
+                foreach (var item in result.Items) nextOwnership[item.Domain] = item.Owner;
             }
             else
             {
-                var result = await DomainOps.ListAsync(owner.Trim());
+                var result = await DomainOps.ListAsync(selected);
+                if (disposed || Session.TicketChannel != channel || !Session.Connected || owner.Trim() != selected) return;
                 if (result.Status != 200 || result.Domains is null)
                 {
                     error = L["Domain list unavailable: HTTP {0}.", result.Status].Value;
+                    domains = null;
                     return;
                 }
-                domains = result.Domains;
+                nextDomains = result.Domains;
+                nextStatus = result.Provisioning;
+                foreach (var domain in nextDomains) nextOwnership[domain] = selected;
             }
+            domains = nextDomains;
+            ownership = nextOwnership;
+            provisioning = nextStatus?.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)
+                ?? new(StringComparer.OrdinalIgnoreCase);
+            warning = nextWarning;
         }
         catch (Exception exception) when (exception is HttpRequestException or FormatException
             or InvalidOperationException or ArgumentException)
         {
-            error = exception.Message;
+            if (!disposed && Session.TicketChannel == channel && owner.Trim() == selected)
+            {
+                error = exception.Message;
+                domains = null;
+            }
         }
-        finally { loading = false; }
-        await RefreshOperationState();
+        finally
+        {
+            loading = false;
+            if (!disposed)
+            {
+                StateHasChanged();
+                if (refreshRequested)
+                {
+                    refreshRequested = false;
+                    await Refresh();
+                }
+            }
+        }
     }
+    private bool refreshRequested;
 
     private bool deleteDialogOpen;
     private async Task SelectDelete(string domain)
