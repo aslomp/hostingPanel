@@ -19,37 +19,39 @@ if (provider.Equals("Kubernetes", StringComparison.OrdinalIgnoreCase))
     builder.Services.AddScoped<IHostingBackend, KubernetesBackend>();
 }
 else if (provider.Equals("DirectAdmin", StringComparison.OrdinalIgnoreCase))
+{
     builder.Services.AddScoped<IHostingBackend, DirectAdminBackend>();
+    builder.Services.AddScoped<LegacyUserDetailsService>();
+    builder.Services.AddScoped<LegacyAccountOverviewService>();
+    builder.Services.AddScoped<DomainManagementService>();
+    builder.Services.AddScoped<AccountCatalogService>();
+    builder.Services.AddScoped<AccountMutationService>();
+    builder.Services.AddScoped<AccessibleDomainsService>();
+    builder.Services.AddScoped<ImpersonationService>();
+    builder.Services.AddScoped<DnsZoneService>();
+    builder.Services.AddScoped<DatabaseManagementService>();
+    builder.Services.AddScoped<AccessibleDatabasesService>();
+    builder.Services.AddScoped<FileAccessService>();
+    builder.Services.AddScoped<TicketService>();
+    builder.Services.AddHttpClient("legacy-directadmin", client =>
+    {
+        var configured = builder.Configuration["DirectAdmin:BaseUrl"]
+            ?? throw new InvalidOperationException("DirectAdmin:BaseUrl is required.");
+        var origin = new Uri(configured, UriKind.Absolute);
+        if (origin.Scheme != Uri.UriSchemeHttps || origin.AbsolutePath != "/"
+            || origin.UserInfo.Length != 0 || origin.Query.Length != 0 || origin.Fragment.Length != 0)
+            throw new InvalidOperationException("DirectAdmin:BaseUrl must be a credential-free HTTPS origin.");
+        client.BaseAddress = origin;
+        client.Timeout = TimeSpan.FromSeconds(30);
+    }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        AllowAutoRedirect = false,
+        UseCookies = false,
+        AutomaticDecompression = DecompressionMethods.None
+    });
+}
 else
     throw new InvalidOperationException($"Unknown HostingPanel backend '{provider}'.");
-builder.Services.AddScoped<LegacyUserDetailsService>();
-builder.Services.AddScoped<LegacyAccountOverviewService>();
-builder.Services.AddScoped<DomainManagementService>();
-builder.Services.AddScoped<AccountCatalogService>();
-builder.Services.AddScoped<AccountMutationService>();
-builder.Services.AddScoped<AccessibleDomainsService>();
-builder.Services.AddScoped<ImpersonationService>();
-builder.Services.AddScoped<DnsZoneService>();
-builder.Services.AddScoped<DatabaseManagementService>();
-builder.Services.AddScoped<AccessibleDatabasesService>();
-builder.Services.AddScoped<FileAccessService>();
-builder.Services.AddScoped<TicketService>();
-builder.Services.AddHttpClient("legacy-directadmin", client =>
-{
-    var configured = builder.Configuration["DirectAdmin:BaseUrl"]
-        ?? throw new InvalidOperationException("DirectAdmin:BaseUrl is required.");
-    var origin = new Uri(configured, UriKind.Absolute);
-    if (origin.Scheme != Uri.UriSchemeHttps || origin.AbsolutePath != "/"
-        || origin.UserInfo.Length != 0 || origin.Query.Length != 0 || origin.Fragment.Length != 0)
-        throw new InvalidOperationException("DirectAdmin:BaseUrl must be a credential-free HTTPS origin.");
-    client.BaseAddress = origin;
-    client.Timeout = TimeSpan.FromSeconds(30);
-}).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-{
-    AllowAutoRedirect = false,
-    UseCookies = false,
-    AutomaticDecompression = DecompressionMethods.None
-});
 
 var app = builder.Build();
 if (provider.Equals("Kubernetes", StringComparison.OrdinalIgnoreCase))
