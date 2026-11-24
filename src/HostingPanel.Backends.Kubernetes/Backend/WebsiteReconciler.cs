@@ -201,6 +201,8 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             var pools = new StringBuilder("[global]\nerror_log = /proc/self/fd/2\ndaemonize = no\n");
             var passwd = new StringBuilder();
             var group = new StringBuilder();
+            if (owners.Length == 0)
+                pools.Append("[idle]\nuser = www-data\ngroup = www-data\nlisten = 127.0.0.1:9000\npm = ondemand\npm.max_children = 1\nclear_env = yes\nsecurity.limit_extensions = .php\n");
             foreach (var owner in owners)
             {
                 passwd.AppendLine($"{owner.UnixName}:x:{owner.Uid}:{owner.Gid}:Hosting account:/nonexistent:/usr/sbin/nologin");
@@ -217,10 +219,10 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             }
             var data = new Dictionary<string,string> { ["php-fpm.conf"] = pools.ToString(), ["passwd"] = passwd.ToString(), ["group"] = group.ToString() };
             var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data))));
-            var image = version == "7" ? Required("Php7Image") : configuration["KubernetesHosting:Php8Image"] ?? "php:8.4-fpm";
+            var image = version == "7" ? Required("Php7Image") : configuration["KubernetesHosting:Php8Image"] ?? "php:8.6.0-fpm";
             resources.Add(new { apiVersion = "v1", kind = "ConfigMap", metadata = Meta(), data });
             resources.Add(new { apiVersion = "apps/v1", kind = "Deployment", metadata = Meta(), spec = new {
-                replicas = owners.Length == 0 ? 0 : configuration.GetValue<int?>("KubernetesHosting:Php" + version + "Replicas") ?? 1,
+                replicas = configuration.GetValue<int?>("KubernetesHosting:Php" + version + "Replicas") ?? 1,
                 selector = new { matchLabels = labels }, template = new {
                     metadata = new { labels, annotations = new Dictionary<string,string> { ["hostingpanel/config-sha256"] = hash } }, spec = new {
                         automountServiceAccountToken = false,
@@ -229,7 +231,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                             args = new[] { "cat /etc/hostingpanel/passwd >> /etc/passwd; cat /etc/hostingpanel/group >> /etc/group; php-fpm -t -y /etc/hostingpanel/php-fpm.conf; exec php-fpm -F -y /etc/hostingpanel/php-fpm.conf" },
                             securityContext = new { runAsUser = 0, allowPrivilegeEscalation = false,
                                 capabilities = new { drop = new[] { "ALL" }, add = new[] { "SETUID", "SETGID", "CHOWN", "KILL", "DAC_OVERRIDE" } } },
-                            readinessProbe = new { tcpSocket = new { port = owners.Length == 0 ? 9000 : owners[0].Port } },
+                            readinessProbe = new { exec = new { command = new[] { "php-fpm", "-t", "-y", "/etc/hostingpanel/php-fpm.conf" } } },
                             volumeMounts = new object[] { new { name = "sites", mountPath = "/var/www/sites" },
                                 new { name = "config", mountPath = "/etc/hostingpanel", readOnly = true } } } },
                         volumes = new object[] { new { name = "sites", nfs = new { server = Required("NfsServer"), path = Required("NfsPath") } },
