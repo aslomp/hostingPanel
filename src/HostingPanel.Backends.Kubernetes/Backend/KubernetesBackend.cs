@@ -31,7 +31,12 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         var row = await db.Configuration.AsNoTracking().SingleOrDefaultAsync(x => x.Key == SettingsKey, ct);
         if (row is null) return configuredSettings;
         using var document = JsonDocument.Parse(row.ValueJson);
-        if (!BackendSettingsSchema.TryRead<KubernetesBackendSettings>(document.RootElement,
+        // Older persisted settings lack the DNS properties. Fill only new keys from deployment defaults.
+        var stored = document.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
+        using var defaults = JsonDocument.Parse(BackendSettingsSchema.Serialize(configuredSettings));
+        foreach (var key in new[] { nameof(KubernetesBackendSettings.DnsAutoCreateZones), nameof(KubernetesBackendSettings.DnsWebIp), nameof(KubernetesBackendSettings.DnsNs1), nameof(KubernetesBackendSettings.DnsNs2) })
+            stored.TryAdd(key, defaults.RootElement.GetProperty(key).Clone());
+        if (!BackendSettingsSchema.TryRead<KubernetesBackendSettings>(JsonSerializer.SerializeToElement(stored),
             out var settings, out _))
             throw new InvalidOperationException("Stored Kubernetes backend settings are invalid.");
         return settings!;
@@ -94,6 +99,37 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
             configuration = config.RootElement.Clone(),
             ingressProvider = settings.IngressProvider.ToString()
         });
+    }
+
+    // Stage DNS and website desired state in the same SaveChanges transaction.
+    private async Task<string?> StageDomainDnsAsync(HostedDomain domain, CancellationToken ct)
+    {
+        if (powerDns is null) return null;
+        var dnsSettings = await GetEffectiveSettingsAsync(ct);
+        if (!dnsSettings.DnsAutoCreateZones) return null;
+        var existing = await db.DnsZones.SingleOrDefaultAsync(z => z.Name == domain.Name, ct);
+        if (existing is not null)
+        {
+            if (existing.OwnerId != domain.OwnerId || existing.DomainId is not null)
+                return "DNS_ZONE_EXISTS";
+            existing.DomainId = domain.Id;
+            return null;
+        }
+        var ipText = dnsSettings.DnsWebIp;
+        var ns1 = dnsSettings.DnsNs1.TrimEnd('.');
+        var ns2 = dnsSettings.DnsNs2.TrimEnd('.');
+        if (!System.Net.IPAddress.TryParse(ipText, out var ip) ||
+            ip.AddressFamily is not (System.Net.Sockets.AddressFamily.InterNetwork or System.Net.Sockets.AddressFamily.InterNetworkV6) ||
+            !ValidDomain(ns1) || !ValidDomain(ns2) || string.Equals(ns1, ns2, StringComparison.OrdinalIgnoreCase))
+            return "DNS_DEFAULTS_NOT_CONFIGURED";
+        var zone = new DnsZone { Name = domain.Name, DomainId = domain.Id, OwnerId = domain.OwnerId };
+        db.DnsZones.Add(zone);
+        db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "@", Type = ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? "A" : "AAAA", Value = ip.ToString() });
+        db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "www", Type = "CNAME", Value = domain.Name + "." });
+        foreach (var ns in new[] { ns1!, ns2! })
+            db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "@", Type = "NS", Value = ns.ToLowerInvariant() + "." });
+        Schedule("dns-zone", zone.Id, "create", new { zone.Name });
+        return null;
     }
 
     private void Schedule(string type, Guid id, string operation, object? payload = null)
@@ -187,6 +223,8 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         db.Accounts.Add(account);
         var domain = new HostedDomain { Name = input.Domain.ToLowerInvariant(), OwnerId = account.Id };
         db.Domains.Add(domain);
+        if (await StageDomainDnsAsync(domain, ct) is { } dnsError)
+            return new(dnsError == "DNS_ZONE_EXISTS" ? 409 : 503, dnsError);
         Schedule("account", account.Id, "create", new { account.Username });
         Schedule("domain", domain.Id, "create", new { domain.Name });
         await ScheduleWebsiteAsync(domain, "create", ct);
@@ -344,6 +382,8 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
             var created = new HostedDomain { OwnerId = principal.Id, Name = name,
                 SettingsJson = JsonSerializer.Serialize(new { php = input.Php, ssl = input.Ssl, cgi = input.Cgi }) };
             db.Domains.Add(created);
+            if (await StageDomainDnsAsync(created, ct) is { } dnsError)
+                return new(dnsError == "DNS_ZONE_EXISTS" ? 409 : 503, dnsError);
             Schedule("domain", created.Id, "create", new { name });
             await ScheduleWebsiteAsync(created, "create", ct);
         }
