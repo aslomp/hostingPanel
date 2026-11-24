@@ -114,6 +114,7 @@ else if (settings is not null)
         }
     </MudPaper>
 }
+@implements IDisposable
 @code {
     [Parameter] public string Username { get; set; } = "";
     private Dictionary<string,string>? settings;
@@ -123,42 +124,57 @@ else if (settings is not null)
     private string? error;
     private string? packageError;
     private string? usageError;
-    private bool loading;
+    private readonly LatestRead read = new();
+    private bool loading => read.Loading;
     private bool switching;
     private string? impersonationError;
 
-    protected override async Task OnParametersSetAsync()
+    private bool disposed;
+    protected override void OnInitialized() => Session.Changed += SessionChanged;
+    protected override Task OnParametersSetAsync() => Load();
+    private void SessionChanged() => _ = InvokeAsync(async () =>
     {
-        if (Session.Connected) await Load();
+        if (disposed) return;
+        var task = Load();
+        StateHasChanged();
+        await task;
+        if (!disposed) StateHasChanged();
+    });
+    public void Dispose()
+    {
+        disposed = true;
+        Session.Changed -= SessionChanged;
+        read.Dispose();
     }
 
-    private async Task Load()
+    private Task Load()
     {
-        if (loading || !Session.Connected) return;
-        loading = true;
-        error = null; packageError = null; usageError = null;
+        if (disposed) return Task.CompletedTask;
         settings = null; packageSettings = null; usage = null; package = null;
-        try
+        error = packageError = usageError = null;
+        if (!Session.Connected)
         {
-            var result = await Accounts.OverviewAsync(Username);
-            if (result.Status != 200 || result.Config is null)
+            read.Cancel();
+            return Task.CompletedTask;
+        }
+        var target = Username;
+        var channel = Session.TicketChannel;
+        return read.RunAsync(ct => Accounts.OverviewAsync(target, ct),
+            () => Session.Connected && Session.TicketChannel == channel && Username == target,
+            result =>
             {
-                error = L["Failed to retrieve user data (HTTP {0}).", result.Status].Value;
-                return;
-            }
-            settings = Copy(result.Config);
-            package = result.Package;
-            packageSettings = Copy(result.PackageSettings);
-            packageError = result.Error;
-            usage = Copy(result.Usage);
-            usageError = result.UsageError;
-        }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
-            or ArgumentException or FormatException)
-        {
-            error = ex.Message;
-        }
-        finally { loading = false; }
+                if (result.Status != 200 || result.Config is null)
+                {
+                    error = L["Failed to retrieve user data (HTTP {0}).", result.Status].Value;
+                    return;
+                }
+                settings = Copy(result.Config);
+                package = result.Package;
+                packageSettings = Copy(result.PackageSettings);
+                packageError = result.Error;
+                usage = Copy(result.Usage);
+                usageError = result.UsageError;
+            }, ex => error = ex.Message);
     }
 
     private async Task Impersonate()

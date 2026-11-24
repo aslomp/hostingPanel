@@ -89,70 +89,92 @@ else
     private Dictionary<string, string>? fields;
     private string? error;
     private string? saveMessage;
-    private bool loading;
+    private readonly LatestRead read = new();
+    private readonly LatestRead statusRead = new();
+    private bool loading => read.Loading;
     private bool saving;
     private string php = "OFF", ssl = "OFF", cgi = "OFF";
     private string bandwidth = "", quota = "";
 
     private bool disposed;
-    protected override void OnInitialized() => Operations.Changed += OperationChanged;
+    protected override void OnInitialized()
+    {
+        Operations.Changed += OperationChanged;
+        Session.Changed += SessionChanged;
+    }
     private void OperationChanged() { if (!disposed) _ = InvokeAsync(RefreshOperationState); }
-    public void Dispose() { disposed = true; Operations.Changed -= OperationChanged; }
-
-    protected override async Task OnParametersSetAsync()
+    private void SessionChanged() => _ = InvokeAsync(async () =>
     {
-        if (Session.Connected) await Refresh();
+        if (disposed) return;
+        saveMessage = null;
+        var task = Refresh();
+        StateHasChanged();
+        await task;
+        if (!disposed) StateHasChanged();
+    });
+    public void Dispose()
+    {
+        disposed = true;
+        Operations.Changed -= OperationChanged;
+        Session.Changed -= SessionChanged;
+        read.Dispose();
+        statusRead.Dispose();
     }
 
-    private async Task RefreshOperationState()
+    protected override Task OnParametersSetAsync() => Refresh();
+
+    private Task RefreshOperationState()
     {
-        if (disposed || !Session.Connected || fields is null) return;
-        var domain = Domain;
-        try
-        {
-            var state = await DomainOps.GetProvisioningStatusAsync(domain);
-            if (!disposed && domain == Domain && fields is not null && state is not null)
+        if (disposed || !Session.Connected || fields is null || loading) return Task.CompletedTask;
+        var target = Domain;
+        var channel = Session.TicketChannel;
+        var current = fields;
+        return statusRead.RunAsync(ct => DomainOps.GetProvisioningStatusAsync(target, ct),
+            () => Session.Connected && Session.TicketChannel == channel && Domain == target && ReferenceEquals(fields, current),
+            state =>
             {
-                fields["provisioning"] = state;
-                StateHasChanged();
-            }
-        }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or OperationCanceledException) { }
+                if (state is not null)
+                {
+                    current["provisioning"] = state;
+                    StateHasChanged();
+                }
+            }, _ => { });
     }
 
-    private async Task Refresh()
+    private Task Refresh()
     {
-        if (loading || !Session.Connected) return;
-        loading = true;
+        if (disposed) return Task.CompletedTask;
+        statusRead.Cancel();
         error = null;
         fields = null;
-        try
+        if (!Session.Connected)
         {
-            var result = await DomainOps.GetAsync(Domain);
-            var status = result.Status;
-            if (status != 200 || result.Settings is null)
+            read.Cancel();
+            return Task.CompletedTask;
+        }
+        var target = Domain;
+        var channel = Session.TicketChannel;
+        return read.RunAsync(ct => DomainOps.GetAsync(target, ct),
+            () => Session.Connected && Session.TicketChannel == channel && Domain == target,
+            result =>
             {
-                error = status switch
+                if (result.Status != 200 || result.Settings is null)
                 {
-                    403 => L["You do not have access to these domain settings."].Value,
-                    404 => L["Domain not found."].Value,
-                    _ => L["Domain information unavailable (HTTP {0}).", status].Value
-                };
-                return;
-            }
-            fields = result.Settings.ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
-            php = Get("php");
-            ssl = Get("ssl");
-            cgi = Get("cgi");
-            bandwidth = Get("bandwidth");
-            quota = Get("quota");
-        }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
-            or ArgumentException or FormatException)
-        {
-            error = ex.Message;
-        }
-        finally { loading = false; }
+                    error = result.Status switch
+                    {
+                        403 => L["You do not have access to these domain settings."].Value,
+                        404 => L["Domain not found."].Value,
+                        _ => L["Domain information unavailable (HTTP {0}).", result.Status].Value
+                    };
+                    return;
+                }
+                fields = result.Settings.ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
+                php = Get("php");
+                ssl = Get("ssl");
+                cgi = Get("cgi");
+                bandwidth = Get("bandwidth");
+                quota = Get("quota");
+            }, ex => error = ex.Message);
     }
 
     private string Get(string key) => fields is not null && fields.TryGetValue(key, out var value)
@@ -170,10 +192,13 @@ else
     {
         if (saving || !Session.Connected) return;
         saving = true;
+        var target = Domain;
+        var channel = Session.TicketChannel;
         saveMessage = null;
         try
         {
-            var (status, errorCode) = await DomainOps.UpdateSettingAsync(Domain, setting, value);
+            var (status, errorCode) = await DomainOps.UpdateSettingAsync(target, setting, value);
+            if (disposed || !Session.Connected || Session.TicketChannel != channel || Domain != target) return;
             if (errorCode is null && status is >= 200 and < 300)
             {
                 saveMessage = status == 202 ? L["Domain operation accepted. Provisioning is pending."].Value : L["{0} saved.", setting].Value;
@@ -187,7 +212,8 @@ else
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
             or ArgumentException)
         {
-            saveMessage = ex.Message;
+            if (!disposed && Session.Connected && Session.TicketChannel == channel && Domain == target)
+                saveMessage = ex.Message;
         }
         finally { saving = false; }
     }
