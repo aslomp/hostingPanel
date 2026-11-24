@@ -105,7 +105,7 @@ data:
     </VirtualHost>
     IncludeOptional /runtime/current/*.conf
   sync.py: |
-    import hashlib, json, os, pathlib, re, shutil, ssl, subprocess, time, urllib.request
+    import hashlib, json, os, pathlib, re, shutil, ssl, subprocess, time, urllib.request, urllib.parse
     root = pathlib.Path("/vhosts")
     token_path = "/var/run/secrets/kubernetes.io/serviceaccount/token"
     ca_path = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
@@ -132,7 +132,6 @@ data:
                 files[name + ".conf"] = item["data"]["vhost.conf"]
             continuation = page["metadata"].get("continue")
             if continuation:
-                import urllib.parse
                 next_url = url + "&continue=" + urllib.parse.quote(continuation, safe="")
             else:
                 next_url = None
@@ -224,7 +223,7 @@ spec:
     metadata:
       labels: {app.kubernetes.io/name: apache-baseline}
       annotations:
-        hostingpanel/apache-config: "shared-vhosts-v1"
+        hostingpanel/apache-config: "shared-vhosts-v2"
     spec:
       serviceAccountName: apache-vhosts
       automountServiceAccountToken: false
