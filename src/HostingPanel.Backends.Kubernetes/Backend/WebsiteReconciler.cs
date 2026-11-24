@@ -33,7 +33,8 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var rows = await db.ReconciliationOperations.Where(x => x.ResourceType == "website"
             && x.Status == "pending").ToListAsync(ct);
         if (rows.Count == 0) return;
-        await KubectlAsync(BuildRuntimeManifest(), ct, "apply", "--server-side", "--field-manager=hostingpanel", "-f", "-");
+        if (configuration.GetValue<bool>("KubernetesHosting:AllowSharedPhpRuntime"))
+            await KubectlAsync(BuildRuntimeManifest(), ct, "apply", "--server-side", "--field-manager=hostingpanel", "-f", "-");
         foreach (var group in rows.GroupBy(x => x.ResourceId))
         {
             var latest = group.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).First();
@@ -84,9 +85,11 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var tls = Flag("ssl", true);
         if (Flag("cgi", false)) throw new InvalidOperationException("CGI is not supported");
         var name = "site-" + domain.Id.ToString("N");
-        var labels = new Dictionary<string,string> { ["app.kubernetes.io/name"] = name };
+        var labels = new Dictionary<string,string> { ["app.kubernetes.io/name"] = name, ["hostingpanel/component"] = "apache" };
         var root = "/var/www/sites/" + domain.Id.ToString("N");
-        var phpVersion = configuration["KubernetesHosting:DefaultPhpVersion"] ?? "8";
+        var phpVersion = configuration["KubernetesHosting:SitePhpVersions:" + host] ?? configuration["KubernetesHosting:DefaultPhpVersion"] ?? "8";
+        if (php && !configuration.GetValue<bool>("KubernetesHosting:AllowSharedPhpRuntime"))
+            throw new InvalidOperationException("Shared PHP requires explicit trust in all hosted PHP applications.");
         if (phpVersion is not ("7" or "8")) throw new InvalidOperationException("Unsupported PHP version");
         if (php && phpVersion == "7" && !configuration.GetValue<bool>("KubernetesHosting:EnablePhp7"))
             throw new InvalidOperationException("PHP 7 is disabled");
@@ -100,7 +103,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             LoadModule log_config_module modules/mod_log_config.so
             LoadModule dir_module modules/mod_dir.so
             LoadModule mime_module modules/mod_mime.so
-                        LoadModule proxy_module modules/mod_proxy.so
+            LoadModule proxy_module modules/mod_proxy.so
             LoadModule proxy_fcgi_module modules/mod_proxy_fcgi.so
             LoadModule rewrite_module modules/mod_rewrite.so
             User daemon
@@ -110,8 +113,8 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             TypesConfig conf/mime.types
             """ + "\n<VirtualHost *:8080>\nServerName " + host + "\nDocumentRoot " + root +
             "\n<Directory " + root + ">\nOptions -Indexes -ExecCGI -Includes\nAllowOverride None\nRequire all granted\nDirectoryIndex index.php index.html\n</Directory>\n" +
-            (php ? "<FilesMatch \"\\.php$\">\nSetHandler \"proxy:fcgi://php-fpm-" + phpVersion + ":9000\"\n</FilesMatch>\n"
-            : "<FilesMatch \"\\.php$\">\nRequire all denied\n</FilesMatch>\n") + "</VirtualHost>\n";
+            (php ? "<FilesMatch \"[.]php$\">\nSetHandler \"proxy:fcgi://php-fpm-" + phpVersion + ":9000\"\n</FilesMatch>\n"
+            : "<FilesMatch \"[.]php$\">\nRequire all denied\n</FilesMatch>\n") + "</VirtualHost>\n";
         var checksum = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(apache)));
         object Meta() => new { name, @namespace = Namespace, labels };
         object DataMount(bool readOnly) => new { name = "data", mountPath = root, readOnly };
@@ -168,6 +171,10 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                         volumes = new[] { new { name = "sites", nfs = new { server = Required("NfsServer"), path = Required("NfsPath") } } }
                     }
                 }
+            } });
+            resources.Add(new { apiVersion = "networking.k8s.io/v1", kind = "NetworkPolicy", metadata = Meta(), spec = new {
+                podSelector = new { matchLabels = labels }, policyTypes = new[] { "Ingress" },
+                ingress = new[] { new { from = new[] { new { podSelector = new { matchLabels = new Dictionary<string,string> { ["hostingpanel/component"] = "apache" } } } }, ports = new[] { new { protocol = "TCP", port = 9000 } } } }
             } });
             resources.Add(new { apiVersion = "v1", kind = "Service", metadata = Meta(), spec = new {
                 type = "ClusterIP", selector = labels, ports = new[] { new { port = 9000, targetPort = 9000 } }
