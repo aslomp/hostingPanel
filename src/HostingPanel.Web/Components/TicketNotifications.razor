@@ -5,32 +5,24 @@
 @inject DirectAdminSession Session
 @inject TicketLiveMonitor Monitor
 @inject NavigationManager Navigation
+@inject ISnackbar Snackbar
 @implements IAsyncDisposable
 
 <div class="ticket-notifications" aria-live="polite">
     @if (Session.Connected)
     {
-        <a href="/tickets" class="notification-link" title="@L["Tickets and messages"]">
+        <a href="/tickets" class="notification-link" @onclick="Clear" title="@L["Tickets and messages"]">
             <span class="notification-icon" aria-hidden="true">✉</span>
             @if (newCount > 0) { <span class="notification-count">@newCount</span> }
             <span>Tickets</span>
         </a>
-        @if (lastNotice is not null)
-        {
-            <div class="notification-toast" role="status">
-                <strong>Nieuw @(lastNotice.Kind == "message" ? "bericht" : "ticketantwoord")</strong>
-                <span>@lastNotice.Subject</span>
-                <a href="/tickets" @onclick="Clear">Open tickets</a>
-                <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Inherit" aria-label="@L["Dismiss notification"]" OnClick="Clear" />
-            </div>
-        }
+
     }
 </div>
 
 @code {
     private HubConnection? connection;
     private string? joinedChannel;
-    private TicketSignal? lastNotice;
     private int newCount;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -45,7 +37,6 @@
             connection = null;
         }
         joinedChannel = null;
-        lastNotice = null;
         newCount = 0;
         if (!Session.Connected || channel is null) return;
 
@@ -57,7 +48,7 @@
         {
             if (joinedChannel != channel) return;
             newCount++;
-            lastNotice = notice;
+            Snackbar.Add(notice.Subject, Severity.Info);
             Session.NotifyTicketInboxChanged();
             StateHasChanged();
         }));
@@ -84,7 +75,6 @@
     private void Clear()
     {
         newCount = 0;
-        lastNotice = null;
     }
 
     public async ValueTask DisposeAsync()
