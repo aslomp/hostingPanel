@@ -25,3 +25,7 @@ See [sessions and authentication](authentication.md) and [support and realtime](
 AccountOverview and the user, database, domain and DNS detail pages own a LatestRead instance per component. A newer read cancels the earlier read and only the current route/session result may update the UI. Disposal cancels outstanding reads; a session change clears the previous inventory and reloads under the effective identity. Domain provisioning invalidation has its own read lifecycle. Mutations are not cancelled by superseding reads, and a completion from a changed session must not update the current account overview. Provider authorization remains authoritative.
 
 The database overview owns independent LatestRead lifecycles for the current account and accessible-account inventories. Both reset on identity change and discard stale results; each operation resolves its own backend scope. Partial inventory warnings belong to the same accepted result. Existing mutation semantics are unchanged.
+
+## Dialog mutation lifecycle
+
+Account, database and standalone DNS creation dialogs use component-owned DialogMutation for exclusive submission and error state. The dialog captures the session channel at opening, validates it again after asynchronous form validation and before accepting backend results, and closes on identity changes. Dispatched writes are never cancelled or replayed by the UI. Backend-specific result interpretation remains with the feature; authorization remains with the provider.

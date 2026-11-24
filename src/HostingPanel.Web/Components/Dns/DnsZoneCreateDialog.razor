@@ -3,6 +3,7 @@
 @using HostingPanel.Api.Services
 @using HostingPanel.Api.Adapters
 @inject PanelSession Session
+@implements IDisposable
 @inject DnsOperations Dns
 <MudDialog>
     <DialogContent>
@@ -24,22 +25,32 @@
 @code {
     [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
     private string zoneDomain = "", zoneIp = "", zoneNs1 = "", zoneNs2 = "";
-    private string? error;
-    private bool busy;
-    private void Cancel() { if (!busy) Dialog.Cancel(); }
-    private async Task Create()
-    {
-        if (busy || !Session.Connected || string.IsNullOrWhiteSpace(zoneDomain)) return;
-        busy = true; error = null;
-        try
-        {
+    private string? error => mutation.Error;
+    private readonly DialogMutation mutation = new();
+  private bool busy => mutation.Busy;
+  private string? openedChannel;
+    protected override void OnInitialized()
+  {
+    openedChannel = Session.TicketChannel;
+    Session.Changed += SessionChanged;
+  }
+  private void Cancel() { if (!busy) Dialog.Cancel(); }
+    private void SessionChanged() => _ = InvokeAsync(() =>
+  {
+    if (!Session.Connected || Session.TicketChannel != openedChannel) Dialog.Cancel();
+  });
+  public void Dispose()
+  {
+    Session.Changed -= SessionChanged;
+    mutation.Dispose();
+  }
+  private Task Create() => mutation.RunAsync(Session, openedChannel, async current =>
+  {
+      if (string.IsNullOrWhiteSpace(zoneDomain)) return;
             var result = await Dns.CreateAsync(new DnsZoneCreate(zoneDomain.Trim(), zoneIp.Trim(), zoneNs1.Trim(), zoneNs2.Trim()));
+      if (!current()) return;
             var status = result.Status;
             if (result.Executed || result.ProvisioningPending) { Dialog.Close(DialogResult.Ok(true)); return; }
-            error = L["Creation not confirmed: backend HTTP {0}.", status].Value;
-        }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
-        { error = ex.Message; }
-        finally { busy = false; }
-    }
+            mutation.SetError(L["Creation not confirmed: backend HTTP {0}.", status].Value);
+  });
 }
