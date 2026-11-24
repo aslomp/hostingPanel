@@ -16,6 +16,7 @@ public static class KubernetesRegistration
     services.AddSingleton<PhpIdentityModel>();
     services.AddSingleton<IHostingPanelModelExtension>(sp => sp.GetRequiredService<PhpIdentityModel>());
     services.AddSingleton<IHostingPanelSchemaExtension>(sp => sp.GetRequiredService<PhpIdentityModel>());
+    services.AddSingleton<NfsDirectoryProvisioner>();
     services.AddHostedService<WebsiteReconciler>();
 
         return services;
