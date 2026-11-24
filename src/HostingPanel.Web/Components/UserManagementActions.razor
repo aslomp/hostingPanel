@@ -1,6 +1,8 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
-@inject DirectAdminSession Session
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@inject AccountOperations Accounts
 
 <MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@L["Account management"]</h2>
@@ -37,21 +39,21 @@
     private bool busy, failed;
     private string? message;
 
-    private Task ChangePackage() => Run(() => Session.SetUserPackageAsync(Username, newPackage),
-        L["DirectAdmin confirmed the new user package."].Value);
-    private Task ChangeLimit() => Run(() => Session.SetAccountLimitAsync(Kind, Username, limitField, limitValue),
-        L["DirectAdmin confirmed the new limit."].Value);
-    private Task ChangeSuspension() => Run(() => Session.SetAccountSuspensionAsync(Username, suspend == "true"),
-        L["DirectAdmin confirms: account status updated."].Value);
+    private Task ChangePackage() => Run(() => Accounts.SetPackageAsync(Username, newPackage),
+        L["Package change request accepted."].Value);
+    private Task ChangeLimit() => Run(() => Accounts.SetLimitAsync(Kind, Username, limitField, limitValue),
+        L["Limit change request accepted."].Value);
+    private Task ChangeSuspension() => Run(() => Accounts.SetSuspendedAsync(Username, suspend == "true"),
+        L["Account status change request accepted."].Value);
 
-    private async Task Run(Func<Task<(int Status, string Body)>> action, string success)
+    private async Task Run(Func<Task<AccountOperationResult>> action, string success)
     {
         if (busy || !Session.Connected) return;
         busy = true; failed = false; message = null;
         try
         {
-            var (status, _) = await action();
-            failed = status is < 200 or >= 300;
+            var (status, errorCode) = await action();
+            failed = errorCode is not null || status is < 200 or >= 300;
             message = failed ? L["Backend HTTP {0}.", status].Value : success;
             if (!failed) await OnChanged.InvokeAsync();
         }

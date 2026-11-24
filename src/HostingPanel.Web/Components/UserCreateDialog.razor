@@ -1,6 +1,8 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
-@inject DirectAdminSession Session
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@inject AccountOperations Accounts
 
 <MudDialog>
   <DialogContent>
@@ -40,8 +42,8 @@
       if (!form.IsValid || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(package)) return;
       if (password.Length < 5) { error = L["Password must contain at least 5 characters."].Value; return; }
       if (password != confirmation) { error = L["Passwords do not match."].Value; return; }
-      var (status, _) = await Session.CreateHostingAccountAsync(Kind, username, email, password, domain, package, ip);
-      if (status is >= 200 and < 300) { MudDialog.Close(DialogResult.Ok(username)); return; }
+      var (status, errorCode) = await Accounts.CreateAsync(new CreateHostingAccount(Kind, username, email, password, domain, package, ip));
+      if (errorCode is null && status is >= 200 and < 300) { MudDialog.Close(DialogResult.Ok(username)); return; }
       error = L["Account not created: backend HTTP {0}.", status].Value;
     }
     catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
