@@ -14,6 +14,13 @@ public sealed class SettingsOperations(IHttpClientFactory clients, PanelSession 
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
         return await SendAsync(HttpMethod.Put, "hosting/backend-settings", content, ct);
     }
+    public Task<(int Status, string Body)> GetProfileNameserversAsync(CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Get, "hosting/profile/nameservers", null, ct);
+    public async Task<(int Status, string Body)> SaveProfileNameserversAsync(string json, CancellationToken ct = default)
+    {
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        return await SendAsync(HttpMethod.Put, "hosting/profile/nameservers", content, ct);
+    }
     private async Task<(int Status, string Body)> SendAsync(HttpMethod method, string endpoint, HttpContent? content, CancellationToken ct)
     {
         var http = clients.CreateClient("hosting-api");

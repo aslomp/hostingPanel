@@ -19,10 +19,10 @@
         </select>
         <input type="hidden" name="returnUrl" value="@(new Uri(Navigation.Uri).PathAndQuery)" />
     </form>
-    <span class="analytics-account" title="@Session.Username">
+    <a class="analytics-account" href="/profile" title="@L["My profile"].Value">
         <MudAvatar Size="Size.Small" Color="Color.Primary">@((string.IsNullOrWhiteSpace(Session.Username) ? "?" : Session.Username[..1]).ToUpperInvariant())</MudAvatar>
         <span class="analytics-account-name">@Session.Username</span>
-    </span>
+    </a>
     <form method="post" action="/logout" data-enhance="false" class="analytics-logout">
         <AntiforgeryToken />
         <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Text" Color="Color.Inherit" Size="Size.Small">@L["Disconnect"]</MudButton>

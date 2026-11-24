@@ -7,6 +7,7 @@ public static class DirectAdminRegistration
     {
 
     services.AddScoped<DirectAdminBackend>();
+    services.AddScoped<IAccountNameservers, DirectAdminAccountNameservers>();
     services.AddScoped<IAuthenticationProvider>(sp => sp.GetRequiredService<DirectAdminBackend>());
     services.AddScoped<IApiCompatibilityHandler>(sp => sp.GetRequiredService<DirectAdminBackend>());
     services.AddScoped<IAccessibleDatabases>(sp => sp.GetRequiredService<DirectAdminBackend>().AccessibleDatabases);
