@@ -17,6 +17,7 @@ public sealed record AccountOperationResult(int Status, string? Error);
 /// scope, resource permissions and command validation.
 /// </summary>
 public sealed class AccountMutationService(IHttpClientFactory clients)
+: IAccountMutations
 {
     private static bool ValidUsername(string? value) =>
         !string.IsNullOrWhiteSpace(value) && value.Length <= 64 &&
