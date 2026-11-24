@@ -5,13 +5,13 @@
 <MudDialog>
   <DialogContent>
     <MudForm @ref="form">
-      <MudTextField T="string" Label="@L["Account name"].Value" @bind-Value="username" Required="true" />
-      <MudTextField T="string" Label="@L["Email address"].Value" @bind-Value="email" />
-      <MudTextField T="string" Label="@L["Primary domain"].Value" @bind-Value="domain" />
-      <MudTextField T="string" Label="@L["Package"].Value" @bind-Value="package" Required="true" />
-      <MudTextField T="string" Label="@L["IP / assignment"].Value" @bind-Value="ip" />
-      <MudTextField T="string" Label="@L["New password"].Value" @bind-Value="password" InputType="InputType.Password" Required="true" />
-      <MudTextField T="string" Label="@L["Confirm password"].Value" @bind-Value="confirmation" InputType="InputType.Password" Required="true" />
+      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Account name"].Value" @bind-Value="username" Required="true" />
+      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Email address"].Value" @bind-Value="email" />
+      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Primary domain"].Value" @bind-Value="domain" />
+      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Package"].Value" @bind-Value="package" Required="true" />
+      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["IP / assignment"].Value" @bind-Value="ip" />
+      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["New password"].Value" @bind-Value="password" autocomplete="new-password" InputType="InputType.Password" Required="true" />
+      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Confirm password"].Value" @bind-Value="confirmation" autocomplete="new-password" InputType="InputType.Password" Required="true" />
     </MudForm>
     @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
   </DialogContent>
@@ -28,21 +28,18 @@
   private string username = "", email = "", domain = "", package = "", ip = "shared", password = "", confirmation = "";
   private string? error;
   private bool busy;
-  private void Cancel() => MudDialog.Cancel();
+  private void Cancel() { if (!busy) MudDialog.Cancel(); }
   private async Task Create()
   {
     if (busy || !Session.Connected) return;
-    await form.ValidateAsync();
-    if (!form.IsValid || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(package) ||
-        password.Length < 5 || password != confirmation)
-    {
-      error = L["Passwords do not match."].Value;
-      return;
-    }
     busy = true;
     error = null;
     try
     {
+      await form.ValidateAsync();
+      if (!form.IsValid || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(package)) return;
+      if (password.Length < 5) { error = L["Password must contain at least 5 characters."].Value; return; }
+      if (password != confirmation) { error = L["Passwords do not match."].Value; return; }
       var (status, _) = await Session.CreateHostingAccountAsync(Kind, username, email, password, domain, package, ip);
       if (status is >= 200 and < 300) { MudDialog.Close(DialogResult.Ok(username)); return; }
       error = L["Account not created: backend HTTP {0}.", status].Value;
