@@ -28,6 +28,7 @@ kubernetesHosting:
   kubectlVersion: v1.35.5
   toolsImage: curlimages/curl:8.17.0
   nfsServer: ""
+  # Existing DirectAdmin /home export, containing username/domains/domain/public_html
   nfsPath: ""
   # Optional existing PVC for the provisioning filesystem. Its root must
   # correspond to nfsPath and permit the authorized provisioning identity.
