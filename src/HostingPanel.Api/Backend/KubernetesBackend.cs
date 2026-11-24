@@ -453,8 +453,8 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         return new(200, config, package?.Name, limits, null);
     }
 
-    public Task<LegacyDetailResult> GetAsync(string username, string kind, AuthenticationHeaderValue auth, CancellationToken ct)
-        => Task.FromResult(new LegacyDetailResult(501, null, "KUBERNETES_MODERN_USER_SCHEMA_NOT_IMPLEMENTED"));
+    public Task<UserDetailResult> GetAsync(string username, string kind, AuthenticationHeaderValue auth, CancellationToken ct)
+        => Task.FromResult(new UserDetailResult(501, null, "KUBERNETES_MODERN_USER_SCHEMA_NOT_IMPLEMENTED"));
 
     public Task<ImpersonationCheck> CheckAsync(AuthenticationHeaderValue auth, string target, CancellationToken ct)
         => Task.FromResult(new ImpersonationCheck(501, "KUBERNETES_IMPERSONATION_NOT_IMPLEMENTED"));
@@ -470,6 +470,16 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
     public Task<FileAccessResult> DeleteFtpAsync(string domain, string user, AuthenticationHeaderValue auth, CancellationToken ct)
         => Task.FromResult(new FileAccessResult(501, "KUBERNETES_FTP_NOT_IMPLEMENTED"));
 
+    public IResult PreviewDomain(DomainCreatePreview input)
+    {
+        if (!ValidDomain(input.Domain))
+            return Results.Json(new { type = "INVALID_DOMAIN" }, statusCode: 400);
+        return Results.Json(new {
+            domain = input.Domain.ToLowerInvariant(), dryRun = true,
+            desiredSettings = new { php = input.Php, ssl = input.Ssl, cgi = input.Cgi },
+            executed = false
+        });
+    }
     public Task ForwardAsync(HttpContext context)
     {
         context.Response.StatusCode = StatusCodes.Status501NotImplemented;

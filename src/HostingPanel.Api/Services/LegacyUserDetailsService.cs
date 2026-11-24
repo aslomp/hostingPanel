@@ -9,14 +9,14 @@ namespace HostingPanel.Api.Services;
 public sealed class LegacyUserDetailsService(IHttpClientFactory clients, IWebHostEnvironment environment)
 : IUserDetails
 {
-    public async Task<LegacyDetailResult> GetAsync(string username, string kind,
+    public async Task<UserDetailResult> GetAsync(string username, string kind,
         AuthenticationHeaderValue authentication, CancellationToken cancellationToken)
     : IUserDetails
 {
         var legacyCall = kind == "config" ? "CMD_API_SHOW_USER_CONFIG" : "CMD_API_SHOW_USER_USAGE";
         var client = clients.CreateClient("legacy-directadmin");
 
-        async Task<LegacyDetailResult> Fetch(string command)
+        async Task<UserDetailResult> Fetch(string command)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get,
                 command + "?user=" + Uri.EscapeDataString(username));
@@ -68,7 +68,7 @@ public sealed class LegacyUserDetailsService(IHttpClientFactory clients, IWebHos
     }
 }
 
-public sealed record LegacyDetailResult(int Status,
+public sealed record UserDetailResult(int Status,
     IReadOnlyDictionary<string,string>? Fields,
     string? Error,
     JsonObject? Result = null);

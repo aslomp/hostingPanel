@@ -35,7 +35,7 @@ public sealed class DomainController(IHostingBackend backend) : BackendControlle
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var owner = context.Request.Query["user"].ToString();
             var selected = string.IsNullOrWhiteSpace(owner) ? null : owner;
-            if (!DomainManagementService.ValidOwner(selected))
+            if (!HostingInputValidation.ValidOwner(selected))
                 return Results.Json(new { type = "BAD_REQUEST" }, statusCode: 400);
         
             var response = await service.ListAsync(selected, auth, context.RequestAborted);
@@ -50,16 +50,7 @@ public sealed class DomainController(IHostingBackend backend) : BackendControlle
         var context = HttpContext;
         if (!TryGetBasic(context, out _))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-            if (!LegacyDomainsAdapter.IsValidDomain(input.Domain))
-                return Results.Json(new { type = "INVALID_DOMAIN" }, statusCode: 400);
-            return Results.Json(new {
-                domain = input.Domain.ToLowerInvariant(),
-                dryRun = true,
-                legacyEndpoint = "CMD_API_DOMAIN",
-                method = "POST",
-                form = LegacyDomainsAdapter.EncodeCreateForm(input.Domain.ToLowerInvariant(), input.Php, input.Ssl, input.Cgi),
-                executed = false
-            });
+            return backend.PreviewDomain(input);
     }
 
     [HttpPost("/hosting/domains/execute")]

@@ -108,7 +108,7 @@ public sealed class UserController(IHostingBackend backend) : BackendController
         var service = backend.AccountOverview;
         if (!TryGetBasic(context, out var auth))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-            if (!LegacyAccountOverviewService.ValidUsername(username))
+            if (!HostingInputValidation.ValidUsername(username))
                 return Results.Json(new { type = "INVALID_USERNAME" }, statusCode: 400);
             var result = await service.GetAsync(username, auth, context.RequestAborted);
             return result.Config is null

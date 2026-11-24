@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using HostingPanel.Api.Services;
+using HostingPanel.Api.Adapters;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HostingPanel.Api;
@@ -30,6 +31,19 @@ public sealed class DirectAdminBackend(
     public IDomains Domains => domains;
     public IDns Dns => dns;
     public IFileAccess FileAccess => fileAccess;
+    public IResult PreviewDomain(DomainCreatePreview input)
+    {
+        if (!LegacyDomainsAdapter.IsValidDomain(input.Domain))
+            return Results.Json(new { type = "INVALID_DOMAIN" }, statusCode: 400);
+        return Results.Json(new {
+            domain = input.Domain.ToLowerInvariant(),
+            dryRun = true,
+            legacyEndpoint = "CMD_API_DOMAIN",
+            method = "POST",
+            form = LegacyDomainsAdapter.EncodeCreateForm(input.Domain.ToLowerInvariant(), input.Php, input.Ssl, input.Cgi),
+            executed = false
+        });
+    }
     public Task ForwardAsync(HttpContext context) => BackendController.ForwardToBackendAsync(context, clients);
 }
 

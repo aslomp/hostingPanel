@@ -19,6 +19,7 @@ public interface IHostingBackend
     IDns Dns { get; }
     IFileAccess FileAccess { get; }
     Task ForwardAsync(HttpContext context);
+    IResult PreviewDomain(DomainCreatePreview input);
 }
 
 public interface IAccountCatalog {
@@ -35,7 +36,7 @@ public interface IAccessibleDomains {
     Task<VisibleDomainsResult> ListAsync(AuthenticationHeaderValue auth, CancellationToken ct);
 }
 public interface IUserDetails {
-    Task<LegacyDetailResult> GetAsync(string username, string kind, AuthenticationHeaderValue auth, CancellationToken ct);
+    Task<UserDetailResult> GetAsync(string username, string kind, AuthenticationHeaderValue auth, CancellationToken ct);
 }
 public interface IAccountOverview {
     Task<AccountOverviewResult> GetAsync(string username, AuthenticationHeaderValue auth, CancellationToken ct);
