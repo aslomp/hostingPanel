@@ -4,7 +4,7 @@
 @using System.Text.Json
 @inject DirectAdminSession Session
 <PageTitle>Resellers — HostingPanel</PageTitle>
-<div class="page-header"><div><div class="eyebrow">@L["Account management"]</div><h1>@L["Reseller management"]</h1><p>@L["Backend-accessible accounts and reseller configuration, without UI role filtering."]</p></div><button disabled="@busy" @onclick="Load">@L["Refresh"]</button></div>
+<div class="page-header"><div><div class="eyebrow">@L["Account management"]</div><h1>@L["Reseller management"]</h1><p>@L["Backend-accessible accounts and reseller configuration, without UI role filtering."]</p></div><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></div>
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {
@@ -16,7 +16,7 @@ else
     <section class="card">
         <h2>@L["Reseller details"]</h2>
         <label>@L["Username"]</label><input @bind="username" placeholder="reseller" />
-        <button disabled="@busy" @onclick="LoadDetails">@L["Retrieve configuration and usage"]</button>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="LoadDetails">@L["Retrieve configuration and usage"]</MudButton>
         <h3>@L["Configuration"]</h3><JsonOverview Json="@details" /><h3>@L["Usage"]</h3><JsonOverview Json="@usage" />
     </section>
     <section class="card">

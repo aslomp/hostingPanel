@@ -29,8 +29,7 @@ else
         <label for="ticketBody">@L["Message"]</label>
         <textarea id="ticketBody" rows="10" @bind="body" placeholder="@L["Write the message…"]" maxlength="65536"></textarea>
         <div class="form-actions">
-            <button class="primary" disabled="@(sending || string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(body) || string.IsNullOrWhiteSpace(recipient))"
-                    @onclick="Send">@(sending ? "Verzenden…" : L["Send ticket"].Value)</button>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(sending || string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(body) || string.IsNullOrWhiteSpace(recipient))" OnClick="Send">@(sending ? "Verzenden…" : L["Send ticket"].Value)</MudButton>
             <a href="/tickets">@L["Cancel"]</a>
         </div>
         @if (feedback is not null) { <p role="status">@feedback</p> }
