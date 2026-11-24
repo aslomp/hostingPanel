@@ -5,8 +5,11 @@
 @inject DirectAdminSession Session
 @inject NavigationManager Navigation
 <PageTitle>@L["Create ticket — HostingPanel"]</PageTitle>
-<div class="page-header"><div><div class="eyebrow"><a href="/tickets">Tickets</a> / Nieuw ticket</div>
-    <h1>Ticket aanmaken</h1><p>@L["Send a new request to the DirectAdmin backend."]</p></div></div>
+<PanelPageHeader>
+    <Breadcrumb><a href="/tickets">Tickets</a> / Nieuw ticket</Breadcrumb>
+    <TitleContent>Ticket aanmaken</TitleContent>
+    <Description>@L["Send a new request to the DirectAdmin backend."]</Description>
+</PanelPageHeader>
 @if (!Session.Connected)
 {
     <section class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</section>

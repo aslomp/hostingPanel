@@ -9,14 +9,12 @@
 @inject IDialogService Dialogs
 
 <PageTitle>@L["Domain management — HostingPanel"]</PageTitle>
-<div class="page-header">
-    <div>
-        <div class="eyebrow">@L["Account management / Domains"]</div>
-        <h1>@L["Domain management"]</h1>
-        <p>@L["Manage domains and website configuration through the selected hosting backend."]</p>
-    </div>
-    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Refresh" Disabled="@loading">@(loading ? "Laden…" : L["Refresh"].Value)</MudButton>
-</div>
+<PanelPageHeader>
+    <Breadcrumb>@L["Account management / Domains"]</Breadcrumb>
+    <TitleContent>@L["Domain management"]</TitleContent>
+    <Description>@L["Manage domains and website configuration through the selected hosting backend."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Refresh" Disabled="@loading">@(loading ? "Laden…" : L["Refresh"].Value)</MudButton></Actions>
+</PanelPageHeader>
 
 @if (!Session.Connected)
 {
@@ -30,9 +28,9 @@ else
         <label for="owner">@L["Username (optional)"]</label>
         <MudTextField T="string" @bind-Value="owner" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="owner" Placeholder="@L["For example, an existing user"].Value" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Refresh" Disabled="@loading">@L["Retrieve"]</MudButton>
-        @if (error is not null) { <p class="error" role="alert">@error</p> }
+        @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
         @if (warning is not null) { <p role="status">Niet alle accountgegevens zijn beschikbaar: @warning</p> }
-        else if (loading) { <p role="status">@L["Retrieving domains…"]</p> }
+        else if (loading) { <PanelLoading>@L["Retrieving domains…"]</PanelLoading> }
         else if (domains is not null)
         {
             <p>@domains.Count domein(en) gevonden.</p>

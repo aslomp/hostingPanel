@@ -4,7 +4,12 @@
 @using System.Text.Json
 @inject DirectAdminSession Session
 <PageTitle>Resellers — HostingPanel</PageTitle>
-<div class="page-header"><div><div class="eyebrow">@L["Account management"]</div><h1>@L["Reseller management"]</h1><p>@L["Backend-accessible accounts and reseller configuration, without UI role filtering."]</p></div><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></div>
+<PanelPageHeader>
+    <Breadcrumb>@L["Account management"]</Breadcrumb>
+    <TitleContent>@L["Reseller management"]</TitleContent>
+    <Description>@L["Backend-accessible accounts and reseller configuration, without UI role filtering."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {
@@ -23,7 +28,7 @@ else
         <h2>@L["Reseller packages"]</h2>
         <JsonOverview Json="@packages" />
     </section>
-    @if (error is not null) { <p class="error" role="alert">@error</p> }
+    @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
     <AccountActions Kind="reseller" />
 }
 @code {

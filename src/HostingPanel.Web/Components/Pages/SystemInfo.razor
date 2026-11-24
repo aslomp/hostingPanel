@@ -4,11 +4,16 @@
 @using System.Text.Json
 @inject DirectAdminSession Session
 <PageTitle>@L["System information — HostingPanel"]</PageTitle>
-<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>@L["System information"]</h1><p>@L["Live information from the connected backend."]</p></div><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Refresh">@L["Refresh"]</MudButton></div>
+<PanelPageHeader>
+    <Breadcrumb>@L["Server management"]</Breadcrumb>
+    <TitleContent>@L["System information"]</TitleContent>
+    <Description>@L["Live information from the connected backend."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Refresh">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {
-    @if (busy) { <p role="status">@L["Retrieving system information…"]</p> }
+    @if (busy) { <PanelLoading>@L["Retrieving system information…"]</PanelLoading> }
     <div class="tiles">
         @foreach (var item in checks)
         {

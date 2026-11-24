@@ -3,7 +3,12 @@
 @page "/sessions"
 @inject DirectAdminSession Session
 <PageTitle>@L["Sessions — HostingPanel"]</PageTitle>
-<div class="page-header"><div><div class="eyebrow">@L["Account management"]</div><h1>@L["Sessions"]</h1><p>@L["Current session, active sessions and session management from DirectAdmin."]</p></div><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></div>
+<PanelPageHeader>
+    <Breadcrumb>@L["Account management"]</Breadcrumb>
+    <TitleContent>@L["Sessions"]</TitleContent>
+    <Description>@L["Current session, active sessions and session management from DirectAdmin."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {
@@ -22,7 +27,7 @@ else
         <label>@L["Enter the same ID to confirm"]</label><MudTextField T="string" @bind-Value="sessionConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || string.IsNullOrWhiteSpace(publicId) || sessionConfirmation != publicId)" OnClick="DestroySession">@L["Terminate session"]</MudButton>
     </section>
-    @if (busy) { <p role="status">@L["Processing…"]</p> }
+    @if (busy) { <PanelLoading>@L["Processing…"]</PanelLoading> }
 }
 @code {
     private string current = "", all = "", confirmation = "", publicId = "", sessionConfirmation = "";

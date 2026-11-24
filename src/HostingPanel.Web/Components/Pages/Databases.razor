@@ -5,16 +5,15 @@
 @inject DirectAdminSession Session
 
 <PageTitle>@L["Database management — HostingPanel"]</PageTitle>
-<div class="page-header">
-  <div><div class="eyebrow">@L["Account management / Databases"]</div>
-    <h1>@L["Database management"]</h1>
-    <p>@L["Databases belonging to your account and all subordinate accounts accessible through the backend."]</p>
-  </div>
-  <div class="form-actions">
+<PanelPageHeader>
+    <Breadcrumb>@L["Account management / Databases"]</Breadcrumb>
+    <TitleContent>@L["Database management"]</TitleContent>
+    <Description>@L["Databases belonging to your account and all subordinate accounts accessible through the backend."]</Description>
+    <Actions><div class="form-actions">
     <a class="btn" href="#database-create">@L["＋ Create database"]</a>
     <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(loading || overallLoading)" OnClick="RefreshAll">@L["↻ Refresh"]</MudButton>
-  </div>
-</div>
+  </div></Actions>
+</PanelPageHeader>
 @if (!Session.Connected)
 {
   <section class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</section>
@@ -27,8 +26,8 @@ else
     </div>
     <p>@L["Includes databases of subordinate accounts where DirectAdmin permits access."]</p>
     <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@overallLoading" OnClick="LoadOverall">@L["Refresh overview"]</MudButton>
-    @if (overallLoading) { <p role="status">@L["Retrieving databases from accessible accounts…"]</p> }
-    @if (overallError is not null) { <p class="error" role="alert">@overallError</p> }
+    @if (overallLoading) { <PanelLoading>@L["Retrieving databases from accessible accounts…"]</PanelLoading> }
+    @if (overallError is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@overallError</MudAlert> }
     @if (overall is not null)
     {
       <p>@overall.Count databases gevonden. @(overallWarnings.Count == 0 ? L["Complete inventory."].Value : L["Incomplete: {0} accounts could not be read.", overallWarnings.Count].Value)</p>
@@ -56,8 +55,8 @@ else
     <h2>@L["Databases in the current session"]</h2>
     <p>@L["Manage databases in the current session. For other accounts, use backend-supported session switching."]</p>
 
-    @if (error is not null) { <p role="alert" class="error">@error</p> }
-    @if (loading) { <p role="status">@L["Loading databases…"]</p> }
+    @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
+    @if (loading) { <PanelLoading>@L["Loading databases…"]</PanelLoading> }
     @if (databases is not null)
     {
       <label for="dbFilter">Zoek database (@databases.Count)</label>
