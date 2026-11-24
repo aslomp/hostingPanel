@@ -12,7 +12,7 @@
     <Actions>
         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
             <CrudAddButton OnClick="OpenCreateDialog" Disabled="@(!Session.Connected || loading || mutating)">@L[ResellersOnly ? "Create reseller" : "Add user"]</CrudAddButton>
-            <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@(loading || mutating)">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton>
         </MudStack>
     </Actions>
 </PanelPageHeader>
@@ -30,7 +30,7 @@ else if (loading)
 }
 else if (accounts is not null)
 {
-    @if (operationMessage is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@operationMessage</MudAlert> }
+    @if (operationMessage is not null) { <MudAlert Severity="@(operationFailed ? Severity.Error : Severity.Success)" Class="my-2">@operationMessage</MudAlert> }
     <MudPaper Class="pa-4 my-3" Elevation="1">
         <div class="dashboard-section-heading"><h2>@L["All accessible accounts"]</h2><MudChip T="string" Size="Size.Small" Color="Color.Success">@Visible.Count()</MudChip></div>
         <label for="userFilter">@L["Search users"]</label>
@@ -48,7 +48,7 @@ else if (accounts is not null)
                     @if (!item.Account.Role.Equals("admin", StringComparison.OrdinalIgnoreCase) &&
                         !item.Account.Username.Equals(Session.Username, StringComparison.OrdinalIgnoreCase))
                     {
-                        <CrudDeleteButton Label="@L[item.Account.Role.Equals("reseller", StringComparison.OrdinalIgnoreCase) ? "Delete reseller" : "Delete user"].Value" Disabled="@mutating" OnClick="@(() => ConfirmDelete(item.Account))" />
+                        <CrudDeleteButton Label="@DeleteLabel(item.Account)" Disabled="@mutating" OnClick="@(() => ConfirmDelete(item.Account))" />
                     }
                 </td>
             </tr>
@@ -67,6 +67,8 @@ else if (accounts is not null)
 @code {
     [Parameter] public bool ResellersOnly { get; set; }
     private string? packages;
+    private bool operationFailed;
+    private string DeleteLabel(Account account) => L[account.Role.Equals("reseller", StringComparison.OrdinalIgnoreCase) ? "Delete reseller" : "Delete user"].Value;
     private string DetailHref(Account account) => $"/{(account.Role.Equals("reseller", StringComparison.OrdinalIgnoreCase) ? "resellers" : "users")}/{Uri.EscapeDataString(account.Username)}";
     private sealed record Account(string Username, string Role, string? Creator);
     private sealed record TreeItem(Account Account, int Depth);
@@ -84,10 +86,11 @@ else if (accounts is not null)
     private IEnumerable<TreeItem> Ordered()
     {
         if (accounts is null) yield break;
-        var byName = accounts.ToDictionary(x => x.Username, StringComparer.OrdinalIgnoreCase);
+        var byName = accounts.Select(x => x.Username).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var children = accounts.Where(x => x.Creator is not null).ToLookup(x => x.Creator!, StringComparer.OrdinalIgnoreCase);
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var roots = accounts.Where(x => x.Creator is null ||
-            !byName.ContainsKey(x.Creator) ||
+            !byName.Contains(x.Creator) ||
             x.Creator.Equals(x.Username, StringComparison.OrdinalIgnoreCase))
             .OrderBy(x => x.Role == "admin" ? 0 : x.Role == "reseller" ? 1 : 2)
             .ThenBy(x => x.Username, StringComparer.OrdinalIgnoreCase);
@@ -100,8 +103,7 @@ else if (accounts is not null)
         {
             if (!visited.Add(parent.Username)) yield break;
             yield return new(parent, depth);
-            foreach (var child in accounts.Where(x => x.Creator is not null &&
-                x.Creator.Equals(parent.Username, StringComparison.OrdinalIgnoreCase))
+            foreach (var child in children[parent.Username]
                 .OrderBy(x => x.Username, StringComparer.OrdinalIgnoreCase))
                 foreach (var item in Descendants(child, depth + 1))
                     yield return item;
@@ -120,7 +122,7 @@ else if (accounts is not null)
                 new DialogParameters<UserCreateDialog> { { x => x.Kind, ResellersOnly ? "reseller" : "user" } },
                 new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = false, BackdropClick = false, CloseOnEscapeKey = false });
             var result = await dialog.Result;
-            if (result is { Canceled: false }) await Load();
+            if (result is { Canceled: false }) { operationFailed = false; operationMessage = L["Account created."].Value; await Load(); }
         }
         finally { mutating = false; }
     }
@@ -132,22 +134,24 @@ else if (accounts is not null)
         if (account.Role.Equals("admin", StringComparison.OrdinalIgnoreCase) ||
             account.Username.Equals(Session.Username, StringComparison.OrdinalIgnoreCase)) return;
         var identity = Session.Username;
+        mutating = true;
+        operationMessage = null;
+        try
+        {
         var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
             $"{L["Delete account"]}: {account.Username}", account.Username,
             L["Deleting this account is irreversible. All associated data will be removed."].Value,
             L["Confirm account name"].Value);
         if (!confirmed || !Session.Connected || !string.Equals(identity, Session.Username, StringComparison.Ordinal))
             return;
-        mutating = true;
-        operationMessage = null;
-        try
-        {
             var (status, _) = await Session.DeleteHostingAccountAsync(kind, account.Username, account.Username);
-            if (status is >= 200 and < 300) await Load();
+            operationFailed = status is < 200 or >= 300;
+            if (!operationFailed) { operationMessage = L["DirectAdmin confirmed deletion of '{0}'.", account.Username].Value; await Load(); }
             else operationMessage = L["Deletion not confirmed: backend HTTP {0}.", status].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
         {
+            operationFailed = true;
             operationMessage = ex.Message;
         }
         finally { mutating = false; }
