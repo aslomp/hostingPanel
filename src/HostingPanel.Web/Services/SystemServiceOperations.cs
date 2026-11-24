@@ -18,17 +18,17 @@ public sealed class SystemServiceOperations(CompatibilityApiClient client)
     public Task<(int Status, string Body)> LogAsync(string service, CancellationToken ct = default) =>
         client.GetRawAsync($"api/system-services/service/{Segment(service)}/log", ct);
 
-    public Task<(int Status, string Body)> SetWatchdogAsync(string service, bool enabled) =>
+    public Task<(int Status, string Body)> SetWatchdogAsync(string service, bool enabled, CancellationToken ct = default) =>
         client.RequestApiAsync(HttpMethod.Put,
             $"api/system-services-actions/service/{Segment(service)}/watchdog",
-            JsonSerializer.Serialize(new { enable = enabled }));
+            JsonSerializer.Serialize(new { enable = enabled }), ct);
 
-    public Task<(int Status, string Body)> ExecuteAsync(string service, string action)
+    public Task<(int Status, string Body)> ExecuteAsync(string service, string action, CancellationToken ct = default)
     {
         if (action is not ("restart" or "reload" or "start" or "stop"))
             throw new ArgumentException("Unsupported service action.", nameof(action));
         return client.RequestApiAsync(HttpMethod.Post,
-            $"api/system-services-actions/service/{Segment(service)}/{action}");
+            $"api/system-services-actions/service/{Segment(service)}/{action}", cancellationToken: ct);
     }
 
     private static string Segment(string service) => ValidService(service)

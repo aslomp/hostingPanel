@@ -7,6 +7,28 @@ using System.Text;
 var checks = new List<(string Description, Action Test)>
 {
     ("Session HTTP transport preserves routes, credentials and disconnect boundaries", PanelHttpTransportTests.Run),
+    ("Administrative mutations retain a cancellable API boundary", () =>
+    {
+        foreach (var (type, names) in new (Type, string[])[]
+        {
+            (typeof(SystemUpdateOperations), ["CheckAsync", "RunAsync"]),
+            (typeof(SystemServiceOperations), ["SetWatchdogAsync", "ExecuteAsync"]),
+            (typeof(ServerSettingsOperations), ["TestDatabaseAsync", "SaveDatabaseAsync", "ChangeHostnameAsync", "ChangeTimezoneAsync", "PatchAsync"])
+        })
+        {
+            foreach (var name in names)
+            {
+                var method = type.GetMethod(name) ?? throw new Exception($"Missing {type.Name}.{name}");
+                var parameters = method.GetParameters();
+                Require(parameters[^1].ParameterType == typeof(CancellationToken) &&
+                    parameters[^1].IsOptional);
+            }
+        }
+        Require(SystemUpdateOperations.ValidPackages(["openssl", "nginx-plus"]));
+        Require(!SystemUpdateOperations.ValidPackages(["nginx/path"]));
+        Require(SystemServiceOperations.ValidService("nginx.service"));
+        Require(!SystemServiceOperations.ValidService("../nginx"));
+    }),
     ("Apache candidate revisions are deterministic and immutable", ApacheConfigurationRevisionTests.Run),
     ("Dialog mutations reject duplicates and obsolete sessions", DialogMutationTests.Run),
     ("Latest UI reads discard superseded results and cancel on disposal", LatestReadTests.Run),
