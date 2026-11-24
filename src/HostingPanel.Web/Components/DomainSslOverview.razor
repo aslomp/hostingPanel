@@ -1,7 +1,8 @@
 @using HostingPanel.Web.Localization
 @using System.Text.Json
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
-@inject DirectAdminSession Session
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
 
 <PageTitle>@L["Domain SSL"] — HostingPanel</PageTitle>
 <PanelPageHeader>
@@ -59,7 +60,7 @@ else
         busy = true; error = null;
         try
         {
-            var (status, body) = await Session.GetRawAsync("api/domain-tls/domains");
+            var (status, body) = await ApiClient.GetRawAsync("api/domain-tls/domains");
             if (status != 200) { domains = null; error = L["Backend HTTP {0}.", status].Value; return; }
             using var doc = JsonDocument.Parse(body);
             domains = doc.RootElement.EnumerateArray().Select(x =>

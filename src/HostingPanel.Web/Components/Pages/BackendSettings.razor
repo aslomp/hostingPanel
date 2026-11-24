@@ -3,7 +3,8 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @using System.Text.Json.Nodes
-@inject DirectAdminSession Session
+@inject PanelSession Session
+@inject SettingsOperations SettingsOps
 
 <PageTitle>@L[NameserversOnly ? "Name servers" : IpOnly ? "IP management" : "Backend settings"] — HostingPanel</PageTitle>
 <PanelPageHeader>
@@ -211,13 +212,13 @@ else
         busy = true; view = null; message = null; errors.Clear();
         try
         {
-            var (status, body) = await Session.GetBackendSettingsAsync();
+            var (status, body) = await SettingsOps.GetBackendSettingsAsync();
             if (status == 200)
             {
                 Accept(body);
                 if (IpOnly || NameserversOnly)
                 {
-                    var (networkStatus, networkBody) = await Session.GetNetworkInventoryAsync();
+                    var (networkStatus, networkBody) = await SettingsOps.GetNetworkInventoryAsync();
                     inventory = networkStatus == 200 ? JsonSerializer.Deserialize<NetworkInventory>(networkBody, JsonOptions) : null;
                 }
             }
@@ -255,11 +256,11 @@ else
                 catch (JsonException) { errors[field.Name] = [L["Invalid value."].Value]; }
             }
             if (errors.Count > 0) return;
-            var (status, body) = await Session.SaveBackendSettingsAsync(
+            var (status, body) = await SettingsOps.SaveBackendSettingsAsync(
                 JsonSerializer.Serialize(new { revision = view.Revision, values }, JsonOptions));
             if (status == 200)
             {
-                var (readStatus, savedBody) = await Session.GetBackendSettingsAsync();
+                var (readStatus, savedBody) = await SettingsOps.GetBackendSettingsAsync();
                 if (readStatus != 200) { message = $"Save returned success but readback failed: HTTP {readStatus}."; return; }
                 var saved = JsonSerializer.Deserialize<SettingsView>(savedBody, JsonOptions) ?? throw new JsonException("Settings response is empty.");
                 var expected = JsonSerializer.Deserialize<SettingsView>(body, JsonOptions) ?? throw new JsonException("Save response is empty.");

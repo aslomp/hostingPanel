@@ -2,7 +2,8 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/server-tls"
 @using System.Text.Json
-@inject DirectAdminSession Session
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
 <PageTitle>Server TLS — HostingPanel</PageTitle>
 <PanelPageHeader>
     <Breadcrumb>@L["Server management"]</Breadcrumb>
@@ -42,11 +43,11 @@ else
         busy = true;
         try
         {
-            var (s,b) = await Session.GetRawAsync("api/server-tls/status");
+            var (s,b) = await ApiClient.GetRawAsync("api/server-tls/status");
             status = $"HTTP {s}\n{b}";
-            var (a,c) = await Session.GetRawAsync("api/server-tls/acme-config");
+            var (a,c) = await ApiClient.GetRawAsync("api/server-tls/acme-config");
             acme = $"HTTP {a}\n{c}";
-            var (d,e) = await Session.GetRawAsync("api/server-tls/certificate");
+            var (d,e) = await ApiClient.GetRawAsync("api/server-tls/certificate");
             certificate = $"HTTP {d}\n{e}";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }
@@ -63,7 +64,7 @@ else
                 !new[] { "account", "additionalDomains", "dnsEnvironment", "dnsProvider", "enabled", "keyType", "provider" }
                     .All(key => json.RootElement.TryGetProperty(key, out _)))
             { feedback = L["ACME JSON is missing one or more required contract fields."].Value; return; }
-            var (status, body) = await Session.RequestApiAsync(HttpMethod.Put,
+            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Put,
                 "api/server-tls/acme-config", acmeJson);
             feedback = $"Backend HTTP {status}: {body}";
         }
@@ -77,7 +78,7 @@ else
         busy = true; feedback = null;
         try
         {
-            var (s, b) = await Session.RequestApiAsync(HttpMethod.Post, "api/server-tls/obtain");
+            var (s, b) = await ApiClient.RequestApiAsync(HttpMethod.Post, "api/server-tls/obtain");
             feedback = $"Backend HTTP {s}: {b}";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }

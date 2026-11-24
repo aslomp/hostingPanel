@@ -1,7 +1,7 @@
 @page "/domains/{Domain}/ssl"
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
-@inject DirectAdminSession Session
+@inject PanelSession Session
 <PageTitle>@Domain — @L["Domain SSL"]</PageTitle>
 <PanelPageHeader>
     <Breadcrumb><a href="/navigation/domain-ssl">@L["Domain SSL"]</a> / @Domain</Breadcrumb>

@@ -2,7 +2,8 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/navigation/{Key}"
 @using System.Text.Json
-@inject DirectAdminSession Session
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
 
 @if (Key == "ip-management")
 {
@@ -125,7 +126,7 @@ else
             path += "?path=" + Uri.EscapeDataString(directory);
         if (path is "api/email-logs" or "api/email-logs-summary")
             path += "?from=" + Uri.EscapeDataString(DateTimeOffset.UtcNow.AddDays(-1).ToString("O"));
-        if (!DirectAdminSession.IsAllowedEndpoint(path))
+        if (!CompatibilityApiClient.IsAllowedEndpoint(path))
         {
             statusText = L["Invalid API path."].Value;
             return;
@@ -133,7 +134,7 @@ else
         busy = true;
         try
         {
-            var (status, body) = await Session.GetRawAsync(path);
+            var (status, body) = await ApiClient.GetRawAsync(path);
             statusText = status is >= 200 and < 300
                 ? L["Data received from DirectAdmin (HTTP {0}).", status].Value
                 : L["DirectAdmin returned HTTP {0}.", status].Value;
