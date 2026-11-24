@@ -20,7 +20,6 @@ public static class KubernetesRegistration
     services.AddScoped<KubernetesBackend>();
     services.AddScoped<IKubernetesSettingsReader>(sp => sp.GetRequiredService<KubernetesBackend>());
     services.AddScoped<IDomainDnsStaging>(sp => sp.GetRequiredService<KubernetesBackend>());
-    services.AddScoped<IHostingBackend>(sp => sp.GetRequiredService<KubernetesBackend>());
     services.AddScoped<IAuthenticationProvider>(sp => sp.GetRequiredService<KubernetesBackend>());
     services.AddScoped<IApiCompatibilityHandler>(sp => sp.GetRequiredService<KubernetesBackend>());
     services.AddScoped<IAccessibleDatabases>(sp => sp.GetRequiredService<KubernetesBackend>().AccessibleDatabases);

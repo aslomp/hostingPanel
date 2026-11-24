@@ -16,7 +16,8 @@ namespace HostingPanel.Api;
 /// Reconciliation with the cluster is deliberately a separate responsibility.
 /// </summary>
 public sealed partial class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, PowerDnsClient? powerDns = null, IConfiguration? configuration = null) :
-    IHostingBackend, IAccountCatalog, IAccountMutations, IAccessibleDomains,
+    IAuthenticationProvider, IWebHosting, IDNSProvider, ICertificateProvider, IApiCompatibilityHandler, IDomainPreview,
+    IAccountCatalog, IAccountMutations, IAccessibleDomains,
     IUserDetails, IAccountOverview, IImpersonation, IDatabases,
     IAccessibleDatabases, IDomains, IFileAccess, ITickets, IBackendSettingsAccess, IHostingNetworkAccess, IKubernetesSettingsReader, IDomainDnsStaging
 {
