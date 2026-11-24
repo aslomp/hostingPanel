@@ -6,6 +6,7 @@ using HostingPanel.Api.Adapters;
 namespace HostingPanel.Api.Services;
 
 public sealed class DomainManagementService(IHttpClientFactory clients)
+: IDomains
 {
     public async Task<DomainListResult> ListAsync(string? owner,
         AuthenticationHeaderValue credentials, CancellationToken cancellationToken)
