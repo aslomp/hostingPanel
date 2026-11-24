@@ -40,11 +40,11 @@ else
                     ("Domein", "domain"), ("Gebruiker", "username"), ("IP-adres", "ip"),
                     ("Standaarddomein", "defaultdomain"), ("Opgeschort", "suspended"),
                     ("Subdomeinen", "subdomain"), ("Documentroot", "private_html"),
-                    ("PHP-versie", "php1_ver"), ("PHP-handler", "php1_info") })
+                    ("PHP-versie", "php1_ver"), ("PHP-handler", "php1_info"), ("Provisioning", "provisioning") })
                 {
                     @if (fields is not null && fields.TryGetValue(item.Key, out var value))
                     {
-                        <tr><th>@item.Label</th><td>@value</td></tr>
+                        <tr><th>@L[item.Label]</th><td>@(item.Key == "provisioning" ? L[value].Value : value)</td></tr>
                     }
                 }
             </tbody></table>
