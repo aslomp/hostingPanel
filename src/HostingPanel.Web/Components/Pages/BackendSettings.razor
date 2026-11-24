@@ -26,8 +26,8 @@ else
                 <div class="form-actions"><MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddIp" Disabled="@busy">+ @L["Add IP"]</MudButton></div>
                 <h2>@L["IP addresses"]</h2>
                 <div class="form-actions">
-                    <button disabled="@busy" @onclick='() => SetSelectedStatus("shared")'>@L["Share"]</button>
-                    <button disabled="@busy" @onclick='() => SetSelectedStatus("available")'>@L["Available"]</button>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick='() => SetSelectedStatus("shared")'>@L["Share"]</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick='() => SetSelectedStatus("available")'>@L["Available"]</MudButton>
                     <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="ClearSelectedNs">@L["Clear NS"]</MudButton>
                     <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="ToggleGlobal">@L["Toggle global"]</MudButton>
                     <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@busy" OnClick="DeleteSelected">@L["Delete"]</MudButton>
@@ -48,7 +48,7 @@ else
                         </td>
                         <td><MudCheckBox T="bool" @bind-Value="ip.Global" /></td><td><MudTextField T="string" @bind-Value="ip.NameServer" Margin="Margin.Dense" Immediate="true" /></td>
                         <td><MudNumericField T="int" Min="0" Max="128" @bind-Value="ip.PrefixLength" Margin="Margin.Dense" /></td>
-                        <td><button disabled="@busy" @onclick="() => RemoveIp(ip)">@L["Delete"]</button></td></tr>
+                        <td><MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@busy" OnClick="() => RemoveIp(ip)">@L["Delete"]</MudButton></td></tr>
                     }
                     </tbody>
                 </MudSimpleTable>
@@ -56,7 +56,7 @@ else
                 @if (inventory?.Warning is { } warning) { <p>@warning</p> }
                 <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>IP</th><th>@L["Device"]</th><th></th></tr></thead><tbody>
                 @foreach (var device in inventory?.Devices ?? [])
-                { <tr><td>@device.Address</td><td>@device.Device</td><td><button disabled="@(busy || addresses.Any(x => x.Address == device.Address))" @onclick="() => ImportDevice(device)">@L["Add IP"]</button></td></tr> }
+                { <tr><td>@device.Address</td><td>@device.Device</td><td><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || addresses.Any(x => x.Address == device.Address))" OnClick="() => ImportDevice(device)">@L["Add IP"]</MudButton></td></tr> }
                 </tbody></MudSimpleTable>
                 <p>@L["Select the default public web IP for new domains."]</p>
                 <MudSelect T="string" @bind-Value="draftWebIp" Margin="Margin.Dense"><MudSelectItem T="string" Value='@("")'>@L["Not set"]</MudSelectItem>
@@ -67,7 +67,7 @@ else
             }
             @if (NameserversOnly && view.Fields.Any(f => f.Name == "IpAddresses"))
             {
-                <div class="form-actions"><button class="primary" disabled="@busy" @onclick="() => editingNs = !editingNs">+ @L["Create nameservers"]</button></div>
+                <div class="form-actions"><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="() => editingNs = !editingNs">+ @L["Create nameservers"]</MudButton></div>
                 @if (editingNs)
                 {
                     <MudSelect T="string" @bind-Value="nsAddress" Margin="Margin.Dense"><MudSelectItem T="string" Value='@("")'>@L["Select IP"]</MudSelectItem>@foreach (var ip in addresses) { <MudSelectItem T="string" Value='@ip.Address'>@ip.Address</MudSelectItem> }</MudSelect>
@@ -76,7 +76,7 @@ else
                 }
                 <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>IP</th><th>@L["Status"]</th><th>@L["Users"]</th><th>@L["Name server"]</th><th></th></tr></thead>
                 <tbody>@foreach (var ip in addresses.Where(x => x.NameServer.Length > 0))
-                { <tr><td>@ip.Address</td><td>@ip.Status</td><td>@(inventory?.Users.GetValueOrDefault(ip.Address) ?? 0)</td><td>@ip.NameServer</td><td><button disabled="@busy" @onclick="() => ip.NameServer = string.Empty">@L["Delete"]</button></td></tr> }</tbody></MudSimpleTable>
+                { <tr><td>@ip.Address</td><td>@ip.Status</td><td>@(inventory?.Users.GetValueOrDefault(ip.Address) ?? 0)</td><td>@ip.NameServer</td><td><MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@busy" OnClick="() => ip.NameServer = string.Empty">@L["Delete"]</MudButton></td></tr> }</tbody></MudSimpleTable>
                 <h2>@L["Default nameservers assigned to new users"]</h2>
             }
             @if (!VisibleFields.Any() && !IpOnly)
@@ -122,7 +122,7 @@ else
                             }
                             @if (field.Nullable && field.Type == "string")
                             {
-                                <button type="button" disabled="@busy" @onclick="() => Set(field.Name, null)">@L["Not set"]</button>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="() => Set(field.Name, null)">@L["Not set"]</MudButton>
                             }
                             @if (errors.TryGetValue(field.Name, out var fieldErrors))
                             {

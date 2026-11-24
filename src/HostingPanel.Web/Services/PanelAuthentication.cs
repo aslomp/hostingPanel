@@ -96,7 +96,7 @@ public static class PanelAuthentication
             <html lang="{{CultureInfo.CurrentUICulture.TwoLetterISOLanguageName}}">
             <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
             <title>HostingPanel — {{T("Sign in")}}</title><link rel="stylesheet" href="/site.css"></head>
-            <body><main style="min-height:100vh;display:grid;place-items:center;padding:24px">
+            <body class="login-page"><main style="min-height:100vh;display:grid;place-items:center;padding:24px">
             <section class="card" style="width:min(100%,440px);padding:32px">
             <div class="eyebrow">HostingPanel · CONTROL CENTER</div>
             <h1>{{T("Sign in")}}</h1><p>{{T("Sign in to your hosting account.")}}</p>{{message}}

@@ -42,7 +42,7 @@ else
                 <tbody>
                 @foreach (var domain in domains.Where(d => d.Contains(filter, StringComparison.OrdinalIgnoreCase)))
                 {
-                    <tr><td><a href="@($"/domains/{Uri.EscapeDataString(domain)}")">@domain</a> — <a href="@($"/domains/{Uri.EscapeDataString(domain)}/dns")">DNS</a></td><td>@(ownership.TryGetValue(domain, out var domainOwner) ? domainOwner : (string.IsNullOrWhiteSpace(owner) ? "—" : owner))</td><td>@L[provisioning.GetValueOrDefault(domain) ?? "Unknown"]</td><td><button @onclick="() => SelectDelete(domain)" disabled="@mutationBusy">@L["Delete"]</button></td></tr>
+                    <tr><td><a href="@($"/domains/{Uri.EscapeDataString(domain)}")">@domain</a> — <a href="@($"/domains/{Uri.EscapeDataString(domain)}/dns")">DNS</a></td><td>@(ownership.TryGetValue(domain, out var domainOwner) ? domainOwner : (string.IsNullOrWhiteSpace(owner) ? "—" : owner))</td><td>@L[provisioning.GetValueOrDefault(domain) ?? "Unknown"]</td><td><MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="() => SelectDelete(domain)" Disabled="@mutationBusy">@L["Delete"]</MudButton></td></tr>
                 }
                 </tbody>
             </MudSimpleTable>
