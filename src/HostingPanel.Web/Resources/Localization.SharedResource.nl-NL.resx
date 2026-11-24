@@ -831,4 +831,10 @@
   <data name="The backend denied deletion." xml:space="preserve"><value>De backend weigert verwijdering.</value></data>
   <data name="The backend denied this database operation." xml:space="preserve"><value>De backend weigert deze databasebewerking.</value></data>
   <data name="The backend did not confirm creation (HTTP {0})." xml:space="preserve"><value>De backend bevestigde de aanmaak niet (HTTP {0}).</value></data>
+  <data name="Password must contain at least 12 characters." xml:space="preserve"><value>Het wachtwoord moet minimaal 12 tekens bevatten.</value></data>
+  <data name="The selected hosting package does not exist or is not available to your account." xml:space="preserve"><value>Het gekozen hostingpakket bestaat niet of is niet beschikbaar voor uw account.</value></data>
+  <data name="An account with this name already exists." xml:space="preserve"><value>Er bestaat al een account met deze naam.</value></data>
+  <data name="This domain is already in use." xml:space="preserve"><value>Dit domein is al in gebruik.</value></data>
+  <data name="Check the account name, email address, domain, package and password." xml:space="preserve"><value>Controleer de accountnaam, het e-mailadres, domein, pakket en wachtwoord.</value></data>
+  <data name="You are not authorized to create this account." xml:space="preserve"><value>U bent niet bevoegd om dit account aan te maken.</value></data>
 </root>
