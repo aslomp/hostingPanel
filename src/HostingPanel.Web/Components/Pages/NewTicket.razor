@@ -6,13 +6,13 @@
 @inject NavigationManager Navigation
 <PageTitle>@L["Create ticket — HostingPanel"]</PageTitle>
 <PanelPageHeader>
-    <Breadcrumb><a href="/tickets">Tickets</a> / Nieuw ticket</Breadcrumb>
-    <TitleContent>Ticket aanmaken</TitleContent>
+    <Breadcrumb><a href="/tickets">Tickets</a> / @L["New ticket"]</Breadcrumb>
+    <TitleContent>@L["Create ticket"]</TitleContent>
     <Description>@L["Send a new request to the DirectAdmin backend."]</Description>
 </PanelPageHeader>
 @if (!Session.Connected)
 {
-    <MudPaper Class="pa-4 my-3" Elevation="1">Maak eerst verbinding via het <a href="/">dashboard</a>.</MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
 }
 else
 {
@@ -21,7 +21,7 @@ else
         <MudGrid Spacing="3">
             <MudItem xs="12" sm="6"><label for="ticketRecipient">@L["Recipient"]</label>
                 <MudTextField T="string" @bind-Value="recipient" Required="true" RequiredError="@L["Recipient"].Value" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketRecipient" Placeholder="creator" />
-                <p>Gebruik <code>creator</code> of een gebruikersnaam die DirectAdmin accepteert.</p>
+                <p>@L["Use creator or a username accepted by DirectAdmin."]</p>
             </MudItem>
             <MudItem xs="12" sm="6"><label for="ticketPriority">@L["Priority"]</label>
                 <MudSelect T="string" @bind-Value="priority" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="ticketPriority">
@@ -33,7 +33,7 @@ else
         <label for="ticketBody">@L["Message"]</label>
         <MudTextField T="string" @bind-Value="body" Required="true" RequiredError="@L["Message"].Value" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketBody" Placeholder="@L["Write the message…"].Value" Lines="10" MaxLength="65536" />
         <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mt-3">
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(sending || string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(body) || string.IsNullOrWhiteSpace(recipient))" OnClick="Send">@(sending ? "Verzenden…" : L["Send ticket"].Value)</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(sending || string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(body) || string.IsNullOrWhiteSpace(recipient))" OnClick="Send">@(sending ? L["Sending…"].Value : L["Send ticket"].Value)</MudButton>
             <a href="/tickets">@L["Cancel"]</a>
         </MudStack>
         @if (feedback is not null) { <p role="status">@feedback</p> }

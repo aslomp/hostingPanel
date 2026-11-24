@@ -727,4 +727,22 @@
   <data name="Passwords do not match." xml:space="preserve"><value>De wachtwoorden komen niet overeen.</value></data>
   <data name="No DNS zones match this filter." xml:space="preserve"><value>Geen DNS-zones komen overeen met dit filter.</value></data>
   <data name="No DNS records found." xml:space="preserve"><value>Geen DNS-records gevonden.</value></data>
+  <data name="dashboard" xml:space="preserve"><value>dashboard</value></data>
+  <data name="Creating…" xml:space="preserve"><value>Aanmaken…</value></data>
+  <data name="Sending…" xml:space="preserve"><value>Verzenden…</value></data>
+  <data name="Not all account data is available: {0}" xml:space="preserve"><value>Niet alle accountgegevens zijn beschikbaar: {0}</value></data>
+  <data name="Domains found: {0}" xml:space="preserve"><value>Domeinen gevonden: {0}</value></data>
+  <data name="Found: {0}" xml:space="preserve"><value>Gevonden: {0}</value></data>
+  <data name="Databases found: {0}." xml:space="preserve"><value>Databases gevonden: {0}.</value></data>
+  <data name="DNS zones found: {0}." xml:space="preserve"><value>DNS-zones gevonden: {0}.</value></data>
+  <data name="Inventory may be incomplete: {0}" xml:space="preserve"><value>Inventarisatie mogelijk onvolledig: {0}</value></data>
+  <data name="Directly from DirectAdmin." xml:space="preserve"><value>Rechtstreeks uit DirectAdmin.</value></data>
+  <data name="Records found: {0}." xml:space="preserve"><value>Records gevonden: {0}.</value></data>
+  <data name="User details" xml:space="preserve"><value>Gebruikersdetails</value></data>
+  <data name="Package information unavailable: {0}" xml:space="preserve"><value>Pakketgegevens niet beschikbaar: {0}</value></data>
+  <data name="Use creator or a username accepted by DirectAdmin." xml:space="preserve"><value>Gebruik creator of een gebruikersnaam die DirectAdmin accepteert.</value></data>
+  <data name="Account type" xml:space="preserve"><value>Accounttype</value></data>
+  <data name="IP address" xml:space="preserve"><value>IP-adres</value></data>
+  <data name="Suspended" xml:space="preserve"><value>Geschorst</value></data>
+  <data name="Skin" xml:space="preserve"><value>Skin</value></data>
 </root>

@@ -7,11 +7,11 @@
 
 <PageTitle>@Username — Accountbeheer</PageTitle>
 <PanelPageHeader>
-    <Breadcrumb><a href="/users">@L["Account management"]</a> / Gebruikersdetails</Breadcrumb>
+    <Breadcrumb><a href="/users">@L["Account management"]</a> / @L["User details"]</Breadcrumb>
     <TitleContent>@Username</TitleContent>
     <Description>@L["Account settings, assigned hosting package and package limits available in DirectAdmin."]</Description>
     <Actions><div>
-        <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@loading">@(loading ? "Laden…" : L["Refresh"].Value)</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton>
         @if (Session.Connected && !Session.IsImpersonating &&
             !Username.Equals(Session.OriginalUsername, StringComparison.OrdinalIgnoreCase))
         {
@@ -27,7 +27,7 @@
 }
 @if (!Session.Connected)
 {
-    <MudPaper Class="pa-4 my-3" Elevation="1">Verbind eerst via het <a href="/">dashboard</a>.</MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
 }
 else if (loading)
 {
@@ -45,14 +45,14 @@ else if (settings is not null)
             <p>@L["Live account information from the legacy DirectAdmin server."]</p>
             <MudSimpleTable Dense="true" Hover="true" Striped="true"><tbody>
                 @foreach (var entry in new (string Label,string Key)[] {
-                    ("Gebruikersnaam","username"), ("Naam","name"), ("E-mailadres","email"),
-                    ("Accounttype","usertype"), ("Aangemaakt door","creator"),
-                    ("Hoofddomein","domain"), ("IP-adres","ip"), ("Pakket","package"),
-                    ("Geschorst","suspended"), ("Taal","language"), ("Skin","skin") })
+                    ("Username","username"), ("Name","name"), ("Email address","email"),
+                    ("Account type","usertype"), ("Created by","creator"),
+                    ("Primary domain","domain"), ("IP address","ip"), ("Package","package"),
+                    ("Suspended","suspended"), ("Language","language"), ("Skin","skin") })
                 {
                     @if (settings.TryGetValue(entry.Key, out var value))
                     {
-                        <tr><th>@entry.Label</th><td>@value</td></tr>
+                        <tr><th>@L[entry.Label]</th><td>@value</td></tr>
                     }
                 }
             </tbody></MudSimpleTable>
@@ -62,7 +62,7 @@ else if (settings is not null)
             <h2>@L["Hosting package"]</h2>
             @if (package is not null)
             {
-                <p>Toegewezen pakket: <strong>@package</strong></p>
+                <p>@L["Assigned package:"] <strong>@package</strong></p>
             }
             else
             {
@@ -70,7 +70,7 @@ else if (settings is not null)
             }
             @if (packageError is not null)
             {
-                <p class="error" role="status">Pakketgegevens niet beschikbaar: @packageError</p>
+                <p class="error" role="status">@L["Package information unavailable: {0}", packageError]</p>
             }
             @if (packageSettings is not null)
             {

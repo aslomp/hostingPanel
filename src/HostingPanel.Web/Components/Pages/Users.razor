@@ -10,11 +10,11 @@
     <TitleContent>@L["User management"]</TitleContent>
     <Description>@L["All accounts exposed by DirectAdmin to the current session, including resellers and their users."]</Description>
     <Actions><MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2"><MudButton Href="#account-create" Variant="Variant.Filled" Color="Color.Primary">@L["＋ Add user"]</MudButton>
-    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@loading">@(loading ? "Laden…" : L["↻ Refresh"].Value)</MudButton></MudStack></Actions>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@loading">@(loading ? L["Loading…"].Value : L["↻ Refresh"].Value)</MudButton></MudStack></Actions>
 </PanelPageHeader>
 @if (!Session.Connected)
 {
-    <MudPaper Class="pa-4 my-3" Elevation="1">Verbind eerst via het <a href="/">dashboard</a> met DirectAdmin.</MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
 }
 else if (error is not null)
 {

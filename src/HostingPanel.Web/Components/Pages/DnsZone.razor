@@ -9,12 +9,12 @@
 <PanelPageHeader>
     <Breadcrumb><a href="/domains">@L["Domains"]</a> / <a href="@($"/domains/{Uri.EscapeDataString(Domain)}")">@Domain</a> / DNS</Breadcrumb>
     <TitleContent>@L["DNS management"]</TitleContent>
-    <Description>Zone: <strong>@Domain</strong> — rechtstreeks uit DirectAdmin.</Description>
+    <Description>Zone: <strong>@Domain</strong> — @L["Directly from DirectAdmin."]</Description>
     <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@busy">@L["Refresh"]</MudButton></Actions>
 </PanelPageHeader>
 @if (!Session.Connected)
 {
-    <MudPaper Class="pa-4 my-3" Elevation="1">Verbind eerst via het <a href="/">dashboard</a>.</MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
 }
 else
 {
@@ -24,7 +24,7 @@ else
         @if (busy) { <PanelLoading>@L["Loading DNS zone…"]</PanelLoading> }
         @if (records is not null)
         {
-            <p>@records.Count records gevonden.</p>
+            <p>@L["Records found: {0}.", records.Count]</p>
             <MudSimpleTable Dense="true" Hover="true" Striped="true">
                 <thead><tr><th>Type</th><th>@L["Name"]</th><th>@L["Value"]</th><th>TTL</th><th>@L["Management"]</th></tr></thead>
                 <tbody>

@@ -12,12 +12,12 @@
     <Description>@L["All DNS zones exposed by the backend through DirectAdmin, including independently managed zones."]</Description>
     <Actions><MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
       <MudButton Href="#dns-create" Variant="Variant.Filled" Color="Color.Primary">@L["＋ Add DNS zone"]</MudButton>
-      <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Reload" Disabled="@loading">@(loading ? "Laden…" : L["↻ Refresh"].Value)</MudButton>
+      <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Reload" Disabled="@loading">@(loading ? L["Loading…"].Value : L["↻ Refresh"].Value)</MudButton>
     </MudStack></Actions>
 </PanelPageHeader>
 @if (!Session.Connected)
 {
-    <MudPaper Class="pa-4 my-3" Elevation="1">Maak eerst verbinding via het <a href="/">dashboard</a>.</MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
 }
 else
 {
@@ -44,7 +44,7 @@ else
         @if (loading) { <PanelLoading>@L["Retrieving DNS zones…"]</PanelLoading> }
         @if (zones is not null)
         {
-            <p>@Visible.Count DNS-zone(s) gevonden. @(warning is null ? "" : "Inventarisatie mogelijk onvolledig: " + warning)</p>
+            <p>@L["DNS zones found: {0}.", Visible.Count] @(warning is null ? "" : L["Inventory may be incomplete: {0}", warning].Value)</p>
             <MudSimpleTable Dense="true" Hover="true" Striped="true">
                 <thead><tr><th>@L["Domain"]</th><th>@L["Owner"]</th><th>@L["Local data"]</th><th>@L["Local mail"]</th></tr></thead>
                 <tbody>

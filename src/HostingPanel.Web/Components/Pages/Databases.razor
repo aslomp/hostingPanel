@@ -16,13 +16,13 @@
 </PanelPageHeader>
 @if (!Session.Connected)
 {
-  <MudPaper Class="pa-4 my-3" Elevation="1">Maak eerst verbinding via het <a href="/">dashboard</a>.</MudPaper>
+  <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
 }
 else
 {
   <MudPaper Class="pa-4 my-3" Elevation="1">
     <div class="dashboard-section-heading"><h2>@L["All accessible databases"]</h2>
-      @if (overall is not null) { <MudChip T="string" Size="Size.Small" Color="@(overallWarnings.Count == 0 ? Color.Success : Color.Warning)">@overall.Count gevonden</MudChip> }
+      @if (overall is not null) { <MudChip T="string" Size="Size.Small" Color="@(overallWarnings.Count == 0 ? Color.Success : Color.Warning)">@L["Found: {0}", overall.Count]</MudChip> }
     </div>
     <p>@L["Includes databases of subordinate accounts where DirectAdmin permits access."]</p>
     <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@overallLoading" OnClick="LoadOverall">@L["Refresh overview"]</MudButton>
@@ -30,7 +30,7 @@ else
     @if (overallError is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@overallError</MudAlert> }
     @if (overall is not null)
     {
-      <p>@overall.Count databases gevonden. @(overallWarnings.Count == 0 ? L["Complete inventory."].Value : L["Incomplete: {0} accounts could not be read.", overallWarnings.Count].Value)</p>
+      <p>@L["Databases found: {0}.", overall.Count] @(overallWarnings.Count == 0 ? L["Complete inventory."].Value : L["Incomplete: {0} accounts could not be read.", overallWarnings.Count].Value)</p>
       <label for="overallDbFilter">@L["Search databases"]</label>
       <MudTextField T="string" @bind-Value="overallSearch" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="overallDbFilter" Placeholder="@L["Search database or owner…"].Value" />
       <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>@L["Owner"]</th><th>Database</th><th>@L["Tables"]</th><th>@L["Users"]</th><th>@L["Size (bytes)"]</th><th>Definer issues</th></tr></thead><tbody>
@@ -84,7 +84,7 @@ else
         <MudTextField T="string" @bind-Value="newPassword" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbPassword" autocomplete="new-password" InputType="InputType.Password" /></MudItem>
     </MudGrid>
     <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@creating" OnClick="Create">
-      @(creating ? "Aanmaken…" : L["Create database"].Value)
+      @(creating ? L["Creating…"].Value : L["Create database"].Value)
     </MudButton>
     </MudStack>
     </MudForm>

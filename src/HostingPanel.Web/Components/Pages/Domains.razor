@@ -13,12 +13,12 @@
     <Breadcrumb>@L["Account management / Domains"]</Breadcrumb>
     <TitleContent>@L["Domain management"]</TitleContent>
     <Description>@L["Manage domains and website configuration through the selected hosting backend."]</Description>
-    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Refresh" Disabled="@loading">@(loading ? "Laden…" : L["Refresh"].Value)</MudButton></Actions>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Refresh" Disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton></Actions>
 </PanelPageHeader>
 
 @if (!Session.Connected)
 {
-    <MudPaper Class="pa-4 my-3" Elevation="1"><p>Verbind eerst via het <a href="/">dashboard</a>.</p></MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1"><p>@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</p></MudPaper>
 }
 else
 {
@@ -29,11 +29,11 @@ else
         <MudTextField T="string" @bind-Value="owner" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="owner" Placeholder="@L["For example, an existing user"].Value" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Refresh" Disabled="@loading">@L["Retrieve"]</MudButton>
         @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
-        @if (warning is not null) { <p role="status">Niet alle accountgegevens zijn beschikbaar: @warning</p> }
+        @if (warning is not null) { <p role="status">@L["Not all account data is available: {0}", warning]</p> }
         else if (loading) { <PanelLoading>@L["Retrieving domains…"]</PanelLoading> }
         else if (domains is not null)
         {
-            <p>@domains.Count domein(en) gevonden.</p>
+            <p>@L["Domains found: {0}", domains.Count]</p>
             <label for="domainFilter">@L["Filter domains"]</label>
             <MudTextField T="string" @bind-Value="filter" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="domainFilter" Placeholder="@L["Search domain name"].Value" />
             <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true">
