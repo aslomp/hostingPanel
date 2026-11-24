@@ -17,7 +17,7 @@ namespace HostingPanel.Api;
 public sealed class KubernetesBackend(HostingPanelDbContext db) :
     IHostingBackend, IAccountCatalog, IAccountMutations, IAccessibleDomains,
     IUserDetails, IAccountOverview, IImpersonation, IDatabases,
-    IAccessibleDatabases, IDomains, IDns, IFileAccess
+    IAccessibleDatabases, IDomains, IDns, IFileAccess, ITickets
 {
     public IAccountCatalog AccountCatalog => this;
     public IAccountMutations AccountMutations => this;
