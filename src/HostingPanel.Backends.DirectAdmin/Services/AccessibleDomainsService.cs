@@ -70,5 +70,4 @@ public sealed class AccessibleDomainsService(
     }
 }
 
-public sealed record VisibleDomainsResult(int Status,
-    IReadOnlyList<VisibleDomain>? Items, string? Warning);
+

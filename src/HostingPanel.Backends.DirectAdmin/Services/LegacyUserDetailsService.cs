@@ -68,7 +68,4 @@ public sealed class LegacyUserDetailsService(IHttpClientFactory clients, IWebHos
     }
 }
 
-public sealed record UserDetailResult(int Status,
-    IReadOnlyDictionary<string,string>? Fields,
-    string? Error,
-    JsonObject? Result = null);
+

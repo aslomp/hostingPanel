@@ -77,7 +77,4 @@ public sealed class LegacyAccountOverviewService(IHttpClientFactory clients)
             .ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
 }
 
-public sealed record AccountOverviewResult(int Status,
-    IReadOnlyDictionary<string,string>? Config, string? Package,
-    IReadOnlyDictionary<string,string>? PackageSettings, string? Error,
-    IReadOnlyDictionary<string,string>? Usage = null, string? UsageError = null);
+

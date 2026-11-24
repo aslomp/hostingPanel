@@ -109,7 +109,6 @@ public sealed class FileAccessService(IHttpClientFactory clients)
     }
 }
 
-public sealed record FtpAccountRequest(
-    string Domain, string User, string Type, string Password, string? CustomPath);
 
-public sealed record FileAccessResult(int Status, string Body);
+
+
