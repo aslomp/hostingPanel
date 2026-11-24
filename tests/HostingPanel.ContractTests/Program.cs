@@ -6,6 +6,22 @@ using System.Text;
 
 var checks = new List<(string Description, Action Test)>
 {
+    ("Backend settings describe enum, validate and reject hidden or unknown fields", () =>
+    {
+        var settings = new HostingPanel.Api.KubernetesBackendSettings();
+        var schema = HostingPanel.Api.BackendSettingsSchema.Describe("Kubernetes", settings);
+        Require(schema.Fields.Count == 1 && schema.Fields[0].Type == "enum" && schema.Fields[0].Options.Count == 2);
+        Require(schema.Values.GetProperty("IngressProvider").GetString() == "NginxIngress");
+        using var good = System.Text.Json.JsonDocument.Parse("""{"IngressProvider":"EnvoyProxy"}""");
+        Require(HostingPanel.Api.BackendSettingsSchema.TryRead<HostingPanel.Api.KubernetesBackendSettings>(good.RootElement, out var proposed, out _));
+        Require(proposed!.IngressProvider == HostingPanel.Api.KubernetesIngressProvider.EnvoyProxy);
+        Require(HostingPanel.Api.BackendSettingsSchema.Revision(settings) != HostingPanel.Api.BackendSettingsSchema.Revision(proposed));
+        foreach (var invalid in new[] { """{"IngressProvider":1}""", """{"IngressProvider":"invalid"}""", """{"IngressProvider":"EnvoyProxy","Validator":{}}""", """{}""", """{"IngressProvider":"EnvoyProxy","IngressProvider":"NginxIngress"}""" })
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(invalid);
+            Require(!HostingPanel.Api.BackendSettingsSchema.TryRead<HostingPanel.Api.KubernetesBackendSettings>(document.RootElement, out _, out _));
+        }
+    }),
     ("User list JSON is parsed", () =>
     {
         var users = DirectAdminUsersParser.Parse("[\"admin\",\"demo\"]");

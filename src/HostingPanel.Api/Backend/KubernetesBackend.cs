@@ -14,11 +14,60 @@ namespace HostingPanel.Api;
 /// no legacy command calls and no implicit fallback to DirectAdmin.
 /// Reconciliation with the cluster is deliberately a separate responsibility.
 /// </summary>
-public sealed class KubernetesBackend(HostingPanelDbContext db) :
+public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings) :
     IHostingBackend, IAccountCatalog, IAccountMutations, IAccessibleDomains,
     IUserDetails, IAccountOverview, IImpersonation, IDatabases,
-    IAccessibleDatabases, IDomains, IDns, IFileAccess, ITickets
+    IAccessibleDatabases, IDomains, IDns, IFileAccess, ITickets, IBackendSettingsAccess
 {
+    public IBackendSettingsAccess Settings => this;
+    private const string SettingsKey = "BackendSettings:Kubernetes";
+
+    public async Task<int> AuthenticateSessionAsync(AuthenticationHeaderValue auth, CancellationToken ct) =>
+        await AuthenticateAsync(auth, ct) is null ? 401 : 200;
+
+    public async Task<KubernetesBackendSettings> GetEffectiveSettingsAsync(CancellationToken ct)
+    {
+        var row = await db.Configuration.AsNoTracking().SingleOrDefaultAsync(x => x.Key == SettingsKey, ct);
+        if (row is null) return configuredSettings;
+        using var document = JsonDocument.Parse(row.ValueJson);
+        if (!BackendSettingsSchema.TryRead<KubernetesBackendSettings>(document.RootElement,
+            out var settings, out _))
+            throw new InvalidOperationException("Stored Kubernetes backend settings are invalid.");
+        return settings!;
+    }
+
+    public async Task<IResult> ReadAsync(AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        var principal = await AuthenticateAsync(auth, ct);
+        if (principal is null) return Results.Unauthorized();
+        if (principal.Kind != "admin") return Results.StatusCode(403);
+        return Results.Ok(BackendSettingsSchema.Describe("Kubernetes", await GetEffectiveSettingsAsync(ct)));
+    }
+
+    public async Task<IResult> WriteAsync(AuthenticationHeaderValue auth, BackendSettingsUpdate update,
+        CancellationToken ct)
+    {
+        var principal = await AuthenticateAsync(auth, ct);
+        if (principal is null) return Results.Unauthorized();
+        if (principal.Kind != "admin") return Results.StatusCode(403);
+        if (!BackendSettingsSchema.TryRead<KubernetesBackendSettings>(update.Values, out var proposed, out var errors))
+            return Results.ValidationProblem(errors);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var current = await GetEffectiveSettingsAsync(ct);
+        if (update.Revision != BackendSettingsSchema.Revision(current))
+            return Results.Conflict(new { type = "SETTINGS_CHANGED" });
+        if (BackendSettingsSchema.Revision(current) != BackendSettingsSchema.Revision(proposed!))
+        {
+            var row = await db.Configuration.SingleOrDefaultAsync(x => x.Key == SettingsKey, ct);
+            if (row is null) { row = new PanelConfiguration { Key = SettingsKey }; db.Configuration.Add(row); }
+            row.ValueJson = BackendSettingsSchema.Serialize(proposed!);
+            Schedule("backend-settings", Guid.Empty, "update", JsonSerializer.Deserialize<JsonElement>(row.ValueJson));
+            await db.SaveChangesAsync(ct);
+        }
+        await tx.CommitAsync(ct);
+        return Results.Ok(BackendSettingsSchema.Describe("Kubernetes", proposed!));
+    }
+
     public IAccountCatalog AccountCatalog => this;
     public IAccountMutations AccountMutations => this;
     public IAccessibleDomains AccessibleDomains => this;

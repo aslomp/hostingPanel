@@ -667,4 +667,27 @@
   <data name="you are acting as" xml:space="preserve"><value>je werkt als</value></data>
   <data name="You choose the administrator or user view. DirectAdmin remains responsible for access rights." xml:space="preserve"><value>Je kiest zelf de beheerders- of gebruikersweergave. DirectAdmin blijft verantwoordelijk voor toegangsrechten.</value></data>
   <data name="You do not have access to these domain settings." xml:space="preserve"><value>Je hebt geen toegang tot deze domeininstellingen.</value></data>
+  <data name="Backend settings" xml:space="preserve"><value>Backend instellingen</value></data>
+  <data name="Backend connection" xml:space="preserve"><value>Backendverbinding</value></data>
+  <data name="Connect to the configured hosting backend. Credentials remain in the interactive Blazor session." xml:space="preserve"><value>Maak verbinding met de ingestelde hostingbackend. De opgegeven gegevens blijven binnen de interactieve Blazor-sessie.</value></data>
+  <data name="You choose the administrator or user view. The backend remains responsible for access rights." xml:space="preserve"><value>Je kiest zelf de beheerders- of gebruikersweergave. De backend blijft verantwoordelijk voor toegangsrechten.</value></data>
+  <data name="Connected to backend" xml:space="preserve"><value>Verbonden met backend</value></data>
+  <data name="The backend rejected the sign-in." xml:space="preserve"><value>De backend heeft de aanmelding geweigerd.</value></data>
+  <data name="Backend session check: HTTP {0}." xml:space="preserve"><value>Backend sessiecontrole: HTTP {0}.</value></data>
+  <data name="Backend connection active" xml:space="preserve"><value>Backendverbinding actief</value></data>
+  <data name="Configuration contract of the active backend." xml:space="preserve"><value>Configuratiecontract van de actieve backend.</value></data>
+  <data name="Connect first via the dashboard." xml:space="preserve"><value>Verbind eerst via het dashboard.</value></data>
+  <data name="This backend has no public settings." xml:space="preserve"><value>Deze backend heeft geen publieke instellingen.</value></data>
+  <data name="Not set" xml:space="preserve"><value>Niet ingesteld</value></data>
+  <data name="Save settings" xml:space="preserve"><value>Instellingen opslaan</value></data>
+  <data name="This backend does not offer a settings contract." xml:space="preserve"><value>Deze backend biedt geen instellingencontract aan.</value></data>
+  <data name="The backend denies access to these settings." xml:space="preserve"><value>De backend weigert toegang tot deze instellingen.</value></data>
+  <data name="Invalid value." xml:space="preserve"><value>Ongeldige waarde.</value></data>
+  <data name="Settings saved." xml:space="preserve"><value>Instellingen opgeslagen.</value></data>
+  <data name="Settings have changed in the meantime. Refresh first." xml:space="preserve"><value>Instellingen zijn intussen gewijzigd. Vernieuw eerst.</value></data>
+  <data name="The backend rejected the settings." xml:space="preserve"><value>De backend heeft de instellingen afgekeurd.</value></data>
+  <data name="Backend HTTP {0}. Settings not saved." xml:space="preserve"><value>Backend HTTP {0}. Instellingen niet opgeslagen.</value></data>
+  <data name="Backend HTTP {0}." xml:space="preserve"><value>Backend HTTP {0}.</value></data>
+  <data name="Yes" xml:space="preserve"><value>Ja</value></data>
+  <data name="No" xml:space="preserve"><value>Nee</value></data>
 </root>

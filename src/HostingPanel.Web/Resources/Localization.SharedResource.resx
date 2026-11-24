@@ -667,4 +667,27 @@
   <data name="you are acting as" xml:space="preserve"><value>you are acting as</value></data>
   <data name="You choose the administrator or user view. DirectAdmin remains responsible for access rights." xml:space="preserve"><value>You choose the administrator or user view. DirectAdmin remains responsible for access rights.</value></data>
   <data name="You do not have access to these domain settings." xml:space="preserve"><value>You do not have access to these domain settings.</value></data>
+  <data name="Backend settings" xml:space="preserve"><value>Backend settings</value></data>
+  <data name="Backend connection" xml:space="preserve"><value>Backend connection</value></data>
+  <data name="Connect to the configured hosting backend. Credentials remain in the interactive Blazor session." xml:space="preserve"><value>Connect to the configured hosting backend. Credentials remain in the interactive Blazor session.</value></data>
+  <data name="You choose the administrator or user view. The backend remains responsible for access rights." xml:space="preserve"><value>You choose the administrator or user view. The backend remains responsible for access rights.</value></data>
+  <data name="Connected to backend" xml:space="preserve"><value>Connected to backend</value></data>
+  <data name="The backend rejected the sign-in." xml:space="preserve"><value>The backend rejected the sign-in.</value></data>
+  <data name="Backend session check: HTTP {0}." xml:space="preserve"><value>Backend session check: HTTP {0}.</value></data>
+  <data name="Backend connection active" xml:space="preserve"><value>Backend connection active</value></data>
+  <data name="Configuration contract of the active backend." xml:space="preserve"><value>Configuration contract of the active backend.</value></data>
+  <data name="Connect first via the dashboard." xml:space="preserve"><value>Connect first via the dashboard.</value></data>
+  <data name="This backend has no public settings." xml:space="preserve"><value>This backend has no public settings.</value></data>
+  <data name="Not set" xml:space="preserve"><value>Not set</value></data>
+  <data name="Save settings" xml:space="preserve"><value>Save settings</value></data>
+  <data name="This backend does not offer a settings contract." xml:space="preserve"><value>This backend does not offer a settings contract.</value></data>
+  <data name="The backend denies access to these settings." xml:space="preserve"><value>The backend denies access to these settings.</value></data>
+  <data name="Invalid value." xml:space="preserve"><value>Invalid value.</value></data>
+  <data name="Settings saved." xml:space="preserve"><value>Settings saved.</value></data>
+  <data name="Settings have changed in the meantime. Refresh first." xml:space="preserve"><value>Settings have changed in the meantime. Refresh first.</value></data>
+  <data name="The backend rejected the settings." xml:space="preserve"><value>The backend rejected the settings.</value></data>
+  <data name="Backend HTTP {0}. Settings not saved." xml:space="preserve"><value>Backend HTTP {0}. Settings not saved.</value></data>
+  <data name="Backend HTTP {0}." xml:space="preserve"><value>Backend HTTP {0}.</value></data>
+  <data name="Yes" xml:space="preserve"><value>Yes</value></data>
+  <data name="No" xml:space="preserve"><value>No</value></data>
 </root>

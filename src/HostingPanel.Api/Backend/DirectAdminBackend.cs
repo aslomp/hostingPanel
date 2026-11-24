@@ -46,6 +46,18 @@ public sealed class DirectAdminBackend(
             executed = false
         });
     }
+    public async Task<int> AuthenticateSessionAsync(AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "api/session");
+        request.Headers.Authorization = auth;
+        try
+        {
+            using var response = await clients.CreateClient("legacy-directadmin").SendAsync(request, ct);
+            return (int)response.StatusCode;
+        }
+        catch (HttpRequestException) { return 502; }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return 504; }
+    }
     public Task ForwardAsync(HttpContext context) => BackendController.ForwardToBackendAsync(context, clients);
 }
 
