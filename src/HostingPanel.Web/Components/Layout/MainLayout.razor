@@ -8,23 +8,23 @@
 @inject NavigationManager Navigation
 
 <div class="shell">
-  <aside class="sidebar" aria-label="@L["Hoofdnavigatie"]">
+  <aside class="sidebar" aria-label="@L["Main navigation"]">
     <a class="brand" href="/">◈ <span>HostingPanel<small>CONTROL CENTER</small></span></a>
-    <div class="nav-caption">@L["Navigatiecontext"]</div>
-    <div class="nav-context-switch" role="group" aria-label="@L["Navigatiecontext"]">
+    <div class="nav-caption">@L["Navigation context"]</div>
+    <div class="nav-context-switch" role="group" aria-label="@L["Navigation context"]">
       <button type="button" class="@(NavContext.Mode == "admin" ? "active" : "")"
               aria-pressed="@(NavContext.Mode == "admin")"
-              @onclick='() => SetContext("admin")'>@L["Beheerder"]</button>
+              @onclick='() => SetContext("admin")'>@L["Administrator"]</button>
       <button type="button" class="@(NavContext.Mode == "user" ? "active" : "")"
               aria-pressed="@(NavContext.Mode == "user")"
-              @onclick='() => SetContext("user")'>@L["Gebruiker"]</button>
+              @onclick='() => SetContext("user")'>@L["User"]</button>
     </div>
-    <div class="nav-caption">@(NavContext.Mode == "admin" ? L["Beheerdersfuncties"].Value : L["Gebruikersfuncties"].Value)</div>
-    <label class="sidebar-search-label" for="hosting-nav-search">Zoek naar pagina's</label>
+    <div class="nav-caption">@(NavContext.Mode == "admin" ? L["Administrator features"].Value : L["User features"].Value)</div>
+    <label class="sidebar-search-label" for="hosting-nav-search">@L["Search pages"]</label>
     <input id="hosting-nav-search" class="sidebar-search" type="search"
-           placeholder="Zoek naar pagina's..." @bind="navSearch" @bind:event="oninput" />
+           placeholder="Search pages..." @bind="navSearch" @bind:event="oninput" />
     <NavLink href="/" Match="NavLinkMatch.All">▦ @L["Dashboard"]</NavLink>
-    <nav class="sidebar-scroll" aria-label="@L["Beheeronderdelen"]">
+    <nav class="sidebar-scroll" aria-label="@L["Management sections"]">
       @foreach (var navGroup in FilteredSections)
       {
         <details class="nav-section" open>
@@ -37,7 +37,7 @@
                 <span>@L[item.Label]</span>
                 @if (!item.Implemented)
                 {
-                  <span class="nav-pending" title="@L["Nog niet geïmplementeerd"]" aria-label="@L["Nog niet geïmplementeerd"]">○</span>
+                  <span class="nav-pending" title="@L["Not implemented"]" aria-label="@L["Not implemented"]">○</span>
                 }
               </NavLink>
             }
@@ -45,7 +45,7 @@
         </details>
       }
     </nav>
-    <p class="nav-note">@L["DirectAdmin-compatibele API"]<br />@L["De backend bepaalt de toegangsrechten."]</p>
+    <p class="nav-note">@L["DirectAdmin-compatible API"]<br />@L["The backend controls access rights."]</p>
   </aside>
   <div class="workspace">
     <header class="topbar">
@@ -55,16 +55,16 @@
       </div>
       <div class="session-identity">
         <form method="get" action="/culture/set" class="culture-picker">
-          <label for="ui-culture">@L["Taal"]</label>
-          <select id="ui-culture" name="culture" aria-label="@L["Taal"]" onchange="this.form.submit()">
+          <label for="ui-culture">@L["Language"]</label>
+          <select id="ui-culture" name="culture" aria-label="@L["Language"]" onchange="this.form.submit()">
             <option value="nl-NL" selected="@(CultureInfo.CurrentUICulture.Name == "nl-NL")">Nederlands</option>
             <option value="en-US" selected="@(CultureInfo.CurrentUICulture.Name == "en-US")">English</option>
           </select>
           <input type="hidden" name="returnUrl" value="@(new Uri(Navigation.Uri).PathAndQuery)" />
         </form>
         <TicketNotifications @key="Session.TicketChannel" />
-        <span>@(Session.Connected ? L["Verbonden account"].Value : L["Backend niet verbonden"].Value)
-          <strong>@(Session.Connected ? Session.Username : L["Niet aangemeld"].Value)</strong>
+        <span>@(Session.Connected ? L["Connected account"].Value : L["Backend disconnected"].Value)
+          <strong>@(Session.Connected ? Session.Username : L["Not signed in"].Value)</strong>
         </span>
         <span class="session-avatar" aria-hidden="true">@(Session.Connected ? Session.Username[..Math.Min(2,Session.Username.Length)].ToUpperInvariant() : "HP")</span>
       </div>
@@ -72,9 +72,9 @@
     @if (Session.IsImpersonating)
     {
       <div class="impersonation-banner" role="status">
-        <span><strong>@L["Impersonation actief:"]</strong> @L["je werkt als"] <strong>@Session.Username</strong>
-        @L["namens beheerder"] <strong>@Session.OriginalUsername</strong>.</span>
-        <button @onclick="ReturnToAdministrator">@L["Terug naar beheerder"]</button>
+        <span><strong>@L["Impersonation active:"]</strong> @L["you are acting as"] <strong>@Session.Username</strong>
+        @L["on behalf of administrator"] <strong>@Session.OriginalUsername</strong>.</span>
+        <button @onclick="ReturnToAdministrator">@L["Return to administrator"]</button>
       </div>
     }
     <main class="content">@Body</main>
@@ -105,7 +105,7 @@
         get
         {
             var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', 2)[0].Trim('/');
-            if (string.IsNullOrWhiteSpace(path)) return "Dashboard";
+            if (string.IsNullOrWhiteSpace(path)) return L["Dashboard"].Value;
             var item = AllSections.SelectMany(navSection => navSection.Items)
                 .FirstOrDefault(link => link.Path.Trim('/').Equals(path, StringComparison.OrdinalIgnoreCase));
             return item is null ? path.Split('/')[0].Replace('-', ' ') : L[item.Label].Value;
@@ -133,99 +133,99 @@
     // All items remain visible for every account: DirectAdmin authorizes each request.
     private static readonly NavSection[] AllSections =
     [
-        new("Accountbeheer", "♙",
+        new("Account management", "♙",
         [
-            Live("Nieuwe Gebruiker Toevoegen", "♙", "/users"),
-            Live("Toon Alle Gebruikers", "♧", "/users"),
-            Live("Mijn Gebruikers", "♙", "/users"),
-            Live("Beheer gebruikers pakketten", "▤", "/users"),
-            Planned("Verplaats Gebruikers tussen Resellers", "⇄", "move-users"),
-            Planned("Berichtsjablonen", "✉", "message-templates"),
-            Live("Wachtwoorden wijzigen", "⚿", "/change-password"),
-            Live("Reseller Aanmaken", "♙", "/resellers"),
+            Live("Add new user", "♙", "/users"),
+            Live("Show all users", "♧", "/users"),
+            Live("My users", "♙", "/users"),
+            Live("Manage user packages", "▤", "/users"),
+            Planned("Move users between resellers", "⇄", "move-users"),
+            Planned("Message templates", "✉", "message-templates"),
+            Live("Change passwords", "⚿", "/change-password"),
+            Live("Create reseller", "♙", "/resellers"),
             Live("Resellers", "♙", "/resellers"),
-            Live("Beheer Reseller Pakketten", "▤", "/resellers"),
-            Planned("Admin Aanmaken", "♙", "create-admin"),
+            Live("Manage reseller packages", "▤", "/resellers"),
+            Planned("Create administrator", "♙", "create-admin"),
             Live("Administrators", "♙", "/users")
         ]),
-        new("Server Beheer", "▣",
+        new("Server management", "▣",
         [
-            Live("Administrator instellingen", "⚙", "/server-settings"),
-            Planned("Aangepaste HTTPD configuraties", "▤", "httpd-config"),
-            Live("DNS Beheer", "◎", "/dns-zones"),
-            Planned("IP Beheer", "⌁", "ip-management"),
-            Planned("Naam Servers", "◇", "name-servers"),
-            Planned("Multi Server Instellen", "▦", "multi-server"),
-            Planned("PHP Instellingen", "⌘", "php-settings"),
-            Live("Server TLS Certificaat", "♢", "/server-tls"),
+            Live("Administrator settings", "⚙", "/server-settings"),
+            Planned("Custom HTTPD configurations", "▤", "httpd-config"),
+            Live("DNS management", "◎", "/dns-zones"),
+            Planned("IP management", "⌁", "ip-management"),
+            Planned("Name servers", "◇", "name-servers"),
+            Planned("Multi-server setup", "▦", "multi-server"),
+            Planned("PHP settings", "⌘", "php-settings"),
+            Live("Server TLS certificate", "♢", "/server-tls"),
             Planned("CustomBuild", "⚒", "custombuild")
         ]),
-        new("Admin Gereedschap", "⚒",
+        new("Admin tools", "⚒",
         [
-            Planned("Back-up en herstel", "◷", "backup-restore"),
-            Planned("Brute Force Monitor", "♢", "brute-force-monitor"),
-            Planned("Proces Monitor", "▥", "process-monitor"),
-            Planned("Beheer van e-mail wachtrij", "✉", "mail-queue"),
-            Live("Systeem Services", "⚙", "/system-services"),
-            Planned("Systeem Backup", "▣", "system-backup"),
-            Planned("cPanel Importeren", "⇩", "cpanel-import"),
-            Planned("Bericht aan Alle Gebruikers", "✉", "broadcast"),
-            Planned("Thema’s", "◈", "themes"),
-            Planned("Evolution Thema Aanpassen", "◈", "evolution-theme"),
-            Planned("Onderhoud", "⚒", "maintenance")
+            Planned("Backup and restore", "◷", "backup-restore"),
+            Planned("Brute force monitor", "♢", "brute-force-monitor"),
+            Planned("Process monitor", "▥", "process-monitor"),
+            Planned("Manage mail queue", "✉", "mail-queue"),
+            Live("System services", "⚙", "/system-services"),
+            Planned("System backup", "▣", "system-backup"),
+            Planned("Import cPanel", "⇩", "cpanel-import"),
+            Planned("Message all users", "✉", "broadcast"),
+            Planned("Themes", "◈", "themes"),
+            Planned("Customize Evolution theme", "◈", "evolution-theme"),
+            Planned("Maintenance", "⚒", "maintenance")
         ]),
-        new("Systeem Info & Bestanden", "▤",
+        new("System information & files", "▤",
         [
-            Planned("Cron Taken van alle Gebruikers", "◷", "global-cron"),
-            Planned("Systeem bestand editor", "▤", "system-file-editor"),
-            Planned("Bekijk Logboek", "☷", "system-logs"),
-            Live("Globale Statistieken", "◴", "/system-info")
+            Planned("All users' cron jobs", "◷", "global-cron"),
+            Planned("System file editor", "▤", "system-file-editor"),
+            Planned("View logs", "☷", "system-logs"),
+            Live("Global statistics", "◴", "/system-info")
         ]),
-        new("Extra Programma's", "▦",
+        new("Extra programs", "▦",
         [
-            Planned("Plugin Beheer", "▦", "plugin-manager"),
+            Planned("Plugin management", "▦", "plugin-manager"),
             Planned("ConfigServer Security & Firewall", "♢", "csf")
         ]),
         new("Support", "?",
         [
-            Live("Beheer Tickets", "☏", "/tickets"),
-            Live("Ticket Aanmaken", "✉", "/tickets/new"),
+            Live("Manage tickets", "☏", "/tickets"),
+            Live("Create ticket", "✉", "/tickets/new"),
             Live("Updates", "↻", "/system-updates"),
-            Planned("Licensering", "♧", "licensing")
+            Planned("Licensing", "♧", "licensing")
         ]),
-        new("Aanvullende HostingPanel-functies", "⌘",
+        new("Additional HostingPanel features", "⌘",
         [
-            Live("Sessies", "◷", "/sessions"),
-            Live("Resellerbeheer", "♙", "/resellers"),
-            Live("Databasebeheer", "▦", "/databases"),
-            Live("Systeeminformatie", "▤", "/system-info"),
-            Live("ModSecurity en ClamAV", "♢", "/security"),
+            Live("Sessions", "◷", "/sessions"),
+            Live("Reseller management", "♙", "/resellers"),
+            Live("Database management", "▦", "/databases"),
+            Live("System information", "▤", "/system-info"),
+            Live("ModSecurity and ClamAV", "♢", "/security"),
             Live("DirectAdmin API", "⌘", "/api-browser")
         ])
     ];
 
     private static readonly NavSection[] AdminSections =
-        AllSections.Where(section => section.Title != "Gebruiker").ToArray();
+        AllSections.Where(section => section.Title != "User").ToArray();
 
     private static readonly NavSection[] UserSections =
     [
-        new("Gebruiker", "♙",
+        new("User", "♙",
         [
-            Live("Domeinbeheer", "◎", "/domains"),
-            Planned("E-mailaccounts", "✉", "email-accounts"),
-            Planned("Bestandsbeheer", "▤", "file-manager"),
+            Live("Domain management", "◎", "/domains"),
+            Planned("Email accounts", "✉", "email-accounts"),
+            Planned("File management", "▤", "file-manager"),
             Live("Databases", "▦", "/databases"),
-            Planned("SSL certificaten", "♢", "domain-ssl"),
-            Live("DNS Beheer", "◎", "/dns-zones"),
-            Planned("Cron Taken", "◷", "cron-jobs"),
-            Planned("Back-ups", "◷", "user-backups")
+            Planned("SSL certificates", "♢", "domain-ssl"),
+            Live("DNS management", "◎", "/dns-zones"),
+            Planned("Cron jobs", "◷", "cron-jobs"),
+            Planned("Backups", "◷", "user-backups")
         ]),
-        new("Ondersteuning", "☏",
+        new("Support", "☏",
         [
             Live("Tickets", "☏", "/tickets"),
-            Live("Nieuw ticket", "✉", "/tickets/new"),
-            Live("Berichten", "✉", "/messages"),
-            Live("Wachtwoord wijzigen", "⚿", "/change-password")
+            Live("New ticket", "✉", "/tickets/new"),
+            Live("Messages", "✉", "/messages"),
+            Live("Change password", "⚿", "/change-password")
         ])
     ];
 
