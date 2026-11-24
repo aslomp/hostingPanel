@@ -55,7 +55,7 @@ def main():
                     page.locator('input[name="password"]').fill("ci-browser-test-password")
                     page.locator('form[action="/login"] button[type="submit"]').click()
                     expect(page.locator(".mud-layout")).to_be_visible(timeout=20000)
-                    expect(page.get_by_role("heading", name="Control panel", exact=True)).to_be_visible()
+                    expect(page.get_by_role("heading", name="Dashboard", exact=True)).to_be_visible()
                     # A real component event, not merely server-rendered HTML.
                     user = page.get_by_role("button", name="User", exact=True)
                     expect(user).to_be_visible()
@@ -69,7 +69,7 @@ def main():
                             pass
                     else:
                         raise AssertionError("Navigation context did not become interactive")
-                    search = page.get_by_role("textbox", name="Search pages")
+                    search = page.get_by_placeholder("Search pages", exact=True)
                     search.fill("Databases")
                     expect(page.get_by_test_id("panel-navigation").get_by_role("link", name="Databases", exact=True)).to_be_visible()
                     expect(page.get_by_test_id("panel-navigation").get_by_role("link", name="Domain management", exact=True)).to_have_count(0)
@@ -92,7 +92,48 @@ def main():
                     dialog.get_by_role("button", name="Cancel", exact=True).click()
                     expect(dialog).to_have_count(0)
                     expect(add).to_be_enabled()
-                    # Do not submit provisioning or password mutations.
+                    # Real account creation against an isolated SQLite database.
+                    for route, button, account, role in [
+                        ("/users", "Add user", "browseruser", "user"),
+                        ("/resellers", "Create reseller", "browserreseller", "reseller"),
+                    ]:
+                        page.goto(base + route)
+                        add_account = page.get_by_role("button", name=button, exact=True)
+                        expect(add_account).to_be_enabled(timeout=20000)
+                        for _ in range(20):
+                            add_account.click()
+                            try:
+                                expect(page.get_by_role("dialog")).to_be_visible(timeout=1000)
+                                break
+                            except AssertionError:
+                                pass
+                        else:
+                            raise AssertionError("Account creation dialog did not open")
+                        dialog = page.get_by_role("dialog")
+                        dialog.get_by_label("Account name", exact=True).fill(account)
+                        dialog.get_by_label("Email address", exact=True).fill(account + "@example.invalid")
+                        dialog.get_by_label("Primary domain", exact=True).fill(account + ".invalid")
+                        expect(dialog.get_by_label("Package", exact=True)).to_have_value("default")
+                        dialog.get_by_label("New password", exact=True).fill("short")
+                        dialog.get_by_label("Confirm password", exact=True).fill("short")
+                        dialog.get_by_role("button", name="Create account", exact=True).click()
+                        expect(dialog.get_by_text("Password must contain at least 12 characters.", exact=True)).to_be_visible()
+                        dialog.get_by_label("New password", exact=True).fill("ci-account-password-123!")
+                        dialog.get_by_label("Confirm password", exact=True).fill("ci-account-password-123!")
+                        dialog.get_by_role("button", name="Create account", exact=True).click()
+                        expect(dialog).to_have_count(0, timeout=20000)
+                        row = page.get_by_role("row").filter(has=page.get_by_role("link", name=account, exact=True))
+                        expect(row).to_be_visible(timeout=20000)
+                        expect(row.get_by_text(role, exact=True)).to_be_visible()
+                        page.reload()
+                        expect(row).to_be_visible(timeout=20000)
+                        import sqlite3
+                        with sqlite3.connect(Path(directory) / "browser.db") as db:
+                            assert db.execute(
+                                "SELECT COUNT(*) FROM Accounts a JOIN Domains d ON d.OwnerId=a.Id JOIN Packages p ON p.Id=a.PackageId WHERE a.Username=? AND a.Kind=? AND d.Name=? AND p.Name=?",
+                                (account, role, account + ".invalid", "default"),
+                            ).fetchone()[0] == 1
+                    # Do not submit password mutations.
                     page.goto(base + "/change-password")
                     expect(page.get_by_role("heading", name="Change password", exact=True)).to_be_visible()
                     save = page.get_by_role("button", name="Change password", exact=True)

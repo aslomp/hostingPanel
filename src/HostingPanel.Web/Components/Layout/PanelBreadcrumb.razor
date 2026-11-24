@@ -1,0 +1,22 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@using static HostingPanel.Web.Components.Layout.NavigationCatalog
+@inject NavigationManager Navigation
+@implements IDisposable
+<MudText Typo="Typo.caption" Color="Color.Secondary">HostingPanel / @CurrentPage</MudText>
+@code {
+    protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+    private string CurrentPage
+    {
+        get
+        {
+            var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', 2)[0].Trim('/');
+            if (string.IsNullOrWhiteSpace(path)) return L["Dashboard"].Value;
+            var item = AllSections.Concat(UserSections).SelectMany(navSection => navSection.Items)
+                .FirstOrDefault(link => link.Path.Trim('/').Equals(path, StringComparison.OrdinalIgnoreCase));
+            return item is null ? path.Split('/')[0].Replace('-', ' ') : L[item.Label].Value;
+        }
+    }
+}

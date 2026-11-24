@@ -1,69 +1,18 @@
-@using System.Globalization
-@using HostingPanel.Web.Localization
-@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @inherits LayoutComponentBase
-@implements IDisposable
-@inject PanelSession Session
-@inject ImpersonationOperations Impersonation
-@inject NavigationContextState NavContext
-@inject NavigationManager Navigation
 
 <MudThemeProvider />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
-<MudLayout>
-    <MudAppBar Elevation="1" Color="Color.Primary">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" aria-label="@L["Toggle navigation"].Value" aria-expanded="@(drawerOpen ? "true" : "false")" OnClick="ToggleDrawer" />
-        <MudText Typo="Typo.h6">HostingPanel</MudText>
-        <MudSpacer />
-        <TicketNotifications @key="Session.TicketChannel" />
-        <form method="get" action="/culture/set" class="culture-picker">
-            <select name="culture" aria-label="@L["Language"]" onchange="this.form.submit()">
-                <option value="nl-NL" selected="@(CultureInfo.CurrentUICulture.Name == "nl-NL")">Nederlands</option>
-                <option value="en-US" selected="@(CultureInfo.CurrentUICulture.Name == "en-US")">English</option>
-            </select>
-            <input type="hidden" name="returnUrl" value="@(new Uri(Navigation.Uri).PathAndQuery)" />
-        </form>
-        <MudText Typo="Typo.body2">@Session.Username</MudText>
-        <form method="post" action="/logout" data-enhance="false">
-            <AntiforgeryToken />
-            <MudButton ButtonType="ButtonType.Submit" Color="Color.Inherit">@L["Disconnect"]</MudButton>
-        </form>
-    </MudAppBar>
-    <MudDrawer @bind-Open="drawerOpen" Variant="DrawerVariant.Responsive" Elevation="1" Width="280px">
-        <MudStack Spacing="2" Class="pa-3">
-            <MudText Typo="Typo.overline">@L["Navigation context"]</MudText>
-            <MudStack Row="true" Spacing="1">
-                <MudButton Variant="@(NavContext.Mode == "admin" ? Variant.Filled : Variant.Text)" Color="Color.Primary" aria-pressed='@(NavContext.Mode == "admin" ? "true" : "false")' OnClick='() => SetContext("admin")'>@L["Administrator"]</MudButton>
-                <MudButton Variant="@(NavContext.Mode == "user" ? Variant.Filled : Variant.Text)" Color="Color.Primary" aria-pressed='@(NavContext.Mode == "user" ? "true" : "false")' OnClick='() => SetContext("user")'>@L["User"]</MudButton>
-            </MudStack>
-            <MudTextField T="string" @bind-Value="navSearch" Immediate="true" Label="@L["Search pages"].Value" Variant="Variant.Outlined" Margin="Margin.Dense" />
-        </MudStack>
-        <MudNavMenu Dense="true" aria-label="@L["Navigation context"].Value" data-testid="panel-navigation">
-            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">@L["Dashboard"]</MudNavLink>
-            @foreach (var navGroup in FilteredSections)
-            {
-                <MudNavGroup @key="navGroup.Title" Title="@L[navGroup.Title].Value" Expanded="true">
-                    @foreach (var item in navGroup.Items)
-                    {
-                        <MudNavLink @key="item.Label" Href="@item.Path" Match="NavLinkMatch.All">@L[item.Label]</MudNavLink>
-                    }
-                </MudNavGroup>
-            }
-        </MudNavMenu>
+<MudLayout Class="analytics-shell">
+    <PanelToolbar DrawerOpen="@drawerOpen" ToggleDrawer="ToggleDrawer" />
+    <MudDrawer @bind-Open="drawerOpen" Variant="DrawerVariant.Responsive" Elevation="0" Width="256px" Class="analytics-drawer">
+        <PanelSidebar />
     </MudDrawer>
-    <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="py-4">
-            <MudText Typo="Typo.caption" Color="Color.Secondary">HostingPanel / @CurrentPage</MudText>
-            @if (Session.IsImpersonating)
-            {
-                <MudAlert Severity="Severity.Warning" Class="my-3">
-                    <strong>@L["Impersonation active:"]</strong> @L["you are acting as"] <strong>@Session.Username</strong>
-                    @L["on behalf of administrator"] <strong>@Session.OriginalUsername</strong>.
-                    <MudButton OnClick="ReturnToAdministrator">@L["Return to administrator"]</MudButton>
-                </MudAlert>
-            }
+    <MudMainContent Class="analytics-main">
+        <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="analytics-content">
+            <PanelBreadcrumb />
+            <ImpersonationBanner />
             @Body
         </MudContainer>
     </MudMainContent>
@@ -72,157 +21,4 @@
 @code {
     private bool drawerOpen = true;
     private void ToggleDrawer() => drawerOpen = !drawerOpen;
-    protected override void OnInitialized()
-    {
-        Session.Changed += OnSessionChanged;
-        NavContext.Changed += OnSessionChanged;
-    }
-    private void OnSessionChanged() => _ = InvokeAsync(StateHasChanged);
-    public void Dispose()
-    {
-        Session.Changed -= OnSessionChanged;
-        NavContext.Changed -= OnSessionChanged;
-    }
-
-    private string navSearch = "";
-    private void SetContext(string value)
-    {
-        NavContext.Select(value);
-        navSearch = "";
-    }
-    private string CurrentPage
-    {
-        get
-        {
-            var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', 2)[0].Trim('/');
-            if (string.IsNullOrWhiteSpace(path)) return L["Dashboard"].Value;
-            var item = AllSections.SelectMany(navSection => navSection.Items)
-                .FirstOrDefault(link => link.Path.Trim('/').Equals(path, StringComparison.OrdinalIgnoreCase));
-            return item is null ? path.Split('/')[0].Replace('-', ' ') : L[item.Label].Value;
-        }
-    }
-    private IEnumerable<NavSection> CurrentSections =>
-        NavContext.Mode == "user" ? UserSections : AdminSections;
-    private IEnumerable<NavSection> FilteredSections => string.IsNullOrWhiteSpace(navSearch)
-        ? CurrentSections
-        : CurrentSections.Select(section => section with {
-            Items = L[section.Title].Value.Contains(navSearch, StringComparison.OrdinalIgnoreCase)
-                ? section.Items
-                : section.Items.Where(item => L[item.Label].Value.Contains(navSearch,
-                    StringComparison.OrdinalIgnoreCase)).ToArray()
-        }).Where(section => section.Items.Length > 0);
-
-    private sealed record NavItem(string Label, string Icon, string Path, bool Implemented = true);
-    private sealed record NavSection(string Title, string Icon, NavItem[] Items);
-
-    private static NavItem Live(string label, string icon, string path) => new(label, icon, path);
-    private static NavItem Planned(string label, string icon, string key) =>
-        new(label, icon, "/navigation/" + key);
-
-    // Match the section and item order in the reference index.html.
-    // All items remain visible for every account: DirectAdmin authorizes each request.
-    private static readonly NavSection[] AllSections =
-    [
-        new("Account management", "♙",
-        [
-            Live("Add new user", "♙", "/users"),
-            Live("Show all users", "♧", "/users"),
-            Live("My users", "♙", "/users"),
-            Live("Manage user packages", "▤", "/users"),
-            Planned("Move users between resellers", "⇄", "move-users"),
-            Planned("Message templates", "✉", "message-templates"),
-            Live("Change passwords", "⚿", "/change-password"),
-            Live("Create reseller", "♙", "/resellers"),
-            Live("Resellers", "♙", "/resellers"),
-            Live("Manage reseller packages", "▤", "/resellers"),
-            Planned("Create administrator", "♙", "create-admin"),
-            Live("Administrators", "♙", "/users")
-        ]),
-        new("Server management", "▣",
-        [
-            Live("Administrator settings", "⚙", "/server-settings"),
-            Live("Backend settings", "⚙", "/backend-settings"),
-            Planned("Custom HTTPD configurations", "▤", "httpd-config"),
-            Live("DNS management", "◎", "/dns-zones"),
-            Planned("IP management", "⌁", "ip-management"),
-            Planned("Name servers", "◇", "name-servers"),
-            Planned("Multi-server setup", "▦", "multi-server"),
-            Planned("PHP settings", "⌘", "php-settings"),
-            Live("Server TLS certificate", "♢", "/server-tls"),
-            Planned("CustomBuild", "⚒", "custombuild")
-        ]),
-        new("Admin tools", "⚒",
-        [
-            Planned("Backup and restore", "◷", "backup-restore"),
-            Planned("Brute force monitor", "♢", "brute-force-monitor"),
-            Planned("Process monitor", "▥", "process-monitor"),
-            Planned("Manage mail queue", "✉", "mail-queue"),
-            Live("System services", "⚙", "/system-services"),
-            Planned("System backup", "▣", "system-backup"),
-            Planned("Import cPanel", "⇩", "cpanel-import"),
-            Planned("Message all users", "✉", "broadcast"),
-            Planned("Themes", "◈", "themes"),
-            Planned("Customize Evolution theme", "◈", "evolution-theme"),
-            Planned("Maintenance", "⚒", "maintenance")
-        ]),
-        new("System information & files", "▤",
-        [
-            Planned("All users' cron jobs", "◷", "global-cron"),
-            Planned("System file editor", "▤", "system-file-editor"),
-            Planned("View logs", "☷", "system-logs"),
-            Live("Global statistics", "◴", "/system-info")
-        ]),
-        new("Extra programs", "▦",
-        [
-            Planned("Plugin management", "▦", "plugin-manager"),
-            Planned("ConfigServer Security & Firewall", "♢", "csf")
-        ]),
-        new("Support", "?",
-        [
-            Live("Manage tickets", "☏", "/tickets"),
-            Live("Create ticket", "✉", "/tickets/new"),
-            Live("Updates", "↻", "/system-updates"),
-            Planned("Licensing", "♧", "licensing")
-        ]),
-        new("Additional HostingPanel features", "⌘",
-        [
-            Live("Sessions", "◷", "/sessions"),
-            Live("Reseller management", "♙", "/resellers"),
-            Live("Database management", "▦", "/databases"),
-            Live("System information", "▤", "/system-info"),
-            Live("ModSecurity and ClamAV", "♢", "/security"),
-            Live("DirectAdmin API", "⌘", "/api-browser")
-        ])
-    ];
-
-    private static readonly NavSection[] AdminSections =
-        AllSections.Where(section => section.Title != "User").ToArray();
-
-    private static readonly NavSection[] UserSections =
-    [
-        new("User", "♙",
-        [
-            Live("Domain management", "◎", "/domains"),
-            Planned("Email accounts", "✉", "email-accounts"),
-            Planned("File management", "▤", "file-manager"),
-            Live("Databases", "▦", "/databases"),
-            Planned("SSL certificates", "♢", "domain-ssl"),
-            Live("DNS management", "◎", "/dns-zones"),
-            Planned("Cron jobs", "◷", "cron-jobs"),
-            Planned("Backups", "◷", "user-backups")
-        ]),
-        new("Support", "☏",
-        [
-            Live("Tickets", "☏", "/tickets"),
-            Live("New ticket", "✉", "/tickets/new"),
-            Live("Messages", "✉", "/messages"),
-            Live("Change password", "⚿", "/change-password")
-        ])
-    ];
-
-    private void ReturnToAdministrator()
-    {
-        Impersonation.End();
-        Navigation.NavigateTo("/");
-    }
 }

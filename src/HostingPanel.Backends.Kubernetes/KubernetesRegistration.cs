@@ -22,6 +22,7 @@ public static class KubernetesRegistration
     services.AddScoped<KubernetesIdentityService>();
     services.AddScoped<IAuthenticationProvider>(sp => sp.GetRequiredService<KubernetesIdentityService>());
     services.AddScoped<KubernetesSettingsService>();
+    services.AddScoped<IAccountNameservers, KubernetesAccountNameservers>();
     services.AddScoped<IKubernetesSettingsReader>(sp => sp.GetRequiredService<KubernetesSettingsService>());
     services.AddScoped<IBackendSettingsAccess>(sp => sp.GetRequiredService<KubernetesSettingsService>());
     services.AddScoped<IHostingNetworkAccess>(sp => sp.GetRequiredService<KubernetesSettingsService>());
@@ -107,6 +108,13 @@ public static class KubernetesRegistration
             });
             await db.SaveChangesAsync();
         }
+    }
+
+    // Existing installations with no packages also need a usable initial package.
+    if (!await db.Packages.AnyAsync())
+    {
+        db.Packages.Add(new HostingPackage { Name = "default", LimitsJson = "{}" });
+        await db.SaveChangesAsync();
     }
 
     }

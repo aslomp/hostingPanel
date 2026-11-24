@@ -56,23 +56,7 @@ public sealed class KubernetesProvisioningService(HostingPanelDbContext db, Kube
             eligible.OrderByDescending(x => x.Address == dnsSettings.DnsWebIp).ThenBy(x => x.Address, StringComparer.Ordinal)
                 .Take(1).Select(x => x.Address).ToArray();
         if (selected.Length == 0) return "NO_ASSIGNED_IP";
-        // The existing IP management entries carry nameserver assignments.
-        // Do not maintain a second account-specific configuration.
-        var assignedNameservers = dnsSettings.IpAddresses
-            .Where(x => (x.AssignedUsers ?? []).Contains(owner.Username))
-            .Select(x => x.NameServer);
-        var resellerNameservers = dnsSettings.IpAddresses
-            .Where(x => (x.Resellers ?? []).Contains(owner.Username) ||
-                (parent is not null && (x.Resellers ?? []).Contains(parent.Username)) ||
-                (parent is not null && (x.AssignedUsers ?? []).Contains(parent.Username)))
-            .Select(x => x.NameServer);
-        var nameservers = assignedNameservers.Concat(resellerNameservers)
-            .Concat(new[] { dnsSettings.DnsNs1, dnsSettings.DnsNs2 })
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(x => x.TrimEnd('.'))
-            .Where(KubernetesInputValidation.ValidDomain)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(2).ToArray();
+        var nameservers = await KubernetesAccountNameservers.ResolveAsync(db, owner, dnsSettings, ct);
         var ns1 = nameservers.ElementAtOrDefault(0) ?? "";
         var ns2 = nameservers.ElementAtOrDefault(1) ?? "";
         if (selected.Any(x => !System.Net.IPAddress.TryParse(x, out _)) ||

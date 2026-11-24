@@ -3,13 +3,14 @@
 @using HostingPanel.Api.Services
 @inject PanelSession Session
 @inject AccountOperations Accounts
+@inject IConfiguration Configuration
 
 <MudDialog>
   <DialogContent>
     <MudForm @ref="form">
       <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Account name"].Value" @bind-Value="username" Required="true" />
-      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Email address"].Value" @bind-Value="email" />
-      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Primary domain"].Value" @bind-Value="domain" />
+      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Email address"].Value" @bind-Value="email" Required="true" InputType="InputType.Email" />
+      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Primary domain"].Value" @bind-Value="domain" Required="true" />
       <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Package"].Value" @bind-Value="package" Required="true" />
       <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["IP / assignment"].Value" @bind-Value="ip" />
       <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["New password"].Value" @bind-Value="password" autocomplete="new-password" InputType="InputType.Password" Required="true" />
@@ -28,6 +29,11 @@
   [Parameter] public string Kind { get; set; } = "user";
   private MudForm form = default!;
   private string username = "", email = "", domain = "", package = "", ip = "shared", password = "", confirmation = "";
+  protected override void OnInitialized()
+  {
+    if (IsKubernetes) package = "default";
+  }
+  private bool IsKubernetes => string.Equals(Configuration["HostingPanel:Backend"], "Kubernetes", StringComparison.OrdinalIgnoreCase);
   private string? error;
   private bool busy;
   private void Cancel() { if (!busy) MudDialog.Cancel(); }
@@ -40,11 +46,20 @@
     {
       await form.ValidateAsync();
       if (!form.IsValid || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(package)) return;
+      if (IsKubernetes && password.Length < 12) { error = L["Password must contain at least 12 characters."].Value; return; }
       if (password.Length < 5) { error = L["Password must contain at least 5 characters."].Value; return; }
       if (password != confirmation) { error = L["Passwords do not match."].Value; return; }
       var (status, errorCode) = await Accounts.CreateAsync(new CreateHostingAccount(Kind, username, email, password, domain, package, ip));
       if (errorCode is null && status is >= 200 and < 300) { MudDialog.Close(DialogResult.Ok(username)); return; }
-      error = L["Account not created: backend HTTP {0}.", status].Value;
+      error = errorCode switch
+      {
+        "PACKAGE_NOT_FOUND" => L["The selected hosting package does not exist or is not available to your account."].Value,
+        "ACCOUNT_EXISTS" => L["An account with this name already exists."].Value,
+        "DOMAIN_EXISTS" or "DNS_ZONE_EXISTS" => L["This domain is already in use."].Value,
+        "INVALID_ACCOUNT_REQUEST" => L["Check the account name, email address, domain, package and password."].Value,
+        "ACCESS_DENIED" or "UNAUTHORIZED" => L["You are not authorized to create this account."].Value,
+        _ => L["Account not created: backend HTTP {0}.", status].Value + (errorCode is null ? "" : $" ({errorCode})")
+      };
     }
     catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
     { error = ex.Message; }
