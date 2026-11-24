@@ -4,6 +4,7 @@
 @inject PanelSession Session
 @inject AccountOperations Accounts
 @inject IDialogService Dialogs
+@implements IDisposable
 
 <PageTitle>@L[ResellersOnly ? "Resellers — HostingPanel" : "Account tree — HostingPanel"]</PageTitle>
 <PanelPageHeader>
@@ -71,7 +72,9 @@ else if (accounts is not null)
     private List<VisibleAccount>? accounts;
     private string search = "";
     private string? error;
-    private bool loading;
+    private readonly LatestRead read = new();
+    private bool loading => read.Loading;
+    private bool disposed;
     private bool mutating;
     private string? operationMessage;
 
@@ -108,7 +111,8 @@ else if (accounts is not null)
 
     private async Task OpenCreateDialog()
     {
-        if (mutating || !Session.Connected) return;
+        if (disposed || mutating || loading || !Session.Connected) return;
+        var channel = Session.TicketChannel;
         mutating = true;
         operationMessage = null;
         try
@@ -118,7 +122,7 @@ else if (accounts is not null)
                 new DialogParameters<UserCreateDialog> { { x => x.Kind, ResellersOnly ? "reseller" : "user" } },
                 new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = false, BackdropClick = false, CloseOnEscapeKey = false });
             var result = await dialog.Result;
-            if (result is { Canceled: false }) { operationFailed = false; operationMessage = L["Account creation request accepted."].Value; await Load(); }
+            if (result is { Canceled: false } && !disposed && Session.Connected && Session.TicketChannel == channel) { operationFailed = false; operationMessage = L["Account creation request accepted."].Value; await Load(); }
         }
         finally { mutating = false; }
     }
@@ -137,43 +141,69 @@ else if (accounts is not null)
             $"{L["Delete account"]}: {account.Username}", account.Username,
             L["Deleting this account is irreversible. All associated data will be removed."].Value,
             L["Confirm account name"].Value);
-        if (!confirmed || !Session.Connected || !string.Equals(identity, Session.Username, StringComparison.Ordinal))
+        if (!confirmed || disposed || !Session.Connected || Session.TicketChannel != channel || !string.Equals(identity, Session.Username, StringComparison.Ordinal) || accounts?.Contains(account) != true)
             return;
             var (status, errorCode) = await Accounts.DeleteAsync(account.Username, account.Username);
+            if (disposed || !Session.Connected || Session.TicketChannel != channel) return;
             operationFailed = errorCode is not null || status is < 200 or >= 300;
             if (!operationFailed) { operationMessage = L["Deletion request accepted for '{0}'.", account.Username].Value; await Load(); }
             else operationMessage = L["Deletion not confirmed: backend HTTP {0}.", status].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
         {
-            operationFailed = true;
-            operationMessage = ex.Message;
+            if (!disposed && Session.Connected && Session.TicketChannel == channel)
+            {
+                operationFailed = true;
+                operationMessage = ex.Message;
+            }
         }
         finally { mutating = false; }
     }
 
     protected override async Task OnInitializedAsync()
     {
-        if (Session.Connected) await Load();
+        Session.Changed += SessionChanged;
+        await Load();
     }
-    private async Task Load()
+
+    private void SessionChanged() => _ = InvokeAsync(async () =>
     {
-        if (loading || !Session.Connected) return;
-        loading = true;
+        if (disposed) return;
+        operationMessage = null;
+        var task = Load();
+        StateHasChanged();
+        await task;
+        if (!disposed) StateHasChanged();
+    });
+
+    public void Dispose()
+    {
+        disposed = true;
+        Session.Changed -= SessionChanged;
+        read.Dispose();
+    }
+
+    private Task Load()
+    {
+        if (disposed) return Task.CompletedTask;
+        accounts = null;
         error = null;
-        try
+        if (!Session.Connected)
         {
-            var result = await Accounts.ListAsync();
-            if (result.Status != 200 || result.Accounts is null)
-                throw new InvalidOperationException(L["Backend HTTP {0}.", result.Status].Value);
-            accounts = result.Accounts.ToList();
+            read.Cancel();
+            return Task.CompletedTask;
         }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
-            or UnauthorizedAccessException or FormatException)
-        {
-            error = ex.Message;
-            accounts = null;
-        }
-        finally { loading = false; }
+        var channel = Session.TicketChannel;
+        return read.RunAsync(ct => Accounts.ListAsync(ct),
+            () => Session.Connected && Session.TicketChannel == channel,
+            result =>
+            {
+                if (result.Status != 200 || result.Accounts is null)
+                {
+                    error = L["Backend HTTP {0}.", result.Status].Value;
+                    return;
+                }
+                accounts = result.Accounts.ToList();
+            }, ex => error = ex.Message);
     }
 }

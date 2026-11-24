@@ -19,3 +19,7 @@ Shared PanelPageHeader, PanelLoading, PanelEmptyState, CrudAddButton, CrudDelete
 PanelSession.Changed signals circuit identity changes; components subscribing to it must unsubscribe on disposal and marshal background events through InvokeAsync. HostingOperationNotifications is a separate internal invalidation bus for reconciliation progress; no resource data or credentials are published. Refresh through authorized operation services. A notification does not establish completion or access to a resource.
 
 See [sessions and authentication](authentication.md) and [support and realtime](support.md).
+
+## Read lifecycle
+
+AccountOverview and the user, database, domain and DNS detail pages own a LatestRead instance per component. A newer read cancels the earlier read and only the current route/session result may update the UI. Disposal cancels outstanding reads; a session change clears the previous inventory and reloads under the effective identity. Domain provisioning invalidation has its own read lifecycle. Mutations are not cancelled by superseding reads, and a completion from a changed session must not update the current account overview. Provider authorization remains authoritative.
