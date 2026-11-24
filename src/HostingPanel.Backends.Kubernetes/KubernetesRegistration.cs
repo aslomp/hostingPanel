@@ -31,6 +31,7 @@ public static class KubernetesRegistration
     services.AddScoped<IDomainDnsStaging>(sp => sp.GetRequiredService<KubernetesProvisioningService>());
     services.AddScoped<KubernetesAccountService>();
     services.AddScoped<IAccountCatalog>(sp => sp.GetRequiredService<KubernetesAccountService>());
+    services.AddScoped<IAccountPackages>(sp => sp.GetRequiredService<KubernetesAccountService>());
     services.AddScoped<IAccountMutations>(sp => sp.GetRequiredService<KubernetesAccountService>());
     services.AddScoped<IAccountOverview>(sp => sp.GetRequiredService<KubernetesAccountService>());
     services.AddScoped<IUserDetails>(sp => sp.GetRequiredService<KubernetesAccountService>());
