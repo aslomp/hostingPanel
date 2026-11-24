@@ -1,6 +1,6 @@
 # Kubernetes backend: SQLite control-plane foundation
 
-The public HTTP routes and Blazor client use **IHostingBackend**. Controllers do not own any DirectAdmin transport, credentials, or provider-selection logic. Choose the implementation at startup through `HostingPanel:Backend` (`DirectAdmin` by default, or `Kubernetes`). No Kubernetes operation falls back to DirectAdmin.
+The public HTTP routes and Blazor client use **IHostingBackend**. The SQLite persistence model now lives in **HostingPanel.Persistence** and is registered for all providers. DirectAdmin remains authoritative for all its hosting resources and never mirrors them into SQLite. See [shared persistence](shared-sqlite-persistence.md). Controllers do not own any DirectAdmin transport, credentials, or provider-selection logic. Choose the implementation at startup through `HostingPanel:Backend` (`DirectAdmin` by default, or `Kubernetes`). No Kubernetes operation falls back to DirectAdmin.
 
 ## First boot
 
