@@ -59,8 +59,16 @@ def main():
                     # A real component event, not merely server-rendered HTML.
                     user = page.get_by_role("button", name="User", exact=True)
                     expect(user).to_be_visible()
-                    user.click()
-                    expect(user).to_have_attribute("aria-pressed", "true", timeout=20000)
+                    # Prerendered buttons can be visible before the circuit is ready.
+                    for _ in range(20):
+                        user.click()
+                        try:
+                            expect(user).to_have_attribute("aria-pressed", "true", timeout=1000)
+                            break
+                        except AssertionError:
+                            pass
+                    else:
+                        raise AssertionError("Navigation context did not become interactive")
                     search = page.get_by_role("textbox", name="Search pages")
                     search.fill("Databases")
                     expect(page.locator(".mud-nav-menu").get_by_role("link", name="Databases", exact=True)).to_be_visible()
@@ -68,11 +76,48 @@ def main():
                     search.clear()
                     page.locator(".mud-nav-menu").get_by_role("link", name="Domain management", exact=True).click()
                     expect(page.get_by_role("heading", name="Domain management", exact=True)).to_be_visible()
+                    add = page.get_by_role("button", name="Add domain", exact=True)
+                    expect(add).to_be_disabled()
+                    domain = page.locator("#newDomain")
+                    domain.fill("browser-test.invalid")
+                    expect(add).to_be_enabled()
+                    domain.clear()
+                    expect(add).to_be_disabled()
+                    # Do not submit provisioning or password mutations.
+                    page.goto(base + "/change-password")
+                    expect(page.get_by_role("heading", name="Change password", exact=True)).to_be_visible()
+                    save = page.get_by_role("button", name="Change password", exact=True)
+                    expect(save).to_be_disabled()
+                    current = page.get_by_label("Current password", exact=True)
+                    new = page.get_by_label("New password", exact=True)
+                    repeat = page.get_by_label("Repeat new password", exact=True)
+                    # Wait for interactive rendering after the full page load.
+                    for _ in range(20):
+                        current.fill("ci-browser-test-password")
+                        new.fill("test-new-password")
+                        repeat.fill("mismatch")
+                        expect(save).to_be_disabled()
+                        repeat.fill("test-new-password")
+                        try:
+                            expect(save).to_be_enabled(timeout=1000)
+                            break
+                        except AssertionError:
+                            current.clear()
+                            new.clear()
+                            repeat.clear()
+                    else:
+                        raise AssertionError("Password form did not become interactive")
+                    repeat.clear()
+                    expect(save).to_be_disabled()
+                    page.reload()
+                    expect(page.locator(".mud-layout")).to_be_visible()
+                    expect(page.get_by_role("heading", name="Change password", exact=True)).to_be_visible()
+                    expect(page.get_by_label("Current password", exact=True)).to_have_value("")
                     page.set_viewport_size({"width": 390, "height": 844})
                     expect(page.get_by_role("button", name="Toggle navigation")).to_be_visible()
                     assert not errors, errors
                     browser.close()
-                print("Interactive login, navigation context, search and responsive shell: OK")
+                print("Interactive login, navigation, form guards, session restore and responsive shell: OK")
             except BaseException:
                 log.seek(0)
                 print(log.read().decode(errors="replace"))
