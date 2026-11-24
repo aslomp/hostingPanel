@@ -25,7 +25,7 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
     {
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
-        var backend = scope.ServiceProvider.GetRequiredService<IDNSProvider>();
+        var backend = scope.ServiceProvider.GetRequiredService<KubernetesDnsService>();
         var provider = new PowerDnsProvider(backend, scope.ServiceProvider.GetRequiredService<PowerDnsClient>());
         // Stage deferred zone creation from durable domain requests. A new scope
         // per request prevents failed work from leaking tracked changes into other domains.

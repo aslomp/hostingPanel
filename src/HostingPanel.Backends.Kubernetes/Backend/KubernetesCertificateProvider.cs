@@ -5,7 +5,7 @@ using HostingPanel.Providers.CertManager;
 using Microsoft.EntityFrameworkCore;
 namespace HostingPanel.Api;
 
-public sealed partial class KubernetesBackend
+public sealed partial class KubernetesCertificateProvider(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesSettingsService settingsProvider, IConfiguration? configuration = null) : ICertificateProvider
 {
     internal static string AcmeKey(Guid id) => "Acme:Domain:" + id.ToString("N");
     internal static async Task<DomainAcmeConfiguration> DomainAcmeAsync(HostingPanelDbContext db, Guid id, CancellationToken ct)
@@ -30,12 +30,12 @@ public sealed partial class KubernetesBackend
     {
         var ct = context.RequestAborted;
         if (!AuthenticationHeaderValue.TryParse(context.Request.Headers.Authorization.ToString(), out var auth) ||
-            await AuthenticateAsync(auth, ct) is not { } principal)
+            await identity.AuthenticateAsync(auth, ct) is not { } principal)
         { await Results.Unauthorized().ExecuteAsync(context); return; }
         var path = context.Request.Path.Value ?? "";
         var method = context.Request.Method;
-        var settings = await GetEffectiveSettingsAsync(ct);
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var settings = await settingsProvider.GetEffectiveSettingsAsync(ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         if (path == "/api/session/acme-data" && method == "GET")
         {
             await Results.Ok(new { certProviders = settings.AcmeProviders.Select(x => new { autoRegistration = true, id = x.Id, name = x.Name, staging = x.Staging }),

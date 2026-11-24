@@ -154,7 +154,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 if (marker is null) throw new InvalidOperationException("Missing deletion authorization.");
                 if (configuration.GetValue<bool>("CertManager:Enabled"))
                 {
-                    var client = KubernetesBackend.CertificateClient(configuration);
+                    var client = KubernetesCertificateProvider.CertificateClient(configuration);
                     var certName = HostingPanel.Providers.CertManager.CertManagerClient.Name(operation.ResourceId);
                     using var certs = JsonDocument.Parse(await client.ListAsync(ct));
                     if (certs.RootElement.GetProperty("items").EnumerateArray().Any(x => x.GetProperty("metadata").GetProperty("name").GetString() == certName))
