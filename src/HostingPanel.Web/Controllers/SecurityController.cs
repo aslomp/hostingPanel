@@ -4,7 +4,7 @@ namespace HostingPanel.Api.Controllers;
 
 /// <summary>Exact DirectAdmin Swagger routes. Backend determines authorization and support.</summary>
 [ApiController]
-public sealed class SecurityController(IHostingBackend backend) : BackendController
+public sealed class SecurityController(IApiCompatibilityHandler compatibility) : BackendController
 {
     [HttpGet("/api/clamav")]
     [HttpPost("/api/clamav")]
@@ -18,5 +18,5 @@ public sealed class SecurityController(IHostingBackend backend) : BackendControl
     [HttpGet("/api/modsecurity/global-config")]
     [HttpPut("/api/modsecurity/global-config")]
     [HttpGet("/api/modsecurity/user-configs")]
-    public Task ForwardAsync() => backend.ForwardAsync(HttpContext);
+    public Task ForwardAsync() => compatibility.ForwardAsync(HttpContext);
 }

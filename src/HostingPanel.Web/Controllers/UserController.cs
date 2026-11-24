@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HostingPanel.Api.Controllers;
 
 [ApiController]
-public sealed class UserController(IHostingBackend backend) : BackendController
+public sealed class UserController(IAccountCatalog accountCatalog, IAccountMutations accountMutations, IImpersonation impersonation, IAccountOverview accountOverview, IApiCompatibilityHandler compatibility) : BackendController
 {
     [HttpPost("/hosting/users")]
     public async Task<IResult> CreateHostingUser([FromBody] CreateHostingAccount input, CancellationToken ct)
@@ -17,7 +17,7 @@ public sealed class UserController(IHostingBackend backend) : BackendController
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
         if (input.Kind != "user")
             return Results.Json(new { type = "INVALID_ACCOUNT_KIND" }, statusCode: 400);
-        var result = await backend.AccountMutations.CreateAsync(input, auth, ct);
+        var result = await accountMutations.CreateAsync(input, auth, ct);
         return result.Error is null
             ? Results.Json(new { username = input.Username, created = true }, statusCode: result.Status)
             : Results.Json(new { type = result.Error }, statusCode: result.Status);
@@ -29,7 +29,7 @@ public sealed class UserController(IHostingBackend backend) : BackendController
     {
         if (!TryGetBasic(HttpContext, out var auth))
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-        var result = await backend.AccountMutations.DeleteAsync(username, input.Confirmation, auth, ct);
+        var result = await accountMutations.DeleteAsync(username, input.Confirmation, auth, ct);
         return result.Error is null
             ? Results.Json(new { username, deleted = true }, statusCode: result.Status)
             : Results.Json(new { type = result.Error }, statusCode: result.Status);
@@ -41,7 +41,7 @@ public sealed class UserController(IHostingBackend backend) : BackendController
     {
         if (!TryGetBasic(HttpContext, out var auth))
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-        var result = await backend.AccountMutations.SetPackageAsync(
+        var result = await accountMutations.SetPackageAsync(
             username, input.Package, auth, ct);
         return result.Error is null
             ? Results.Json(new { username, package = input.Package, updated = true }, statusCode: result.Status)
@@ -54,7 +54,7 @@ public sealed class UserController(IHostingBackend backend) : BackendController
     {
         if (!TryGetBasic(HttpContext, out var auth))
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-        var result = await backend.AccountMutations.SetLimitAsync(
+        var result = await accountMutations.SetLimitAsync(
             "user", username, input, auth, ct);
         return result.Error is null
             ? Results.Json(new { username, field = input.Field, updated = true }, statusCode: result.Status)
@@ -67,7 +67,7 @@ public sealed class UserController(IHostingBackend backend) : BackendController
     {
         if (!TryGetBasic(HttpContext, out var auth))
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-        var result = await backend.AccountMutations.SetSuspendedAsync(
+        var result = await accountMutations.SetSuspendedAsync(
             username, input.Suspended, auth, ct);
         return result.Error is null
             ? Results.Json(new { username, suspended = input.Suspended, updated = true }, statusCode: result.Status)
@@ -78,7 +78,7 @@ public sealed class UserController(IHostingBackend backend) : BackendController
     public async Task<IResult> hosting_accounts_Get_4()
     {
         var context = HttpContext;
-        var catalog = backend.AccountCatalog;
+        var catalog = accountCatalog;
         if (!TryGetBasic(context, out var auth))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var result = await catalog.ListAsync(auth, context.RequestAborted);
@@ -91,7 +91,7 @@ public sealed class UserController(IHostingBackend backend) : BackendController
     public async Task<IResult> hosting_impersonation_check_Get_8()
     {
         var context = HttpContext;
-        var service = backend.Impersonation;
+        var service = impersonation;
         if (!TryGetBasic(context, out var auth))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var target = context.Request.Query["user"].ToString();
@@ -105,7 +105,7 @@ public sealed class UserController(IHostingBackend backend) : BackendController
     public async Task<IResult> hosting_users_username_overview_Get_9([FromRoute] string username)
     {
         var context = HttpContext;
-        var service = backend.AccountOverview;
+        var service = accountOverview;
         if (!TryGetBasic(context, out var auth))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             if (!HostingInputValidation.ValidUsername(username))
@@ -126,7 +126,7 @@ public sealed class UserController(IHostingBackend backend) : BackendController
     [HttpGet("/api/search/users-extended")]
     [HttpGet("/api/users/list")]
     [HttpGet("/api/users/{username}/login-history")]
-    public Task ForwardUserAsync() => backend.ForwardAsync(HttpContext);
+    public Task ForwardUserAsync() => compatibility.ForwardAsync(HttpContext);
 
 
 }

@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HostingPanel.Api.Controllers;
 
 [ApiController]
-public sealed class DatabaseController(IHostingBackend backend) : BackendController
+public sealed class DatabaseController(IAccessibleDatabases accessibleDatabases, IDatabases databases, IApiCompatibilityHandler compatibility) : BackendController
 {
     [HttpGet("/hosting/databases/accessible")]
     public async Task<IResult> ListAccessibleDatabases(CancellationToken ct)
@@ -16,7 +16,7 @@ public sealed class DatabaseController(IHostingBackend backend) : BackendControl
         if (!TryGetBasic(HttpContext, out var auth))
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
 
-        var inventory = await backend.AccessibleDatabases.ListAsync(auth, ct);
+        var inventory = await accessibleDatabases.ListAsync(auth, ct);
         return inventory.Items is null
             ? Results.Json(new { type = inventory.Error ?? "UPSTREAM_ERROR" }, statusCode: inventory.Status)
             : Results.Json(new {
@@ -30,7 +30,7 @@ public sealed class DatabaseController(IHostingBackend backend) : BackendControl
     public async Task<IResult> hosting_databases_Get_10()
     {
         var context = HttpContext;
-        var service = backend.Databases;
+        var service = databases;
         if (!TryGetBasic(context, out var auth))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var result = await service.ListAsync(auth, context.RequestAborted);
@@ -43,7 +43,7 @@ public sealed class DatabaseController(IHostingBackend backend) : BackendControl
     public async Task<IResult> hosting_databases_database_users_Get_11([FromRoute] string database)
     {
         var context = HttpContext;
-        var service = backend.Databases;
+        var service = databases;
         if (!TryGetBasic(context, out var auth))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var result = await service.UsersAsync(database, auth, context.RequestAborted);
@@ -56,7 +56,7 @@ public sealed class DatabaseController(IHostingBackend backend) : BackendControl
     public async Task<IResult> hosting_databases_Post_12([FromBody] DatabaseCreateRequest input)
     {
         var context = HttpContext;
-        var service = backend.Databases;
+        var service = databases;
         if (!TryGetBasic(context, out var auth))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var result = await service.CreateAsync(input, auth, context.RequestAborted);
@@ -69,7 +69,7 @@ public sealed class DatabaseController(IHostingBackend backend) : BackendControl
     public async Task<IResult> hosting_databases_database_Delete_13([FromRoute] string database, [FromBody] DatabaseDeleteRequest input)
     {
         var context = HttpContext;
-        var service = backend.Databases;
+        var service = databases;
         if (!TryGetBasic(context, out var auth))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var result = await service.DeleteAsync(database, input.Confirmation, auth,
@@ -106,7 +106,7 @@ public sealed class DatabaseController(IHostingBackend backend) : BackendControl
     [HttpGet("/api/db-show/users")]
     [HttpGet("/api/db-show/users/{dbuser}")]
     [HttpGet("/api/db-show/users/{dbuser}/databases")]
-    public Task ForwardDatabaseAsync() => backend.ForwardAsync(HttpContext);
+    public Task ForwardDatabaseAsync() => compatibility.ForwardAsync(HttpContext);
 
 
 }

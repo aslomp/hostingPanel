@@ -4,7 +4,7 @@ namespace HostingPanel.Api.Controllers;
 
 /// <summary>Exact DirectAdmin Swagger routes. Backend determines authorization and support.</summary>
 [ApiController]
-public sealed class SessionController(IHostingBackend backend) : BackendController
+public sealed class SessionController(IApiCompatibilityHandler compatibility, ICertificateProvider certificates) : BackendController
 {
     [HttpGet("/api/session")]
     [HttpPost("/api/session/login-as/return")]
@@ -18,8 +18,8 @@ public sealed class SessionController(IHostingBackend backend) : BackendControll
     [HttpGet("/api/sessions")]
     [HttpPost("/api/sessions/destroy-all-other")]
     [HttpPost("/api/sessions/destroy/{public_id}")]
-    public Task ForwardAsync() => backend.ForwardAsync(HttpContext);
+    public Task ForwardAsync() => compatibility.ForwardAsync(HttpContext);
 
     [HttpGet("/api/session/acme-data")]
-    public Task AcmeDataAsync() => backend.HandleCertificateRequestAsync(HttpContext);
+    public Task AcmeDataAsync() => certificates.HandleCertificateRequestAsync(HttpContext);
 }

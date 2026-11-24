@@ -6,7 +6,7 @@ using HostingPanel.Api.Services;
 namespace HostingPanel.Api;
 
 /// <summary>No provider-specific implementations appear in this contract.</summary>
-public interface IHostingBackend : IApiCompatibilityHandler, IAuthenticationProvider, IWebHosting, IDNSProvider, ICertificateProvider
+public interface IHostingBackend : IDomainPreview, IApiCompatibilityHandler, IAuthenticationProvider, IWebHosting, IDNSProvider, ICertificateProvider
 {
     IBackendSettingsAccess? Settings => null;
     IAccountCatalog AccountCatalog { get; }
@@ -22,7 +22,6 @@ public interface IHostingBackend : IApiCompatibilityHandler, IAuthenticationProv
     IDNSProvider Dns { get; }
     IFileAccess FileAccess { get; }
     ITickets Tickets { get; }
-    IResult PreviewDomain(DomainCreatePreview input);
 }
 
 public interface IAccountCatalog {
@@ -76,4 +75,9 @@ public interface ITickets
     Task<TicketActionResult> CreateAsync(TicketCreateRequest input, AuthenticationHeaderValue auth, CancellationToken ct);
     Task<TicketActionResult> ReplyAsync(string legacyId, TicketReplyRequest input, AuthenticationHeaderValue auth, CancellationToken ct);
     Task<TicketActionResult> SetStatusAsync(string legacyId, TicketStatusChange input, AuthenticationHeaderValue auth, CancellationToken ct);
+}
+
+public interface IDomainPreview
+{
+    IResult PreviewDomain(DomainCreatePreview input);
 }

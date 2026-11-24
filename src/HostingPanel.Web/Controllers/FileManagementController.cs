@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HostingPanel.Api.Controllers;
 
 [ApiController]
-public sealed class FileManagementController(IHostingBackend backend) : BackendController
+public sealed class FileManagementController(IApiCompatibilityHandler compatibility) : BackendController
 {
     [HttpPost("/api/filemanager-actions/chmod")]
     [HttpPost("/api/filemanager-actions/copy")]
@@ -33,7 +33,7 @@ public sealed class FileManagementController(IHostingBackend backend) : BackendC
     [HttpGet("/api/filemanager/stat")]
     [HttpGet("/api/filemanager/trash")]
     [HttpGet("/api/filemanager/tree")]
-    public Task ForwardFileManagementAsync() => backend.ForwardAsync(HttpContext);
+    public Task ForwardFileManagementAsync() => compatibility.ForwardAsync(HttpContext);
 
 
 }

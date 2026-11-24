@@ -4,7 +4,7 @@ namespace HostingPanel.Api.Controllers;
 
 /// <summary>Exact DirectAdmin Swagger routes. Backend determines authorization and support.</summary>
 [ApiController]
-public sealed class TlsController(IHostingBackend backend) : BackendController
+public sealed class TlsController(IApiCompatibilityHandler compatibility) : BackendController
 {
     [HttpGet("/api/server-tls/acme-config")]
     [HttpPut("/api/server-tls/acme-config")]
@@ -14,5 +14,5 @@ public sealed class TlsController(IHostingBackend backend) : BackendController
     [HttpPut("/api/server-tls/files")]
     [HttpPost("/api/server-tls/obtain")]
     [HttpGet("/api/server-tls/status")]
-    public Task ForwardAsync() => backend.ForwardAsync(HttpContext);
+    public Task ForwardAsync() => compatibility.ForwardAsync(HttpContext);
 }
