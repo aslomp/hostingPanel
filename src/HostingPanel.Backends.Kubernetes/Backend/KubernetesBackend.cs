@@ -449,9 +449,9 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
     {
         var principal = await AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
-        if (!ValidDomain(domain) || !LegacyDnsAdapter.Valid(change.Record)
+        if (!ValidDomain(domain) || !DnsRecordValidation.Valid(change.Record)
             || change.Action is not ("add" or "edit" or "delete")
-            || (change.Action != "add" && (change.Previous is null || !LegacyDnsAdapter.Valid(change.Previous))))
+            || (change.Action != "add" && (change.Previous is null || !DnsRecordValidation.Valid(change.Previous))))
             return new(400, "INVALID_DNS_CHANGE");
         var ids = await VisibleAccountsAsync(principal, ct);
         var zone = await db.DnsZones.FirstOrDefaultAsync(x => x.Name == domain.ToLowerInvariant(), ct);

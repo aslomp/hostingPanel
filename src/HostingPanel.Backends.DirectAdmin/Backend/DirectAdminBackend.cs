@@ -58,24 +58,12 @@ public sealed class DirectAdminBackend(
         catch (HttpRequestException) { return 502; }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return 504; }
     }
-    public Task ForwardAsync(HttpContext context) => BackendController.ForwardToBackendAsync(context, clients);
+    public Task ForwardAsync(HttpContext context) => DirectAdminTransport.ForwardAsync(context, clients);
 }
 
-public abstract class BackendController : ControllerBase
+
+public static class DirectAdminTransport
 {
-    protected static bool TryGetBasic(HttpContext context, out AuthenticationHeaderValue authentication)
-    {
-        authentication = null!;
-        if (!AuthenticationHeaderValue.TryParse(context.Request.Headers.Authorization.ToString(), out var value)
-            || !value.Scheme.Equals("Basic", StringComparison.OrdinalIgnoreCase)
-            || string.IsNullOrWhiteSpace(value.Parameter))
-        {
-            context.Response.Headers.WWWAuthenticate = "Basic realm=\"HostingPanel API\"";
-            return false;
-        }
-        authentication = value;
-        return true;
-    }
     /// <summary>
     /// Forward an exact Swagger route without changing its method, URL, query,
     /// credentials, request content or upstream response status.
@@ -90,7 +78,7 @@ public abstract class BackendController : ControllerBase
         || header.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)
         || header.Equals("Upgrade", StringComparison.OrdinalIgnoreCase);
 
-    protected internal static async Task ForwardToBackendAsync(HttpContext context, IHttpClientFactory clients)
+    public static async Task ForwardAsync(HttpContext context, IHttpClientFactory clients)
     {
         // Authentication and authorization for official DirectAdmin routes belong
         // to the backend. In particular, login/logout may not have Basic credentials.

@@ -64,7 +64,7 @@ static void Ensure(bool value, string description)
 public sealed class ForwardProbe : BackendController
 {
     public static Task Invoke(HttpContext context, IHttpClientFactory factory) =>
-        ForwardToBackendAsync(context, factory);
+        DirectAdminTransport.ForwardAsync(context, factory);
 }
 public sealed class ClientFactory(HttpClient client) : IHttpClientFactory
 {

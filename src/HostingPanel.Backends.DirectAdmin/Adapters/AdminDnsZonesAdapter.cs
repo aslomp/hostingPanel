@@ -2,7 +2,6 @@ using System.Text.Json;
 
 namespace HostingPanel.Api.Adapters;
 
-public sealed record AdminDnsZone(string Domain, bool? LocalData, bool? LocalMail);
 public static class AdminDnsZonesAdapter
 {
     public static IReadOnlyList<AdminDnsZone> Parse(string response)
