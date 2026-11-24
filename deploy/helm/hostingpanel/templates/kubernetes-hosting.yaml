@@ -91,6 +91,7 @@ data:
   httpd.conf: |
     ServerRoot "/usr/local/apache2"
     Listen 8080
+    Listen 8081
     ServerName localhost
     LoadModule mpm_event_module modules/mod_mpm_event.so
     LoadModule unixd_module modules/mod_unixd.so
@@ -110,11 +111,22 @@ data:
         AllowOverride None
         Require all denied
     </Directory>
+    ServerTokens Prod
+    ServerSignature Off
+    TraceEnable Off
+    ProxyRequests Off
     <VirtualHost *:8080>
+        ServerName localhost
+        <Location "/">
+            Require all denied
+        </Location>
+    </VirtualHost>
+    # Dedicated probe listener; not exposed by the shared HTTP Service.
+    <VirtualHost *:8081>
         ServerName localhost
         DocumentRoot "/usr/local/apache2/htdocs"
         <Directory "/usr/local/apache2/htdocs">
-            Options -Indexes
+            Options None
             AllowOverride None
             Require all granted
             DirectoryIndex index.html
@@ -240,7 +252,7 @@ spec:
     metadata:
       labels: {app.kubernetes.io/name: apache-baseline}
       annotations:
-        hostingpanel/apache-config: "shared-vhosts-v2"
+        hostingpanel/apache-config: "shared-vhosts-v3"
     spec:
       serviceAccountName: apache-vhosts
       automountServiceAccountToken: false
@@ -254,14 +266,14 @@ spec:
         - name: apache
           image: {{ .Values.kubernetesHosting.apacheImage | quote }}
           command: ["/bin/sh", "/etc/hostingpanel/run.sh"]
-          ports: [{name: http, containerPort: 8080}]
+          ports: [{name: http, containerPort: 8080}, {name: health, containerPort: 8081}]
           securityContext:
             allowPrivilegeEscalation: false
             capabilities: {drop: [ALL]}
           readinessProbe:
-            httpGet: {path: /, port: http}
+            httpGet: {path: /, port: health}
           livenessProbe:
-            httpGet: {path: /, port: http}
+            httpGet: {path: /, port: health}
           volumeMounts:
             - {name: config, mountPath: /etc/hostingpanel, readOnly: true}
             - {name: vhosts, mountPath: /vhosts, readOnly: true}

@@ -215,10 +215,19 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         if (phpVersion is not ("7" or "8")) throw new InvalidOperationException("Unsupported PHP version");
         if (php && phpVersion == "7" && !configuration.GetValue<bool>("KubernetesHosting:EnablePhp7"))
             throw new InvalidOperationException("PHP 7 is disabled");
+        // Only the canonical hostname is served; aliases require explicit routing.
+        // Keep executable extensions and sensitive metadata out of static responses.
+        var deniedPhp = php
+            ? "(?i)^(?!.*(?-i:[.]php)$).*[.](?:php[0-9]*|phtml|phar|phps|inc)(?:[.]|$)"
+            : "(?i)[.](?:php[0-9]*|phtml|phar|phps|inc)(?:[.]|$)";
         var apache = "<VirtualHost *:8080>\nServerName " + host + "\nDocumentRoot \"" + root + "\"" +
-            "\n<Directory \"" + root + "\">\nOptions -Indexes -ExecCGI -Includes -FollowSymLinks -SymLinksIfOwnerMatch\nAllowOverride None\nRequire all granted\nDirectoryIndex index.php index.html\n</Directory>\n" +
-            (php ? "<FilesMatch \"[.]php$\">\nSetHandler \"proxy:fcgi://php-fpm-" + phpVersion + ":" + identity.Port + "\"\n</FilesMatch>\n"
-            : "<FilesMatch \"[.]php$\">\nRequire all denied\n</FilesMatch>\n") + "</VirtualHost>\n";
+            "\n<Directory \"" + root + "\">\nOptions -Indexes -ExecCGI -Includes -FollowSymLinks -SymLinksIfOwnerMatch\nAllowOverride None\nRequire all granted\nDirectoryIndex " +
+            (php ? "index.php index.html" : "index.html") + "\n</Directory>\n" +
+            "<DirectoryMatch \"/[.](?!well-known(?:/|$))[^/]+(?:/|$)\">\nRequire all denied\n</DirectoryMatch>\n" +
+            "<FilesMatch \"(?i)(?:^[.]|[.](?:bak|backup|old|orig|swp|sql|ini|log|dist|save)$|~$|^(?:composer[.](?:json|lock)|wp-config[.]php)$)\">\nRequire all denied\n</FilesMatch>\n" +
+            "<FilesMatch \"" + deniedPhp + "\">\nRequire all denied\n</FilesMatch>\n" +
+            (php ? "<FilesMatch \"[.]php$\">\nSetHandler \"proxy:fcgi://php-fpm-" + phpVersion + ":" + identity.Port + "\"\n</FilesMatch>\n" : "") +
+            "</VirtualHost>\n";
         var configLabels = new Dictionary<string,string> { ["hostingpanel/component"] = "vhost" };
         var resources = new object[] {
             new { apiVersion = "v1", kind = "ConfigMap", metadata = new { name, @namespace = Namespace, labels = configLabels }, data = new Dictionary<string,string> { ["vhost.conf"] = apache } },

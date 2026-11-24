@@ -1,9 +1,9 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/system-info"
-@using System.Text.Json
 @inject PanelSession Session
-@inject CompatibilityApiClient ApiClient
+@inject SystemInformationOperations SystemInfoOps
+@implements IDisposable
 <PageTitle>@L["System information — HostingPanel"]</PageTitle>
 <PanelPageHeader>
     <Breadcrumb>@L["Server management"]</Breadcrumb>
@@ -15,54 +15,59 @@
 else
 {
     @if (busy) { <PanelLoading>@L["Retrieving system information…"]</PanelLoading> }
+    @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
     <MudGrid Spacing="3">
         @foreach (var item in checks)
         {
             <MudItem xs="12" md="6"><MudPaper Class="pa-4 my-3" Elevation="1">
-                <h2>@item.Label</h2><p>HTTP @item.Status</p>
+                <h2>@L[item.LabelKey]</h2><p>HTTP @item.Status</p>
                 <JsonOverview Json="@item.Body" />
             </MudPaper></MudItem>
         }
     </MudGrid>
 }
 @code {
-    private sealed record Check(string Label, string Endpoint, int Status, string Body);
-    private (string Label, string Endpoint)[] sources => [
-        (L["General information"].Value, "api/info"),
-        ("Processor", "api/system-info/cpu"),
-        ("Geheugen", "api/system-info/memory"),
-        ("Belasting", "api/system-info/load"),
-        ("Bestandssystemen", "api/system-info/fs"),
-        ("Uptime", "api/system-info/uptime"),
-        ("Services", "api/system-info/services")
-    ];
-    private List<Check> checks = [];
-    private bool busy;
-    protected override async Task OnInitializedAsync() { if (Session.Connected) await Refresh(); }
-    private async Task Refresh()
+    private IReadOnlyList<SystemInformationSection> checks = [];
+    private readonly LatestRead read = new();
+    private bool busy => read.Loading;
+    private bool disposed;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
     {
-        if (busy || !Session.Connected) return;
-        busy = true;
-        try
-        {
-            var result = new List<Check>();
-            foreach (var source in sources)
-            {
-                try
-                {
-                    var (status, body) = await ApiClient.GetRawAsync(source.Endpoint);
-                    result.Add(new(source.Label, source.Endpoint, status, Pretty(body)));
-                }
-                catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException)
-                { result.Add(new(source.Label, source.Endpoint, 0, ex.Message)); }
-            }
-            checks = result;
-        }
-        finally { busy = false; }
+        Session.Changed += SessionChanged;
+        await Refresh();
     }
-    private static string Pretty(string input)
+
+    private void SessionChanged() => _ = InvokeAsync(async () =>
     {
-        try { using var doc = JsonDocument.Parse(input); return JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true }); }
-        catch (JsonException) { return input; }
+        if (disposed) return;
+        var task = Refresh();
+        StateHasChanged();
+        await task;
+        if (!disposed) StateHasChanged();
+    });
+
+    public void Dispose()
+    {
+        disposed = true;
+        Session.Changed -= SessionChanged;
+        read.Dispose();
+    }
+
+    private Task Refresh()
+    {
+        if (disposed) return Task.CompletedTask;
+        checks = [];
+        error = null;
+        if (!Session.Connected)
+        {
+            read.Cancel();
+            return Task.CompletedTask;
+        }
+        var channel = Session.TicketChannel;
+        return read.RunAsync(ct => SystemInfoOps.ReadAsync(ct),
+            () => Session.Connected && Session.TicketChannel == channel,
+            result => checks = result, ex => error = ex.Message);
     }
 }

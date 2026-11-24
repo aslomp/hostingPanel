@@ -46,4 +46,6 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 
 - Account, database, domain and DNS-zone creation dialogs and DNS record editing share mutation lifecycle state; no additional backend mutation capabilities are implied.
 
+- System information has a dedicated UI operation service; upstream compatibility routes and support limits remain unchanged.
+
 - System service management uses a dedicated UI operation service without expanding upstream or Kubernetes support.
