@@ -4,13 +4,13 @@
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
-<MudLayout>
+<MudLayout Class="analytics-shell">
     <PanelToolbar DrawerOpen="@drawerOpen" ToggleDrawer="ToggleDrawer" />
-    <MudDrawer @bind-Open="drawerOpen" Variant="DrawerVariant.Responsive" Elevation="1" Width="280px">
+    <MudDrawer @bind-Open="drawerOpen" Variant="DrawerVariant.Responsive" Elevation="0" Width="256px" Class="analytics-drawer">
         <PanelSidebar />
     </MudDrawer>
-    <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="py-4">
+    <MudMainContent Class="analytics-main">
+        <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="analytics-content">
             <PanelBreadcrumb />
             <ImpersonationBanner />
             @Body
