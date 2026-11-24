@@ -87,6 +87,7 @@ else if (settings is not null)
             }
         </MudPaper></MudItem>
     </MudGrid>
+    <UserManagementActions Username="@Username" OnChanged="Load" />
     <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["All available user settings"]</h2>
         <p>@L["Original DirectAdmin field names, with confidential values filtered."]</p>
