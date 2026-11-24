@@ -73,7 +73,7 @@ else
     [Parameter] public string Domain { get; set; } = "";
     private sealed record ZoneRecord(string Type, string Name, string Value, string? Ttl);
     private List<ZoneRecord>? records;
-    private string? error, message, originalDomain;
+    private string? error, message;
     private string action = "add", type = "A", name = "", value = "", ttl = "", confirmation = "";
     private ZoneRecord? original;
     private bool busy;

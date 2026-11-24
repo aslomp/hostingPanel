@@ -9,7 +9,10 @@
         <h1>DNS Beheer</h1>
         <p>Alle DNS-zones die de backend via DirectAdmin beschikbaar stelt, inclusief zelfstandig beheerde DNS-zones.</p>
     </div>
-    <button @onclick="Reload" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
+    <div class="form-actions">
+      <a href="#dns-create" class="btn">＋ DNS-zone toevoegen</a>
+      <button @onclick="Reload" disabled="@loading">@(loading ? "Laden…" : "↻ Vernieuwen")</button>
+    </div>
 </div>
 @if (!Session.Connected)
 {
@@ -18,8 +21,12 @@
 else
 {
     <section class="card">
-        <label for="dnsSearch">Domeinen filteren</label>
-        <input id="dnsSearch" @bind="search" @bind:event="oninput" placeholder="Zoek op domeinnaam" />
+        <div class="dashboard-section-heading">
+          <h2>DNS-zones</h2>
+          @if (zones is not null) { <span class="status-pill good">@zones.Count zones</span> }
+        </div>
+        <label for="dnsSearch">Zoeken in DNS-zones</label>
+        <input id="dnsSearch" type="search" @bind="search" @bind:event="oninput" placeholder="Domeinnaam zoeken…" />
         <div class="domain-options">
             <label for="localData">Lokale gegevens</label>
             <select id="localData" @bind="localDataFilter">
@@ -44,8 +51,9 @@ else
                 {
                     <tr>
                         <td><a href="@($"/domains/{Uri.EscapeDataString(zone.Domain)}/dns")">@zone.Domain</a></td>
-                        <td>@(string.IsNullOrWhiteSpace(zone.Owner) ? "—" : zone.Owner)</td><td>@Display(zone.LocalData)</td>
-                        <td>@Display(zone.LocalMail)</td>
+                        <td>@(string.IsNullOrWhiteSpace(zone.Owner) ? "—" : zone.Owner)</td>
+                        <td><span class="status-pill @(zone.LocalData is true ? "good" : "muted")">@Display(zone.LocalData)</span></td>
+                        <td><span class="status-pill @(zone.LocalMail is true ? "good" : "muted")">@Display(zone.LocalMail)</span></td>
                     </tr>
                 }
                 </tbody>
@@ -57,14 +65,16 @@ else
             </div>
         }
     </section>
-    <section class="card">
+    <section class="card" id="dns-create">
         <h2>Zelfstandige DNS-zone aanmaken</h2>
         <p>Gebruik de gedocumenteerde DirectAdmin DNS-admin API. De backend controleert de bevoegdheden.</p>
-        <label>Domein</label><input @bind="zoneDomain" placeholder="example.com" />
-        <label>IPv4-adres</label><input @bind="zoneIp" placeholder="192.0.2.1" />
-        <label>Nameserver 1</label><input @bind="zoneNs1" placeholder="ns1.example.com" />
-        <label>Nameserver 2</label><input @bind="zoneNs2" placeholder="ns2.example.com" />
-        <button class="primary" disabled="@(changing || string.IsNullOrWhiteSpace(zoneDomain))" @onclick="CreateZone">DNS-zone aanmaken</button>
+        <div class="form-grid">
+          <div><label>Domein</label><input @bind="zoneDomain" placeholder="example.com" /></div>
+          <div><label>IPv4-adres</label><input @bind="zoneIp" placeholder="192.0.2.1" /></div>
+          <div><label>Nameserver 1</label><input @bind="zoneNs1" placeholder="ns1.example.com" /></div>
+          <div><label>Nameserver 2</label><input @bind="zoneNs2" placeholder="ns2.example.com" /></div>
+        </div>
+        <div class="form-actions"><button class="primary" disabled="@(changing || string.IsNullOrWhiteSpace(zoneDomain))" @onclick="CreateZone">DNS-zone aanmaken</button></div>
     </section>
     <section class="card">
         <h2>Zelfstandige DNS-zone verwijderen</h2>

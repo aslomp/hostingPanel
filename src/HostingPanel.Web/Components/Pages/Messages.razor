@@ -1,0 +1,98 @@
+@page "/messages"
+@using System.Text.Json
+@inject DirectAdminSession Session
+@implements IDisposable
+<PageTitle>Berichten — HostingPanel</PageTitle>
+
+<div class="page-header"><div><div class="eyebrow">Ondersteuning / Berichten</div><h1>Berichten</h1>
+    <p>Berichten van DirectAdmin. Nieuwe items verschijnen via de SignalR-melding in de navigatiebalk.</p></div>
+    <button disabled="@loading" @onclick="Load">↻ Vernieuwen</button></div>
+@if (!Session.Connected)
+{
+    <section class="card">Maak verbinding via het <a href="/">dashboard</a>.</section>
+}
+else
+{
+    <section class="card">
+        <label for="messageSearch">Zoek in berichten</label>
+        <input id="messageSearch" type="search" @bind="search" @bind:event="oninput" />
+        @if (loading) { <p role="status">Berichten ophalen…</p> }
+        @if (error is not null) { <p class="error" role="alert">@error</p> }
+        @if (messages is not null)
+        {
+            <table><thead><tr><th>Onderwerp</th><th>Afzender</th><th>Ontvangen</th><th>Status</th></tr></thead>
+            <tbody>
+                @foreach (var item in messages.Value.EnumerateArray().Where(x =>
+                    Text(x, "subject").Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                    Text(x, "fromName").Contains(search, StringComparison.OrdinalIgnoreCase)))
+                {
+                    <tr><td><button type="button" disabled="@loading" @onclick="() => OpenMessage(item)">@Text(item, "subject")</button></td>
+                        <td>@Text(item, "fromName")</td><td>@Text(item, "timestamp")</td>
+                        <td><span class="status-pill @(Flag(item, "unread") ? "warning" : "muted")">
+                            @(Flag(item, "unread") ? "Nieuw" : "Gelezen")</span></td></tr>
+                }
+            </tbody></table>
+        }
+    </section>
+    @if (selected is not null)
+    {
+        <section class="card">
+            <h2>@Text(selected.Value, "subject")</h2>
+            <p>Van @Text(selected.Value, "fromName") · @Text(selected.Value, "timestamp")</p>
+            <p class="ticket-message">@Text(selected.Value, "message")</p>
+            <div class="form-actions"><button @onclick="Close">Sluiten</button></div>
+        </section>
+    }
+}
+@code {
+    private JsonElement? messages, selected;
+    private string search = "";
+    private string? error;
+    private bool loading;
+    private static string Text(JsonElement item, string key) =>
+        item.TryGetProperty(key, out var value) ? value.ToString() : "";
+    private static bool Flag(JsonElement item, string key) =>
+        item.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.True;
+    private void OnTicketChanged() => _ = InvokeAsync(async () =>
+    {
+        await Load();
+        StateHasChanged();
+    });
+    public void Dispose() => Session.TicketInboxChanged -= OnTicketChanged;
+    protected override async Task OnInitializedAsync() { Session.TicketInboxChanged += OnTicketChanged;
+        if (Session.Connected) await Load(); }
+    private async Task Load()
+    {
+        if (loading || !Session.Connected) return;
+        loading = true; error = null;
+        try
+        {
+            var (status, body) = await Session.GetRawAsync("api/messages?limit=500");
+            if (status != 200) { error = $"Berichten niet beschikbaar (HTTP {status})."; return; }
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+                throw new JsonException("DirectAdmin returned unexpected message list.");
+            messages = doc.RootElement.Clone();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        { error = ex.Message; messages = null; }
+        finally { loading = false; }
+    }
+    private Task OpenMessage(JsonElement entry) => Open(entry.GetProperty("id").GetInt64());
+    private async Task Open(long id)
+    {
+        if (loading) return;
+        loading = true; error = null;
+        try
+        {
+            var (status, body) = await Session.GetRawAsync($"api/messages/id/{id}");
+            if (status != 200) { error = $"Bericht niet beschikbaar (HTTP {status})."; return; }
+            using var doc = JsonDocument.Parse(body);
+            selected = doc.RootElement.Clone();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        { error = ex.Message; }
+        finally { loading = false; }
+    }
+    private void Close() => selected = null;
+}

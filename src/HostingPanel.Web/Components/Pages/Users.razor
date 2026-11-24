@@ -4,9 +4,10 @@
 
 <PageTitle>Accountboom — HostingPanel</PageTitle>
 <div class="page-header">
-    <div><div class="eyebrow">Accountbeheer</div><h1>Accounts</h1>
+    <div><div class="eyebrow">Accountbeheer</div><h1>Gebruikersbeheer</h1>
         <p>Alle accounts die DirectAdmin aan de huidige sessie beschikbaar stelt, inclusief resellers en hun gebruikers.</p></div>
-    <button @onclick="Load" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
+    <div class="form-actions"><a class="btn" href="#account-create">＋ Gebruiker toevoegen</a>
+    <button @onclick="Load" disabled="@loading">@(loading ? "Laden…" : "↻ Vernieuwen")</button></div>
 </div>
 @if (!Session.Connected)
 {
@@ -23,15 +24,16 @@ else if (loading)
 else if (accounts is not null)
 {
     <div class="card">
-        <label for="userFilter">Accounts filteren (@accounts.Count totaal)</label>
-        <input id="userFilter" @bind="search" @bind:event="oninput" placeholder="Zoek op gebruikersnaam of eigenaar" />
+        <div class="dashboard-section-heading"><h2>Alle toegankelijke accounts</h2><span class="status-pill good">@accounts.Count accounts</span></div>
+        <label for="userFilter">Zoeken in gebruikers</label>
+        <input id="userFilter" type="search" @bind="search" @bind:event="oninput" placeholder="Gebruikersnaam of eigenaar zoeken…" />
         <table><thead><tr><th>Account</th><th>Rol</th><th>Aangemaakt door</th><th>Domeinen</th></tr></thead>
         <tbody>
         @foreach (var item in Visible)
         {
             <tr>
                 <td><span style="@($"padding-left:{item.Depth * 18}px")">@(item.Depth > 0 ? "↳ " : "")<a href="@($"/users/{Uri.EscapeDataString(item.Account.Username)}")">@item.Account.Username</a></span></td>
-                <td>@item.Account.Role</td>
+                <td><span class="status-pill">@item.Account.Role</span></td>
                 <td>@(item.Account.Creator ?? "—")</td>
                 <td><a href="@($"/domains?user={Uri.EscapeDataString(item.Account.Username)}")">Bekijk domeinen</a></td>
             </tr>
@@ -39,7 +41,7 @@ else if (accounts is not null)
         </tbody></table>
         @if (accounts.Count == 0) { <p>Geen accounts teruggegeven door DirectAdmin.</p> }
     </div>
-    <AccountActions Kind="user" />
+    <div id="account-create"><AccountActions Kind="user" /></div>
 }
 @code {
     private sealed record Account(string Username, string Role, string? Creator);

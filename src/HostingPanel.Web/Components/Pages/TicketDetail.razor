@@ -1,0 +1,136 @@
+@page "/tickets/{Id:long}"
+@using System.Text.Json
+@inject DirectAdminSession Session
+@implements IDisposable
+@inject NavigationManager Navigation
+<PageTitle>Ticket #@Id — HostingPanel</PageTitle>
+<div class="page-header"><div><div class="eyebrow"><a href="/tickets">Ticketbeheer</a> / Ticket #@Id</div>
+    <h1>@(ticket is null ? $"Ticket #{Id}" : Text(ticket.Value, "subject"))</h1>
+    <p>Berichten en antwoorden uit DirectAdmin.</p></div>
+    <button disabled="@loading" @onclick="Load">↻ Vernieuwen</button></div>
+@if (!Session.Connected)
+{
+    <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section>
+}
+else
+{
+    @if (error is not null) { <section class="card"><p class="error" role="alert">@error</p></section> }
+    @if (loading) { <p role="status">Ticket ophalen…</p> }
+    @if (ticket is not null)
+    {
+        <section class="card">
+            <div class="dashboard-section-heading"><h2>Ticketgegevens</h2>
+                <span class="status-pill @(IsOpen ? "good" : "muted")">@(IsOpen ? "Open" : "Gesloten")</span></div>
+            <div class="form-grid">
+                <div><label>Afzender</label><p>@Text(ticket.Value, "fromName") (@Text(ticket.Value, "from"))</p></div>
+                <div><label>Datum</label><p>@Text(ticket.Value, "timestamp")</p></div>
+                <div><label>Ticketnummer</label><p>@Text(ticket.Value, "legacyId")</p></div>
+            </div>
+            <hr class="section-divider" />
+            <p class="ticket-message">@Text(ticket.Value, "message")</p>
+        </section>
+        @if (ticket.Value.TryGetProperty("replies", out var replies) && replies.ValueKind == JsonValueKind.Array)
+        {
+            <section class="card">
+                <h2>Gesprek (@replies.GetArrayLength() antwoorden)</h2>
+                @foreach (var reply in replies.EnumerateArray())
+                {
+                    <article class="ticket-reply">
+                        <header><strong>@Text(reply, "fromName")</strong>
+                            <span>@Text(reply, "timestamp")</span></header>
+                        <p class="ticket-message">@Text(reply, "message")</p>
+                    </article>
+                }
+            </section>
+        }
+        <section class="card">
+            <h2>Antwoorden</h2>
+            <p>Een antwoord wordt via DirectAdmin opgeslagen. Alleen een backendbevestiging geldt als succes.</p>
+            <label for="ticketReply">Bericht</label>
+            <textarea id="ticketReply" rows="8" @bind="replyMessage" maxlength="65536"></textarea>
+            <label for="ticketTo">Ontvanger</label>
+            <input id="ticketTo" @bind="recipient" />
+            <div class="form-actions">
+                <button class="primary" disabled="@(sending || string.IsNullOrWhiteSpace(replyMessage) || string.IsNullOrWhiteSpace(recipient))"
+                    @onclick="SendReply">Antwoord verzenden</button>
+                @if (Source == "received")
+                {
+                    <button disabled="@sending" @onclick="ToggleStatus">@(IsOpen ? "Ticket sluiten" : "Ticket heropenen")</button>
+                }
+            </div>
+            @if (feedback is not null) { <p role="status">@feedback</p> }
+        </section>
+    }
+}
+@code {
+    [Parameter] public long Id { get; set; }
+    [SupplyParameterFromQuery(Name = "source")] public string Source { get; set; } = "request";
+    private JsonElement? ticket;
+    private string recipient = "creator", replyMessage = "";
+    private string? error, feedback;
+    private bool loading, sending;
+    private bool IsOpen => ticket is not null && ticket.Value.TryGetProperty("open", out var v) && v.ValueKind == JsonValueKind.True;
+    private static string Text(JsonElement item, string name) =>
+        item.TryGetProperty(name, out var value) ? value.ToString() : "";
+
+    private void OnTicketChanged() => _ = InvokeAsync(async () =>
+    {
+        await Load();
+        StateHasChanged();
+    });
+    public void Dispose() => Session.TicketInboxChanged -= OnTicketChanged;
+    protected override void OnInitialized() => Session.TicketInboxChanged += OnTicketChanged;
+    protected override async Task OnParametersSetAsync() { if (Session.Connected) await Load(); }
+    private async Task Load()
+    {
+        if (loading || !Session.Connected) return;
+        loading = true; error = null;
+        try
+        {
+            var (status, body) = await Session.GetRawAsync(
+                $"hosting/tickets/{Id}?source={Uri.EscapeDataString(Source)}");
+            if (status != 200) { error = $"Ticket niet beschikbaar (HTTP {status})."; ticket = null; return; }
+            using var json = JsonDocument.Parse(body);
+            ticket = json.RootElement.Clone();
+            recipient = Source == "received" ? Text(ticket.Value, "from") : "creator";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException)
+        { error = ex.Message; ticket = null; }
+        finally { loading = false; }
+    }
+    private async Task SendReply()
+    {
+        if (sending || ticket is null || string.IsNullOrWhiteSpace(replyMessage)) return;
+        sending = true; feedback = null;
+        try
+        {
+            var data = JsonSerializer.Serialize(new {
+                message = replyMessage, recipient, subject = Text(ticket.Value, "subject"), source = Source
+            });
+            var legacyId = Text(ticket.Value, "legacyId");
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post,
+                $"hosting/tickets/{Uri.EscapeDataString(legacyId)}/replies", data);
+            if (status == 200) { replyMessage = ""; await Load(); }
+            else feedback = $"DirectAdmin heeft het antwoord niet bevestigd (HTTP {status}): {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException)
+        { feedback = ex.Message; }
+        finally { sending = false; }
+    }
+    private async Task ToggleStatus()
+    {
+        if (sending || ticket is null || Source != "received") return;
+        sending = true; feedback = null;
+        try
+        {
+            var payload = JsonSerializer.Serialize(new { source = Source, open = !IsOpen });
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Put,
+                "hosting/tickets/" + Uri.EscapeDataString(Text(ticket.Value, "legacyId")) + "/status", payload);
+            if (status == 200) await Load();
+            else feedback = $"Statuswijziging niet bevestigd (HTTP {status}): {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { feedback = ex.Message; }
+        finally { sending = false; }
+    }
+}

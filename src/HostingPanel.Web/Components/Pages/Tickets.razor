@@ -1,0 +1,131 @@
+@page "/tickets"
+@using System.Text.Json
+@inject DirectAdminSession Session
+@implements IDisposable
+<PageTitle>Tickets — HostingPanel</PageTitle>
+
+<div class="page-header">
+    <div><div class="eyebrow">Ondersteuning / Tickets</div><h1>Ticketbeheer</h1>
+        <p>Ontvangen tickets en eigen aanvragen. DirectAdmin bepaalt welke tickets je mag zien.</p></div>
+    <div class="form-actions">
+        <a class="btn primary" href="/tickets/new">＋ Nieuw ticket</a>
+        <button disabled="@loading" @onclick="Load">↻ Vernieuwen</button>
+    </div>
+</div>
+@if (!Session.Connected)
+{
+    <section class="card">Maak verbinding via het <a href="/">dashboard</a>.</section>
+}
+else
+{
+    <section class="card">
+        <div class="dashboard-section-heading"><h2>Ticketoverzicht</h2>
+            @if (tickets is not null) { <span class="status-pill">@tickets.Count tickets</span> }
+        </div>
+        <div class="form-grid">
+            <div><label for="ticketSearch">Zoeken</label>
+                <input id="ticketSearch" type="search" @bind="search" @bind:event="oninput" placeholder="Onderwerp, afzender…" /></div>
+            <div><label for="ticketFilter">Weergave</label>
+                <select id="ticketFilter" @bind="filter">
+                    <option value="all">Alle tickets</option><option value="received">Ontvangen</option>
+                    <option value="request">Mijn aanvragen</option><option value="unread">Ongelezen</option>
+                    <option value="open">Open</option><option value="closed">Gesloten</option>
+                </select></div>
+        </div>
+        @if (loading) { <p role="status">Tickets ophalen…</p> }
+        @if (error is not null) { <p class="error" role="alert">@error</p> }
+        @if (warning is not null) { <p class="error" role="status">Het overzicht kan onvolledig zijn: @warning</p> }
+        @if (tickets is not null)
+        {
+            <div class="overview-scroll">
+                <table class="overview-table">
+                    <thead><tr><th>Status</th><th>Onderwerp</th><th>Van</th><th>Herkomst</th><th>Prioriteit</th><th>Datum</th></tr></thead>
+                    <tbody>
+                        @foreach (var ticket in Visible)
+                        {
+                            <tr>
+                                <td><span class="status-pill @(ticket.Open ? "good" : "muted")">@(ticket.Open ? "Open" : "Gesloten")</span></td>
+                                <td><a href="@($"/tickets/{ticket.Id}?source={ticket.Source}")">@ticket.Subject</a>
+                                    @if (ticket.Unread) { <span class="status-pill warning">Nieuw</span> }</td>
+                                <td>@(string.IsNullOrWhiteSpace(ticket.FromName) ? ticket.From : ticket.FromName)</td>
+                                <td>@(ticket.Source == "received" ? "Ontvangen" : "Verzonden")</td>
+                                <td>@ticket.Priority</td>
+                                <td>@ticket.Timestamp</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (Visible.Count == 0) { <p>Er zijn geen tickets die aan dit filter voldoen.</p> }
+        }
+    </section>
+    <section class="card">
+        <div class="dashboard-section-heading"><h2>Berichten</h2><a href="/messages">Alle berichten bekijken</a></div>
+        @if (messageCount > 0)
+        {
+            <p><span class="status-pill warning">@messageCount berichten</span> Nieuwe berichten verschijnen ook via SignalR bovenin de interface.</p>
+        }
+        else { <p>Geen berichten in het huidige backendresultaat.</p> }
+    </section>
+}
+
+@code {
+    private sealed record TicketRow(long Id, string Source, string Subject, string From, string FromName,
+        bool Open, bool Unread, int Priority, string Timestamp);
+    private List<TicketRow>? tickets;
+    private string search = "", filter = "all";
+    private string? error, warning;
+    private int messageCount;
+    private bool loading;
+
+    private IReadOnlyList<TicketRow> Visible => (tickets ?? []).Where(t =>
+        (filter switch {
+            "received" => t.Source == "received", "request" => t.Source == "request",
+            "open" => t.Open, "closed" => !t.Open, "unread" => t.Unread, _ => true
+        }) && (t.Subject.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+               t.From.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+               t.FromName.Contains(search, StringComparison.OrdinalIgnoreCase))).ToArray();
+
+    private void OnTicketChanged() => _ = InvokeAsync(async () =>
+    {
+        await Load();
+        StateHasChanged();
+    });
+    public void Dispose() => Session.TicketInboxChanged -= OnTicketChanged;
+    protected override async Task OnInitializedAsync()
+    {
+        Session.TicketInboxChanged += OnTicketChanged;
+        if (Session.Connected) await Load();
+    }
+
+    private async Task Load()
+    {
+        if (loading || !Session.Connected) return;
+        loading = true; error = null; warning = null;
+        try
+        {
+            var (status, body) = await Session.GetRawAsync("hosting/tickets/inbox");
+            if (status != 200) { error = $"De backend heeft de ticketlijst niet geleverd (HTTP {status})."; tickets = null; return; }
+            using var json = JsonDocument.Parse(body);
+            var root = json.RootElement;
+            tickets = root.GetProperty("tickets").EnumerateArray()
+                .Select(x => new TicketRow(
+                    x.GetProperty("id").GetInt64(), Text(x, "source"),
+                    Text(x, "subject"), Text(x, "from"), Text(x, "fromName"),
+                    Flag(x, "open"), Flag(x, "unread"),
+                    x.GetProperty("priority").GetInt32(), Text(x, "timestamp")))
+                .ToList();
+            messageCount = root.GetProperty("messages").GetArrayLength();
+            if (root.TryGetProperty("warnings", out var warnings) && warnings.GetArrayLength() > 0)
+                warning = string.Join(", ", warnings.EnumerateArray().Select(x => x.GetString()));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        { error = ex.Message; tickets = null; }
+        finally { loading = false; }
+    }
+    private static string Text(JsonElement e, string key) =>
+        e.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? "" : "";
+    private static bool Flag(JsonElement e, string key) =>
+        e.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.True;
+}
