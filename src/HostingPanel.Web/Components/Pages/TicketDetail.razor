@@ -49,9 +49,9 @@ else
             <h2>@L["Replies"]</h2>
             <p>@L["Replies are saved through DirectAdmin. Only backend confirmation is considered successful."]</p>
             <label for="ticketReply">@L["Message"]</label>
-            <textarea id="ticketReply" rows="8" @bind="replyMessage" maxlength="65536"></textarea>
+            <MudTextField T="string" @bind-Value="replyMessage" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketReply" Lines="8" MaxLength="65536" />
             <label for="ticketTo">@L["Recipient"]</label>
-            <input id="ticketTo" @bind="recipient" />
+            <MudTextField T="string" @bind-Value="recipient" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketTo" />
             <div class="form-actions">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(sending || string.IsNullOrWhiteSpace(replyMessage) || string.IsNullOrWhiteSpace(recipient))" OnClick="SendReply">@L["Send reply"]</MudButton>
                 @if (Source == "received")

@@ -17,7 +17,7 @@ else
 {
     <section class="card">
         <label for="messageSearch">@L["Search messages"]</label>
-        <input id="messageSearch" type="search" @bind="search" @bind:event="oninput" />
+        <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="messageSearch" />
         @if (loading) { <p role="status">@L["Retrieving messages…"]</p> }
         @if (error is not null) { <p class="error" role="alert">@error</p> }
         @if (messages is not null)

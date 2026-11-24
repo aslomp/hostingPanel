@@ -10,7 +10,7 @@
 else
 {
     <div class="card">
-        <label>Endpoint<input @bind="endpoint" /></label>
+        <label>Endpoint<MudTextField T="string" @bind-Value="endpoint" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></label>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Fetch">@L["Retrieve"]</MudButton>
         <p>@status</p>
         <JsonOverview Json="@body" />

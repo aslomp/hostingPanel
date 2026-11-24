@@ -34,7 +34,7 @@ else
     <h2>@L["Delete database"]</h2>
     <p>@L["This deletes the database and may cause irreversible data loss. Enter the exact database name to confirm."]</p>
     <label for="dbConfirmation">Typ @Database ter bevestiging</label>
-    <input id="dbConfirmation" @bind="confirmation" autocomplete="off" />
+    <MudTextField T="string" @bind-Value="confirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbConfirmation" autocomplete="off" />
     <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(deleting || confirmation != Database)" OnClick="Delete">@L["Permanently delete database"]</MudButton>
     @if(deleteMessage is not null) { <p role="status">@deleteMessage</p> }
   </section>

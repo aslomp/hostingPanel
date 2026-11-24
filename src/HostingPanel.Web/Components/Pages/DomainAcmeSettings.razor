@@ -5,14 +5,14 @@
 {
     <section class="card">
         <h2>SSL Certificates / ACME Settings</h2>
-        <label><input type="checkbox" @bind="enabled" /> Automatic certificate renewal</label>
+        <MudCheckBox T="bool" @bind-Value="enabled" Label="Automatic certificate renewal" />
         <label>ACME provider</label>
-        <select @bind="provider"><option value="">Default (inherited)</option>
-            @foreach (var option in providers) { <option value="@option.Id">@option.Name</option> }
-        </select>
+        <MudSelect T="string" @bind-Value="provider" Variant="Variant.Outlined" Margin="Margin.Dense"><MudSelectItem T="string" Value='@("")'>Default (inherited)</MudSelectItem>
+            @foreach (var option in providers) { <MudSelectItem T="string" Value='@option.Id'>@option.Name</MudSelectItem> }
+        </MudSelect>
         <label>Private key</label>
-        <select @bind="keyType"><option>ec256</option><option>ec384</option><option>rsa2048</option><option>rsa3072</option><option>rsa4096</option><option>rsa8192</option></select>
-        <label><input type="checkbox" @bind="wildcard" /> Prefer wildcard</label>
+        <MudSelect T="string" @bind-Value="keyType" Variant="Variant.Outlined" Margin="Margin.Dense"><MudSelectItem T="string" Value='@("ec256")'>ec256</MudSelectItem><MudSelectItem T="string" Value='@("ec384")'>ec384</MudSelectItem><MudSelectItem T="string" Value='@("rsa2048")'>rsa2048</MudSelectItem><MudSelectItem T="string" Value='@("rsa3072")'>rsa3072</MudSelectItem><MudSelectItem T="string" Value='@("rsa4096")'>rsa4096</MudSelectItem><MudSelectItem T="string" Value='@("rsa8192")'>rsa8192</MudSelectItem></MudSelect>
+        <MudCheckBox T="bool" @bind-Value="wildcard" Label="Prefer wildcard" />
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Save">Save ACME settings</MudButton>
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Provision">Request certificate</MudButton>
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="LoadStatus">Refresh certificate information</MudButton>
