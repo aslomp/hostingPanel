@@ -5,6 +5,7 @@
 @inject PanelSession Session
 @inject DatabaseOperations DatabaseOps
 @inject IDialogService Dialogs
+@implements IDisposable
 
 <PageTitle>@L["Database management — HostingPanel"]</PageTitle>
 <PanelPageHeader>
@@ -79,21 +80,25 @@ else
   private List<DatabaseOverviewRow>? overall;
   private List<string> overallWarnings = [];
   private string? overallError;
-  private bool overallLoading;
+  private readonly LatestRead overallRead = new();
+  private bool overallLoading => overallRead.Loading;
   private List<string>? databases;
   private string search = "", overallSearch = "";
   private string? error, createMessage;
-  private bool loading, creating, deleting, mutationFailed;
+  private readonly LatestRead ownRead = new();
+  private bool loading => ownRead.Loading;
+  private bool creating, deleting, mutationFailed, disposed;
   private async Task OpenCreate()
   {
-    if (creating || deleting || !Session.Connected) return;
+    if (disposed || creating || deleting || !Session.Connected) return;
+    var channel = Session.TicketChannel;
     creating = true; createMessage = null;
     try
     {
       var dialog = await Dialogs.ShowAsync<DatabaseCreateDialog>(L["Create database with user"].Value,
         new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = false, BackdropClick = false, CloseOnEscapeKey = false });
       var result = await dialog.Result;
-      if (result is { Canceled: false })
+      if (result is { Canceled: false } && !disposed && Session.Connected && Session.TicketChannel == channel)
       {
         mutationFailed = false;
         createMessage = L["Database creation request accepted."].Value;
@@ -104,8 +109,9 @@ else
   }
   private async Task ConfirmDelete(string database)
   {
-    if (deleting || creating || !Session.Connected) return;
+    if (disposed || deleting || creating || loading || !Session.Connected || databases?.Contains(database) != true) return;
     deleting = true;
+    var channel = Session.TicketChannel;
     var identity = Session.Username;
     try
     {
@@ -113,43 +119,64 @@ else
         L["Delete database"].Value, database,
         L["This deletes the database and may cause irreversible data loss. Enter the exact database name to confirm."].Value,
         L["Enter the exact database name to confirm."].Value);
-      if (!confirmed || !Session.Connected || identity != Session.Username) return;
+      if (!confirmed || disposed || !Session.Connected || Session.TicketChannel != channel || identity != Session.Username || databases?.Contains(database) != true) return;
       var (status, errorCode) = await DatabaseOps.DeleteAsync(database, database);
+      if (disposed || !Session.Connected || Session.TicketChannel != channel) return;
       mutationFailed = errorCode is not null || status is < 200 or >= 300;
       createMessage = mutationFailed ? L["Database deletion not confirmed (HTTP {0}).", status].Value : L["Database deletion request accepted."].Value;
       if (!mutationFailed) await RefreshAll();
     }
     catch (Exception ex) when (ex is HttpRequestException or ArgumentException or InvalidOperationException)
-    { mutationFailed = true; createMessage = ex.Message; }
+    { if (!disposed && Session.Connected && Session.TicketChannel == channel) { mutationFailed = true; createMessage = ex.Message; } }
     finally { deleting = false; }
   }
   protected override async Task OnInitializedAsync()
   {
-    if (Session.Connected) await RefreshAll();
+    Session.Changed += SessionChanged;
+    await RefreshAll();
   }
-  private async Task RefreshAll()
+  private void SessionChanged() => _ = InvokeAsync(async () =>
   {
-    if (!Session.Connected) return;
-    await LoadOverall();
-    await Load();
+    if (disposed) return;
+    createMessage = null;
+    var task = RefreshAll();
+    StateHasChanged();
+    await task;
+    if (!disposed) StateHasChanged();
+  });
+  public void Dispose()
+  {
+    disposed = true;
+    Session.Changed -= SessionChanged;
+    ownRead.Dispose();
+    overallRead.Dispose();
   }
-  private async Task Load()
+  private Task RefreshAll()
   {
-    if (loading || !Session.Connected) return;
-    loading = true; error = null;
-    try
+    if (disposed) return Task.CompletedTask;
+    return Task.WhenAll(LoadOverall(), Load());
+  }
+  private Task Load()
+  {
+    if (disposed) return Task.CompletedTask;
+    databases = null; error = null;
+    if (!Session.Connected)
     {
-      var result = await DatabaseOps.ListAsync();
-      if (result.Status != 200 || result.Databases is null)
-      {
-        error = L["Database overview unavailable (HTTP {0}).", result.Status].Value;
-        databases = null; return;
-      }
-      databases = result.Databases.ToList();
+      ownRead.Cancel();
+      return Task.CompletedTask;
     }
-    catch(Exception e) when(e is HttpRequestException or ArgumentException or InvalidOperationException)
-    { error=e.Message; databases=null; }
-    finally {loading=false;}
+    var channel = Session.TicketChannel;
+    return ownRead.RunAsync(ct => DatabaseOps.ListAsync(ct),
+      () => Session.Connected && Session.TicketChannel == channel,
+      result =>
+      {
+        if (result.Status != 200 || result.Databases is null)
+        {
+          error = L["Database overview unavailable (HTTP {0}).", result.Status].Value;
+          return;
+        }
+        databases = result.Databases.ToList();
+      }, ex => error = ex.Message);
   }
   private static string FormatBytes(long value)
   {
@@ -160,22 +187,27 @@ else
     do { size /= 1024; index++; } while (size >= 1024 && index < units.Length - 1);
     return size.ToString("N1") + " " + units[index];
   }
-  private async Task LoadOverall()
+  private Task LoadOverall()
   {
-    if (overallLoading || !Session.Connected) return;
-    overallLoading = true; overallError = null; overall = null;
-    try
+    if (disposed) return Task.CompletedTask;
+    overall = null; overallError = null; overallWarnings = [];
+    if (!Session.Connected)
     {
-      var result = await DatabaseOps.ListAccessibleAsync();
-      if (result.Status != 200 || result.Items is null)
-      {
-        overallError = L["Overall database overview: HTTP {0}.", result.Status].Value; return;
-      }
-      overall = result.Items.ToList();
-      overallWarnings = result.Warnings?.Select(x => $"{x.Account}: {x.Reason} (HTTP {x.Status})").ToList() ?? [];
+      overallRead.Cancel();
+      return Task.CompletedTask;
     }
-    catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
-    { overallError = ex.Message; }
-    finally { overallLoading = false; }
+    var channel = Session.TicketChannel;
+    return overallRead.RunAsync(ct => DatabaseOps.ListAccessibleAsync(ct),
+      () => Session.Connected && Session.TicketChannel == channel,
+      result =>
+      {
+        if (result.Status != 200 || result.Items is null)
+        {
+          overallError = L["Overall database overview: HTTP {0}.", result.Status].Value;
+          return;
+        }
+        overall = result.Items.ToList();
+        overallWarnings = result.Warnings?.Select(x => $"{x.Account}: {x.Reason} (HTTP {x.Status})").ToList() ?? [];
+      }, ex => overallError = ex.Message);
   }
 }

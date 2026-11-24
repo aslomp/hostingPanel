@@ -19,3 +19,5 @@ Shared PanelPageHeader, PanelLoading, PanelEmptyState, CrudAddButton, CrudDelete
 PanelSession.Changed signals circuit identity changes; components subscribing to it must unsubscribe on disposal and marshal background events through InvokeAsync. HostingOperationNotifications is a separate internal invalidation bus for reconciliation progress; no resource data or credentials are published. Refresh through authorized operation services. A notification does not establish completion or access to a resource.
 
 See [sessions and authentication](authentication.md) and [support and realtime](support.md).
+
+The database overview owns independent LatestRead lifecycles for the current account and accessible-account inventories. Both reset on identity change and discard stale results; each operation resolves its own backend scope. Partial inventory warnings belong to the same accepted result. Existing mutation semantics are unchanged.
