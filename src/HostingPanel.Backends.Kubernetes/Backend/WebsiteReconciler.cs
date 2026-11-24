@@ -42,7 +42,8 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var settings = await ((KubernetesBackend)scope.ServiceProvider.GetRequiredService<IHostingBackend>()).GetEffectiveSettingsAsync(ct);
         var listenerSet = settings.TlsListenerSetName;
         var listenerChanged = appliedListenerSet != listenerSet;
-        if (rows.Count == 0 && !shared && migrated && !listenerChanged) return;
+        var cleanupPending = await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "domain-cleanup" && x.Status == "pending", ct);
+        if (rows.Count == 0 && !shared && migrated && !listenerChanged && !cleanupPending) return;
         var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
         var identities = await PhpIdentityModel.AllocateAsync(db, domains.Select(x => x.OwnerId), ct);
         var ownerIds = domains.Select(d => d.OwnerId).Distinct().ToArray();
@@ -131,6 +132,53 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         }
         await db.SaveChangesAsync(ct);
         if (completed.Count > 0) notifications.Publish();
+        await CleanupDeletedDomainsAsync(db, ct);
+    }
+
+    private async Task CleanupDeletedDomainsAsync(HostingPanelDbContext db, CancellationToken ct)
+    {
+        var pending = await db.ReconciliationOperations.Where(x => x.ResourceType == "domain-cleanup" && x.Status == "pending").ToListAsync(ct);
+        foreach (var operation in pending)
+        {
+            try
+            {
+                using var payload = JsonDocument.Parse(operation.PayloadJson);
+                var name = payload.RootElement.GetProperty("name").GetString()!;
+                var username = payload.RootElement.GetProperty("username").GetString()!;
+                var zoneIds = payload.RootElement.GetProperty("zoneIds").EnumerateArray().Select(x => x.GetGuid()).ToArray();
+                if (await db.ReconciliationOperations.AnyAsync(x => x.Status == "pending" &&
+                    ((x.ResourceType == "website" && x.ResourceId == operation.ResourceId) ||
+                     (x.ResourceType == "dns-zone" && zoneIds.Contains(x.ResourceId))), ct)) continue;
+                if (await db.Domains.AnyAsync(x => x.Name == name, ct)) throw new InvalidOperationException("Domain still exists.");
+                var marker = await db.Configuration.FindAsync(["DeletingDomain:" + name], ct);
+                if (marker is null) throw new InvalidOperationException("Missing deletion authorization.");
+                if (configuration.GetValue<bool>("CertManager:Enabled"))
+                {
+                    var client = KubernetesBackend.CertificateClient(configuration);
+                    var certName = HostingPanel.Providers.CertManager.CertManagerClient.Name(operation.ResourceId);
+                    using var certs = JsonDocument.Parse(await client.ListAsync(ct));
+                    if (certs.RootElement.GetProperty("items").EnumerateArray().Any(x => x.GetProperty("metadata").GetProperty("name").GetString() == certName))
+                        continue;
+                    var routeName = "hp-tls-" + operation.ResourceId.ToString("N");
+                    await KubectlAsync(null, ct, "delete", "httproute", routeName, "--ignore-not-found=true");
+                    // TLS Secrets are removed by cert-manager's certificate owner reference
+                    // when enabled by the cluster administrator.
+                }
+                await storage.DeleteAsync(username, name, ct);
+                db.Configuration.Remove(marker);
+                operation.Status = "completed";
+                operation.CompletedAt = DateTimeOffset.UtcNow;
+                operation.LastError = null;
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                operation.Attempts++;
+                operation.LastError = "Domain deletion incomplete; see application log.";
+                logger.LogWarning(ex, "Domain cleanup failed for {Id}", operation.ResourceId);
+            }
+            await db.SaveChangesAsync(ct);
+            notifications.Publish();
+        }
     }
 
     private string Required(string key) => configuration["KubernetesHosting:" + key] is { Length: > 0 } value

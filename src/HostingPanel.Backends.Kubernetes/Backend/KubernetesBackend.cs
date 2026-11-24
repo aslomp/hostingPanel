@@ -300,6 +300,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
         var package = await db.Packages.FirstOrDefaultAsync(p => p.Name == input.Package
             && (p.OwnerId == principal.Id || p.OwnerId == null), ct);
         if (package is null) return new(404, "PACKAGE_NOT_FOUND");
+        if (await db.Configuration.AnyAsync(x => x.Key == "DeletingDomain:" + input.Domain.ToLowerInvariant(), ct)) return new(409, "DOMAIN_DELETION_PENDING");
         if (await db.Domains.AnyAsync(d => d.Name == input.Domain.ToLowerInvariant(), ct))
             return new(409, "DOMAIN_EXISTS");
         var account = new HostingAccount {
@@ -469,6 +470,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
         var existing = await db.Domains.FirstOrDefaultAsync(x => x.Name == name, ct);
         if (input.Action == "create")
         {
+            if (await db.Configuration.AnyAsync(x => x.Key == "DeletingDomain:" + name, ct)) return new(409, "DOMAIN_DELETION_PENDING");
             if (existing is not null) return new(409, "DOMAIN_EXISTS");
             var created = new HostedDomain { OwnerId = principal.Id, Name = name,
                 SettingsJson = JsonSerializer.Serialize(new { php = input.Php, ssl = input.Ssl, cgi = input.Cgi }) };
@@ -488,10 +490,21 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
             if (!ids.Contains(existing.OwnerId)) return new(403, "ACCESS_DENIED");
             if (input.Action == "delete")
             {
-                // A domain with a DNS zone or TLS resources must be removed explicitly there first.
-                if (await db.DnsZones.AnyAsync(z => z.DomainId == existing.Id, ct)
-                    || await db.Certificates.AnyAsync(c => c.DomainId == existing.Id, ct))
-                    return new(409, "DOMAIN_HAS_RESOURCES");
+                var owner = await db.Accounts.SingleAsync(x => x.Id == existing.OwnerId, ct);
+                var zones = await db.DnsZones.Where(x => x.DomainId == existing.Id).ToListAsync(ct);
+                if (zones.Any(x => x.OwnerId != existing.OwnerId)) return new(409, "DNS_OWNERSHIP_CONFLICT");
+                foreach (var zone in zones)
+                {
+                    db.DnsZones.Remove(zone);
+                    Schedule("dns-zone", zone.Id, "delete", new { zone.Name });
+                }
+                var access = await db.FileAccessAccounts.Where(x => x.DomainId == existing.Id).ToListAsync(ct);
+                db.FileAccessAccounts.RemoveRange(access);
+                var acme = await db.Configuration.FindAsync([AcmeKey(existing.Id)], ct);
+                if (acme is not null) db.Configuration.Remove(acme);
+                db.Configuration.Add(new PanelConfiguration { Key = "DeletingDomain:" + name,
+                    ValueJson = JsonSerializer.Serialize(new { id = existing.Id, username = owner.Username }) });
+                Schedule("domain-cleanup", existing.Id, "delete", new { name, username = owner.Username, zoneIds = zones.Select(x => x.Id).ToArray() });
                 db.Domains.Remove(existing);
                 Schedule("domain", existing.Id, "delete", new { name });
                 await ScheduleWebsiteAsync(existing, "delete", ct);
