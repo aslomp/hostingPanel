@@ -33,10 +33,12 @@ else if (Root.Value.ValueKind == JsonValueKind.Array)
                 }
             </RowTemplate>
             <NoRecordsContent><MudText>@L["No results."]</MudText></NoRecordsContent>
-            @if (Depth == 0 && rows.Length > 25)
-            {
-                <PagerContent><MudTablePager PageSizeOptions="@(new[] { 10, 25, 50, 100 })" /></PagerContent>
-            }
+            <PagerContent>
+                @if (Depth == 0 && rows.Length > 25)
+                {
+                    <MudTablePager PageSizeOptions="@(new[] { 10, 25, 50, 100 })" />
+                }
+            </PagerContent>
         </MudTable>
     }
     else
