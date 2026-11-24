@@ -12,7 +12,7 @@
     <Description>@L["All accounts exposed by DirectAdmin to the current session, including resellers and their users."]</Description>
     <Actions>
         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog" Disabled="@loading">@L["Add user"]</MudButton>
+            <CrudAddButton OnClick="OpenCreateDialog" Disabled="@(!Session.Connected || loading || mutating)">@L["Add user"]</CrudAddButton>
             <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton>
         </MudStack>
     </Actions>
@@ -49,12 +49,7 @@ else if (accounts is not null)
                     @if (!item.Account.Role.Equals("admin", StringComparison.OrdinalIgnoreCase) &&
                         !item.Account.Username.Equals(Session.Username, StringComparison.OrdinalIgnoreCase))
                     {
-                        <MudTooltip Text="@L["Delete user"].Value">
-                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
-                                           Size="Size.Small" Disabled="@mutating"
-                                           OnClick="@(() => ConfirmDelete(item.Account))"
-                                           aria-label="@L["Delete user"].Value" />
-                        </MudTooltip>
+                        <CrudDeleteButton Label="@L["Delete user"].Value" Disabled="@mutating" OnClick="@(() => ConfirmDelete(item.Account))" />
                     }
                 </td>
             </tr>

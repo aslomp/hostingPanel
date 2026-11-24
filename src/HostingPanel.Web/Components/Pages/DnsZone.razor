@@ -10,7 +10,7 @@
     <Breadcrumb><a href="/domains">@L["Domains"]</a> / <a href="@($"/domains/{Uri.EscapeDataString(Domain)}")">@Domain</a> / DNS</Breadcrumb>
     <TitleContent>@L["DNS management"]</TitleContent>
     <Description>Zone: <strong>@Domain</strong> — @L["Directly from DirectAdmin."]</Description>
-    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@busy">@L["Refresh"]</MudButton></Actions>
+    <Actions><MudStack Row="true" Spacing="2"><CrudAddButton Disabled="@(busy || !Session.Connected)" OnClick="NewRecord">@L["Add DNS record"]</CrudAddButton><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@busy">@L["Refresh"]</MudButton></MudStack></Actions>
 </PanelPageHeader>
 @if (!Session.Connected)
 {
@@ -25,16 +25,17 @@ else
         @if (records is not null)
         {
             <p>@L["Records found: {0}.", records.Count]</p>
+            <MudTextField T="string" @bind-Value="search" Immediate="true" Variant="Variant.Outlined" Margin="Margin.Dense" Label="@L["Search"].Value" />
             <MudSimpleTable Dense="true" Hover="true" Striped="true">
                 <thead><tr><th>Type</th><th>@L["Name"]</th><th>@L["Value"]</th><th>TTL</th><th>@L["Management"]</th></tr></thead>
                 <tbody>
-                @foreach (var record in records)
+                @foreach (var record in records.Where(r => r.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || r.Type.Contains(search, StringComparison.OrdinalIgnoreCase) || r.Value.Contains(search, StringComparison.OrdinalIgnoreCase)).OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.Type))
                 {
                     <tr>
-                        <td>@record.Type</td><td>@record.Name</td><td>@record.Value</td><td>@record.Ttl</td>
+                        <td>@record.Type</td><td><MudButton Variant="Variant.Text" Disabled="@busy" OnClick="() => Edit(record)">@record.Name</MudButton></td><td>@record.Value</td><td>@record.Ttl</td>
                         <td>
                             <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="() => Edit(record)">@L["Edit"]</MudButton>
-                            <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@busy" OnClick="() => Remove(record)">@L["Delete"]</MudButton>
+                            <CrudDeleteButton Label="@L["Delete DNS record"].Value" Disabled="@busy" OnClick="() => Remove(record)" />
                         </td>
                     </tr>
                 }
@@ -43,6 +44,8 @@ else
             @if (records.Count == 0) { <PanelEmptyState>@L["No DNS records found."]</PanelEmptyState> }
         }
     </MudPaper>
+    @if (editorOpen)
+    {
     <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@(action == "add" ? L["Add DNS record"].Value : L["Edit DNS record"].Value)</h2>
         <p>@L["DirectAdmin determines whether the change is permitted."]</p>
@@ -59,12 +62,13 @@ else
         <MudTextField T="string" @bind-Value="ttl" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dnsTtl" Disabled="@(action == "delete")" />
         <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || deleteDialogOpen || action == "delete")" OnClick="Save">
-                @(busy ? "Bezig…" : action == "add" ? "Toevoegen" : L["Save change"].Value)
+                @(busy ? L["Processing…"].Value : action == "add" ? L["Add DNS record"].Value : L["Save change"].Value)
             </MudButton>
-            <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Reset">@L["New record"]</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="CancelEdit">@L["Cancel"]</MudButton>
         </MudStack>
-        @if (message is not null) { <p role="status">@message</p> }
     </MudPaper>
+    }
+    @if (message is not null) { <MudAlert Severity="@(failed ? Severity.Error : Severity.Success)" Class="my-2">@message</MudAlert> }
 }
 @code {
     [Parameter] public string Domain { get; set; } = "";
@@ -73,7 +77,10 @@ else
     private string? error, message;
     private string action = "add", type = "A", name = "", value = "", ttl = "", confirmation = "";
     private ZoneRecord? original;
-    private bool busy;
+    private bool busy, editorOpen, failed;
+    private string search = "";
+    private void NewRecord() { Reset(); editorOpen = true; }
+    private void CancelEdit() { Reset(); editorOpen = false; }
     protected override async Task OnParametersSetAsync()
     {
         if (Session.Connected) await Load();
@@ -120,7 +127,7 @@ else
     }
     private void Edit(ZoneRecord r)
     {
-        original = r; action = "edit"; type = r.Type; name = r.Name; value = r.Value;
+        editorOpen = true; original = r; action = "edit"; type = r.Type; name = r.Name; value = r.Value;
         ttl = r.Ttl ?? ""; confirmation = ""; message = null;
     }
     private bool deleteDialogOpen;
@@ -162,11 +169,14 @@ else
         if (busy || !Session.Connected || (action == "delete" && (original is null || confirmation != original.Name))) return;
         busy = true;
         message = null;
+        var succeeded = false;
         try
         {
             var (status, body) = await Session.ChangeDnsRecordAsync(Domain, action,
                 type, name, value, string.IsNullOrWhiteSpace(ttl) ? null : ttl,
                 original?.Type, original?.Name, original?.Value);
+            succeeded = status == 200;
+            failed = !succeeded;
             message = status switch {
                 200 => L["DirectAdmin confirmed the DNS change."].Value,
                 409 => L["DirectAdmin reported a conflict for this DNS change."].Value,
@@ -176,14 +186,14 @@ else
             };
             if (status == 200)
             {
-                Reset();
+                Reset(); editorOpen = false;
                 message = L["DirectAdmin confirmed the DNS change."].Value;
             }
         }
         catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException or ArgumentException)
-        { message = e.Message; }
+        { failed = true; message = e.Message; }
         finally { busy = false; }
-        if (message?.StartsWith(L["DirectAdmin confirmed the DNS change"].Value, StringComparison.Ordinal) == true)
+        if (succeeded)
             await Load();
     }
 }

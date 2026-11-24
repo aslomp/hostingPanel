@@ -23,6 +23,7 @@
 
 @code {
   [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+  [Parameter] public string Kind { get; set; } = "user";
   private MudForm form = default!;
   private string username = "", email = "", domain = "", package = "", ip = "shared", password = "", confirmation = "";
   private string? error;
@@ -42,7 +43,7 @@
     error = null;
     try
     {
-      var (status, _) = await Session.CreateHostingAccountAsync("user", username, email, password, domain, package, ip);
+      var (status, _) = await Session.CreateHostingAccountAsync(Kind, username, email, password, domain, package, ip);
       if (status is >= 200 and < 300) { MudDialog.Close(DialogResult.Ok(username)); return; }
       error = L["Account not created: backend HTTP {0}.", status].Value;
     }

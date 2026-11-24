@@ -11,7 +11,7 @@
     <TitleContent>@L["Ticket management"]</TitleContent>
     <Description>@L["Received tickets and own requests. DirectAdmin determines which tickets you can view."]</Description>
     <Actions><MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-        <MudButton Href="/tickets/new" Variant="Variant.Filled" Color="Color.Primary">@L["＋ New ticket"]</MudButton>
+        <CrudAddButton Href="/tickets/new" Disabled="@(!Session.Connected || loading)">@L["New ticket"]</CrudAddButton>
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="Load">@L["↻ Refresh"]</MudButton>
     </MudStack></Actions>
 </PanelPageHeader>
@@ -32,7 +32,7 @@ else
                 <MudSelect T="string" @bind-Value="filter" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="ticketFilter">
                     <MudSelectItem T="string" Value='@("all")'>@L["All tickets"]</MudSelectItem><MudSelectItem T="string" Value='@("received")'>@L["Received"]</MudSelectItem>
                     <MudSelectItem T="string" Value='@("request")'>@L["My requests"]</MudSelectItem><MudSelectItem T="string" Value='@("unread")'>@L["Unread"]</MudSelectItem>
-                    <MudSelectItem T="string" Value='@("open")'>Open</MudSelectItem><MudSelectItem T="string" Value='@("closed")'>@L["Closed"]</MudSelectItem>
+                    <MudSelectItem T="string" Value='@("open")'>@L["Open"]</MudSelectItem><MudSelectItem T="string" Value='@("closed")'>@L["Closed"]</MudSelectItem>
                 </MudSelect></MudItem>
         </MudGrid>
         @if (loading) { <PanelLoading>@L["Retrieving tickets…"]</PanelLoading> }
@@ -42,12 +42,12 @@ else
         {
             <div class="overview-scroll">
                 <MudSimpleTable Dense="true" Hover="true" Striped="true" Class="overview-table">
-                    <thead><tr><th>Status</th><th>@L["Subject"]</th><th>@L["From"]</th><th>@L["Origin"]</th><th>@L["Priority"]</th><th>@L["Date"]</th></tr></thead>
+                    <thead><tr><th>@L["Status"]</th><th>@L["Subject"]</th><th>@L["From"]</th><th>@L["Origin"]</th><th>@L["Priority"]</th><th>@L["Date"]</th></tr></thead>
                     <tbody>
                         @foreach (var ticket in Visible)
                         {
                             <tr>
-                                <td><MudChip T="string" Size="Size.Small" Color="@(ticket.Open ? Color.Success : Color.Default)">@(ticket.Open ? "Open" : L["Closed"].Value)</MudChip></td>
+                                <td><MudChip T="string" Size="Size.Small" Color="@(ticket.Open ? Color.Success : Color.Default)">@(ticket.Open ? L["Open"].Value : L["Closed"].Value)</MudChip></td>
                                 <td><a href="@($"/tickets/{ticket.Id}?source={ticket.Source}")">@ticket.Subject</a>
                                     @if (ticket.Unread) { <MudChip T="string" Size="Size.Small" Color="Color.Warning">@L["New"]</MudChip> }</td>
                                 <td>@(string.IsNullOrWhiteSpace(ticket.FromName) ? ticket.From : ticket.FromName)</td>
