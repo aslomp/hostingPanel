@@ -166,7 +166,7 @@ spec:
           nfs:
             server: {{ .Values.kubernetesHosting.nfsServer | quote }}
             path: {{ .Values.kubernetesHosting.nfsPath | quote }}
-            readOnly: true
+            readOnly: false
           {{- end }}
         {{- end }}
         - name: data
