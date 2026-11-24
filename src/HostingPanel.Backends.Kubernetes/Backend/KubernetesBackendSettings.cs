@@ -11,7 +11,7 @@ public enum KubernetesIngressProvider
     EnvoyProxy
 }
 
-public sealed record HostingIpAddress(string Address, int PrefixLength, string Status, string Device, string NameServer, bool Global = false, string[]? Resellers = null);
+public sealed record HostingIpAddress(string Address, int PrefixLength, string Status, string Device, string NameServer, bool Global = false, string[]? Resellers = null, string[]? AssignedUsers = null);
 
 public sealed class KubernetesBackendSettings : IBackendSettings
 {
@@ -65,7 +65,9 @@ public sealed class KubernetesBackendSettingsValidator : IBackendSettingsValidat
                 entry.PrefixLength < 0 || entry.PrefixLength > (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128) ||
                 entry.Status is not ("server" or "shared" or "available" or "owned") ||
                 entry.Address != address.ToString() || !unique.Add(address.ToString()) || entry.Device is null || entry.Device.Length > 128 ||
-                (entry.Resellers?.Any(x => string.IsNullOrWhiteSpace(x) || x.Length > 64) ?? false) || entry.NameServer is null || (entry.NameServer.Length > 0 && Uri.CheckHostName(entry.NameServer.TrimEnd('.')) != UriHostNameType.Dns))
+                (entry.Resellers?.Any(x => string.IsNullOrWhiteSpace(x) || x.Length > 64) ?? false) || (entry.AssignedUsers?.Any(x => string.IsNullOrWhiteSpace(x) || x.Length > 64) ?? false) ||
+                (entry.Status == "owned" && (entry.Global || (entry.Resellers?.Length ?? 0) != 0 || (entry.AssignedUsers?.Length ?? 0) != 1)) ||
+                (entry.Status == "available" && (entry.AssignedUsers?.Length ?? 0) != 0) || entry.NameServer is null || (entry.NameServer.Length > 0 && Uri.CheckHostName(entry.NameServer.TrimEnd('.')) != UriHostNameType.Dns))
                 errors[nameof(typed.IpAddresses)] = ["Invalid or duplicate IP address, prefix, status or nameserver."];
         }
         if (typed.IpAddresses.Length > 0 && typed.DnsWebIp.Length > 0 &&

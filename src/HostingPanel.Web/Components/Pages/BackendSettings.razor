@@ -38,11 +38,14 @@ else
                     @foreach (var ip in addresses)
                     {
                         <tr><td><input type="checkbox" @bind="ip.Selected" /></td><td><input @bind="ip.Address" /></td>
-                        <td><select @bind="ip.Status"><option value="server">server</option><option value="shared">shared</option><option value="available">available</option></select></td>
+                        <td><select @bind="ip.Status"><option value="server">server</option><option value="shared">shared</option><option value="available">available</option><option value="owned">dedicated</option></select></td>
                         <td><input @bind="ip.Device" /></td>
                         <td>@foreach (var reseller in inventory?.Resellers ?? [])
                         { <label><input type="checkbox" checked="@ip.Resellers.Contains(reseller)" @onchange="e => Assign(ip, reseller, e.Value is true)" />@reseller</label> }</td>
-                        <td>@(inventory?.Users.GetValueOrDefault(ip.Address) ?? 0)</td>
+                        <td>@(inventory?.Users.GetValueOrDefault(ip.Address) ?? 0)
+                        @foreach (var user in inventory?.AccountNames ?? [])
+                        { <label><input type="checkbox" checked="@ip.AssignedUsers.Contains(user)" @onchange="e => AssignUser(ip, user, e.Value is true)" />@user</label> }
+                        </td>
                         <td><input type="checkbox" @bind="ip.Global" /></td><td><input @bind="ip.NameServer" /></td>
                         <td><input type="number" min="0" max="128" @bind="ip.PrefixLength" /></td>
                         <td><button disabled="@busy" @onclick="() => RemoveIp(ip)">@L["Delete"]</button></td></tr>
@@ -151,15 +154,17 @@ else
         public string NameServer { get; set; } = "";
         public bool Global { get; set; }
         public string[] Resellers { get; set; } = [];
+        public string[] AssignedUsers { get; set; } = [];
         [System.Text.Json.Serialization.JsonIgnore] public bool Selected { get; set; }
     }
     private sealed record DeviceRow(string Address, string Device, int PrefixLength);
-    private sealed record NetworkInventory(Dictionary<string,int> Users, string[] Resellers, DeviceRow[] Devices, string? Warning);
+    private sealed record NetworkInventory(Dictionary<string,int> Users, string[] Resellers, DeviceRow[] Devices, string? Warning, string[] AccountNames);
     private NetworkInventory? inventory;
     private bool editingNs;
     private string nsAddress = "", nsName = "";
     private void SetNs() { var ip = addresses.FirstOrDefault(x => x.Address == nsAddress); if (ip is not null) { ip.NameServer = nsName.Trim(); editingNs = false; } }
     private void Assign(IpRow ip, string reseller, bool selected) => ip.Resellers = selected ? ip.Resellers.Append(reseller).Distinct().ToArray() : ip.Resellers.Where(x => x != reseller).ToArray();
+    private void AssignUser(IpRow ip, string user, bool selected) => ip.AssignedUsers = selected ? (ip.Status == "owned" ? new[] { user } : ip.AssignedUsers.Append(user).Distinct().ToArray()) : ip.AssignedUsers.Where(x => x != user).ToArray();
     private void SetSelectedStatus(string status) { foreach (var ip in addresses.Where(x => x.Selected)) ip.Status = status; }
     private void ClearSelectedNs() { foreach (var ip in addresses.Where(x => x.Selected)) ip.NameServer = ""; }
     private void ToggleGlobal() { foreach (var ip in addresses.Where(x => x.Selected)) ip.Global = !ip.Global; }
@@ -194,7 +199,7 @@ else
         if (next.Values.TryGetProperty("IpAddresses", out var ips))
         {
             addresses = ips.Deserialize<List<IpRow>>() ?? [];
-            foreach (var ip in addresses) ip.Resellers ??= [];
+            foreach (var ip in addresses) { ip.Resellers ??= []; ip.AssignedUsers ??= []; }
             draftWebIp = draft.GetValueOrDefault("DnsWebIp") ?? "";
             if (draftWebIp.Length > 0 && !addresses.Any(x => x.Address == draftWebIp))
                 addresses.Add(new() { Address = draftWebIp, Status = "server", PrefixLength = draftWebIp.Contains(':') ? 128 : 32 });
@@ -262,7 +267,7 @@ else
                 if (saved.Revision != expected.Revision) { message = "Saved settings could not be verified."; return; }
                 Accept(savedBody); message = L["Settings saved."].Value;
             }
-            else if (status == 409) message = L["Settings have changed in the meantime. Refresh first."].Value;
+            else if (status == 409) message = L["Settings conflict."].Value + " " + body;
             else if (status == 400)
             {
                 using var problem = JsonDocument.Parse(body);

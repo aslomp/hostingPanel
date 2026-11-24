@@ -65,6 +65,19 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         var accounts = await db.Accounts.AsNoTracking().Where(x => x.Kind == "reseller" || x.Kind == "admin").Select(x => x.Username).ToListAsync(ct);
         if (proposed!.IpAddresses.Any(x => (x.Resellers ?? []).Any(r => !accounts.Contains(r))))
             return Results.ValidationProblem(new Dictionary<string, string[]> { ["IpAddresses"] = ["Unknown reseller."] });
+        var users = await db.Accounts.AsNoTracking().Where(x => x.Kind == "user" || x.Kind == "reseller" || x.Kind == "admin").Select(x => new { x.Id, x.Username }).ToListAsync(ct);
+        if (proposed.IpAddresses.Any(x => (x.AssignedUsers ?? []).Any(u => !users.Any(a => a.Username == u))))
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["IpAddresses"] = ["Unknown assigned user."] });
+        var existingUses = await (from r in db.DnsRecords.AsNoTracking()
+            join z in db.DnsZones.AsNoTracking() on r.ZoneId equals z.Id
+            where (r.Type == "A" || r.Type == "AAAA") && (r.Name == "@" || r.Name == z.Name || r.Name == z.Name + ".")
+            select new { r.Value, z.OwnerId }).ToListAsync(ct);
+        foreach (var dedicated in proposed.IpAddresses.Where(x => x.Status == "owned"))
+        {
+            var ownerId = users.Single(x => x.Username == dedicated.AssignedUsers![0]).Id;
+            if (existingUses.Any(x => System.Net.IPAddress.TryParse(x.Value, out var address) && address.ToString() == dedicated.Address && x.OwnerId != ownerId))
+                return Results.Conflict(new { type = "IP_IN_USE_BY_OTHER_USER", address = dedicated.Address });
+        }
         var used = await UsedIpsAsync(ct);
         foreach (var old in current.IpAddresses.Where(x => used.ContainsKey(x.Address)))
             if (!proposed.IpAddresses.Any(x => x.Address == old.Address && x.Status != "available"))
@@ -125,22 +138,27 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
             ?? await db.Accounts.AsNoTracking().SingleAsync(x => x.Id == domain.OwnerId, ct);
         var parent = owner.CreatorId is { } creator
             ? db.Accounts.Local.FirstOrDefault(x => x.Id == creator) ?? await db.Accounts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == creator, ct) : null;
-        var eligible = dnsSettings.IpAddresses.Where(x => x.Status is "server" or "shared" &&
-            (x.Global || x.Status == "server" || (x.Resellers ?? []).Contains(owner.Username) ||
-             (parent is not null && (x.Resellers ?? []).Contains(parent.Username)))).ToArray();
-        var ipText = dnsSettings.IpAddresses.Length == 0 ? dnsSettings.DnsWebIp :
-            eligible.FirstOrDefault(x => x.Address == dnsSettings.DnsWebIp)?.Address ??
-            eligible.OrderBy(x => x.Address, StringComparer.Ordinal).FirstOrDefault()?.Address;
-        if (ipText is null) return "NO_ASSIGNED_IP";
+        var direct = dnsSettings.IpAddresses.Where(x => x.Status is "server" or "shared" or "owned" &&
+            (x.AssignedUsers ?? []).Contains(owner.Username)).ToArray();
+        var reseller = dnsSettings.IpAddresses.Where(x => x.Status == "shared" &&
+            ((x.Resellers ?? []).Contains(owner.Username) || (parent is not null && (x.Resellers ?? []).Contains(parent.Username)))).ToArray();
+        var global = dnsSettings.IpAddresses.Where(x => x.Status == "shared" && x.Global).ToArray();
+        var server = dnsSettings.IpAddresses.Where(x => x.Status == "server").ToArray();
+        var eligible = direct.Length > 0 ? direct : reseller.Length > 0 ? reseller : global.Length > 0 ? global : server;
+        var selected = dnsSettings.IpAddresses.Length == 0 ? new[] { dnsSettings.DnsWebIp } :
+            direct.Length > 0 ? direct.Select(x => x.Address).ToArray() :
+            eligible.OrderByDescending(x => x.Address == dnsSettings.DnsWebIp).ThenBy(x => x.Address, StringComparer.Ordinal)
+                .Take(1).Select(x => x.Address).ToArray();
+        if (selected.Length == 0) return "NO_ASSIGNED_IP";
         var ns1 = dnsSettings.DnsNs1.TrimEnd('.');
         var ns2 = dnsSettings.DnsNs2.TrimEnd('.');
-        if (!System.Net.IPAddress.TryParse(ipText, out var ip) ||
-            ip.AddressFamily is not (System.Net.Sockets.AddressFamily.InterNetwork or System.Net.Sockets.AddressFamily.InterNetworkV6) ||
+        if (selected.Any(x => !System.Net.IPAddress.TryParse(x, out _)) ||
             !ValidDomain(ns1) || !ValidDomain(ns2) || string.Equals(ns1, ns2, StringComparison.OrdinalIgnoreCase))
             return "DNS_DEFAULTS_NOT_CONFIGURED";
         var zone = new DnsZone { Name = domain.Name, DomainId = domain.Id, OwnerId = domain.OwnerId };
         db.DnsZones.Add(zone);
-        db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "@", Type = ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? "A" : "AAAA", Value = ip.ToString() });
+        foreach (var address in selected.Select(System.Net.IPAddress.Parse).Distinct())
+            db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "@", Type = address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? "A" : "AAAA", Value = address.ToString() });
         db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "www", Type = "CNAME", Value = domain.Name + "." });
         foreach (var ns in new[] { ns1!, ns2! })
             db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "@", Type = "NS", Value = ns.ToLowerInvariant() + "." });
@@ -197,7 +215,8 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
             }
             catch (Exception) when (!ct.IsCancellationRequested) { warning = "Gateway address discovery unavailable."; }
         }
-        return Results.Ok(new { users = used, resellers, devices, warning });
+        var accountNames = await db.Accounts.AsNoTracking().OrderBy(x => x.Username).Select(x => x.Username).ToListAsync(ct);
+        return Results.Ok(new { users = used, resellers, devices, warning, accountNames });
     }
 
     private void Schedule(string type, Guid id, string operation, object? payload = null)
