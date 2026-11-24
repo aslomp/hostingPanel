@@ -6,6 +6,7 @@
 @inject PanelSession Session
 @inject DnsOperations Dns
 @inject IDialogService Dialogs
+@implements IDisposable
 
 <PageTitle>DNS — @Domain</PageTitle>
 <PanelPageHeader>
@@ -52,41 +53,62 @@ else
     [Parameter] public string Domain { get; set; } = "";
     private List<DnsRecord>? records;
     private string? error, message;
-    private bool busy, editorOpen, failed;
+    private readonly LatestRead read = new();
+    private bool mutating, editorOpen, failed, disposed;
+    private bool busy => mutating || read.Loading;
     private string search = "";
     private Task NewRecord() => OpenEditor(null);
     private Task Edit(DnsRecord record) => OpenEditor(record);
-    protected override async Task OnParametersSetAsync()
+    protected override void OnInitialized() => Session.Changed += SessionChanged;
+    protected override Task OnParametersSetAsync() => Load();
+    private void SessionChanged() => _ = InvokeAsync(async () =>
     {
-        if (Session.Connected) await Load();
+        if (disposed) return;
+        message = null;
+        var task = Load();
+        StateHasChanged();
+        await task;
+        if (!disposed) StateHasChanged();
+    });
+    public void Dispose()
+    {
+        disposed = true;
+        Session.Changed -= SessionChanged;
+        read.Dispose();
     }
-    private async Task Load()
+
+    private Task Load()
     {
-        if (busy || !Session.Connected) return;
-        busy = true;
+        if (disposed) return Task.CompletedTask;
+        records = null;
         error = null;
-        try
+        if (!Session.Connected)
         {
-            var result = await Dns.ReadAsync(Domain);
-            if (result.Status != 200 || result.Records is null)
-            {
-                error = L["DNS zone unavailable: HTTP {0}.", result.Status].Value;
-                if (result.Error is { Length: > 0 and <= 80 } reason && reason.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'))
-                    error += $" ({reason})";
-                records = null;
-                return;
-            }
-            records = result.Records.ToList();
+            read.Cancel();
+            return Task.CompletedTask;
         }
-        catch (Exception e) when (e is HttpRequestException or InvalidOperationException or ArgumentException)
-        { error = e.Message; }
-        finally { busy = false; }
+        var target = Domain;
+        var channel = Session.TicketChannel;
+        return read.RunAsync(ct => Dns.ReadAsync(target, ct),
+            () => Session.Connected && Session.TicketChannel == channel && Domain == target,
+            result =>
+            {
+                if (result.Status != 200 || result.Records is null)
+                {
+                    error = L["DNS zone unavailable: HTTP {0}.", result.Status].Value;
+                    if (result.Error is { Length: > 0 and <= 80 } reason && reason.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'))
+                        error += $" ({reason})";
+                    return;
+                }
+                records = result.Records.ToList();
+            }, ex => error = ex.Message);
     }
     private async Task OpenEditor(DnsRecord? record)
     {
         if (busy || editorOpen || deleteDialogOpen || !Session.Connected) return;
         editorOpen = true; message = null;
         var domain = Domain;
+        var channel = Session.TicketChannel;
         try
         {
             var parameters = new DialogParameters<DnsRecordDialog> { { x => x.Domain, domain } };
@@ -101,7 +123,7 @@ else
                 L[record is null ? "Add DNS record" : "Edit DNS record"].Value, parameters,
                 new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = false, BackdropClick = false, CloseOnEscapeKey = false });
             var result = await dialog.Result;
-            if (result is { Canceled: false } && domain == Domain)
+            if (result is { Canceled: false } && !disposed && Session.Connected && Session.TicketChannel == channel && domain == Domain)
             {
                 failed = false;
                 message = L["DNS change request accepted."].Value;
@@ -115,6 +137,7 @@ else
     {
         if (busy || editorOpen || deleteDialogOpen || !Session.Connected || records?.Contains(r) != true) return;
         var domain = Domain;
+        var channel = Session.TicketChannel;
         var identity = Session.Username;
         deleteDialogOpen = true;
         try
@@ -124,23 +147,24 @@ else
                 L["Permanently delete this DNS record?"].Value,
                 L["Exact record name"].Value,
                 $"{domain} — {r.Type} {r.Name} {r.Value}");
-            if (!confirmed || busy || !Session.Connected ||
+            if (!confirmed || disposed || busy || !Session.Connected || Session.TicketChannel != channel ||
                 !string.Equals(identity, Session.Username, StringComparison.Ordinal) ||
                 !string.Equals(domain, Domain, StringComparison.Ordinal) ||
                 records?.Contains(r) != true) return;
-            busy = true; message = null;
+            mutating = true; message = null;
             try
             {
                 var result = await Dns.ChangeAsync(domain, new DnsChange("delete", r, r));
+                if (disposed || !Session.Connected || Session.TicketChannel != channel || Domain != domain) return;
                 var status = result.Status;
                 failed = !result.Executed && !result.ProvisioningPending;
                 message = failed ? L["DNS change not confirmed (HTTP {0}).", status].Value
-                    : L["DirectAdmin confirmed the DNS change."].Value;
+                    : L["DNS change request accepted."].Value;
             }
             catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
-            { failed = true; message = ex.Message; }
-            finally { busy = false; }
-            if (!failed) await Load();
+            { if (!disposed && Session.Connected && Session.TicketChannel == channel && Domain == domain) { failed = true; message = ex.Message; } }
+            finally { mutating = false; }
+            if (!failed && !disposed && Session.Connected && Session.TicketChannel == channel && Domain == domain) await Load();
         }
         finally { deleteDialogOpen = false; }
     }
