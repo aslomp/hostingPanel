@@ -31,16 +31,29 @@ public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfigur
         var client = KubernetesBackend.CertificateClient(configuration);
         using var actual = JsonDocument.Parse(await client.ListAsync(ct));
         var keep = new HashSet<string>(StringComparer.Ordinal);
+        var readyListeners = new List<(Guid Id, string Host)>();
+        var readyCertificates = actual.RootElement.GetProperty("items").EnumerateArray().Where(IsReady).Select(x => x.GetProperty("metadata").GetProperty("name").GetString()).ToHashSet();
         foreach (var domain in domains)
         {
             var acme = await KubernetesBackend.DomainAcmeAsync(db, domain.Id, ct);
-            if (!acme.Enabled) continue;
+            if (!acme.Enabled || !SslEnabled(domain)) continue;
             keep.Add(CertManagerClient.Name(domain.Id));
             var issuer = KubernetesBackend.ResolveIssuer(settings, owners[domain.OwnerId], acme);
             var names = KubernetesBackend.CertificateNames(domain, acme);
             if (issuer is null || names.Length == 0 || (acme.PreferWildcard && !issuer.SupportsWildcard)) continue;
-            try { await client.ApplyAsync(domain.Id, names, issuer.IssuerName, issuer.IssuerKind, acme.KeyType, ct); }
+            try {
+                await client.ApplyAsync(domain.Id, names, issuer.IssuerName, issuer.IssuerKind, acme.KeyType, ct);
+                if (readyCertificates.Contains(CertManagerClient.Name(domain.Id)) && names.Contains(domain.Name))
+                    readyListeners.Add((domain.Id, domain.Name));
+            }
             catch (Exception ex) when (!ct.IsCancellationRequested) { logger.LogWarning(ex, "Certificate request failed for {Id}", domain.Id); }
+        }
+        if (settings.TlsListenerSetName.Length > 0)
+        {
+            if (settings.TlsListenerSetName != configuration["CertManager:ListenerSetName"])
+                throw new InvalidOperationException("ListenerSet must match the Helm-authorized name.");
+            await new ListenerSetReconciler(client, configuration["KubernetesHosting:Namespace"] ?? "hosting")
+                .ReconcileAsync(settings.TlsListenerSetName, readyListeners, ct);
         }
         foreach (var item in actual.RootElement.GetProperty("items").EnumerateArray())
         {
@@ -48,5 +61,14 @@ public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfigur
             if (name.StartsWith("site-", StringComparison.Ordinal) && Guid.TryParseExact(name[5..], "N", out _) && !keep.Contains(name))
                 await client.DeleteAsync(name, ct);
         }
+    }
+    private static bool IsReady(JsonElement cert) =>
+        cert.TryGetProperty("status", out var status) && status.TryGetProperty("conditions", out var conditions) &&
+        conditions.EnumerateArray().Any(c => c.GetProperty("type").GetString() == "Ready" && c.GetProperty("status").GetString() == "True");
+    private static bool SslEnabled(HostedDomain domain)
+    {
+        using var doc = JsonDocument.Parse(domain.SettingsJson);
+        return !doc.RootElement.TryGetProperty("ssl", out var flag) ||
+            (flag.ValueKind != JsonValueKind.False && !(flag.ValueKind == JsonValueKind.String && flag.GetString() is "OFF" or "False" or "false"));
     }
 }

@@ -90,6 +90,10 @@ spec:
               value: {{ .Values.directAdmin.baseUrl | quote }}
             {{- end }}
             {{- if $hosting }}
+            - name: CertManager__ListenerSetName
+              value: {{ .Values.certManager.listenerSetName | quote }}
+            - name: BackendSettings__TlsListenerSetName
+              value: {{ .Values.certManager.listenerSetName | quote }}
             - name: CertManager__Enabled
               value: {{ .Values.certManager.enabled | quote }}
             - name: KubernetesHosting__Enabled

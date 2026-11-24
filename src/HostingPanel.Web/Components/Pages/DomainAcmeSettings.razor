@@ -15,6 +15,32 @@
         <label><input type="checkbox" @bind="wildcard" /> Prefer wildcard</label>
         <button disabled="@busy" @onclick="Save">Save ACME settings</button>
         <button disabled="@busy" @onclick="Provision">Request certificate</button>
+        <button disabled="@busy" @onclick="LoadStatus">Refresh certificate information</button>
+        @if (certificateStatus is not null) { <p role="status">@certificateStatus</p> }
+        @foreach (var cert in certificates)
+        {
+            <table><tbody>
+                <tr><th>Status</th><td>@(cert.Error.Length == 0 ? "Issued" : cert.Error)</td></tr>
+                <tr><th>Automatic renewal</th><td>@cert.AutorenewEnabled</td></tr>
+                @if (cert.Certificate is not null)
+                {
+                    <tr><th>Subject</th><td>@cert.Certificate.Subject</td></tr>
+                    <tr><th>Issuer</th><td>@cert.Certificate.Issuer</td></tr>
+                    <tr><th>DNS names</th><td>@string.Join(", ", cert.Certificate.DnsNames)</td></tr>
+                    <tr><th>Valid from</th><td>@cert.Certificate.NotBefore.ToLocalTime()</td></tr>
+                    <tr><th>Expires</th><td>@cert.Certificate.NotAfter.ToLocalTime()</td></tr>
+                    <tr><th>Key type</th><td>@cert.Certificate.PrettyType</td></tr>
+                    <tr><th>Serial number</th><td>@cert.Certificate.SerialNumber</td></tr>
+                }
+            </tbody></table>
+        }
+        @if (logs.Length > 0)
+        {
+            <h3>ACME logs</h3>
+            <table><thead><tr><th>Created</th><th>Challenge</th><th>Status</th></tr></thead><tbody>
+            @foreach(var log in logs) { <tr><td>@log.CreateTime</td><td>@log.ChallengeType</td><td>@log.Status</td></tr> }
+            </tbody></table>
+        }
         @if (message is not null) { <p role="status">@message</p> }
     </section>
 }
@@ -22,6 +48,25 @@
     [Parameter] public string Domain { get; set; } = "";
     private sealed record Provider(string Id, string Name);
     private Provider[] providers = [];
+    private sealed record PublicCert(string Subject,string Issuer,string[] DnsNames,DateTimeOffset NotBefore,DateTimeOffset NotAfter,string PrettyType,string SerialNumber);
+    private sealed record Cert(string Error,bool AutorenewEnabled,PublicCert? Certificate);
+    private sealed record CertResponse(Cert[] Certs);
+    private sealed record AcmeLog(string CreateTime,string ChallengeType,string Status);
+    private Cert[] certificates = [];
+    private AcmeLog[] logs = [];
+    private string? certificateStatus;
+    private async Task LoadStatus()
+    {
+        certificates = []; logs = []; certificateStatus = null;
+        try {
+            var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+            var (status, body) = await Session.GetRawAsync(Endpoint + "/certs");
+            if (status == 200) { certificates = JsonSerializer.Deserialize<CertResponse>(body,options)?.Certs ?? []; if(certificates.Length==0) certificateStatus="No certificate issued yet."; }
+            else certificateStatus=$"Certificate information unavailable (HTTP {status}).";
+            var (ls, lb) = await Session.GetRawAsync(Endpoint + "/acme-logs");
+            if(ls==200) logs=JsonSerializer.Deserialize<AcmeLog[]>(lb,options) ?? [];
+        } catch(Exception ex) when(ex is JsonException or HttpRequestException or InvalidOperationException) { certificateStatus="Certificate information unavailable."; }
+    }
     private JsonObject? config;
     private string provider = "", keyType = "ec256";
     private bool enabled, wildcard, busy;
@@ -43,6 +88,7 @@
             provider = config["provider"]?.GetValue<string>() ?? "";
             keyType = config["keyType"]?.GetValue<string>() ?? "ec256";
             wildcard = config["preferWildcard"]?.GetValue<bool>() ?? false;
+            await LoadStatus();
         } catch (Exception ex) when (ex is JsonException or HttpRequestException or InvalidOperationException) { message = ex.Message; }
     }
     private async Task Save()

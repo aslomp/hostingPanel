@@ -18,6 +18,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
 {
     private string? appliedRuntimeHash;
     private bool migrated;
+    private string? appliedListenerSet;
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -38,7 +39,10 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var rows = await db.ReconciliationOperations.Where(x => x.ResourceType == "website"
             && x.Status == "pending").ToListAsync(ct);
         var shared = configuration.GetValue<bool>("KubernetesHosting:AllowSharedPhpRuntime");
-        if (rows.Count == 0 && !shared && migrated) return;
+        var settings = await ((KubernetesBackend)scope.ServiceProvider.GetRequiredService<IHostingBackend>()).GetEffectiveSettingsAsync(ct);
+        var listenerSet = settings.TlsListenerSetName;
+        var listenerChanged = appliedListenerSet != listenerSet;
+        if (rows.Count == 0 && !shared && migrated && !listenerChanged) return;
         var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
         var identities = await PhpIdentityModel.AllocateAsync(db, domains.Select(x => x.OwnerId), ct);
         var ownerIds = domains.Select(d => d.OwnerId).Distinct().ToArray();
@@ -69,7 +73,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         }
         var completed = new List<ReconciliationOperation>();
         var byId = rows.GroupBy(x => x.ResourceId).ToDictionary(x => x.Key, x => x.ToArray());
-        var targets = byId.Keys.Concat(migrated ? Array.Empty<Guid>() : domains.Select(x => x.Id)).Distinct();
+        var targets = byId.Keys.Concat(migrated && !listenerChanged ? Array.Empty<Guid>() : domains.Select(x => x.Id)).Distinct();
         var migrationFailed = false;
         foreach (var id in targets)
         {
@@ -85,7 +89,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 {
                     if (storageErrors.TryGetValue(domain.Id, out var storageError))
                         throw new InvalidOperationException("Website storage unavailable.", storageError);
-                    var manifest = BuildManifest(domain, accounts[domain.OwnerId].Username, identities[domain.OwnerId]);
+                    var manifest = BuildManifest(domain, accounts[domain.OwnerId].Username, identities[domain.OwnerId], listenerSet.Length > 0);
                     await KubectlAsync(manifest, ct, "apply", "--server-side", "--field-manager=hostingpanel", "-f", "-");
                 }
                 completed.AddRange(group);
@@ -118,6 +122,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         }
         // Legacy deployments are retired explicitly by the administrator after testing.
         migrated = !migrationFailed;
+        if (!migrationFailed) appliedListenerSet = listenerSet;
         foreach (var row in completed)
         {
             row.Status = "completed";
@@ -133,7 +138,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
 
     private string Namespace => configuration["KubernetesHosting:Namespace"] ?? "hosting";
 
-    private string BuildManifest(HostedDomain domain, string username, PhpAccountIdentity identity)
+    private string BuildManifest(HostedDomain domain, string username, PhpAccountIdentity identity, bool managedTls)
     {
         var host = domain.Name;
         if (host.Length > 253 || host.Split('.').Any(label => label.Length is < 1 or > 63
@@ -169,7 +174,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             new { apiVersion = "v1", kind = "ConfigMap", metadata = new { name, @namespace = Namespace, labels = configLabels }, data = new Dictionary<string,string> { ["vhost.conf"] = apache } },
             new { apiVersion = "gateway.networking.k8s.io/v1", kind = "HTTPRoute", metadata = new { name, @namespace = Namespace }, spec = new {
                 parentRefs = new[] { new { name = Required("GatewayName"), @namespace = Required("GatewayNamespace"),
-                    sectionName = Required(tls ? "HttpsListener" : "HttpListener") } },
+                    sectionName = Required(tls && !managedTls ? "HttpsListener" : "HttpListener") } },
                 hostnames = new[] { host }, rules = new[] { new { backendRefs = new[] { new { name = "apache-baseline", port = 80 } } } }
             } }
         };
