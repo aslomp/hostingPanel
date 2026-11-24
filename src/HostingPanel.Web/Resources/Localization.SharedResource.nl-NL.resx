@@ -748,4 +748,34 @@
   <data name="The overview may be incomplete: {0}" xml:space="preserve"><value>Het overzicht kan onvolledig zijn: {0}</value></data>
   <data name="Sent" xml:space="preserve"><value>Verzonden</value></data>
   <data name="Messages: {0}" xml:space="preserve"><value>Berichten: {0}</value></data>
+  <data name="Conversation ({0} replies)" xml:space="preserve"><value>Gesprek ({0} antwoorden)</value></data>
+  <data name="SSL Certificates / ACME Settings" xml:space="preserve"><value>SSL-certificaten / ACME-instellingen</value></data>
+  <data name="Automatic certificate renewal" xml:space="preserve"><value>Automatische certificaatvernieuwing</value></data>
+  <data name="ACME provider" xml:space="preserve"><value>ACME-provider</value></data>
+  <data name="Default (inherited)" xml:space="preserve"><value>Standaard (overgenomen)</value></data>
+  <data name="Private key" xml:space="preserve"><value>Privésleutel</value></data>
+  <data name="Prefer wildcard" xml:space="preserve"><value>Voorkeur voor wildcard</value></data>
+  <data name="Save ACME settings" xml:space="preserve"><value>ACME-instellingen opslaan</value></data>
+  <data name="Refresh certificate information" xml:space="preserve"><value>Certificaatinformatie vernieuwen</value></data>
+  <data name="Issued" xml:space="preserve"><value>Uitgegeven</value></data>
+  <data name="Automatic renewal" xml:space="preserve"><value>Automatische vernieuwing</value></data>
+  <data name="Issuer" xml:space="preserve"><value>Uitgever</value></data>
+  <data name="DNS names" xml:space="preserve"><value>DNS-namen</value></data>
+  <data name="Valid from" xml:space="preserve"><value>Geldig vanaf</value></data>
+  <data name="Expires" xml:space="preserve"><value>Verloopt</value></data>
+  <data name="Key type" xml:space="preserve"><value>Sleuteltype</value></data>
+  <data name="Serial number" xml:space="preserve"><value>Serienummer</value></data>
+  <data name="Created" xml:space="preserve"><value>Aangemaakt</value></data>
+  <data name="Challenge" xml:space="preserve"><value>Challenge</value></data>
+  <data name="Status" xml:space="preserve"><value>Status</value></data>
+  <data name="No certificate issued yet." xml:space="preserve"><value>Nog geen certificaat uitgegeven.</value></data>
+  <data name="Certificate information unavailable (HTTP {0})." xml:space="preserve"><value>Certificaatinformatie niet beschikbaar (HTTP {0}).</value></data>
+  <data name="Certificate information unavailable." xml:space="preserve"><value>Certificaatinformatie niet beschikbaar.</value></data>
+  <data name="ACME settings saved." xml:space="preserve"><value>ACME-instellingen opgeslagen.</value></data>
+  <data name="Certificate request submitted." xml:space="preserve"><value>Certificaataanvraag ingediend.</value></data>
+  <data name="Default domain" xml:space="preserve"><value>Standaarddomein</value></data>
+  <data name="Subdomains" xml:space="preserve"><value>Subdomeinen</value></data>
+  <data name="Document root" xml:space="preserve"><value>Documentroot</value></data>
+  <data name="PHP version" xml:space="preserve"><value>PHP-versie</value></data>
+  <data name="PHP handler" xml:space="preserve"><value>PHP-handler</value></data>
 </root>

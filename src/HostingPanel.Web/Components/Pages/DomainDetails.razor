@@ -6,7 +6,7 @@
 @inject HostingPanel.Api.HostingOperationNotifications Operations
 @implements IDisposable
 
-<PageTitle>@Domain — Domeinbeheer</PageTitle>
+<PageTitle>@Domain — @L["Domain management"]</PageTitle>
 <PanelPageHeader>
     <Breadcrumb><a href="/domains">@L["Domain management"]</a> / Details</Breadcrumb>
     <TitleContent>@Domain</TitleContent>
@@ -16,7 +16,7 @@
 
 @if (!Session.Connected)
 {
-    <MudPaper Class="pa-4 my-3" Elevation="1">Verbind eerst met DirectAdmin via het <a href="/">dashboard</a>.</MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
 }
 else if (loading)
 {
@@ -37,10 +37,10 @@ else
             <h2>@L["General"]</h2>
             <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><tbody>
                 @foreach (var item in new (string Label, string Key)[] {
-                    ("Domein", "domain"), ("Gebruiker", "username"), ("IP-adres", "ip"),
-                    ("Standaarddomein", "defaultdomain"), ("Opgeschort", "suspended"),
-                    ("Subdomeinen", "subdomain"), ("Documentroot", "private_html"),
-                    ("PHP-versie", "php1_ver"), ("PHP-handler", "php1_info"), ("Provisioning", "provisioning") })
+                    ("Domain", "domain"), ("User", "username"), ("IP address", "ip"),
+                    ("Default domain", "defaultdomain"), ("Suspended", "suspended"),
+                    ("Subdomains", "subdomain"), ("Document root", "private_html"),
+                    ("PHP version", "php1_ver"), ("PHP handler", "php1_info"), ("Provisioning", "provisioning") })
                 {
                     @if (fields is not null && fields.TryGetValue(item.Key, out var value))
                     {

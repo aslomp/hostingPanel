@@ -14,7 +14,7 @@
 </PanelPageHeader>
 @if (!Session.Connected)
 {
-    <MudPaper Class="pa-4 my-3" Elevation="1">Verbind eerst via het <a href="/">dashboard</a>.</MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
 }
 else
 {
@@ -36,7 +36,7 @@ else
         @if (ticket.Value.TryGetProperty("replies", out var replies) && replies.ValueKind == JsonValueKind.Array)
         {
             <MudPaper Class="pa-4 my-3" Elevation="1">
-                <h2>Gesprek (@replies.GetArrayLength() antwoorden)</h2>
+                <h2>@L["Conversation ({0} replies)", replies.GetArrayLength()]</h2>
                 @foreach (var reply in replies.EnumerateArray())
                 {
                     <article class="ticket-reply">

@@ -10,7 +10,7 @@
     <Description>@L["View modern DirectAdmin-compatible HostingPanel API responses."]</Description>
     </PanelPageHeader>
 <MudPaper Class="pa-4 my-3" Elevation="1"><p><a href="@SwaggerUrl" target="_blank" rel="noopener noreferrer">@L["Complete Swagger documentation (274 API paths)"]</a></p><p>@L["The complete pinned DirectAdmin specification; not every operation is implemented in HostingPanel yet."]</p></MudPaper>
-@if (!Session.Connected) { <MudPaper Class="pa-4 my-3" Elevation="1">Verbind eerst via het <a href="/">dashboard</a>.</MudPaper> }
+@if (!Session.Connected) { <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper> }
 else
 {
     <MudPaper Class="pa-4 my-3" Elevation="1">
