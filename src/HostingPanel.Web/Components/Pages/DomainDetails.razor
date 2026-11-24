@@ -1,8 +1,9 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/domains/{Domain}"
-@using System.Text.Json
-@inject DirectAdminSession Session
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@inject DomainOperations DomainOps
 @inject HostingPanel.Api.HostingOperationNotifications Operations
 @implements IDisposable
 
@@ -109,7 +110,7 @@ else
         var domain = Domain;
         try
         {
-            var state = await Session.GetProvisioningStatusAsync(domain);
+            var state = await DomainOps.GetProvisioningStatusAsync(domain);
             if (!disposed && domain == Domain && fields is not null && state is not null)
             {
                 fields["provisioning"] = state;
@@ -127,8 +128,9 @@ else
         fields = null;
         try
         {
-            var (status, body) = await Session.GetDomainDetailsAsync(Domain);
-            if (status != 200)
+            var result = await DomainOps.GetAsync(Domain);
+            var status = result.Status;
+            if (status != 200 || result.Settings is null)
             {
                 error = status switch
                 {
@@ -138,11 +140,7 @@ else
                 };
                 return;
             }
-            using var doc = JsonDocument.Parse(body);
-            var settings = doc.RootElement.GetProperty("settings");
-            if (settings.ValueKind != JsonValueKind.Object) throw new FormatException("Invalid domain settings.");
-            fields = settings.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.ToString(),
-                StringComparer.OrdinalIgnoreCase);
+            fields = result.Settings.ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
             php = Get("php");
             ssl = Get("ssl");
             cgi = Get("cgi");
@@ -150,7 +148,7 @@ else
             quota = Get("quota");
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
-            or ArgumentException or FormatException or JsonException)
+            or ArgumentException or FormatException)
         {
             error = ex.Message;
         }
@@ -175,8 +173,8 @@ else
         saveMessage = null;
         try
         {
-            var (status, _) = await Session.SaveDomainSettingAsync(Domain, setting, value);
-            if (status is >= 200 and < 300)
+            var (status, errorCode) = await DomainOps.UpdateSettingAsync(Domain, setting, value);
+            if (errorCode is null && status is >= 200 and < 300)
             {
                 saveMessage = status == 202 ? L["Domain operation accepted. Provisioning is pending."].Value : L["{0} saved.", setting].Value;
                 await Refresh();
