@@ -47,6 +47,38 @@ public sealed class NfsDirectoryProvisioner(IConfiguration configuration)
         return (uid, gid);
     }
 
+    // Fail closed on unsafe ancestors. GNU rm does not follow symlinks within
+    // the tree; --one-file-system prevents crossing nested mounts.
+    public async Task DeleteAsync(string username, string domain, CancellationToken ct)
+    {
+        if (!ValidPart(username, false) || !ValidPart(domain, true))
+            throw new InvalidOperationException("Invalid domain storage path.");
+        var configured = configuration["KubernetesHosting:NfsProvisioningPath"];
+        if (!OperatingSystem.IsLinux() || string.IsNullOrWhiteSpace(configured) || !Path.IsPathFullyQualified(configured))
+            throw new InvalidOperationException("Missing authorized storage mount.");
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(configured));
+        if (root == "/" || !Directory.Exists(root)) throw new InvalidOperationException("Storage root unavailable.");
+        var parent = Path.Combine(root, username, "domains");
+        for (DirectoryInfo? ancestor = new(parent); ancestor is not null; ancestor = ancestor.Parent)
+        {
+            if (ancestor.LinkTarget is not null) throw new InvalidOperationException("Unsafe storage ancestor.");
+            if (!ancestor.Exists) throw new InvalidOperationException("Storage ancestor unavailable.");
+            if ((File.GetUnixFileMode(ancestor.FullName) & (UnixFileMode.GroupWrite | UnixFileMode.OtherWrite)) != 0)
+                throw new InvalidOperationException("Writable storage ancestor; deletion refused.");
+        }
+        // This operation requires trusted storage-side ownership and no concurrent
+        // untrusted renames of the domain directory.
+        var site = Path.Combine(parent, domain);
+        if (new DirectoryInfo(site).LinkTarget is not null) throw new InvalidOperationException("Domain directory is a symlink.");
+        if (!Directory.Exists(site))
+        {
+            if (File.Exists(site)) throw new InvalidOperationException("Domain storage is not a directory.");
+            return;
+        }
+        await RunAsync("/usr/bin/rm", ct, "-r", "--one-file-system", "--", site);
+        if (Directory.Exists(site) || File.Exists(site)) throw new InvalidOperationException("Domain storage deletion incomplete.");
+    }
+
     private static bool ValidPart(string input, bool allowDots) =>
         input.Length is > 0 and <= 253 && input != "." && input != ".."
         && input.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_'

@@ -70,10 +70,10 @@ else
     {
         <section class="card">
             <h2>@L["Delete domain"]: @deleteDomain</h2>
-            <p>@L["Deleting a domain may remove website files and associated resources."]</p>
+            <p class="error" role="alert"><strong>@L["Permanently delete this domain? This cannot be undone."]</strong> @L["All domain website files, DNS records, routes and certificates will be removed."]</p>
             <label for="confirmDomain">@L["Enter the exact domain name to confirm."]</label>
             <input id="confirmDomain" @bind="confirmation" autocomplete="off" />
-            <button disabled="@(mutationBusy || confirmation != deleteDomain)" @onclick="DeleteDomain">@L["Delete"]</button>
+            <button disabled="@(mutationBusy || confirmation != deleteDomain)" @onclick="DeleteDomain">@L["Permanently delete"]</button>
             <button disabled="@mutationBusy" @onclick="CancelDelete">@L["Cancel"]</button>
         </section>
     }
