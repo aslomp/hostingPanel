@@ -312,6 +312,16 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         return new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(username + ":" + _loginKey)));
     }
 
+    public async Task<string?> GetProvisioningStatusAsync(string domain, CancellationToken ct = default)
+    {
+        if (backendScopes is null || !Connected) return null;
+        using var scope = backendScopes.CreateScope();
+        var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IHostingBackend>();
+        var result = await backend.Domains.GetDetailsAsync(domain, EffectiveCredentials(), ct);
+        return result.Status == 200 && result.Settings is not null
+            && result.Settings.TryGetValue("provisioning", out var state) ? state : null;
+    }
+
     public async Task<(int Status, string Body)> GetAccessibleDomainsAsync(
         CancellationToken cancellationToken = default)
     {
