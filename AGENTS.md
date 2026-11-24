@@ -33,6 +33,12 @@ These instructions apply to the entire repository. Read [current architecture](d
 - Overview pages show a table, create action above it, clickable detail rows and explicit delete actions with confirmation. Reuse components across user/reseller/profile workflows where semantics match.
 - Use English localization keys and maintain Dutch translations. Prefer typed DTOs and capability contracts over raw JSON where appropriate. Preserve cancellation, async boundaries and clear ownership.
 
+## Lifetime, notifications and status
+- Use BackendOperationScope for typed circuit operations. Never retain a provider or EF Core context for the lifetime of a Blazor circuit.
+- Navigation context is presentation, not authorization. Keep original/effective identity, server-side session and resource authorization distinct; see docs/authentication.md.
+- Treat HostingOperationNotifications as invalidation only. Keep ticket polling/SignalR channel lifecycle separate; do not publish credentials or bypass authorized reads.
+- Read docs/reconciliation.md and docs/certificates.md before changing lifecycle/status logic. Do not remove deletion markers before cleanup succeeds or claim TLS Secret deletion without verifying owner-reference behavior.
+
 ## Verification and completion
 - Build the affected providers and Web project with .NET 10. Run contract and API integration suites; add regression tests for changed behavior, including unauthorized access, fallback, failures and no unintended side effects.
 - For UI workflows use real browser regression coverage following tests/browser-smoke.py and CI; a rendered page alone is not proof that a form works.

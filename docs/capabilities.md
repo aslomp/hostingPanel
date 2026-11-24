@@ -13,14 +13,16 @@ Source-reviewed against main at 510684cd. "Implemented" means code exists, not t
 | Automatic DNS for new domains | Upstream | StageDomainDnsAsync; deferred retries for missing settings |
 | Account nameserver management | Read-only own profile via upstream session config; editing not implemented | Existing IP/reseller/default resolution; profile displays effective nameservers (read-only) |
 | TLS / ACME | Upstream operations | cert-manager Certificate reconciliation and optional existing ListenerSet integration |
-| Database inventory | Upstream | SQLite inventory; real database runtime provisioning not established |
-| File access | Upstream operations where supported | Inspect service support; not proof of deployed SSH/SFTP authentication |
-| Tickets | Upstream | SQLite ticket service |
+| Database inventory | Upstream | SQLite inventory; create/delete explicitly return 501 |
+| File access | Upstream operations where supported | FTP operations explicitly return 501; SSH/SFTP not established |
+| Tickets | Upstream | Owner-scoped SQLite tickets/replies/status and recipient messages; full support routing not established |
 | General modern /api compatibility | Explicit forwarding | Compatibility handler returns 501 for unsupported calls |
 
 ## DirectAdmin server administration
 
 Official server settings, TLS/ACME, sessions, service actions, updates, system information, security and packages are routed to DirectAdmin; upstream version and authorization determine success. Legacy services implement resource operations separately. See the [DirectAdmin backend guide](directadmin.md) for concrete endpoints, services and UI boundaries.
+
+See [support and realtime](support.md), [certificates](certificates.md), [authentication](authentication.md) and [reconciliation](reconciliation.md) for the implementation boundaries.
 
 ## Validation boundaries
 

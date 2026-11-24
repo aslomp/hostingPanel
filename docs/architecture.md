@@ -17,7 +17,7 @@ flowchart TD
  SDK --> G[Gateway API and cert-manager]
 ```
 
-Some UI operations still use a same-host HTTP client (hosting-api) through the operation services; this is transitional, not a separately deployed API application. CompatibilityApiClient is for explicit compatibility routes, not a generic backend interface.
+Typed UI operations resolve capabilities in independent per-call BackendOperationScope instances to avoid retaining EF Core contexts across Blazor circuits. Some settings/compatibility operations still use a same-host HTTP client (hosting-api); this is transitional, not a separately deployed API application. See [web UI](web-ui.md). CompatibilityApiClient is for explicit compatibility routes, not a generic backend interface.
 
 | Assembly | Ownership |
 | --- | --- |
@@ -47,4 +47,4 @@ Kubernetes services persist desired resources and reconciliation operations. Web
 
 The shared Apache service receives per-domain configuration; do not create Apache workloads per domain. KubernetesResourceClient uses the .NET SDK. PowerDNS publication and cert-manager issuance require their actual infrastructure and configuration.
 
-See [configuration](configuration.md), [DNS](dns.md), [capabilities](capabilities.md) and [Kubernetes hosting](kubernetes-hosting.md).
+See [authentication](authentication.md), [reconciliation](reconciliation.md), [certificates](certificates.md), [support](support.md), [configuration](configuration.md), [DNS](dns.md), [capabilities](capabilities.md) and [Kubernetes hosting](kubernetes-hosting.md).

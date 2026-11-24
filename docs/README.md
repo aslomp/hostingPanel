@@ -13,6 +13,13 @@ Current behavior is described in the following pages. Start here, then verify ag
 | [Kubernetes hosting](kubernetes-hosting.md) | Shared Apache, PHP, storage and deployment |
 | [Installation](installation.md) | Running the unified host |
 | [Persistence](shared-sqlite-persistence.md) | SQLite ownership and schema extension |
+| [Web UI](web-ui.md) | Component structure, operation scopes and navigation |
+| [Authentication](authentication.md) | Login, session lifetime and backend identity |
+| [Support and realtime](support.md) | Tickets, messages, SignalR and polling |
+| [Certificates](certificates.md) | ACME selection, status and ListenerSet lifecycle |
+| [Reconciliation](reconciliation.md) | Outbox, status, deletion and storage |
+| [Testing](testing.md) | CI and regression validation |
+| [Documentation audit](audit-2026-11-24.md) | Coverage findings and remaining verification |
 | [Localization](localization.md) | UI translation conventions |
 | [Decisions](decisions/README.md) | Architecture invariants and rationale |
 | [Plans](plans/README.md) | Work not necessarily implemented |

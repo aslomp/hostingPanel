@@ -6,7 +6,7 @@ Source-reviewed against main 510684cdb965011b592e2803c8b7c274143e01e6. This is t
 
 Select HostingPanel:Backend=DirectAdmin and set DirectAdmin:BaseUrl to a fixed credential-free HTTPS origin (including port if needed). DirectAdminRegistration registers the request-scoped DirectAdminBackend facade and separate capabilities and services. The named legacy-directadmin HTTP client uses a fixed origin, a 30-second timeout, no automatic redirects or cookie jar. TLS validation remains enabled.
 
-HostingPanel.Web contains the Blazor UI, controllers and session handling in one process. UI operation services may use BackendOperationScope to resolve a capability in an isolated DI scope or the same-host hosting-api transport; compatibility calls use CompatibilityApiClient. Neither the UI nor controllers implement DirectAdmin's hosting permission system.
+HostingPanel.Web contains the Blazor UI, controllers and session handling in one process. Typed UI operation services use BackendOperationScope to resolve a capability in an isolated per-call DI scope; settings/compatibility operations use the same-host hosting-api transport. See [web UI](web-ui.md). Neither the UI nor controllers implement DirectAdmin's hosting permission system.
 
 DirectAdmin owns users, resellers, packages, resource limits, domains, websites, DNS, databases, file access, tickets, server settings, services and certificate configuration. Do not import those resources into HostingPanel's SQLite database, create Kubernetes resources for DirectAdmin operations, or use Kubernetes BackendSettings as a replacement for DirectAdmin settings.
 
@@ -97,5 +97,7 @@ When changing an operation, verify the upstream API semantics and real permissio
 - HostingPanel.ApiIntegrationTests: upstream forwarding and response behavior using fake transport.
 - tests/browser-smoke.py and required-login-smoke.py: browser/session regression coverage; CI defines actual execution.
 - Source review is not a live DirectAdmin compatibility certification. Legacy responses can vary by version; missing schema fields, partial inventories, permission denials, redirects and ambiguous writes must remain visible rather than becoming synthetic success.
+
+See also [authentication](authentication.md), [support and realtime](support.md) and [certificates](certificates.md) for shared workflows and backend distinctions.
 
 For future changes follow [AGENTS.md](../AGENTS.md), the [architecture](architecture.md) and [capability inventory](capabilities.md).

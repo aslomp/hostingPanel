@@ -27,7 +27,7 @@ Source: src/HostingPanel.Backends.Kubernetes/Backend/KubernetesProvisioningServi
 
 Concatenate in that order, discard blank/invalid names, remove trailing dots, deduplicate case-insensitively, take the first two. Require two distinct valid hostnames. This is a sequence of candidates, not three mutually exclusive pairs: one account name can be supplemented by a default.
 
-The nameserver inventory is already persisted under BackendSettings:Kubernetes. Do not introduce a duplicate account store. AssignedUsers and Resellers also affect address allocation; editing them solely to change DNS can unintentionally change future A/AAAA records. An independent account editor must respect that constraint. Existing records are not rewritten when defaults change.
+On audited main the profile displays the effective nameservers read-only; it does not implement independent selection or account mutation. The nameserver inventory is already persisted under BackendSettings:Kubernetes. Do not introduce a duplicate account store. AssignedUsers and Resellers also affect address allocation; editing them solely to change DNS can unintentionally change future A/AAAA records. An independent account editor must respect that constraint. Existing records are not rewritten when defaults change.
 
 ## Publication and removal
 
