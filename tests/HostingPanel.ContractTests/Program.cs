@@ -6,6 +6,7 @@ using System.Text;
 
 var checks = new List<(string Description, Action Test)>
 {
+    ("Session HTTP transport preserves routes, credentials and disconnect boundaries", PanelHttpTransportTests.Run),
     ("Apache candidate revisions are deterministic and immutable", ApacheConfigurationRevisionTests.Run),
     ("Dialog mutations reject duplicates and obsolete sessions", DialogMutationTests.Run),
     ("Latest UI reads discard superseded results and cancel on disposal", LatestReadTests.Run),
