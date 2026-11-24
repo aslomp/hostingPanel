@@ -1,7 +1,8 @@
 @using HostingPanel.Web.Localization
 @using System.Text.Json
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
-@inject DirectAdminSession Session
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
 @inject IDialogService Dialogs
 
 <MudPaper Class="pa-4 my-3" Elevation="1">
@@ -53,7 +54,7 @@
         busy = true; error = null;
         try
         {
-            var (status, body) = await Session.GetRawAsync("api/reseller-packages");
+            var (status, body) = await ApiClient.GetRawAsync("api/reseller-packages");
             if (status != 200) { packages = null; details = null; error = L["Backend HTTP {0}.", status].Value; return; }
             using var doc = JsonDocument.Parse(body);
             packages = doc.RootElement.EnumerateArray().Select(x => x.GetProperty("name").GetString() ?? "")
@@ -71,7 +72,7 @@
         busy = true; error = null; details = null; selected = name;
         try
         {
-            var (status, body) = await Session.GetRawAsync(Endpoint(name));
+            var (status, body) = await ApiClient.GetRawAsync(Endpoint(name));
             if (status == 200) details = body;
             else error = L["Backend HTTP {0}.", status].Value;
         }
@@ -90,7 +91,7 @@
             var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
                 L["Delete package"].Value, name, L["Permanently delete this package?"].Value, L["Enter the exact package name to confirm."].Value);
             if (!confirmed || !Session.Connected || identity != Session.Username || packages?.Contains(name) != true) return;
-            var (status, _) = await Session.RequestApiAsync(HttpMethod.Delete, Endpoint(name));
+            var (status, _) = await ApiClient.RequestApiAsync(HttpMethod.Delete, Endpoint(name));
             succeeded = status is >= 200 and < 300;
             failed = !succeeded;
             feedback = succeeded ? L["Package deleted."].Value : L["Deletion not confirmed: backend HTTP {0}.", status].Value;

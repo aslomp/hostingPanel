@@ -97,7 +97,6 @@ builder.Services.AddScoped<DnsOperations>();
 builder.Services.AddScoped<DatabaseOperations>();
 builder.Services.AddScoped<TicketOperations>();
 builder.Services.AddScoped<ImpersonationOperations>();
-builder.Services.AddScoped<DirectAdminSession>();
 builder.Services.AddScoped<CompatibilityApiClient>();
 builder.Services.AddScoped<SettingsOperations>();
 builder.Services.AddScoped<NavigationContextState>();

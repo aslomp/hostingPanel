@@ -2,7 +2,8 @@
 @using System.Text.Json
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/sessions"
-@inject DirectAdminSession Session
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
 @inject IDialogService Dialogs
 
 <PageTitle>@L["Sessions — HostingPanel"]</PageTitle>
@@ -92,9 +93,9 @@ else
         busy = true; error = null;
         try
         {
-            var (cs, cb) = await Session.GetRawAsync("api/session");
+            var (cs, cb) = await ApiClient.GetRawAsync("api/session");
             current = $"HTTP {cs}\n{cb}";
-            var (ls, lb) = await Session.GetRawAsync("api/sessions");
+            var (ls, lb) = await ApiClient.GetRawAsync("api/sessions");
             if (ls != 200) { sessions = null; selected = null; error = L["Backend HTTP {0}.", ls].Value; return; }
             using var doc = JsonDocument.Parse(lb);
             sessions = doc.RootElement.EnumerateArray().Select(x => new SessionRow(
@@ -128,7 +129,7 @@ else
                 row is null ? L["The backend determines which sessions may be terminated. This operation preserves the current session."].Value : L["Terminate this session?"].Value,
                 row is null ? L["Enter DESTROY to confirm"].Value : L["Enter the same ID to confirm"].Value);
             if (!confirmed || !Session.Connected || identity != Session.Username) return;
-            var (status, _) = await Session.RequestApiAsync(HttpMethod.Post, endpoint);
+            var (status, _) = await ApiClient.RequestApiAsync(HttpMethod.Post, endpoint);
             failed = status is < 200 or >= 300;
             feedback = failed ? L["Backend HTTP {0}.", status].Value : L["Session operation completed."].Value;
         }
