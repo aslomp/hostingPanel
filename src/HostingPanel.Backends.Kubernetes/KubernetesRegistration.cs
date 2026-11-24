@@ -1,3 +1,4 @@
+using HostingPanel.Providers.PowerDNS;
 using HostingPanel.Api.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace HostingPanel.Api;
@@ -18,6 +19,18 @@ public static class KubernetesRegistration
     services.AddSingleton<IHostingPanelSchemaExtension>(sp => sp.GetRequiredService<PhpIdentityModel>());
     services.AddSingleton<NfsDirectoryProvisioner>();
     services.AddHostedService<WebsiteReconciler>();
+    if (configuration.GetValue<bool>("PowerDns:Enabled"))
+    {
+        services.AddHttpClient<PowerDnsClient>(http =>
+        {
+            var endpoint = configuration["PowerDns:BaseUrl"] ?? throw new InvalidOperationException("Missing PowerDns:BaseUrl");
+            var key = configuration["PowerDns:ApiKey"] ?? throw new InvalidOperationException("Missing PowerDns:ApiKey");
+            http.BaseAddress = new Uri(endpoint.TrimEnd('/') + "/api/v1/servers/" + Uri.EscapeDataString(configuration["PowerDns:ServerId"] ?? "localhost") + "/");
+            http.DefaultRequestHeaders.Add("X-API-Key", key);
+            http.Timeout = TimeSpan.FromSeconds(15);
+        });
+        services.AddHostedService<DnsReconciler>();
+    }
 
         return services;
     }

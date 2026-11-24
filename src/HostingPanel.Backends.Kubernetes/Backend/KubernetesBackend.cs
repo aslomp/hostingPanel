@@ -1,3 +1,4 @@
+using HostingPanel.Providers.PowerDNS;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
@@ -14,7 +15,7 @@ namespace HostingPanel.Api;
 /// no legacy command calls and no implicit fallback to DirectAdmin.
 /// Reconciliation with the cluster is deliberately a separate responsibility.
 /// </summary>
-public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings) :
+public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, PowerDnsClient? powerDns = null) :
     IHostingBackend, IAccountCatalog, IAccountMutations, IAccessibleDomains,
     IUserDetails, IAccountOverview, IImpersonation, IDatabases,
     IAccessibleDatabases, IDomains, IFileAccess, ITickets, IBackendSettingsAccess
@@ -78,7 +79,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
     public IAccessibleDatabases AccessibleDatabases => this;
     public IDomains Domains => this;
     public IWebHosting WebHosting => this;
-    public IDNSProvider Dns => this;
+    public IDNSProvider Dns => powerDns is null ? this : new PowerDnsProvider(this, powerDns);
     public IFileAccess FileAccess => this;
     public ITickets Tickets => this;
 

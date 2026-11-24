@@ -1,0 +1,119 @@
+{{- if and (eq .Values.backend "Kubernetes") .Values.powerDns.enabled }}
+{{- $name := include "hostingpanel.name" . }}
+{{- $secret := default (printf "%s-powerdns" $name) .Values.powerDns.existingSecret }}
+{{- if not .Values.powerDns.existingSecret }}
+{{- $old := lookup "v1" "Secret" .Release.Namespace $secret }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secret }}
+  annotations:
+    helm.sh/resource-policy: keep
+type: Opaque
+data:
+  api-key: {{ if $old }}{{ index $old.data "api-key" | quote }}{{ else }}{{ randAlphaNum 48 | b64enc | quote }}{{ end }}
+---
+{{- end }}
+{{- if not .Values.powerDns.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}-powerdns
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.powerDns.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.powerDns.size | quote }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}-powerdns
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/instance: {{ .Release.Name | quote }}, app.kubernetes.io/component: powerdns}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/instance: {{ .Release.Name | quote }}, app.kubernetes.io/component: powerdns}
+    spec:
+      automountServiceAccountToken: false
+      initContainers:
+        - name: init-db
+          image: {{ .Values.powerDns.image | quote }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              if [ ! -f /data/pdns.sqlite3 ]; then
+                cp /var/lib/powerdns/pdns.sqlite3 /data/pdns.sqlite3.tmp
+                mv /data/pdns.sqlite3.tmp /data/pdns.sqlite3
+              fi
+          volumeMounts: [{name: data, mountPath: /data}]
+      containers:
+        - name: powerdns
+          image: {{ .Values.powerDns.image | quote }}
+          args: ["--gsqlite3-database=/data/pdns.sqlite3", "--local-port=5353", "--api=yes", "--webserver=yes", "--webserver-address=0.0.0.0", "--webserver-port=8081", "--webserver-allow-from=0.0.0.0/0", "--disable-axfr=yes"]
+          env:
+            - name: PDNS_AUTH_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret | quote }}
+                  key: api-key
+          ports:
+            - {name: dns-tcp, containerPort: 5353, protocol: TCP}
+            - {name: dns-udp, containerPort: 5353, protocol: UDP}
+            - {name: api, containerPort: 8081}
+          readinessProbe:
+            tcpSocket: {port: dns-tcp}
+          livenessProbe:
+            tcpSocket: {port: dns-tcp}
+          volumeMounts: [{name: data, mountPath: /data}]
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-powerdns" $name) .Values.powerDns.existingClaim | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-powerdns
+spec:
+  type: {{ .Values.powerDns.serviceType }}
+  selector: {app.kubernetes.io/instance: {{ .Release.Name | quote }}, app.kubernetes.io/component: powerdns}
+  ports:
+    - {name: dns-tcp, port: 53, targetPort: dns-tcp, protocol: TCP}
+    - {name: dns-udp, port: 53, targetPort: dns-udp, protocol: UDP}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-powerdns-api
+spec:
+  type: ClusterIP
+  selector: {app.kubernetes.io/instance: {{ .Release.Name | quote }}, app.kubernetes.io/component: powerdns}
+  ports: [{name: api, port: 8081, targetPort: api}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}-powerdns
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/instance: {{ .Release.Name | quote }}, app.kubernetes.io/component: powerdns}
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - {port: 5353, protocol: TCP}
+        - {port: 5353, protocol: UDP}
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/instance: {{ .Release.Name | quote }}, app.kubernetes.io/component: web}
+      ports: [{port: 8081, protocol: TCP}]
+{{- end }}

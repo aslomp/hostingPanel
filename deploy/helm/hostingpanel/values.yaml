@@ -46,3 +46,13 @@ kubernetesHosting:
     enabled: false
     hostname: ""
     listener: https
+
+# Authoritative DNS is deployed for the Kubernetes backend by default.
+powerDns:
+  enabled: true
+  image: powerdns/pdns-auth-49:latest
+  storageClassName: ""
+  size: 1Gi
+  existingClaim: ""
+  existingSecret: ""
+  serviceType: LoadBalancer
