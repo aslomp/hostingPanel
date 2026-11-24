@@ -3,6 +3,7 @@
 @page "/databases"
 @using System.Text.Json
 @inject DirectAdminSession Session
+@inject IDialogService Dialogs
 
 <PageTitle>@L["Database management — HostingPanel"]</PageTitle>
 <PanelPageHeader>
@@ -10,7 +11,7 @@
     <TitleContent>@L["Database management"]</TitleContent>
     <Description>@L["Databases belonging to your account and all subordinate accounts accessible through the backend."]</Description>
     <Actions><MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-    <MudButton Href="#database-create" Variant="Variant.Filled" Color="Color.Primary">@L["＋ Create database"]</MudButton>
+    <CrudAddButton Disabled="@(!Session.Connected || creating)" OnClick="OpenCreate">@L["Create database"]</CrudAddButton>
     <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(loading || overallLoading)" OnClick="RefreshAll">@L["↻ Refresh"]</MudButton>
   </MudStack></Actions>
 </PanelPageHeader>
@@ -62,16 +63,18 @@ else
       <label for="dbFilter">Zoek database (@databases.Count)</label>
       <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbFilter" Placeholder="@L["Database name"].Value" />
       <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>Database</th><th>@L["Actions"]</th></tr></thead><tbody>
-        @foreach(var database in databases.Where(x => x.Contains(search,StringComparison.OrdinalIgnoreCase)))
+        @foreach(var database in databases.Where(x => x.Contains(search,StringComparison.OrdinalIgnoreCase)).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
         {
           <tr><td><a href="@($"/databases/{Uri.EscapeDataString(database)}")">@database</a></td>
-            <td><a href="@($"/databases/{Uri.EscapeDataString(database)}")">@L["View users / delete"]</a></td></tr>
+            <td><CrudDeleteButton Label="@L["Delete database"].Value" Disabled="@deleting" OnClick="() => ConfirmDelete(database)" /></td></tr>
         }
       </tbody></MudSimpleTable>
       @if(databases.Count==0) { <PanelEmptyState>@L["No databases found."]</PanelEmptyState> }
     }
   </MudPaper>
-  <MudPaper Class="pa-4 my-3" Elevation="1" id="database-create">
+  @if (createOpen)
+  {
+  <MudPaper Class="pa-4 my-3" Elevation="1">
     <MudForm @ref="createForm">
     <h2>@L["Create database with user"]</h2>
     <p>@L["DirectAdmin adds the account prefix where necessary. The exact name is retrieved from the backend after creation."]</p>
@@ -86,10 +89,12 @@ else
     <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@creating" OnClick="Create">
       @(creating ? L["Creating…"].Value : L["Create database"].Value)
     </MudButton>
+    <MudButton OnClick="CloseCreate" Disabled="@creating">@L["Cancel"]</MudButton>
     </MudStack>
     </MudForm>
-    @if (createMessage is not null) { <p role="status">@createMessage</p> }
   </MudPaper>
+  }
+  @if (createMessage is not null) { <MudAlert Severity="@(mutationFailed ? Severity.Error : Severity.Success)" Class="my-2">@createMessage</MudAlert> }
 }
 @code {
   private MudForm createForm = default!;
@@ -102,7 +107,30 @@ else
   private string search = "", overallSearch = "";
   private string newDatabase = "app", newUser = "app", newPassword = "";
   private string? error, createMessage;
-  private bool loading, creating;
+  private bool loading, creating, createOpen, deleting, mutationFailed;
+  private void OpenCreate() { createOpen = true; createMessage = null; }
+  private void CloseCreate() { createOpen = false; createMessage = null; }
+  private async Task ConfirmDelete(string database)
+  {
+    if (deleting || creating || !Session.Connected) return;
+    deleting = true;
+    var identity = Session.Username;
+    try
+    {
+      var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+        L["Delete database"].Value, database,
+        L["This deletes the database and may cause irreversible data loss. Enter the exact database name to confirm."].Value,
+        L["Enter the exact database name to confirm."].Value);
+      if (!confirmed || !Session.Connected || identity != Session.Username) return;
+      var (status, _) = await Session.DeleteDatabaseAsync(database, database);
+      mutationFailed = status is < 200 or >= 300;
+      createMessage = mutationFailed ? L["Database deletion not confirmed (HTTP {0}).", status].Value : L["Database deleted."].Value;
+      if (!mutationFailed) await RefreshAll();
+    }
+    catch (Exception ex) when (ex is HttpRequestException or ArgumentException or InvalidOperationException)
+    { mutationFailed = true; createMessage = ex.Message; }
+    finally { deleting = false; }
+  }
   protected override async Task OnInitializedAsync()
   {
     if (Session.Connected) await RefreshAll();
@@ -181,6 +209,7 @@ else
     try
     {
       var (status, body)=await Session.CreateDatabaseAsync(newDatabase.Trim(),newUser.Trim(),newPassword);
+      mutationFailed = status is < 200 or >= 300;
       createMessage=status switch
       {
         200 => L["Database created. The overview has been refreshed."].Value,
@@ -191,12 +220,12 @@ else
       };
       if(status==200)
       {
-        newPassword="";
+        newPassword=""; createOpen = false;
         await RefreshAll();
       }
     }
     catch(Exception e) when(e is HttpRequestException or ArgumentException or InvalidOperationException)
-    { createMessage=e.Message; }
+    { mutationFailed = true; createMessage=e.Message; }
     finally {creating=false;}
   }
 }
