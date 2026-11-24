@@ -1,6 +1,6 @@
 using MudBlazor;
 
-namespace HostingPanel.Web.Components;
+namespace HostingPanel.Web.Components.Shared;
 
 public static class DestructiveResourceDialogs
 {

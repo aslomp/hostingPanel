@@ -10,8 +10,8 @@ public static class NavigationParityContractTests
         var navigation = File.ReadAllText(Path.Combine(root,
             "src/HostingPanel.Web/Components/Layout/MainLayout.razor"));
         var placeholder = File.ReadAllText(Path.Combine(root,
-            "src/HostingPanel.Web/Components/Pages/NavigationPage.razor"));
-        var pages = Path.Combine(root, "src/HostingPanel.Web/Components/Pages");
+            "src/HostingPanel.Web/Components/Navigation/NavigationPage.razor"));
+        var pages = Path.Combine(root, "src/HostingPanel.Web/Components");
 
         var translations = XDocument.Load(Path.Combine(root, "src/HostingPanel.Web/Resources/Localization.SharedResource.nl-NL.resx"))
             .Root!.Elements("data").ToDictionary(e => (string)e.Attribute("name")!, e => (string?)e.Element("value") ?? "");
@@ -66,14 +66,14 @@ public static class NavigationParityContractTests
         Require(sectionStart >= 0 && sectionEnd > sectionStart,
             "Reference index.html has no recognizable section definition");
         var referenceSectionText = reference[sectionStart..sectionEnd];
-        var paths = Directory.GetFiles(pages, "*.razor")
+        var paths = Directory.GetFiles(pages, "*.razor", SearchOption.AllDirectories)
             .SelectMany(path => Regex.Matches(File.ReadAllText(path),
                 @"@page ""(?<route>/[^""]+)""").Select(x => x.Groups["route"].Value))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // Parameter names are irrelevant for Blazor route matching:
         // /navigation/{Key} and /navigation/{Feature} would be ambiguous.
-        var routeOwners = Directory.GetFiles(pages, "*.razor")
+        var routeOwners = Directory.GetFiles(pages, "*.razor", SearchOption.AllDirectories)
             .SelectMany(file => Regex.Matches(File.ReadAllText(file),
                 @"@page ""(?<route>/[^""]+)""")
                 .Select(match => (File: Path.GetFileName(file),
