@@ -18,16 +18,16 @@ else
 {
     <MudPaper Class="pa-4 my-3" Elevation="1">
         <MudForm @ref="form">
-        <div class="form-grid">
-            <div><label for="ticketRecipient">@L["Recipient"]</label>
+        <MudGrid Spacing="3">
+            <MudItem xs="12" sm="6"><label for="ticketRecipient">@L["Recipient"]</label>
                 <MudTextField T="string" @bind-Value="recipient" Required="true" RequiredError="@L["Recipient"].Value" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketRecipient" Placeholder="creator" />
                 <p>Gebruik <code>creator</code> of een gebruikersnaam die DirectAdmin accepteert.</p>
-            </div>
-            <div><label for="ticketPriority">@L["Priority"]</label>
+            </MudItem>
+            <MudItem xs="12" sm="6"><label for="ticketPriority">@L["Priority"]</label>
                 <MudSelect T="string" @bind-Value="priority" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="ticketPriority">
                     <MudSelectItem T="string" Value='@("10")'>@L["Low"]</MudSelectItem><MudSelectItem T="string" Value='@("20")'>@L["Normal"]</MudSelectItem><MudSelectItem T="string" Value='@("30")'>@L["High"]</MudSelectItem>
-                </MudSelect></div>
-        </div>
+                </MudSelect></MudItem>
+        </MudGrid>
         <label for="ticketSubject">@L["Subject"]</label>
         <MudTextField T="string" @bind-Value="subject" Required="true" RequiredError="@L["Subject"].Value" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketSubject" Placeholder="@L["Briefly describe the request"].Value" MaxLength="200" />
         <label for="ticketBody">@L["Message"]</label>

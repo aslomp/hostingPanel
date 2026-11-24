@@ -86,11 +86,11 @@ else
             }
             else if (VisibleFields.Any())
             {
-                <div class="form-grid">
+                <MudGrid Spacing="3">
                     @foreach (var field in VisibleFields)
                     {
                         var id = "setting-" + field.Name;
-                        <div @key="field.Name">
+                        <MudItem xs="12" sm="6" @key="field.Name">
                             <label for="@id">@field.Label</label>
                             @if (field.Description is not null) { <p>@field.Description</p> }
                             @if (field.Type == "enum")
@@ -129,9 +129,9 @@ else
                             {
                                 @foreach (var error in fieldErrors) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
                             }
-                        </div>
+                        </MudItem>
                     }
-                </div>
+                </MudGrid>
                 <div class="form-actions"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@busy" OnClick="Save">@L["Save settings"]</MudButton></div>
             }
         </MudPaper>

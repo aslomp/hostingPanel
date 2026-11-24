@@ -25,16 +25,16 @@ else
         <div class="dashboard-section-heading"><h2>@L["Ticket overview"]</h2>
             @if (tickets is not null) { <MudChip T="string" Size="Size.Small" Color="Color.Default">@tickets.Count tickets</MudChip> }
         </div>
-        <div class="form-grid">
-            <div><label for="ticketSearch">@L["Search"]</label>
-                <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketSearch" Placeholder="@L["Subject, sender…"].Value" /></div>
-            <div><label for="ticketFilter">@L["View"]</label>
+        <MudGrid Spacing="3">
+            <MudItem xs="12" sm="6"><label for="ticketSearch">@L["Search"]</label>
+                <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketSearch" Placeholder="@L["Subject, sender…"].Value" /></MudItem>
+            <MudItem xs="12" sm="6"><label for="ticketFilter">@L["View"]</label>
                 <MudSelect T="string" @bind-Value="filter" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="ticketFilter">
                     <MudSelectItem T="string" Value='@("all")'>@L["All tickets"]</MudSelectItem><MudSelectItem T="string" Value='@("received")'>@L["Received"]</MudSelectItem>
                     <MudSelectItem T="string" Value='@("request")'>@L["My requests"]</MudSelectItem><MudSelectItem T="string" Value='@("unread")'>@L["Unread"]</MudSelectItem>
                     <MudSelectItem T="string" Value='@("open")'>Open</MudSelectItem><MudSelectItem T="string" Value='@("closed")'>@L["Closed"]</MudSelectItem>
-                </MudSelect></div>
-        </div>
+                </MudSelect></MudItem>
+        </MudGrid>
         @if (loading) { <PanelLoading>@L["Retrieving tickets…"]</PanelLoading> }
         @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
         @if (warning is not null) { <p class="error" role="status">Het overzicht kan onvolledig zijn: @warning</p> }

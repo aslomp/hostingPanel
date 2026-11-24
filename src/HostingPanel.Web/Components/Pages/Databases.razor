@@ -75,14 +75,14 @@ else
     <MudForm @ref="createForm">
     <h2>@L["Create database with user"]</h2>
     <p>@L["DirectAdmin adds the account prefix where necessary. The exact name is retrieved from the backend after creation."]</p>
-    <div class="form-grid">
-      <div><label for="databaseName">@L["Database name"]</label>
-        <MudTextField T="string" @bind-Value="newDatabase" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="databaseName" autocomplete="off" Placeholder="app" /></div>
-      <div><label for="dbUsername">@L["Database user"]</label>
-        <MudTextField T="string" @bind-Value="newUser" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbUsername" autocomplete="off" Placeholder="app" /></div>
-      <div><label for="dbPassword">@L["Password"]</label>
-        <MudTextField T="string" @bind-Value="newPassword" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbPassword" autocomplete="new-password" InputType="InputType.Password" /></div>
-    </div>
+    <MudGrid Spacing="3">
+      <MudItem xs="12" sm="6"><label for="databaseName">@L["Database name"]</label>
+        <MudTextField T="string" @bind-Value="newDatabase" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="databaseName" autocomplete="off" Placeholder="app" /></MudItem>
+      <MudItem xs="12" sm="6"><label for="dbUsername">@L["Database user"]</label>
+        <MudTextField T="string" @bind-Value="newUser" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbUsername" autocomplete="off" Placeholder="app" /></MudItem>
+      <MudItem xs="12" sm="6"><label for="dbPassword">@L["Password"]</label>
+        <MudTextField T="string" @bind-Value="newPassword" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbPassword" autocomplete="new-password" InputType="InputType.Password" /></MudItem>
+    </MudGrid>
     <div class="form-actions"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@creating" OnClick="Create">
       @(creating ? "Aanmaken…" : L["Create database"].Value)
     </MudButton>

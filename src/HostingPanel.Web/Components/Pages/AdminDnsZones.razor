@@ -69,12 +69,12 @@ else
     <MudPaper Class="pa-4 my-3" Elevation="1" id="dns-create">
         <h2>@L["Create standalone DNS zone"]</h2>
         <p>@L["Use the documented DirectAdmin DNS admin API. The backend checks permissions."]</p>
-        <div class="form-grid">
-          <div><label>@L["Domain"]</label><MudTextField T="string" @bind-Value="zoneDomain" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="example.com" /></div>
-          <div><label>@L["IPv4 address"]</label><MudTextField T="string" @bind-Value="zoneIp" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="192.0.2.1" /></div>
-          <div><label>Nameserver 1</label><MudTextField T="string" @bind-Value="zoneNs1" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="ns1.example.com" /></div>
-          <div><label>Nameserver 2</label><MudTextField T="string" @bind-Value="zoneNs2" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="ns2.example.com" /></div>
-        </div>
+        <MudGrid Spacing="3">
+          <MudItem xs="12" sm="6"><label>@L["Domain"]</label><MudTextField T="string" @bind-Value="zoneDomain" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="example.com" /></MudItem>
+          <MudItem xs="12" sm="6"><label>@L["IPv4 address"]</label><MudTextField T="string" @bind-Value="zoneIp" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="192.0.2.1" /></MudItem>
+          <MudItem xs="12" sm="6"><label>Nameserver 1</label><MudTextField T="string" @bind-Value="zoneNs1" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="ns1.example.com" /></MudItem>
+          <MudItem xs="12" sm="6"><label>Nameserver 2</label><MudTextField T="string" @bind-Value="zoneNs2" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="ns2.example.com" /></MudItem>
+        </MudGrid>
         <div class="form-actions"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(changing || string.IsNullOrWhiteSpace(zoneDomain))" OnClick="CreateZone">@L["Create DNS zone"]</MudButton></div>
     </MudPaper>
     <MudPaper Class="pa-4 my-3" Elevation="1">

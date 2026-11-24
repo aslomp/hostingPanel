@@ -39,8 +39,8 @@ else if (error is not null)
 }
 else if (settings is not null)
 {
-    <div class="tiles">
-        <MudPaper Class="pa-4 my-3" Elevation="1">
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="6"><MudPaper Class="pa-4 my-3" Elevation="1">
             <h2>Account</h2>
             <p>@L["Live account information from the legacy DirectAdmin server."]</p>
             <MudSimpleTable Dense="true" Hover="true" Striped="true"><tbody>
@@ -57,8 +57,8 @@ else if (settings is not null)
                 }
             </tbody></MudSimpleTable>
             <p><a href="@($"/domains?user={Uri.EscapeDataString(Username)}")">@L["View this user's domains"]</a></p>
-        </MudPaper>
-        <MudPaper Class="pa-4 my-3" Elevation="1">
+        </MudPaper></MudItem>
+        <MudItem xs="12" md="6"><MudPaper Class="pa-4 my-3" Elevation="1">
             <h2>@L["Hosting package"]</h2>
             @if (package is not null)
             {
@@ -85,8 +85,8 @@ else if (settings is not null)
             {
                 <p>@L["The package returned no additional configuration fields."]</p>
             }
-        </MudPaper>
-    </div>
+        </MudPaper></MudItem>
+    </MudGrid>
     <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["All available user settings"]</h2>
         <p>@L["Original DirectAdmin field names, with confidential values filtered."]</p>
