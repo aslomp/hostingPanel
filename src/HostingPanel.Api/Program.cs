@@ -5,10 +5,23 @@ using Microsoft.AspNetCore.Mvc;
 using HostingPanel.Api;
 using HostingPanel.Api.Adapters;
 using HostingPanel.Api.Services;
+using HostingPanel.Api.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
-builder.Services.AddScoped<IHostingBackend, DirectAdminBackend>();
+var provider = builder.Configuration["HostingPanel:Backend"] ?? "DirectAdmin";
+if (provider.Equals("Kubernetes", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddDbContext<HostingPanelDbContext>(options =>
+        options.UseSqlite(builder.Configuration.GetConnectionString("HostingPanel")
+            ?? "Data Source=hostingpanel.db"));
+    builder.Services.AddScoped<IHostingBackend, KubernetesBackend>();
+}
+else if (provider.Equals("DirectAdmin", StringComparison.OrdinalIgnoreCase))
+    builder.Services.AddScoped<IHostingBackend, DirectAdminBackend>();
+else
+    throw new InvalidOperationException($"Unknown HostingPanel backend '{provider}'.");
 builder.Services.AddScoped<LegacyUserDetailsService>();
 builder.Services.AddScoped<LegacyAccountOverviewService>();
 builder.Services.AddScoped<DomainManagementService>();
@@ -38,6 +51,20 @@ builder.Services.AddHttpClient("legacy-directadmin", client =>
 });
 
 var app = builder.Build();
+if (provider.Equals("Kubernetes", StringComparison.OrdinalIgnoreCase))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
+    var path = db.Database.GetDbConnection().DataSource;
+    if (!string.IsNullOrWhiteSpace(path) && path != ":memory:")
+    {
+        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
+        if (directory is not null) Directory.CreateDirectory(directory);
+    }
+    await db.Database.EnsureCreatedAsync();
+    await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;");
+    await db.Database.ExecuteSqlRawAsync("PRAGMA busy_timeout=5000;");
+}
 
 app.UseSwaggerUI(options =>
 {
