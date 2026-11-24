@@ -21,8 +21,13 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
                     join owner in db.Accounts.AsNoTracking() on domain.OwnerId equals owner.Id
                     where ids.Contains(owner.Id)
                     orderby domain.Name
-                    select new VisibleDomain(domain.Name, owner.Username, owner.Kind);
-        return new(200, await query.ToListAsync(ct), null);
+                    select new { domain.Id, domain.Name, owner.Username, owner.Kind };
+        var rows = await query.ToListAsync(ct);
+        var status = await ReadProvisioningAsync(rows.Select(x => x.Id).ToArray(), ct);
+        return new VisibleDomainsResult(200, rows.Select(x => new VisibleDomain(x.Name, x.Username, x.Kind)).ToArray(), null)
+        {
+            Provisioning = rows.ToDictionary(x => x.Name, x => status[x.Id], StringComparer.OrdinalIgnoreCase)
+        };
     }
     async Task<VisibleDomainsResult> IAccessibleDomains.ListAsync(AuthenticationHeaderValue auth, CancellationToken ct)
         => await ListAccessibleDomains(auth, ct);
@@ -35,8 +40,13 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
         var query = from domain in db.Domains.AsNoTracking()
                     join account in db.Accounts.AsNoTracking() on domain.OwnerId equals account.Id
                     where ids.Contains(account.Id) && (owner == null ? account.Id == principal.Id : account.Username == owner)
-                    select domain.Name;
-        return new(200, await query.OrderBy(x => x).ToListAsync(ct), null);
+                    select new { domain.Id, domain.Name };
+        var rows = await query.OrderBy(x => x.Name).ToListAsync(ct);
+        var status = await ReadProvisioningAsync(rows.Select(x => x.Id).ToArray(), ct);
+        return new DomainListResult(200, rows.Select(x => x.Name).ToArray(), null)
+        {
+            Provisioning = rows.ToDictionary(x => x.Name, x => status[x.Id], StringComparer.OrdinalIgnoreCase)
+        };
     }
     public async Task<DomainMutationResult> MutateAsync(DomainMutationRequest input, AuthenticationHeaderValue auth, CancellationToken ct)
     {
@@ -110,16 +120,36 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
         var settings = properties.ToDictionary(x => x.Key, x => x.Value.ToString());
         settings["domain"] = row.Name;
         settings["username"] = await db.Accounts.Where(x => x.Id == row.OwnerId).Select(x => x.Username).SingleAsync(ct);
-        var operations = await db.ReconciliationOperations.AsNoTracking().Where(x => x.ResourceType == "website" && x.ResourceId == row.Id).ToListAsync(ct);
-        var dnsStage = await db.ReconciliationOperations.AsNoTracking().Where(x => x.ResourceType == "domain-dns" && x.ResourceId == row.Id && x.Status == "pending").ToListAsync(ct);
-        var zoneIds = await db.DnsZones.Where(x => x.DomainId == row.Id).Select(x => x.Id).ToListAsync(ct);
-        var dnsOps = await db.ReconciliationOperations.AsNoTracking().Where(x => x.ResourceType == "dns-zone" && zoneIds.Contains(x.ResourceId)).ToListAsync(ct);
-        var pending = operations.Concat(dnsOps).Where(x => x.Status == "pending").ToArray();
-        var blocked = dnsStage.FirstOrDefault();
-        settings["provisioning"] = blocked is not null ? "DNS provisioning blocked: " + blocked.LastError :
-            pending.Any(x => x.Attempts > 0) ? "Retrying" : pending.Length > 0 ? "Pending" :
-            operations.Any(x => x.Status == "completed") ? "Configuration applied" : "Unknown";
+        settings["provisioning"] = (await ReadProvisioningAsync([row.Id], ct))[row.Id];
         return new(200, settings, null);
+    }
+
+    // All domain IDs originate from an authorized query. Fetch only related operations.
+    private async Task<Dictionary<Guid, string>> ReadProvisioningAsync(Guid[] domainIds, CancellationToken ct)
+    {
+        if (domainIds.Length == 0) return new();
+        var domainOps = await db.ReconciliationOperations.AsNoTracking()
+            .Where(x => domainIds.Contains(x.ResourceId) &&
+                (x.ResourceType == "website" || (x.ResourceType == "domain-dns" && x.Status == "pending")))
+            .OrderBy(x => x.Id).ToListAsync(ct);
+        var dnsOps = await (from zone in db.DnsZones.AsNoTracking()
+                            join op in db.ReconciliationOperations.AsNoTracking() on zone.Id equals op.ResourceId
+                            where zone.DomainId.HasValue && domainIds.Contains(zone.DomainId.Value) && op.ResourceType == "dns-zone"
+                            select new { DomainId = zone.DomainId.Value, Operation = op }).ToListAsync(ct);
+        var byDomain = domainOps.ToLookup(x => x.ResourceId);
+        var byZone = dnsOps.ToLookup(x => x.DomainId, x => x.Operation);
+        var result = new Dictionary<Guid, string>(domainIds.Length);
+        foreach (var id in domainIds)
+        {
+            var ops = byDomain[id];
+            var website = ops.Where(x => x.ResourceType == "website");
+            var blocked = ops.FirstOrDefault(x => x.ResourceType == "domain-dns");
+            var pending = website.Concat(byZone[id]).Where(x => x.Status == "pending").ToArray();
+            result[id] = blocked is not null ? "DNS provisioning blocked: " + blocked.LastError :
+                pending.Any(x => x.Attempts > 0) ? "Retrying" : pending.Length > 0 ? "Pending" :
+                website.Any(x => x.Status == "completed") ? "Configuration applied" : "Unknown";
+        }
+        return result;
     }
 
     public async Task<DomainMutationResult> UpdateSettingAsync(string domain, string setting, string value,

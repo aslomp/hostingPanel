@@ -5,7 +5,10 @@ using HostingPanel.Api.Adapters;
 
 namespace HostingPanel.Api.Services;
 
-public sealed record DomainListResult(int Status, IReadOnlyList<string>? Domains, string? Error);
+public sealed record DomainListResult(int Status, IReadOnlyList<string>? Domains, string? Error)
+{
+    public IReadOnlyDictionary<string, string>? Provisioning { get; init; }
+}
 
 public sealed record DomainCreatePreview(string Domain, bool Php = true, bool Ssl = true, bool Cgi = false);
 
