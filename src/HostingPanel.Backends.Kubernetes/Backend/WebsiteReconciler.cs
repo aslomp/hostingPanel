@@ -120,7 +120,12 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             throw new InvalidOperationException("Invalid hostname");
         using var doc = JsonDocument.Parse(domain.SettingsJson);
         bool Flag(string key, bool fallback) => doc.RootElement.TryGetProperty(key, out var value)
-            && value.ValueKind is JsonValueKind.True or JsonValueKind.False ? value.GetBoolean() : fallback;
+            ? value.ValueKind switch {
+                JsonValueKind.True => true, JsonValueKind.False => false,
+                JsonValueKind.String when value.GetString() is "ON" or "True" or "true" => true,
+                JsonValueKind.String when value.GetString() is "OFF" or "False" or "false" => false,
+                _ => fallback
+            } : fallback;
         var php = Flag("php", true);
         var tls = Flag("ssl", true);
         if (Flag("cgi", false)) throw new InvalidOperationException("CGI is not supported");
@@ -197,7 +202,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
     private static bool HasPhp(HostedDomain domain)
     {
         using var doc = JsonDocument.Parse(domain.SettingsJson);
-        return !doc.RootElement.TryGetProperty("php", out var flag) || flag.ValueKind != JsonValueKind.False;
+        return !doc.RootElement.TryGetProperty("php", out var flag) || (flag.ValueKind != JsonValueKind.False && !(flag.ValueKind == JsonValueKind.String && flag.GetString() is "OFF" or "False" or "false"));
     }
 
     private string BuildRuntimeManifest(IReadOnlyList<HostedDomain> domains,
