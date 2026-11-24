@@ -18,6 +18,7 @@ kubernetesHosting:
   enabled: true
   kubectlVersion: v1.35.5
   nfsServer: ""
+  # Example: /home (if the export root directly contains DirectAdmin usernames)
   nfsPath: ""
   provisioningClaim: ""
   gatewayName: ""
