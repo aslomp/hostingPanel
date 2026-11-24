@@ -6,6 +6,7 @@
 @inject PanelSession Session
 @inject DnsOperations Dns
 @inject IDialogService Dialogs
+@implements IDisposable
 
 <PageTitle>@L["DNS management — HostingPanel"]</PageTitle>
 <PanelPageHeader>
@@ -78,7 +79,9 @@ else
     private string search = "", localDataFilter = "all", localMailFilter = "all";
     private string? error, warning;
     private int currentPage = 1;
-    private bool loading, changing;
+    private readonly LatestRead read = new();
+    private bool loading => read.Loading;
+    private bool changing, disposed;
     private bool failed;
     private string? zoneMessage;
 
@@ -95,45 +98,65 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        if (Session.Connected) await Reload();
+        Session.Changed += SessionChanged;
+        await Reload();
+    }
+    private void SessionChanged() => _ = InvokeAsync(async () =>
+    {
+        if (disposed) return;
+        zoneMessage = null;
+        var task = Reload();
+        StateHasChanged();
+        await task;
+        if (!disposed) StateHasChanged();
+    });
+    public void Dispose()
+    {
+        disposed = true;
+        Session.Changed -= SessionChanged;
+        read.Dispose();
     }
     private int EffectivePage => Math.Clamp(currentPage, 1, Math.Max(1, (Visible.Count + PageSize - 1) / PageSize));
     private void Previous() => currentPage = Math.Max(1, EffectivePage - 1);
     private void Next() => currentPage = EffectivePage + 1;
 
-    private async Task Reload()
+    private Task Reload()
     {
-        if (loading || !Session.Connected) return;
-        loading = true;
-        error = null;
-        try
+        if (disposed) return Task.CompletedTask;
+        zones = null;
+        warning = error = null;
+        if (!Session.Connected)
         {
-            var result = await Dns.ListAsync();
-            if (result.Status != 200 || result.Zones is null)
-            {
-                error = result.Status == 403 ? L["The backend denied the server-wide DNS zone overview."].Value
-                    : L["DNS zones unavailable (HTTP {0}).", result.Status].Value;
-                zones = null;
-                return;
-            }
-            zones = result.Zones.ToList();
-            warning = result.Warning;
-            currentPage = 1;
+            read.Cancel();
+            return Task.CompletedTask;
         }
-        catch (Exception e) when (e is HttpRequestException or InvalidOperationException)
-        { error = e.Message; zones = null; }
-        finally { loading = false; }
+        var channel = Session.TicketChannel;
+        return read.RunAsync(ct => Dns.ListAsync(ct),
+            () => Session.Connected && Session.TicketChannel == channel,
+            result =>
+            {
+                if (result.Status != 200 || result.Zones is null)
+                {
+                    error = result.Status == 403 ? L["The backend denied the server-wide DNS zone overview."].Value
+                        : L["DNS zones unavailable (HTTP {0}).", result.Status].Value;
+                    return;
+                }
+                zones = result.Zones.ToList();
+                warning = result.Warning;
+                currentPage = 1;
+            }, ex => error = ex.Message);
     }
     private async Task CreateZone()
     {
-        if (changing || loading || !Session.Connected) return;
+        if (disposed || changing || loading || !Session.Connected) return;
+        var channel = Session.TicketChannel;
         changing = true; zoneMessage = null;
         try
         {
             var dialog = await Dialogs.ShowAsync<DnsZoneCreateDialog>(L["Create standalone DNS zone"].Value,
                 new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = false, BackdropClick = false, CloseOnEscapeKey = false });
             var result = await dialog.Result;
-            if (result is { Canceled: false })
+            if (result is { Canceled: false } && !disposed && Session.Connected && Session.TicketChannel == channel)
             {
                 failed = false; zoneMessage = L["DNS zone creation request accepted."].Value;
                 await Reload();
@@ -144,7 +167,8 @@ else
 
     private async Task ConfirmDeletion(AccessibleDnsZone zone)
     {
-        if (changing || loading || !Session.Connected || zones?.Contains(zone) != true) return;
+        if (disposed || changing || loading || !Session.Connected || zones?.Contains(zone) != true) return;
+        var channel = Session.TicketChannel;
         var identity = Session.Username;
         changing = true; zoneMessage = null;
         try
@@ -153,8 +177,9 @@ else
                 $"{L["Delete standalone DNS zone"]}: {zone.Domain}", zone.Domain,
                 L["Delete only the specified DNS zone; this is not the same as deleting a hosting domain."].Value,
                 L["Enter the exact domain name to confirm"].Value);
-            if (!confirmed || !Session.Connected || identity != Session.Username || zones?.Contains(zone) != true) return;
+            if (!confirmed || disposed || !Session.Connected || Session.TicketChannel != channel || identity != Session.Username || zones?.Contains(zone) != true) return;
             var result = await Dns.DeleteAsync(zone.Domain, zone.Domain);
+            if (disposed || !Session.Connected || Session.TicketChannel != channel) return;
             var status = result.Status;
             failed = !result.Executed && !result.ProvisioningPending;
             zoneMessage = failed ? L["Deletion not confirmed: backend HTTP {0}.", status].Value
@@ -162,7 +187,7 @@ else
             if (!failed) await Reload();
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
-        { failed = true; zoneMessage = ex.Message; }
+        { if (!disposed && Session.Connected && Session.TicketChannel == channel) { failed = true; zoneMessage = ex.Message; } }
         finally { changing = false; }
     }
 

@@ -41,3 +41,5 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 - Account creation uses only backend-authoritative package choices; Kubernetes matches package names, not numeric IDs. An unavailable package results in a descriptive error rather than accepting arbitrary free-text input.
 
 - Dedicated user and reseller package management uses DirectAdmin legacy package endpoints and Kubernetes SQLite package settings. Kubernetes stores limits but does not yet enforce all of them. Existing untyped packages are user packages; reseller packages must be created explicitly. Package names are unique per owner across kinds in the existing SQLite schema.
+
+- DNS zone inventory reads use component-owned cancellation and session guards, without changing provider authorization or DNS provisioning capabilities.
