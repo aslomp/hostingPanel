@@ -1,0 +1,166 @@
+@page "/backend-settings"
+@using System.Text.Json
+@using System.Text.Json.Nodes
+@inject DirectAdminSession Session
+
+<PageTitle>Backend instellingen — HostingPanel</PageTitle>
+<div class="page-header">
+    <div><div class="eyebrow">Serverbeheer</div><h1>Backend instellingen</h1>
+        <p>Configuratiecontract van de actieve backend.</p></div>
+    <button disabled="@(busy || !Session.Connected)" @onclick="Load">Vernieuwen</button>
+</div>
+@if (!Session.Connected)
+{
+    <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section>
+}
+else
+{
+    @if (message is not null) { <p role="status">@message</p> }
+    @if (view is not null)
+    {
+        <section class="card">
+            <h2>@view.Backend</h2>
+            @if (view.Fields.Length == 0)
+            {
+                <p>Deze backend heeft geen publieke instellingen.</p>
+            }
+            else
+            {
+                <div class="form-grid">
+                    @foreach (var field in view.Fields)
+                    {
+                        var id = "setting-" + field.Name;
+                        <div @key="field.Name">
+                            <label for="@id">@field.Label</label>
+                            @if (field.Description is not null) { <p>@field.Description</p> }
+                            @if (field.Type == "enum")
+                            {
+                                <select id="@id" value="@draft[field.Name]" @onchange="e => Set(field.Name, e.Value?.ToString())" disabled="@busy">
+                                    @if (field.Nullable) { <option value="">Niet ingesteld</option> }
+                                    @foreach (var option in field.Options)
+                                    {
+                                        <option value="@option.Value">@option.Label</option>
+                                    }
+                                </select>
+                            }
+                            else if (field.Type == "boolean" && !field.Nullable)
+                            {
+                                <input id="@id" type="checkbox" checked="@(draft[field.Name] == "true")"
+                                    @onchange='e => Set(field.Name, e.Value is true ? "true" : "false")' disabled="@busy" />
+                            }
+                            else if (field.Type == "boolean")
+                            {
+                                <select id="@id" value="@draft[field.Name]" @onchange="e => Set(field.Name, e.Value?.ToString())" disabled="@busy">
+                                    <option value="">Niet ingesteld</option><option value="true">Ja</option><option value="false">Nee</option>
+                                </select>
+                            }
+                            else if (field.Type == "json")
+                            {
+                                <textarea id="@id" rows="4" value="@draft[field.Name]" @onchange="e => Set(field.Name, e.Value?.ToString())" disabled="@busy"></textarea>
+                            }
+                            else
+                            {
+                                <input id="@id" type="text" inputmode="@(field.Type == "number" ? "decimal" : "text")"
+                                    value="@draft[field.Name]" @onchange="e => Set(field.Name, e.Value?.ToString())" disabled="@busy" />
+                            }
+                            @if (field.Nullable && field.Type == "string")
+                            {
+                                <button type="button" disabled="@busy" @onclick="() => Set(field.Name, null)">Niet ingesteld</button>
+                            }
+                            @if (errors.TryGetValue(field.Name, out var fieldErrors))
+                            {
+                                @foreach (var error in fieldErrors) { <p class="error" role="alert">@error</p> }
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="form-actions"><button class="primary" disabled="@busy" @onclick="Save">Instellingen opslaan</button></div>
+            }
+        </section>
+    }
+}
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private SettingsView? view;
+    private readonly Dictionary<string, string?> draft = new(StringComparer.Ordinal);
+    private Dictionary<string, string[]> errors = new();
+    private string? message;
+    private bool busy;
+
+    protected override Task OnInitializedAsync() => Load();
+    private void Set(string key, string? value) { draft[key] = value; errors.Remove(key); }
+
+    private void Accept(string body)
+    {
+        var next = JsonSerializer.Deserialize<SettingsView>(body, JsonOptions)
+            ?? throw new JsonException("Settings response is empty.");
+        draft.Clear();
+        foreach (var field in next.Fields)
+        {
+            var value = next.Values.GetProperty(field.Name);
+            draft[field.Name] = value.ValueKind == JsonValueKind.Null ? null :
+                value.ValueKind == JsonValueKind.String ? value.GetString() : value.GetRawText();
+        }
+        view = next;
+    }
+
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; view = null; message = null; errors.Clear();
+        try
+        {
+            var (status, body) = await Session.GetBackendSettingsAsync();
+            if (status == 200) Accept(body);
+            else message = status switch {
+                501 => "Deze backend biedt geen instellingencontract aan.",
+                401 or 403 => "De backend weigert toegang tot deze instellingen.",
+                _ => $"Backend HTTP {status}."
+            };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        { message = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task Save()
+    {
+        if (busy || view is null || !Session.Connected) return;
+        busy = true; message = null; errors.Clear();
+        try
+        {
+            var values = new JsonObject();
+            foreach (var field in view.Fields)
+            {
+                var raw = draft[field.Name];
+                try
+                {
+                    values[field.Name] = raw is null || (field.Nullable && raw == "" && field.Type != "string") ? null :
+                        field.Type is "enum" or "string" ? JsonValue.Create(raw) : JsonNode.Parse(raw);
+                }
+                catch (JsonException) { errors[field.Name] = ["Ongeldige waarde."]; }
+            }
+            if (errors.Count > 0) return;
+            var (status, body) = await Session.SaveBackendSettingsAsync(
+                JsonSerializer.Serialize(new { revision = view.Revision, values }, JsonOptions));
+            if (status == 200) { Accept(body); message = "Instellingen opgeslagen."; }
+            else if (status == 409) message = "Instellingen zijn intussen gewijzigd. Vernieuw eerst.";
+            else if (status == 400)
+            {
+                using var problem = JsonDocument.Parse(body);
+                if (problem.RootElement.TryGetProperty("errors", out var validation))
+                    errors = validation.Deserialize<Dictionary<string, string[]>>(JsonOptions) ?? new();
+                message = "De backend heeft de instellingen afgekeurd.";
+            }
+            else message = $"Backend HTTP {status}. Instellingen niet opgeslagen.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        { message = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private sealed record SettingsView(string Backend, string Revision, SettingField[] Fields, JsonElement Values);
+    private sealed record SettingField(string Name, string Label, string? Description, string Type, bool Nullable, SettingOption[] Options);
+    private sealed record SettingOption(string Value, string Label);
+}

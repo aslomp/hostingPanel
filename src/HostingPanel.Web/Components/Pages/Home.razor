@@ -24,8 +24,8 @@
 {
   <div class="dashboard-layout">
     <section class="card">
-      <h2>DirectAdmin-verbinding</h2>
-      <p>Maak verbinding met jouw DirectAdmin-server. De opgegeven gegevens blijven binnen de interactieve Blazor-sessie.</p>
+      <h2>Backendverbinding</h2>
+      <p>Maak verbinding met de ingestelde hostingbackend. De opgegeven gegevens blijven binnen de interactieve Blazor-sessie.</p>
       <form @onsubmit="Connect" @onsubmit:preventDefault>
         <div class="form-grid">
           <div><label for="daUser">Gebruikersnaam</label>
@@ -45,7 +45,7 @@
       <section class="card">
         <h2>Over het controlepaneel</h2>
         <p>HostingPanel gebruikt dezelfde beheergroepen als de DirectAdmin Evolution-interface. De rechten en beschikbare resources komen volledig van de backend.</p>
-        <p>Je kiest zelf de beheerders- of gebruikersweergave. DirectAdmin blijft verantwoordelijk voor toegangsrechten.</p>
+        <p>Je kiest zelf de beheerders- of gebruikersweergave. De backend blijft verantwoordelijk voor toegangsrechten.</p>
       </section>
     </aside>
   </div>
@@ -75,7 +75,7 @@ else if (NavContext.Mode == "user")
     <aside class="dashboard-aside">
       <section class="card">
         <h2>Account</h2>
-        <div class="state-row"><span class="state-dot connected"></span>Verbonden met DirectAdmin</div>
+        <div class="state-row"><span class="state-dot connected"></span>Verbonden met backend</div>
         <h3>@Session.Username</h3>
         <p>De gebruikersnavigatie is een weergavemodus. De backend bepaalt de toegang.</p>
         <button @onclick="Disconnect">Verbinding verbreken</button>
@@ -163,11 +163,11 @@ else
         {
             Session.SetCredentials(username, key);
             // Authenticate using the session endpoint, not permission to list users.
-            var (status, _) = await Session.GetRawAsync("api/session");
+            var (status, _) = await Session.AuthenticateBackendAsync();
             if (status is 401 or 403)
-                throw new UnauthorizedAccessException("DirectAdmin heeft de aanmelding geweigerd.");
+                throw new UnauthorizedAccessException("De backend heeft de aanmelding geweigerd.");
             if (status is < 200 or >= 300)
-                throw new HttpRequestException($"DirectAdmin sessiecontrole: HTTP {status}.");
+                throw new HttpRequestException($"Backend sessiecontrole: HTTP {status}.");
             key = "";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
