@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 
 public static class NavigationParityContractTests
 {
@@ -12,6 +13,10 @@ public static class NavigationParityContractTests
             "src/HostingPanel.Web/Components/Pages/NavigationPage.razor"));
         var pages = Path.Combine(root, "src/HostingPanel.Web/Components/Pages");
 
+        var translations = XDocument.Load(Path.Combine(root, "src/HostingPanel.Web/Resources/Localization.SharedResource.nl-NL.resx"))
+            .Root!.Elements("data").ToDictionary(e => (string)e.Attribute("name")!, e => (string?)e.Element("value") ?? "");
+        string Dutch(string key) => translations.TryGetValue(key, out var value) ? value : key;
+
         // Exact reference sections, in reference order; no user-role inference.
         string[] headings = [
             "Accountbeheer", "Server Beheer", "Admin Gereedschap",
@@ -20,7 +25,7 @@ public static class NavigationParityContractTests
         var last = -1;
         foreach (var title in headings)
         {
-            var token = "new(\"" + title + "\"";
+            var token = "new(\"" + (translations.FirstOrDefault(x => x.Value == title && navigation.Contains("new(\"" + x.Key + "\"", StringComparison.Ordinal)).Key ?? title) + "\"";
             var next = navigation.IndexOf(token, StringComparison.Ordinal);
             Require(next > last, "Missing or reordered reference group: " + title);
             last = next;
@@ -61,13 +66,13 @@ public static class NavigationParityContractTests
 
         var hostingPanelExtras = new HashSet<string>(StringComparer.Ordinal)
         {
-            "Sessies", "Resellerbeheer", "Databasebeheer", "Systeeminformatie",
+            "Backend instellingen", "Sessies", "Resellerbeheer", "Databasebeheer", "Systeeminformatie",
             "ModSecurity en ClamAV", "DirectAdmin API",
             "Tickets", "Nieuw ticket", "Berichten", "Wachtwoord wijzigen"
         };
         foreach (Match match in declared)
         {
-            var label = match.Groups["label"].Value;
+            var label = Dutch(match.Groups["label"].Value);
             var destination = match.Groups["path"].Value;
             Require(hostingPanelExtras.Contains(label) ||
                 referenceSectionText.Contains("\"" + label + "\"", StringComparison.Ordinal),

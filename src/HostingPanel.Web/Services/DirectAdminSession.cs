@@ -56,6 +56,18 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         _impersonatedUsername = null;
     }
 
+    public Task<(int Status, string Body)> AuthenticateBackendAsync(CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Get, "hosting/session", null, ct);
+
+    public Task<(int Status, string Body)> GetBackendSettingsAsync(CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Get, "hosting/backend-settings", null, ct);
+
+    public async Task<(int Status, string Body)> SaveBackendSettingsAsync(string json, CancellationToken ct = default)
+    {
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        return await SendAsync(HttpMethod.Put, "hosting/backend-settings", content, ct);
+    }
+
     public async Task<(int Status, string Body)> GetRawAsync(string endpoint, CancellationToken cancellationToken = default)
     {
         if (!Connected) throw new InvalidOperationException("Maak eerst verbinding met DirectAdmin.");

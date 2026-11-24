@@ -1,0 +1,168 @@
+@page "/backend-settings"
+@using System.Text.Json
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@using System.Text.Json.Nodes
+@inject DirectAdminSession Session
+
+<PageTitle>@L["Backend settings"] — HostingPanel</PageTitle>
+<div class="page-header">
+    <div><div class="eyebrow">@L["Server management"]</div><h1>@L["Backend settings"]</h1>
+        <p>@L["Configuration contract of the active backend."]</p></div>
+    <button disabled="@(busy || !Session.Connected)" @onclick="Load">@L["Refresh"]</button>
+</div>
+@if (!Session.Connected)
+{
+    <section class="card"><a href="/">@L["Connect first via the dashboard."]</a></section>
+}
+else
+{
+    @if (message is not null) { <p role="status">@message</p> }
+    @if (view is not null)
+    {
+        <section class="card">
+            <h2>@view.Backend</h2>
+            @if (view.Fields.Length == 0)
+            {
+                <p>@L["This backend has no public settings."]</p>
+            }
+            else
+            {
+                <div class="form-grid">
+                    @foreach (var field in view.Fields)
+                    {
+                        var id = "setting-" + field.Name;
+                        <div @key="field.Name">
+                            <label for="@id">@field.Label</label>
+                            @if (field.Description is not null) { <p>@field.Description</p> }
+                            @if (field.Type == "enum")
+                            {
+                                <select id="@id" value="@draft[field.Name]" @onchange="e => Set(field.Name, e.Value?.ToString())" disabled="@busy">
+                                    @if (field.Nullable) { <option value="">@L["Not set"]</option> }
+                                    @foreach (var option in field.Options)
+                                    {
+                                        <option value="@option.Value">@option.Label</option>
+                                    }
+                                </select>
+                            }
+                            else if (field.Type == "boolean" && !field.Nullable)
+                            {
+                                <input id="@id" type="checkbox" checked="@(draft[field.Name] == "true")"
+                                    @onchange='e => Set(field.Name, e.Value is true ? "true" : "false")' disabled="@busy" />
+                            }
+                            else if (field.Type == "boolean")
+                            {
+                                <select id="@id" value="@draft[field.Name]" @onchange="e => Set(field.Name, e.Value?.ToString())" disabled="@busy">
+                                    <option value="">@L["Not set"]</option><option value="true">@L["Yes"]</option><option value="false">@L["No"]</option>
+                                </select>
+                            }
+                            else if (field.Type == "json")
+                            {
+                                <textarea id="@id" rows="4" value="@draft[field.Name]" @onchange="e => Set(field.Name, e.Value?.ToString())" disabled="@busy"></textarea>
+                            }
+                            else
+                            {
+                                <input id="@id" type="text" inputmode="@(field.Type == "number" ? "decimal" : "text")"
+                                    value="@draft[field.Name]" @onchange="e => Set(field.Name, e.Value?.ToString())" disabled="@busy" />
+                            }
+                            @if (field.Nullable && field.Type == "string")
+                            {
+                                <button type="button" disabled="@busy" @onclick="() => Set(field.Name, null)">@L["Not set"]</button>
+                            }
+                            @if (errors.TryGetValue(field.Name, out var fieldErrors))
+                            {
+                                @foreach (var error in fieldErrors) { <p class="error" role="alert">@error</p> }
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="form-actions"><button class="primary" disabled="@busy" @onclick="Save">@L["Save settings"]</button></div>
+            }
+        </section>
+    }
+}
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private SettingsView? view;
+    private readonly Dictionary<string, string?> draft = new(StringComparer.Ordinal);
+    private Dictionary<string, string[]> errors = new();
+    private string? message;
+    private bool busy;
+
+    protected override Task OnInitializedAsync() => Load();
+    private void Set(string key, string? value) { draft[key] = value; errors.Remove(key); }
+
+    private void Accept(string body)
+    {
+        var next = JsonSerializer.Deserialize<SettingsView>(body, JsonOptions)
+            ?? throw new JsonException("Settings response is empty.");
+        draft.Clear();
+        foreach (var field in next.Fields)
+        {
+            var value = next.Values.GetProperty(field.Name);
+            draft[field.Name] = value.ValueKind == JsonValueKind.Null ? null :
+                value.ValueKind == JsonValueKind.String ? value.GetString() : value.GetRawText();
+        }
+        view = next;
+    }
+
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; view = null; message = null; errors.Clear();
+        try
+        {
+            var (status, body) = await Session.GetBackendSettingsAsync();
+            if (status == 200) Accept(body);
+            else message = status switch {
+                501 => L["This backend does not offer a settings contract."].Value,
+                401 or 403 => L["The backend denies access to these settings."].Value,
+                _ => L["Backend HTTP {0}.", status].Value
+            };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        { message = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task Save()
+    {
+        if (busy || view is null || !Session.Connected) return;
+        busy = true; message = null; errors.Clear();
+        try
+        {
+            var values = new JsonObject();
+            foreach (var field in view.Fields)
+            {
+                var raw = draft[field.Name];
+                try
+                {
+                    values[field.Name] = raw is null || (field.Nullable && raw == "" && field.Type != "string") ? null :
+                        field.Type is "enum" or "string" ? JsonValue.Create(raw) : JsonNode.Parse(raw);
+                }
+                catch (JsonException) { errors[field.Name] = [L["Invalid value."].Value]; }
+            }
+            if (errors.Count > 0) return;
+            var (status, body) = await Session.SaveBackendSettingsAsync(
+                JsonSerializer.Serialize(new { revision = view.Revision, values }, JsonOptions));
+            if (status == 200) { Accept(body); message = L["Settings saved."].Value; }
+            else if (status == 409) message = L["Settings have changed in the meantime. Refresh first."].Value;
+            else if (status == 400)
+            {
+                using var problem = JsonDocument.Parse(body);
+                if (problem.RootElement.TryGetProperty("errors", out var validation))
+                    errors = validation.Deserialize<Dictionary<string, string[]>>(JsonOptions) ?? new();
+                message = L["The backend rejected the settings."].Value;
+            }
+            else message = L["Backend HTTP {0}. Settings not saved.", status].Value;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        { message = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private sealed record SettingsView(string Backend, string Revision, SettingField[] Fields, JsonElement Values);
+    private sealed record SettingField(string Name, string Label, string? Description, string Type, bool Nullable, SettingOption[] Options);
+    private sealed record SettingOption(string Value, string Label);
+}

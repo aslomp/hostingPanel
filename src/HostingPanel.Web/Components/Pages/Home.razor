@@ -26,8 +26,8 @@
 {
   <div class="dashboard-layout">
     <section class="card">
-      <h2>@L["DirectAdmin connection"]</h2>
-      <p>@L["Connect to your DirectAdmin server. Credentials remain in the interactive Blazor session."]</p>
+      <h2>@L["Backend connection"]</h2>
+      <p>@L["Connect to the configured hosting backend. Credentials remain in the interactive Blazor session."]</p>
       <form @onsubmit="Connect" @onsubmit:preventDefault>
         <div class="form-grid">
           <div><label for="daUser">@L["Username"]</label>
@@ -47,7 +47,7 @@
       <section class="card">
         <h2>@L["About the control panel"]</h2>
         <p>@L["HostingPanel uses the same management groups as DirectAdmin Evolution. Permissions and available resources are provided by the backend."]</p>
-        <p>@L["You choose the administrator or user view. DirectAdmin remains responsible for access rights."]</p>
+        <p>@L["You choose the administrator or user view. The backend remains responsible for access rights."]</p>
       </section>
     </aside>
   </div>
@@ -77,7 +77,7 @@ else if (NavContext.Mode == "user")
     <aside class="dashboard-aside">
       <section class="card">
         <h2>@L["Account"]</h2>
-        <div class="state-row"><span class="state-dot connected"></span>@L["Connected to DirectAdmin"]</div>
+        <div class="state-row"><span class="state-dot connected"></span>@L["Connected to backend"]</div>
         <h3>@Session.Username</h3>
         <p>@L["The user navigation is a display mode. The backend determines access."]</p>
         <button @onclick="Disconnect">@L["Disconnect"]</button>
@@ -129,7 +129,7 @@ else
     <aside class="dashboard-aside">
       <section class="card">
         <div class="dashboard-section-heading"><h2>@L["Connected account"]</h2></div>
-        <div class="state-row"><span class="state-dot connected"></span><span>@L["DirectAdmin connection active"]</span></div>
+        <div class="state-row"><span class="state-dot connected"></span><span>@L["Backend connection active"]</span></div>
         <h3>@Session.Username</h3>
         <p>@L["The backend determines available data and actions. No account roles are assumed."]</p>
         <div class="form-actions"><button @onclick="Disconnect">@L["Disconnect"]</button></div>
@@ -165,11 +165,11 @@ else
         {
             Session.SetCredentials(username, key);
             // Authenticate using the session endpoint, not permission to list users.
-            var (status, _) = await Session.GetRawAsync("api/session");
+            var (status, _) = await Session.AuthenticateBackendAsync();
             if (status is 401 or 403)
-                throw new UnauthorizedAccessException(L["DirectAdmin rejected the sign-in."]);
+                throw new UnauthorizedAccessException(L["The backend rejected the sign-in."]);
             if (status is < 200 or >= 300)
-                throw new HttpRequestException(L["DirectAdmin session check: HTTP {0}.", status].Value);
+                throw new HttpRequestException(L["Backend session check: HTTP {0}.", status].Value);
             key = "";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
