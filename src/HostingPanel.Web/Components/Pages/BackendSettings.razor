@@ -5,10 +5,10 @@
 @using System.Text.Json.Nodes
 @inject DirectAdminSession Session
 
-<PageTitle>@L["Backend settings"] — HostingPanel</PageTitle>
+<PageTitle>@L[IpOnly ? "IP management" : "Backend settings"] — HostingPanel</PageTitle>
 <div class="page-header">
-    <div><div class="eyebrow">@L["Server management"]</div><h1>@L["Backend settings"]</h1>
-        <p>@L["Configuration contract of the active backend."]</p></div>
+    <div><div class="eyebrow">@L["Server management"]</div><h1>@L[IpOnly ? "IP management" : "Backend settings"]</h1>
+        <p>@L[IpOnly ? "Public web IP and authoritative DNS defaults." : "Configuration contract of the active backend."]</p></div>
     <button disabled="@(busy || !Session.Connected)" @onclick="Load">@L["Refresh"]</button>
 </div>
 @if (!Session.Connected)
@@ -22,14 +22,14 @@ else
     {
         <section class="card">
             <h2>@view.Backend</h2>
-            @if (view.Fields.Length == 0)
+            @if (!VisibleFields.Any())
             {
                 <p>@L["This backend has no public settings."]</p>
             }
             else
             {
                 <div class="form-grid">
-                    @foreach (var field in view.Fields)
+                    @foreach (var field in VisibleFields)
                     {
                         var id = "setting-" + field.Name;
                         <div @key="field.Name">
@@ -83,6 +83,8 @@ else
 }
 
 @code {
+    [Parameter] public bool IpOnly { get; set; }
+    private IEnumerable<SettingField> VisibleFields => (view?.Fields ?? []).Where(f => !IpOnly || f.Name is "DnsWebIp" or "DnsNs1" or "DnsNs2" or "DnsAutoCreateZones");
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private SettingsView? view;
     private readonly Dictionary<string, string?> draft = new(StringComparer.Ordinal);

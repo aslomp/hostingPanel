@@ -4,6 +4,12 @@
 @using System.Text.Json
 @inject DirectAdminSession Session
 
+@if (Key == "ip-management")
+{
+    <BackendSettings IpOnly="true" />
+}
+else
+{
 <PageTitle>@Title — HostingPanel</PageTitle>
 <div class="page-header">
     <div>
@@ -64,6 +70,8 @@ else
     </section>
 }
 
+}
+
 @code {
     [Parameter] public string Key { get; set; } = "";
     private sealed record DataSource(string Label, string Path);
@@ -80,6 +88,7 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
+        if (Key == "ip-management") return;
         selected = Sources.FirstOrDefault()?.Path ?? "";
         response = null;
         statusText = null;

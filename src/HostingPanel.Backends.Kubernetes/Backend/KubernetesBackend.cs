@@ -15,7 +15,7 @@ namespace HostingPanel.Api;
 /// no legacy command calls and no implicit fallback to DirectAdmin.
 /// Reconciliation with the cluster is deliberately a separate responsibility.
 /// </summary>
-public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, PowerDnsClient? powerDns = null, IConfiguration? configuration = null) :
+public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, PowerDnsClient? powerDns = null) :
     IHostingBackend, IAccountCatalog, IAccountMutations, IAccessibleDomains,
     IUserDetails, IAccountOverview, IImpersonation, IDatabases,
     IAccessibleDatabases, IDomains, IFileAccess, ITickets, IBackendSettingsAccess
@@ -31,7 +31,12 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         var row = await db.Configuration.AsNoTracking().SingleOrDefaultAsync(x => x.Key == SettingsKey, ct);
         if (row is null) return configuredSettings;
         using var document = JsonDocument.Parse(row.ValueJson);
-        if (!BackendSettingsSchema.TryRead<KubernetesBackendSettings>(document.RootElement,
+        // Older persisted settings lack the DNS properties. Fill only new keys from deployment defaults.
+        var stored = document.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
+        using var defaults = JsonDocument.Parse(BackendSettingsSchema.Serialize(configuredSettings));
+        foreach (var key in new[] { nameof(KubernetesBackendSettings.DnsAutoCreateZones), nameof(KubernetesBackendSettings.DnsWebIp), nameof(KubernetesBackendSettings.DnsNs1), nameof(KubernetesBackendSettings.DnsNs2) })
+            stored.TryAdd(key, defaults.RootElement.GetProperty(key).Clone());
+        if (!BackendSettingsSchema.TryRead<KubernetesBackendSettings>(JsonSerializer.SerializeToElement(stored),
             out var settings, out _))
             throw new InvalidOperationException("Stored Kubernetes backend settings are invalid.");
         return settings!;
@@ -99,8 +104,9 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
     // Stage DNS and website desired state in the same SaveChanges transaction.
     private async Task<string?> StageDomainDnsAsync(HostedDomain domain, CancellationToken ct)
     {
-        if (powerDns is null || configuration?.GetValue<bool>("PowerDns:AutoCreateZones") == false)
-            return null;
+        if (powerDns is null) return null;
+        var dnsSettings = await GetEffectiveSettingsAsync(ct);
+        if (!dnsSettings.DnsAutoCreateZones) return null;
         var existing = await db.DnsZones.SingleOrDefaultAsync(z => z.Name == domain.Name, ct);
         if (existing is not null)
         {
@@ -109,9 +115,9 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
             existing.DomainId = domain.Id;
             return null;
         }
-        var ipText = configuration?["PowerDns:WebIp"];
-        var ns1 = configuration?["PowerDns:Ns1"]?.TrimEnd('.');
-        var ns2 = configuration?["PowerDns:Ns2"]?.TrimEnd('.');
+        var ipText = dnsSettings.DnsWebIp;
+        var ns1 = dnsSettings.DnsNs1.TrimEnd('.');
+        var ns2 = dnsSettings.DnsNs2.TrimEnd('.');
         if (!System.Net.IPAddress.TryParse(ipText, out var ip) ||
             ip.AddressFamily is not (System.Net.Sockets.AddressFamily.InterNetwork or System.Net.Sockets.AddressFamily.InterNetworkV6) ||
             !ValidDomain(ns1) || !ValidDomain(ns2) || string.Equals(ns1, ns2, StringComparison.OrdinalIgnoreCase))

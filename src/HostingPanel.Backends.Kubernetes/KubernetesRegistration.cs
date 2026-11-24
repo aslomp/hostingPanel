@@ -8,6 +8,10 @@ public static class KubernetesRegistration
     {
 
     var settings = new KubernetesBackendSettings();
+    settings.DnsAutoCreateZones = configuration.GetValue("PowerDns:AutoCreateZones", true);
+    settings.DnsWebIp = configuration["PowerDns:WebIp"] ?? "";
+    settings.DnsNs1 = configuration["PowerDns:Ns1"] ?? "";
+    settings.DnsNs2 = configuration["PowerDns:Ns2"] ?? "";
     configuration.GetSection("BackendSettings").Bind(settings, options => options.ErrorOnUnknownConfiguration = true);
     var errors = settings.Validator.Validate(settings);
     if (errors.Count != 0)
