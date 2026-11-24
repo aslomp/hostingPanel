@@ -19,21 +19,6 @@ else if (provider.Equals("DirectAdmin", StringComparison.OrdinalIgnoreCase))
     builder.Services.AddDirectAdminBackend(builder.Configuration);
 else
     throw new InvalidOperationException($"Unknown HostingPanel backend '{provider}'.");
-builder.Services.AddScoped<IAuthenticationProvider>(sp => sp.GetRequiredService<IHostingBackend>());
-builder.Services.AddScoped<IApiCompatibilityHandler>(sp => sp.GetRequiredService<IHostingBackend>());
-builder.Services.AddScoped<IAccessibleDatabases>(sp => sp.GetRequiredService<IHostingBackend>().AccessibleDatabases);
-builder.Services.AddScoped<IDatabases>(sp => sp.GetRequiredService<IHostingBackend>().Databases);
-builder.Services.AddScoped<IAccessibleDomains>(sp => sp.GetRequiredService<IHostingBackend>().AccessibleDomains);
-builder.Services.AddScoped<IDomains>(sp => sp.GetRequiredService<IHostingBackend>().Domains);
-builder.Services.AddScoped<IFileAccess>(sp => sp.GetRequiredService<IHostingBackend>().FileAccess);
-builder.Services.AddScoped<ITickets>(sp => sp.GetRequiredService<IHostingBackend>().Tickets);
-builder.Services.AddScoped<IAccountCatalog>(sp => sp.GetRequiredService<IHostingBackend>().AccountCatalog);
-builder.Services.AddScoped<IAccountMutations>(sp => sp.GetRequiredService<IHostingBackend>().AccountMutations);
-builder.Services.AddScoped<IImpersonation>(sp => sp.GetRequiredService<IHostingBackend>().Impersonation);
-builder.Services.AddScoped<IAccountOverview>(sp => sp.GetRequiredService<IHostingBackend>().AccountOverview);
-builder.Services.AddScoped<IWebHosting>(sp => sp.GetRequiredService<IHostingBackend>().WebHosting);
-builder.Services.AddScoped<ICertificateProvider>(sp => sp.GetRequiredService<IHostingBackend>());
-builder.Services.AddScoped<IDomainPreview>(sp => sp.GetRequiredService<IHostingBackend>());
 builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
 builder.Services.Configure<RequestLocalizationOptions>(options =>
 {

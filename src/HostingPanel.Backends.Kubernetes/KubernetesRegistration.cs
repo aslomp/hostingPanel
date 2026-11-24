@@ -17,7 +17,27 @@ public static class KubernetesRegistration
     if (errors.Count != 0)
         throw new InvalidOperationException("Invalid BackendSettings: " + string.Join("; ", errors.Select(x => x.Key + ": " + string.Join(", ", x.Value))));
     services.AddSingleton(settings);
-    services.AddScoped<IHostingBackend, KubernetesBackend>();
+    services.AddScoped<KubernetesBackend>();
+    services.AddScoped<IHostingBackend>(sp => sp.GetRequiredService<KubernetesBackend>());
+    services.AddScoped<IAuthenticationProvider>(sp => sp.GetRequiredService<KubernetesBackend>());
+    services.AddScoped<IApiCompatibilityHandler>(sp => sp.GetRequiredService<KubernetesBackend>());
+    services.AddScoped<IAccessibleDatabases>(sp => sp.GetRequiredService<KubernetesBackend>().AccessibleDatabases);
+    services.AddScoped<IDatabases>(sp => sp.GetRequiredService<KubernetesBackend>().Databases);
+    services.AddScoped<IAccessibleDomains>(sp => sp.GetRequiredService<KubernetesBackend>().AccessibleDomains);
+    services.AddScoped<IDomains>(sp => sp.GetRequiredService<KubernetesBackend>().Domains);
+    services.AddScoped<IFileAccess>(sp => sp.GetRequiredService<KubernetesBackend>().FileAccess);
+    services.AddScoped<ITickets>(sp => sp.GetRequiredService<KubernetesBackend>().Tickets);
+    services.AddScoped<IAccountCatalog>(sp => sp.GetRequiredService<KubernetesBackend>().AccountCatalog);
+    services.AddScoped<IAccountMutations>(sp => sp.GetRequiredService<KubernetesBackend>().AccountMutations);
+    services.AddScoped<IImpersonation>(sp => sp.GetRequiredService<KubernetesBackend>().Impersonation);
+    services.AddScoped<IAccountOverview>(sp => sp.GetRequiredService<KubernetesBackend>().AccountOverview);
+    services.AddScoped<IUserDetails>(sp => sp.GetRequiredService<KubernetesBackend>().UserDetails);
+    services.AddScoped<IWebHosting>(sp => sp.GetRequiredService<KubernetesBackend>().WebHosting);
+    services.AddScoped<ICertificateProvider>(sp => sp.GetRequiredService<KubernetesBackend>());
+    services.AddScoped<IDomainPreview>(sp => sp.GetRequiredService<KubernetesBackend>());
+    services.AddScoped<IDNSProvider>(sp => sp.GetRequiredService<KubernetesBackend>());
+    services.AddScoped<IBackendSettingsAccess>(sp => sp.GetRequiredService<KubernetesBackend>());
+    services.AddScoped<IHostingNetworkAccess>(sp => sp.GetRequiredService<KubernetesBackend>());
     services.AddSingleton<PhpIdentityModel>();
     services.AddSingleton<IHostingPanelModelExtension>(sp => sp.GetRequiredService<PhpIdentityModel>());
     services.AddSingleton<IHostingPanelSchemaExtension>(sp => sp.GetRequiredService<PhpIdentityModel>());

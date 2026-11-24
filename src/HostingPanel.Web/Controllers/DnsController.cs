@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HostingPanel.Api.Controllers;
 
 [ApiController]
-public sealed class DnsController(IHostingBackend backend) : BackendController
+public sealed class DnsController(IDNSProvider backend) : BackendController
 {
     /// <summary>
     /// Overall DNS zone list sourced from the backend-accessible domain catalog.

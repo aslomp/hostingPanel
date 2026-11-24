@@ -6,7 +6,24 @@ public static class DirectAdminRegistration
     public static IServiceCollection AddDirectAdminBackend(this IServiceCollection services, IConfiguration configuration)
     {
 
-    services.AddScoped<IHostingBackend, DirectAdminBackend>();
+    services.AddScoped<DirectAdminBackend>();
+    services.AddScoped<IHostingBackend>(sp => sp.GetRequiredService<DirectAdminBackend>());
+    services.AddScoped<IAuthenticationProvider>(sp => sp.GetRequiredService<DirectAdminBackend>());
+    services.AddScoped<IApiCompatibilityHandler>(sp => sp.GetRequiredService<DirectAdminBackend>());
+    services.AddScoped<IAccessibleDatabases>(sp => sp.GetRequiredService<DirectAdminBackend>().AccessibleDatabases);
+    services.AddScoped<IDatabases>(sp => sp.GetRequiredService<DirectAdminBackend>().Databases);
+    services.AddScoped<IDomains>(sp => sp.GetRequiredService<DirectAdminBackend>().Domains);
+    services.AddScoped<IFileAccess>(sp => sp.GetRequiredService<DirectAdminBackend>().FileAccess);
+    services.AddScoped<ITickets>(sp => sp.GetRequiredService<DirectAdminBackend>().Tickets);
+    services.AddScoped<IAccountCatalog>(sp => sp.GetRequiredService<DirectAdminBackend>().AccountCatalog);
+    services.AddScoped<IAccountMutations>(sp => sp.GetRequiredService<DirectAdminBackend>().AccountMutations);
+    services.AddScoped<IImpersonation>(sp => sp.GetRequiredService<DirectAdminBackend>().Impersonation);
+    services.AddScoped<IAccountOverview>(sp => sp.GetRequiredService<DirectAdminBackend>().AccountOverview);
+    services.AddScoped<IUserDetails>(sp => sp.GetRequiredService<DirectAdminBackend>().UserDetails);
+    services.AddScoped<IWebHosting>(sp => sp.GetRequiredService<DirectAdminBackend>().WebHosting);
+    services.AddScoped<ICertificateProvider>(sp => sp.GetRequiredService<DirectAdminBackend>());
+    services.AddScoped<IDomainPreview>(sp => sp.GetRequiredService<DirectAdminBackend>());
+    services.AddScoped<IDNSProvider>(sp => sp.GetRequiredService<DirectAdminBackend>());
     services.AddScoped<LegacyUserDetailsService>();
     services.AddScoped<LegacyAccountOverviewService>();
     services.AddScoped<DomainManagementService>();
