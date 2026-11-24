@@ -78,7 +78,7 @@ public abstract class BackendController : ControllerBase
         || header.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)
         || header.Equals("Upgrade", StringComparison.OrdinalIgnoreCase);
 
-    internal static async Task ForwardToBackendAsync(HttpContext context, IHttpClientFactory clients)
+    protected internal static async Task ForwardToBackendAsync(HttpContext context, IHttpClientFactory clients)
     {
         // Authentication and authorization for official DirectAdmin routes belong
         // to the backend. In particular, login/logout may not have Basic credentials.
