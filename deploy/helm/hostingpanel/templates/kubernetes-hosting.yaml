@@ -38,7 +38,33 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: {{ $name }}-controller
-{{- if .Values.kubernetesHosting.baselineApache }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: apache-vhosts
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: apache-vhosts
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: apache-vhosts
+subjects:
+  - kind: ServiceAccount
+    name: apache-vhosts
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: apache-vhosts
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -55,19 +81,136 @@ data:
     LoadModule log_config_module modules/mod_log_config.so
     LoadModule dir_module modules/mod_dir.so
     LoadModule mime_module modules/mod_mime.so
+    LoadModule proxy_module modules/mod_proxy.so
+    LoadModule proxy_fcgi_module modules/mod_proxy_fcgi.so
     PidFile /tmp/httpd.pid
     ErrorLog /proc/self/fd/2
     CustomLog /proc/self/fd/1 common
     TypesConfig conf/mime.types
     User daemon
     Group daemon
-    DocumentRoot "/usr/local/apache2/htdocs"
-    <Directory "/usr/local/apache2/htdocs">
-        Options -Indexes
+    <Directory />
         AllowOverride None
-        Require all granted
-        DirectoryIndex index.html
+        Require all denied
     </Directory>
+    <VirtualHost *:8080>
+        ServerName localhost
+        DocumentRoot "/usr/local/apache2/htdocs"
+        <Directory "/usr/local/apache2/htdocs">
+            Options -Indexes
+            AllowOverride None
+            Require all granted
+            DirectoryIndex index.html
+        </Directory>
+    </VirtualHost>
+    IncludeOptional /runtime/current/*.conf
+  sync.py: |
+    import hashlib, json, os, pathlib, re, shutil, ssl, subprocess, time, urllib.request
+    root = pathlib.Path("/vhosts")
+    token_path = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+    ca_path = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+    ns = os.environ["POD_NAMESPACE"]
+    url = "https://kubernetes.default.svc/api/v1/namespaces/" + ns + "/configmaps?labelSelector=hostingpanel%2Fcomponent%3Dvhost"
+    context = ssl.create_default_context(cafile=ca_path)
+    root.mkdir(exist_ok=True)
+    current = root / "current"
+    initial = root / "initial"
+    initial.mkdir(exist_ok=True)
+    if not current.exists():
+        current.symlink_to(initial.name)
+    def snapshot():
+        files = {}
+        next_url = url
+        while next_url:
+            req = urllib.request.Request(next_url, headers={"Authorization": "Bearer " + pathlib.Path(token_path).read_text().strip()})
+            with urllib.request.urlopen(req, context=context, timeout=10) as response:
+                page = json.load(response)
+            for item in page["items"]:
+                name = item["metadata"]["name"]
+                if not re.fullmatch(r"site-[0-9a-f]{32}", name):
+                    continue
+                files[name + ".conf"] = item["data"]["vhost.conf"]
+            continuation = page["metadata"].get("continue")
+            if continuation:
+                import urllib.parse
+                next_url = url + "&continue=" + urllib.parse.quote(continuation, safe="")
+            else:
+                next_url = None
+        return files
+    def sync():
+        files = snapshot()
+        digest = hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
+        target = root / digest
+        if current.resolve() == target:
+            return
+        if not target.exists():
+            staging = root / (digest + ".tmp")
+            if staging.exists():
+                shutil.rmtree(staging)
+            staging.mkdir()
+            for name, content in files.items():
+                (staging / name).write_text(content)
+            staging.rename(target)
+        old = os.readlink(current)
+        temp = root / "next"
+        temp.unlink(missing_ok=True)
+        temp.symlink_to(target.name)
+        os.replace(temp, current)
+        try:
+            pass
+        except Exception:
+            temp.symlink_to(old)
+            os.replace(temp, current)
+            raise
+        for item in root.iterdir():
+            if item.is_dir() and not item.is_symlink() and item != target and item != initial and item.name != old:
+                shutil.rmtree(item)
+    while True:
+        try:
+            sync()
+        except Exception as exc:
+            print("Vhost sync failed:", exc, flush=True)
+        time.sleep(5)
+  run.sh: |
+    #!/bin/sh
+    set -eu
+    mkdir -p /runtime/initial
+    if [ ! -L /runtime/current ]; then ln -s initial /runtime/current; fi
+    httpd -t -f /etc/hostingpanel/httpd.conf
+    httpd -DFOREGROUND -f /etc/hostingpanel/httpd.conf &
+    pid=$!
+    trap 'kill -TERM "$pid" 2>/dev/null || true; wait "$pid" || true; exit 0' TERM INT
+    applied="$(readlink /runtime/current)"
+    while kill -0 "$pid" 2>/dev/null; do
+      candidate="$(readlink /vhosts/current 2>/dev/null || true)"
+      case "$candidate" in
+        ""|initial) ;;
+        *)
+          if [ "$candidate" != "$applied" ] && [ -d "/vhosts/$candidate" ]; then
+            mkdir -p "/runtime/$candidate"
+            if ! cp -a "/vhosts/$candidate/." "/runtime/$candidate/"; then
+              rm -rf "/runtime/$candidate"
+              sleep 5
+              continue
+            fi
+            ln -s "$candidate" /runtime/next
+            mv -Tf /runtime/next /runtime/current
+            if httpd -t -f /etc/hostingpanel/httpd.conf && httpd -k graceful -f /etc/hostingpanel/httpd.conf; then
+              old="$applied"
+              applied="$candidate"
+              if [ "$old" != initial ]; then rm -rf "/runtime/$old"; fi
+            else
+              ln -s "$applied" /runtime/next
+              mv -Tf /runtime/next /runtime/current
+              rm -rf "/runtime/$candidate"
+            fi
+          fi
+          ;;
+      esac
+      sleep 5
+    done
+    wait "$pid"
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -80,17 +223,21 @@ spec:
   template:
     metadata:
       labels: {app.kubernetes.io/name: apache-baseline}
+      annotations:
+        hostingpanel/apache-config: "shared-vhosts-v1"
     spec:
+      serviceAccountName: apache-vhosts
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
         runAsGroup: 1001
+        fsGroup: 1001
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: apache
           image: {{ .Values.kubernetesHosting.apacheImage | quote }}
-          command: ["httpd", "-DFOREGROUND", "-f", "/etc/hostingpanel/httpd.conf"]
+          command: ["/bin/sh", "/etc/hostingpanel/run.sh"]
           ports: [{name: http, containerPort: 8080}]
           securityContext:
             allowPrivilegeEscalation: false
@@ -101,10 +248,46 @@ spec:
             httpGet: {path: /, port: http}
           volumeMounts:
             - {name: config, mountPath: /etc/hostingpanel, readOnly: true}
+            - {name: vhosts, mountPath: /vhosts, readOnly: true}
+            - {name: runtime, mountPath: /runtime}
+            - {name: sites, mountPath: /home, readOnly: true}
+        - name: vhost-sync
+          image: {{ .Values.kubernetesHosting.vhostSyncImage | quote }}
+          command: ["python3", "/etc/hostingpanel/sync.py"]
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: config, mountPath: /etc/hostingpanel, readOnly: true}
+            - {name: vhosts, mountPath: /vhosts}
+            - {name: api-access, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
       volumes:
+        - name: runtime
+          emptyDir: {}
+        - name: api-access
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+              - configMap:
+                  name: kube-root-ca.crt
+                  items: [{key: ca.crt, path: ca.crt}]
         - name: config
           configMap:
             name: apache-baseline
+        - name: vhosts
+          emptyDir: {}
+        - name: sites
+          nfs:
+            server: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}
+            path: {{ required "kubernetesHosting.nfsPath is required" .Values.kubernetesHosting.nfsPath | quote }}
+            readOnly: true
 ---
 apiVersion: v1
 kind: Service
@@ -114,7 +297,6 @@ spec:
   type: ClusterIP
   selector: {app.kubernetes.io/name: apache-baseline}
   ports: [{name: http, port: 80, targetPort: http}]
-{{- end }}
 {{- if .Values.kubernetesHosting.panelRoute.enabled }}
 ---
 apiVersion: gateway.networking.k8s.io/v1

@@ -26,12 +26,12 @@ kubernetesHosting:
   httpListener: http
   httpsListener: https
   apacheImage: httpd:2.4
+  vhostSyncImage: python:3.13-alpine
   phpImage: php:8.6.0-fpm
   phpReplicas: 1
   # Explicit opt-in: only mutually trusted PHP applications until tenant
   # isolation is validated on the actual cluster.
   allowSharedPhpRuntime: true
-  baselineApache: true
   panelRoute:
     enabled: false
     hostname: ""
