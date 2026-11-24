@@ -51,3 +51,5 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 - System service management uses a dedicated UI operation service without expanding upstream or Kubernetes support.
 
 - Server settings use a dedicated UI operation service without adding backend capabilities.
+
+- System package management uses a dedicated UI operation service; upstream compatibility and backend support remain unchanged.

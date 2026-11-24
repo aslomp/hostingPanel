@@ -101,6 +101,7 @@ builder.Services.AddScoped<ImpersonationOperations>();
 builder.Services.AddScoped<CompatibilityApiClient>();
 builder.Services.AddScoped<SettingsOperations>();
 builder.Services.AddScoped<ServerSettingsOperations>();
+builder.Services.AddScoped<SystemUpdateOperations>();
 builder.Services.AddScoped<SystemServiceOperations>();
 builder.Services.AddScoped<SystemInformationOperations>();
 builder.Services.AddScoped<NavigationContextState>();

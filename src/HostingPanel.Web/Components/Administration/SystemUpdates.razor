@@ -1,9 +1,9 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/system-updates"
-@using System.Text.Json
 @inject PanelSession Session
-@inject CompatibilityApiClient ApiClient
+@inject SystemUpdateOperations UpdateOps
+@implements IDisposable
 <PageTitle>@L["System updates — HostingPanel"]</PageTitle>
 <PanelPageHeader>
     <Breadcrumb>@L["Server management"]</Breadcrumb>
@@ -39,56 +39,108 @@ else
     private string updates = "", history = "", confirmation = "";
     private string selectedPackages = "", transactionId = "", transactionLog = "";
     private string? feedback;
-    private bool busy;
-    protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
-    private async Task Load()
+    private readonly LatestRead inventoryRead = new();
+    private readonly LatestRead logRead = new();
+    private readonly DialogMutation mutation = new();
+    private bool disposed;
+    private bool busy => inventoryRead.Loading || logRead.Loading || mutation.Busy;
+
+    protected override async Task OnInitializedAsync()
     {
-        if (busy || !Session.Connected) return;
-        busy = true;
-        try
-        {
-            var (us, ub) = await ApiClient.GetRawAsync("api/system-packages/updates");
-            updates = $"HTTP {us}\n{ub}";
-            var (hs, hb) = await ApiClient.GetRawAsync("api/system-packages/history");
-            history = $"HTTP {hs}\n{hb}";
-        }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }
-        finally { busy = false; }
+        Session.Changed += SessionChanged;
+        await Load();
     }
-    private async Task FetchLog()
+
+    private void SessionChanged() => _ = InvokeAsync(async () =>
     {
-        if (busy || !Session.Connected || string.IsNullOrWhiteSpace(transactionId) ||
-            transactionId.Length > 128 ||
-            transactionId.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_')))
-        { feedback = L["Invalid transaction ID."].Value; return; }
-        busy = true; feedback = null;
-        try
-        {
-            var (status, body) = await ApiClient.GetRawAsync(
-                "api/system-packages/history/" + Uri.EscapeDataString(transactionId) + "/log");
-            transactionLog = $"HTTP {status}\n{body}";
-        }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
-        { feedback = ex.Message; }
-        finally { busy = false; }
+        if (disposed) return;
+        logRead.Cancel();
+        updates = history = transactionLog = transactionId = selectedPackages = confirmation = "";
+        feedback = null;
+        var task = Load();
+        StateHasChanged();
+        await task;
+        if (!disposed) StateHasChanged();
+    });
+
+    public void Dispose()
+    {
+        disposed = true;
+        Session.Changed -= SessionChanged;
+        inventoryRead.Dispose();
+        logRead.Dispose();
+        mutation.Dispose();
     }
-    private Task Check() => Action("api/system-packages/update-test");
-    private Task Run() => confirmation == "UPDATE" ? Action("api/system-packages/update-run") : Task.CompletedTask;
-    private async Task Action(string endpoint)
+
+    private Task Load()
     {
-        if (busy || !Session.Connected) return;
-        busy = true; feedback = null;
-        try
+        if (disposed) return Task.CompletedTask;
+        updates = history = "";
+        feedback = null;
+        if (!Session.Connected)
         {
-            var packages = selectedPackages.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (packages.Any(p => p.Length is < 1 or > 128 ||
-                p.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.' or '+'))))
-            { feedback = L["Invalid package name."].Value; return; }
-            var payload = JsonSerializer.Serialize(new { packages });
-            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Post, endpoint, payload);
-            feedback = $"Backend HTTP {status}: {body}";
+            inventoryRead.Cancel();
+            return Task.CompletedTask;
         }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }
-        finally { busy = false; confirmation = ""; }
+        var channel = Session.TicketChannel;
+        bool Current() => !disposed && Session.Connected && Session.TicketChannel == channel;
+        return inventoryRead.RunAsync(async ct =>
+        {
+            var available = await UpdateOps.ListUpdatesAsync(ct);
+            ct.ThrowIfCancellationRequested();
+            if (!Current()) throw new OperationCanceledException();
+            var previous = await UpdateOps.HistoryAsync(ct);
+            return (Available: available, Previous: previous);
+        }, Current, response =>
+        {
+            updates = $"HTTP {response.Available.Status}\n{response.Available.Body}";
+            history = $"HTTP {response.Previous.Status}\n{response.Previous.Body}";
+        }, ex => feedback = ex.Message);
+    }
+
+    private Task FetchLog()
+    {
+        if (disposed || busy || !Session.Connected) return Task.CompletedTask;
+        if (!SystemUpdateOperations.ValidTransaction(transactionId))
+        {
+            feedback = L["Invalid transaction ID."].Value;
+            return Task.CompletedTask;
+        }
+        var target = transactionId;
+        var channel = Session.TicketChannel;
+        transactionLog = "";
+        feedback = null;
+        return logRead.RunAsync(ct => UpdateOps.LogAsync(target, ct),
+            () => Session.Connected && Session.TicketChannel == channel && transactionId == target,
+            response => transactionLog = $"HTTP {response.Status}\n{response.Body}",
+            ex => feedback = ex.Message);
+    }
+
+    private Task Check() => Submit(false);
+    private Task Run() => confirmation == "UPDATE" ? Submit(true) : Task.CompletedTask;
+
+    private async Task Submit(bool install)
+    {
+        if (disposed || busy || !Session.Connected || (install && confirmation != "UPDATE")) return;
+        var channel = Session.TicketChannel;
+        var packages = selectedPackages.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        feedback = null;
+        await mutation.RunAsync(Session, channel, async current =>
+        {
+            if (!SystemUpdateOperations.ValidPackages(packages))
+            {
+                if (current()) feedback = L["Invalid package name."].Value;
+                return;
+            }
+            var (status, body) = install
+                ? await UpdateOps.RunAsync(packages)
+                : await UpdateOps.CheckAsync(packages);
+            if (current()) feedback = $"Backend HTTP {status}: {body}";
+        });
+        if (!disposed && Session.Connected && Session.TicketChannel == channel)
+        {
+            feedback ??= mutation.Error;
+            confirmation = "";
+        }
     }
 }
