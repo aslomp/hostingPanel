@@ -14,7 +14,7 @@ namespace HostingPanel.Api;
 // A single active reconciler per SQLite database. kubectl uses the configured
 // kubeconfig or the in-cluster service account; no shell interpolation.
 public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguration configuration,
-    ILogger<WebsiteReconciler> logger, NfsDirectoryProvisioner storage) : BackgroundService
+    ILogger<WebsiteReconciler> logger, NfsDirectoryProvisioner storage, HostingOperationNotifications notifications) : BackgroundService
 {
     private string? appliedRuntimeHash;
 
@@ -43,17 +43,28 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var ownerIds = domains.Select(d => d.OwnerId).Distinct().ToArray();
         var accounts = await db.Accounts.AsNoTracking().Where(x => ownerIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id, ct);
-        // Resolve existing DirectAdmin owners before generating any Apache or FPM manifests.
-        // Never change the ownership of an existing /home account.
+        // Resolve storage independently for each domain. A broken mount or
+        // missing directory must not block unrelated websites or deletion.
+        var usable = new List<HostedDomain>();
+        var storageErrors = new Dictionary<Guid, Exception>();
         foreach (var domain in domains)
         {
-            var owner = accounts[domain.OwnerId];
-            var identity = identities[domain.OwnerId];
-            var (uid, gid) = await storage.EnsureAsync(owner.Username, domain.Name, identity, ct);
-            if (identity.ExistingUid is { } previousUid && (previousUid != uid || identity.ExistingGid != gid))
-                throw new InvalidOperationException("Inconsistent ownership of DirectAdmin account directories.");
-            identity.ExistingUid = uid;
-            identity.ExistingGid = gid;
+            try
+            {
+                var owner = accounts[domain.OwnerId];
+                var identity = identities[domain.OwnerId];
+                var (uid, gid) = await storage.EnsureAsync(owner.Username, domain.Name, identity, ct);
+                if (identity.ExistingUid is { } previousUid && (previousUid != uid || identity.ExistingGid != gid))
+                    throw new InvalidOperationException("Inconsistent ownership of DirectAdmin account directories.");
+                identity.ExistingUid = uid;
+                identity.ExistingGid = gid;
+                usable.Add(domain);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                storageErrors[domain.Id] = ex;
+                logger.LogWarning(ex, "Storage unavailable for website {Id}", domain.Id);
+            }
         }
         var completed = new List<ReconciliationOperation>();
         foreach (var group in rows.GroupBy(x => x.ResourceId))
@@ -69,6 +80,8 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                         "--ignore-not-found=true");
                 else
                 {
+                    if (storageErrors.TryGetValue(domain.Id, out var storageError))
+                        throw new InvalidOperationException("Website storage unavailable.", storageError);
                     var identity = identities[domain.OwnerId];
                     var manifest = BuildManifest(domain, accounts[domain.OwnerId].Username, identity);
                     await KubectlAsync(manifest, ct, "apply", "--server-side",
@@ -83,13 +96,14 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 logger.LogWarning(ex, "Could not reconcile website {Id}", group.Key);
             }
             await db.SaveChangesAsync(ct);
+            if (latest.LastError is not null && latest.Attempts == 1) notifications.Publish();
         }
         if (shared)
         {
             // FPM itself enforces source IPs, including connections originating
             // inside the same runtime pod where NetworkPolicy cannot help.
-            var sources = await GetApacheSourcesAsync(domains, ct);
-            var manifest = BuildRuntimeManifest(domains, identities, sources);
+            var sources = await GetApacheSourcesAsync(usable, ct);
+            var manifest = BuildRuntimeManifest(usable, identities, sources);
             var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(manifest)));
             if (hash != appliedRuntimeHash)
             {
@@ -104,6 +118,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             row.LastError = null;
         }
         await db.SaveChangesAsync(ct);
+        if (completed.Count > 0) notifications.Publish();
     }
 
     private string Required(string key) => configuration["KubernetesHosting:" + key] is { Length: > 0 } value
@@ -120,7 +135,12 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             throw new InvalidOperationException("Invalid hostname");
         using var doc = JsonDocument.Parse(domain.SettingsJson);
         bool Flag(string key, bool fallback) => doc.RootElement.TryGetProperty(key, out var value)
-            && value.ValueKind is JsonValueKind.True or JsonValueKind.False ? value.GetBoolean() : fallback;
+            ? value.ValueKind switch {
+                JsonValueKind.True => true, JsonValueKind.False => false,
+                JsonValueKind.String when value.GetString() is "ON" or "True" or "true" => true,
+                JsonValueKind.String when value.GetString() is "OFF" or "False" or "false" => false,
+                _ => fallback
+            } : fallback;
         var php = Flag("php", true);
         var tls = Flag("ssl", true);
         if (Flag("cgi", false)) throw new InvalidOperationException("CGI is not supported");
@@ -197,7 +217,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
     private static bool HasPhp(HostedDomain domain)
     {
         using var doc = JsonDocument.Parse(domain.SettingsJson);
-        return !doc.RootElement.TryGetProperty("php", out var flag) || flag.ValueKind != JsonValueKind.False;
+        return !doc.RootElement.TryGetProperty("php", out var flag) || (flag.ValueKind != JsonValueKind.False && !(flag.ValueKind == JsonValueKind.String && flag.GetString() is "OFF" or "False" or "false"));
     }
 
     private string BuildRuntimeManifest(IReadOnlyList<HostedDomain> domains,

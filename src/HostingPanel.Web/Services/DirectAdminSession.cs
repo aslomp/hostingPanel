@@ -8,7 +8,7 @@ namespace HostingPanel.Web.Services;
 
 // Credentials are held only for an interactive Blazor Server circuit.
 // Never persist or log login keys. Always deploy behind HTTPS.
-public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannelRegistry ticketChannels, PanelSessionStore? sessions = null) : IDisposable
+public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannelRegistry ticketChannels, PanelSessionStore? sessions = null, IServiceScopeFactory? backendScopes = null) : IDisposable
 {
     private string? _sessionId;
     private string? _username;
@@ -305,9 +305,35 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         CancellationToken cancellationToken = default) =>
         SendAsync(HttpMethod.Get, "hosting/accounts", null, cancellationToken);
 
-    public Task<(int Status, string Body)> GetAccessibleDomainsAsync(
-        CancellationToken cancellationToken = default) =>
-        SendAsync(HttpMethod.Get, "hosting/domains/accessible", null, cancellationToken);
+    private AuthenticationHeaderValue EffectiveCredentials()
+    {
+        if (!Connected) throw new InvalidOperationException("Sign in first.");
+        var username = _impersonatedUsername is null ? _username : _username + "|" + _impersonatedUsername;
+        return new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(username + ":" + _loginKey)));
+    }
+
+    public async Task<string?> GetProvisioningStatusAsync(string domain, CancellationToken ct = default)
+    {
+        if (backendScopes is null || !Connected) return null;
+        using var scope = backendScopes.CreateScope();
+        var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IHostingBackend>();
+        var result = await backend.Domains.GetDetailsAsync(domain, EffectiveCredentials(), ct);
+        return result.Status == 200 && result.Settings is not null
+            && result.Settings.TryGetValue("provisioning", out var state) ? state : null;
+    }
+
+    public async Task<(int Status, string Body)> GetAccessibleDomainsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (backendScopes is null)
+            return await SendAsync(HttpMethod.Get, "hosting/domains/accessible", null, cancellationToken);
+        using var scope = backendScopes.CreateScope();
+        var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IHostingBackend>();
+        var result = await backend.AccessibleDomains.ListAsync(EffectiveCredentials(), cancellationToken);
+        return (result.Status, JsonSerializer.Serialize(new {
+            items = result.Items, domains = result.Items?.Select(x => x.Domain).ToArray(), warning = result.Warning
+        }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+    }
 
     public async Task<(int Status, string Body)> GetDomainsAsync(string? username = null,
         CancellationToken cancellationToken = default)
@@ -315,6 +341,13 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         if (username is not null && (username.Length is < 1 or > 64 ||
             !username.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-')))
             throw new ArgumentException("Ongeldige gebruiker.", nameof(username));
+        if (backendScopes is not null)
+        {
+            using var scope = backendScopes.CreateScope();
+            var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IHostingBackend>();
+            var result = await backend.Domains.ListAsync(username, EffectiveCredentials(), cancellationToken);
+            return (result.Status, JsonSerializer.Serialize(new { domains = result.Domains, error = result.Error }));
+        }
         return await SendAsync(HttpMethod.Get,
             "hosting/domains" + (username is null ? "" : "?user=" + Uri.EscapeDataString(username)),
             null, cancellationToken);
@@ -334,6 +367,13 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
     {
         if (action is not ("create" or "modify" or "delete"))
             throw new ArgumentException("Unknown domain operation.", nameof(action));
+        if (backendScopes is not null)
+        {
+            using var scope = backendScopes.CreateScope();
+            var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IHostingBackend>();
+            var result = await backend.Domains.MutateAsync(new HostingPanel.Api.Services.DomainMutationRequest(domain, action, confirmation, php, ssl, cgi), EffectiveCredentials(), cancellationToken);
+            return (result.Status, JsonSerializer.Serialize(new { error = result.Error }));
+        }
         using var content = new StringContent(
             JsonSerializer.Serialize(new { domain, action, confirmation, php, ssl, cgi }),
             Encoding.UTF8, "application/json");
@@ -346,6 +386,13 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         if (string.IsNullOrWhiteSpace(domain) || domain.Contains('/') || domain.Contains('\\')
             || domain.Contains('?') || domain.Any(char.IsControl))
             throw new ArgumentException("Invalid domain.", nameof(domain));
+        if (backendScopes is not null)
+        {
+            using var scope = backendScopes.CreateScope();
+            var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IHostingBackend>();
+            var result = await backend.Domains.GetDetailsAsync(domain, EffectiveCredentials(), cancellationToken);
+            return (result.Status, JsonSerializer.Serialize(new { settings = result.Settings, error = result.Error }));
+        }
         return await SendAsync(HttpMethod.Get,
             "hosting/domains/" + Uri.EscapeDataString(domain), null, cancellationToken);
     }
@@ -356,6 +403,13 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         if (string.IsNullOrWhiteSpace(domain) || domain.Contains('/') || domain.Contains('\\')
             || domain.Contains('?') || domain.Any(char.IsControl))
             throw new ArgumentException("Invalid domain.", nameof(domain));
+        if (backendScopes is not null)
+        {
+            using var scope = backendScopes.CreateScope();
+            var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IHostingBackend>();
+            var result = await backend.Domains.UpdateSettingAsync(domain, setting, value, EffectiveCredentials(), cancellationToken);
+            return (result.Status, JsonSerializer.Serialize(new { error = result.Error }));
+        }
         using var content = new StringContent(
             JsonSerializer.Serialize(new { setting, value }), Encoding.UTF8, "application/json");
         return await SendAsync(HttpMethod.Put,

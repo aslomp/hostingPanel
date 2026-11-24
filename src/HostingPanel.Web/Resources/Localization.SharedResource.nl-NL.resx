@@ -694,4 +694,30 @@
   <data name="Remember me" xml:space="preserve"><value>Aangemeld blijven</value></data>
   <data name="Sign in to your hosting account." xml:space="preserve"><value>Meld je aan bij je hostingaccount.</value></data>
   <data name="Sign-in service unavailable. Try again later." xml:space="preserve"><value>Aanmelden is tijdelijk niet beschikbaar. Probeer het later opnieuw.</value></data>
+  <data name="Manage domains and website configuration through the selected hosting backend." xml:space="preserve"><value>Beheer domeinen en websiteconfiguratie via de geselecteerde hostingbackend.</value></data>
+  <data name="Leave blank to list all accessible domains, or enter an account to filter." xml:space="preserve"><value>Laat leeg voor alle toegankelijke domeinen of filter op account.</value></data>
+  <data name="Add domain" xml:space="preserve"><value>Domein toevoegen</value></data>
+  <data name="Create a website for the signed-in account." xml:space="preserve"><value>Maak een website aan voor het aangemelde account.</value></data>
+  <data name="Delete domain" xml:space="preserve"><value>Domein verwijderen</value></data>
+  <data name="Deleting a domain may remove website files and associated resources." xml:space="preserve"><value>Verwijderen kan websitebestanden en gekoppelde resources verwijderen.</value></data>
+  <data name="Enter the exact domain name to confirm." xml:space="preserve"><value>Typ de exacte domeinnaam ter bevestiging.</value></data>
+  <data name="Domain list unavailable: HTTP {0}." xml:space="preserve"><value>Domeinlijst niet beschikbaar: HTTP {0}.</value></data>
+  <data name="Domain operation completed." xml:space="preserve"><value>Domeinbewerking voltooid.</value></data>
+  <data name="Domain operation accepted. Provisioning is pending." xml:space="preserve"><value>Domeinbewerking geaccepteerd. Provisioning is in behandeling.</value></data>
+  <data name="The backend reported a conflict for this domain operation." xml:space="preserve"><value>De backend meldt een conflict bij deze domeinbewerking.</value></data>
+  <data name="Domain not found." xml:space="preserve"><value>Domein niet gevonden.</value></data>
+  <data name="Invalid domain or settings." xml:space="preserve"><value>Ongeldig domein of ongeldige instellingen.</value></data>
+  <data name="Domain operation failed: HTTP {0}." xml:space="preserve"><value>Domeinbewerking mislukt: HTTP {0}.</value></data>
+  <data name="Domain configuration and settings." xml:space="preserve"><value>Domeinconfiguratie en instellingen.</value></data>
+  <data name="The backend evaluates read and write operations separately." xml:space="preserve"><value>De backend beoordeelt lees- en schrijfbewerkingen afzonderlijk.</value></data>
+  <data name="Each setting is saved separately." xml:space="preserve"><value>Elke instelling wordt afzonderlijk opgeslagen.</value></data>
+  <data name="Additional domain settings" xml:space="preserve"><value>Aanvullende domeininstellingen</value></data>
+  <data name="Additional settings reported by the backend." xml:space="preserve"><value>Aanvullende instellingen van de backend.</value></data>
+  <data name="Domain information unavailable (HTTP {0})." xml:space="preserve"><value>Domeininformatie niet beschikbaar (HTTP {0}).</value></data>
+  <data name="{0} saved." xml:space="preserve"><value>{0} opgeslagen.</value></data>
+  <data name="Provisioning" xml:space="preserve"><value>Provisioning</value></data>
+  <data name="Retrying" xml:space="preserve"><value>Nieuwe poging</value></data>
+  <data name="Pending" xml:space="preserve"><value>In behandeling</value></data>
+  <data name="Configuration applied" xml:space="preserve"><value>Configuratie toegepast</value></data>
+  <data name="Unknown" xml:space="preserve"><value>Onbekend</value></data>
 </root>

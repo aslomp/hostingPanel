@@ -3,6 +3,8 @@
 @page "/domains"
 @using System.Text.Json
 @inject DirectAdminSession Session
+@inject HostingPanel.Api.HostingOperationNotifications Operations
+@implements IDisposable
 @inject NavigationManager Navigation
 
 <PageTitle>@L["Domain management — HostingPanel"]</PageTitle>
@@ -10,7 +12,7 @@
     <div>
         <div class="eyebrow">@L["Account management / Domains"]</div>
         <h1>@L["Domain management"]</h1>
-        <p>@L["Live domain list through the HostingPanel adapter to DirectAdmin. Automated tests use fictitious .xyz1 domains; real domains are also permitted when mutations are enabled."]</p>
+        <p>@L["Manage domains and website configuration through the selected hosting backend."]</p>
     </div>
     <button @onclick="Refresh" disabled="@loading">@(loading ? "Laden…" : L["Refresh"].Value)</button>
 </div>
@@ -23,7 +25,7 @@ else
 {
     <div class="card">
         <h2>@L["Domains of an account"]</h2>
-        <p>@L["Leave blank for all domains accessible through DirectAdmin (admin: server-wide; reseller: own accounts; user: own domains). Enter an account to filter."]</p>
+        <p>@L["Leave blank to list all accessible domains, or enter an account to filter."]</p>
         <label for="owner">@L["Username (optional)"]</label>
         <input id="owner" @bind="owner" placeholder="@L["For example, an existing user"]" />
         <button class="primary" @onclick="Refresh" disabled="@loading">@L["Retrieve"]</button>
@@ -36,11 +38,11 @@ else
             <label for="domainFilter">@L["Filter domains"]</label>
             <input id="domainFilter" @bind="filter" @bind:event="oninput" placeholder="@L["Search domain name"]" />
             <table>
-                <thead><tr><th>@L["Domain"]</th><th>Account</th><th>@L["Source"]</th></tr></thead>
+                <thead><tr><th>@L["Domain"]</th><th>Account</th><th>@L["Provisioning"]</th><th>@L["Actions"]</th></tr></thead>
                 <tbody>
                 @foreach (var domain in domains.Where(d => d.Contains(filter, StringComparison.OrdinalIgnoreCase)))
                 {
-                    <tr><td><a href="@($"/domains/{Uri.EscapeDataString(domain)}")">@domain</a> — <a href="@($"/domains/{Uri.EscapeDataString(domain)}/dns")">DNS</a></td><td>@(ownership.TryGetValue(domain, out var domainOwner) ? domainOwner : (string.IsNullOrWhiteSpace(owner) ? "—" : owner))</td><td>DirectAdmin</td></tr>
+                    <tr><td><a href="@($"/domains/{Uri.EscapeDataString(domain)}")">@domain</a> — <a href="@($"/domains/{Uri.EscapeDataString(domain)}/dns")">DNS</a></td><td>@(ownership.TryGetValue(domain, out var domainOwner) ? domainOwner : (string.IsNullOrWhiteSpace(owner) ? "—" : owner))</td><td>@L[provisioning.GetValueOrDefault(domain) ?? "Unknown"]</td><td><button @onclick="() => SelectDelete(domain)" disabled="@mutationBusy">@L["Delete"]</button></td></tr>
                 }
                 </tbody>
             </table>
@@ -48,49 +50,33 @@ else
         }
     </div>
 
-    <div class="card">
-        <h2>@L["Prepare domain operation"]</h2>
-        <p>Deze actie genereert uitsluitend een voorbeeld van de legacy-aanroep.
-            Er wordt <strong>@L["no domain created or modified"]</strong> op de DirectAdmin-server.</p>
-        <label for="testDomain">@L["Domain name"]</label>
-        <input id="testDomain" @bind="testDomain" placeholder="hosting-test.xyz1" />
+    <section class="card">
+        <h2>@L["Add domain"]</h2>
+        <p>@L["Create a website for the signed-in account."]</p>
+        <label for="newDomain">@L["Domain name"]</label>
+        <input id="newDomain" @bind="testDomain" placeholder="example.com" />
         <div class="domain-options">
             <label><input type="checkbox" @bind="php" /> PHP</label>
             <label><input type="checkbox" @bind="ssl" /> SSL</label>
             <label><input type="checkbox" @bind="cgi" /> CGI</label>
         </div>
-        <button class="primary" disabled="@previewBusy" @onclick="Preview">
-            @(previewBusy ? "Controleren…" : L["View test request"].Value)
-        </button>
-        @if (previewError is not null) { <p class="error" role="alert">@previewError</p> }
-        @if (previewBody is not null)
+        <button class="primary" disabled="@(mutationBusy || string.IsNullOrWhiteSpace(testDomain))" @onclick="CreateDomain">@L["Add domain"]</button>
+        @if (mutationStatus is not null)
         {
-            <p><strong>Dry-run:</strong> alleen ter controle, niet uitgevoerd.</p>
-            <pre>@previewBody</pre>
+            <p role="status">@mutationStatus</p>
         }
-        <div class="card" style="margin-top:24px">
-            <h2>@L["Execute domain operation"]</h2>
-            <p>Gebruik eerst de preview hierboven. Deze actie wijzigt de echte DirectAdmin-server
-               uitsluitend wanneer de beheerder expliciet de algemene server-side mutatieschakelaar aanzet.
-               Verwijderen kan ook bestanden en mailgegevens verwijderen.</p>
-            <label for="domainAction">@L["Action"]</label>
-            <select id="domainAction" @bind="mutationAction">
-                <option value="create">@L["Create"]</option>
-                <option value="modify">@L["Modify (PHP / SSL / CGI)"]</option>
-                <option value="delete">@L["Delete"]</option>
-            </select>
-            <label for="confirmDomain">Typ de exacte domeinnaam ter bevestiging: @testDomain</label>
+    </section>
+    @if (deleteDomain is not null)
+    {
+        <section class="card">
+            <h2>@L["Delete domain"]: @deleteDomain</h2>
+            <p>@L["Deleting a domain may remove website files and associated resources."]</p>
+            <label for="confirmDomain">@L["Enter the exact domain name to confirm."]</label>
             <input id="confirmDomain" @bind="confirmation" autocomplete="off" />
-            <button disabled="@(mutationBusy || confirmation != testDomain || string.IsNullOrWhiteSpace(testDomain))"
-                    @onclick="ExecuteMutation">
-                @(mutationBusy ? "Uitvoeren…" : L["Confirm domain operation"].Value)
-            </button>
-            @if (mutationStatus is not null)
-            {
-                <p role="status">@mutationStatus</p>
-            }
-        </div>
-    </div>
+            <button disabled="@(mutationBusy || confirmation != deleteDomain)" @onclick="DeleteDomain">@L["Delete"]</button>
+            <button disabled="@mutationBusy" @onclick="CancelDelete">@L["Cancel"]</button>
+        </section>
+    }
 }
 @code {
     [SupplyParameterFromQuery(Name = "user")]
@@ -99,25 +85,48 @@ else
     private string filter = "";
     private IReadOnlyList<string>? domains;
     private Dictionary<string,string> ownership = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string,string> provisioning = new(StringComparer.OrdinalIgnoreCase);
+    private bool refreshingStatus;
     private string? warning;
     private string? error;
     private bool loading;
-    private string testDomain = "hosting-test.xyz1";
+    private string testDomain = "";
     private bool php = true;
     private bool ssl = true;
     private bool cgi;
-    private string mutationAction = "create";
+    private string? deleteDomain;
     private string confirmation = "";
     private bool mutationBusy;
     private string? mutationStatus;
-    private bool previewBusy;
-    private string? previewError;
-    private string? previewBody;
+
+    private bool disposed;
+    protected override void OnInitialized() => Operations.Changed += OperationChanged;
+    private void OperationChanged() { if (!disposed) _ = InvokeAsync(RefreshOperationState); }
+    public void Dispose() { disposed = true; Operations.Changed -= OperationChanged; }
 
     protected override async Task OnParametersSetAsync()
     {
         owner = User ?? "";
         if (Session.Connected) await Refresh();
+    }
+
+    private async Task RefreshOperationState()
+    {
+        if (disposed || refreshingStatus || !Session.Connected || domains is null) return;
+        refreshingStatus = true;
+        try
+        {
+            var current = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var domain in domains.ToArray())
+            {
+                if (disposed || !Session.Connected) return;
+                var state = await Session.GetProvisioningStatusAsync(domain);
+                if (state is not null) current[domain] = state;
+            }
+            if (!disposed) { provisioning = current; StateHasChanged(); }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or OperationCanceledException) { }
+        finally { refreshingStatus = false; }
     }
 
     private async Task Refresh()
@@ -134,7 +143,7 @@ else
                 : await Session.GetDomainsAsync(owner.Trim());
             if (status != 200)
             {
-                error = L["Domain list unavailable: HTTP {0}. Check DirectAdmin account permissions.", status].Value;
+                error = L["Domain list unavailable: HTTP {0}.", status].Value;
                 return;
             }
             using var json = JsonDocument.Parse(body);
@@ -163,57 +172,43 @@ else
             error = exception.Message;
         }
         finally { loading = false; }
+        await RefreshOperationState();
     }
 
-    private async Task Preview()
+    private void SelectDelete(string domain) { deleteDomain = domain; confirmation = ""; mutationStatus = null; }
+    private void CancelDelete() { deleteDomain = null; confirmation = ""; }
+    private Task CreateDomain() => ExecuteMutation(testDomain.Trim().ToLowerInvariant(), "create");
+    private Task DeleteDomain() => deleteDomain is null || confirmation != deleteDomain
+        ? Task.CompletedTask : ExecuteMutation(deleteDomain, "delete");
+
+    private async Task ExecuteMutation(string domain, string action)
     {
-        if (previewBusy || !Session.Connected) return;
-        previewBusy = true;
-        previewError = null;
-        previewBody = null;
-        try
-        {
-            var (status, body) = await Session.PreviewDomainAsync(testDomain.Trim(), php, ssl, cgi);
-            if (status != 200)
-            {
-                previewError = L["Test domain rejected (HTTP {0}). Use a valid domain name.", status].Value;
-                return;
-            }
-            using var doc = JsonDocument.Parse(body);
-            previewBody = JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
-        }
-        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException
-            or ArgumentException or JsonException)
-        {
-            previewError = exception.Message;
-        }
-        finally { previewBusy = false; }
-    }
-    private async Task ExecuteMutation()
-    {
-        if (mutationBusy || !Session.Connected || confirmation != testDomain) return;
+        if (mutationBusy || !Session.Connected || string.IsNullOrWhiteSpace(domain)) return;
         mutationBusy = true;
         mutationStatus = null;
         try
         {
-            var (status, body) = await Session.ExecuteTestDomainAsync(
-                testDomain, mutationAction, confirmation, php, ssl, cgi);
+            var (status, _) = await Session.ExecuteTestDomainAsync(domain, action, domain, php, ssl, cgi);
             mutationStatus = status switch
             {
-                200 => L["DirectAdmin confirmed the domain operation. Refresh the domain overview."].Value,
-                409 => L["DirectAdmin reported a conflict for this domain operation."].Value,
-                404 => L["DirectAdmin could not find the specified domain."].Value,
-                400 => L["Invalid domain name or confirmation."].Value,
-                _ => L["Domain operation not confirmed: HTTP {0}.", status].Value
+                200 or 201 or 204 => L["Domain operation completed."].Value,
+                202 => L["Domain operation accepted. Provisioning is pending."].Value,
+                409 => L["The backend reported a conflict for this domain operation."].Value,
+                404 => L["Domain not found."].Value,
+                400 => L["Invalid domain or settings."].Value,
+                _ => L["Domain operation failed: HTTP {0}.", status].Value
             };
-            if (status == 200) { confirmation = ""; await Refresh(); }
+            if (status is >= 200 and < 300)
+            {
+                if (action == "create") { testDomain = ""; owner = ""; }
+                CancelDelete();
+                await Refresh();
+            }
         }
-        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException
-            or ArgumentException)
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or ArgumentException)
         {
             mutationStatus = exception.Message;
         }
         finally { mutationBusy = false; }
     }
-
 }
