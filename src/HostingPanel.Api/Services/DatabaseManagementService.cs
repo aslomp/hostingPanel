@@ -13,6 +13,7 @@ public sealed record DatabaseDeleteRequest(string Confirmation);
 
 /// <summary>DirectAdmin handles user identity, account scope and database ownership.</summary>
 public sealed class DatabaseManagementService(IHttpClientFactory clients)
+: IDatabases
 {
     private async Task<(int Status,string Body)> SendAsync(
         HttpMethod method, string path, AuthenticationHeaderValue auth,
