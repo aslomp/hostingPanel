@@ -28,18 +28,18 @@ public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfigur
         var settings = await backend.GetEffectiveSettingsAsync(ct);
         var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
         var owners = await db.Accounts.AsNoTracking().ToDictionaryAsync(x => x.Id, ct);
-        var client = KubernetesBackend.CertificateClient(configuration);
+        var client = KubernetesCertificateProvider.CertificateClient(configuration);
         using var actual = JsonDocument.Parse(await client.ListAsync(ct));
         var keep = new HashSet<string>(StringComparer.Ordinal);
         var readyListeners = new List<(Guid Id, string Host)>();
         var readyCertificates = actual.RootElement.GetProperty("items").EnumerateArray().Where(IsReady).Select(x => x.GetProperty("metadata").GetProperty("name").GetString()).ToHashSet();
         foreach (var domain in domains)
         {
-            var acme = await KubernetesBackend.DomainAcmeAsync(db, domain.Id, ct);
+            var acme = await KubernetesCertificateProvider.DomainAcmeAsync(db, domain.Id, ct);
             if (!acme.Enabled || !SslEnabled(domain)) continue;
             keep.Add(CertManagerClient.Name(domain.Id));
-            var issuer = KubernetesBackend.ResolveIssuer(settings, owners[domain.OwnerId], acme);
-            var names = KubernetesBackend.CertificateNames(domain, acme);
+            var issuer = KubernetesCertificateProvider.ResolveIssuer(settings, owners[domain.OwnerId], acme);
+            var names = KubernetesCertificateProvider.CertificateNames(domain, acme);
             if (issuer is null || names.Length == 0 || (acme.PreferWildcard && !issuer.SupportsWildcard)) continue;
             try {
                 await client.ApplyAsync(domain.Id, names, issuer.IssuerName, issuer.IssuerKind, acme.KeyType, ct);

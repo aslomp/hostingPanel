@@ -5,7 +5,7 @@ using HostingPanel.Providers.CertManager;
 using Microsoft.EntityFrameworkCore;
 namespace HostingPanel.Api;
 
-public sealed partial class KubernetesBackend
+public sealed partial class KubernetesCertificateProvider(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesSettingsService settingsProvider, IConfiguration? configuration = null) : ICertificateProvider
 {
     internal static string AcmeKey(Guid id) => "Acme:Domain:" + id.ToString("N");
     internal static async Task<DomainAcmeConfiguration> DomainAcmeAsync(HostingPanelDbContext db, Guid id, CancellationToken ct)
@@ -34,7 +34,7 @@ public sealed partial class KubernetesBackend
         { await Results.Unauthorized().ExecuteAsync(context); return; }
         var path = context.Request.Path.Value ?? "";
         var method = context.Request.Method;
-        var settings = await GetEffectiveSettingsAsync(ct);
+        var settings = await settingsProvider.GetEffectiveSettingsAsync(ct);
         var ids = await identity.VisibleAccountsAsync(principal, ct);
         if (path == "/api/session/acme-data" && method == "GET")
         {

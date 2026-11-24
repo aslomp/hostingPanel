@@ -1,0 +1,21 @@
+using HostingPanel.Providers.PowerDNS;
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using HostingPanel.Api.Adapters;
+using HostingPanel.Api.Persistence;
+using HostingPanel.Api.Services;
+using Microsoft.EntityFrameworkCore;
+
+namespace HostingPanel.Api;
+
+public sealed class KubernetesCompatibilityHandler : IApiCompatibilityHandler
+{
+    public Task ForwardAsync(HttpContext context)
+    {
+        context.Response.StatusCode = StatusCodes.Status501NotImplemented;
+        context.Response.ContentType = "application/json";
+        return context.Response.WriteAsJsonAsync(new { type = "KUBERNETES_OPERATION_NOT_IMPLEMENTED" });
+    }
+}
