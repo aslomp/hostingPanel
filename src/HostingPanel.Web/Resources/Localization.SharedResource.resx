@@ -742,4 +742,9 @@
   <data name="Accounts accessible to the current identity." xml:space="preserve"><value>Accounts accessible to the current identity.</value></data>
   <data name="All accessible accounts, including resellers and their users." xml:space="preserve"><value>All accessible accounts, including resellers and their users.</value></data>
   <data name="No accessible accounts." xml:space="preserve"><value>No accessible accounts.</value></data>
+  <data name="Database deletion request accepted." xml:space="preserve"><value>Database deletion request accepted.</value></data>
+  <data name="Database creation request accepted." xml:space="preserve"><value>Database creation request accepted.</value></data>
+  <data name="The backend denied deletion." xml:space="preserve"><value>The backend denied deletion.</value></data>
+  <data name="The backend denied this database operation." xml:space="preserve"><value>The backend denied this database operation.</value></data>
+  <data name="The backend did not confirm creation (HTTP {0})." xml:space="preserve"><value>The backend did not confirm creation (HTTP {0}).</value></data>
 </root>

@@ -1,8 +1,9 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/databases/{Database}"
-@using System.Text.Json
-@inject DirectAdminSession Session
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@inject DatabaseOperations DatabaseOps
 @inject IDialogService Dialogs
 @inject NavigationManager Navigation
 
@@ -53,17 +54,15 @@ else
     loading=true; error=null;
     try
     {
-      var (status,body)=await Session.GetDatabaseUsersAsync(Database);
-      if(status!=200)
+      var result = await DatabaseOps.UsersAsync(Database);
+      if (result.Status != 200 || result.Users is null)
       {
-        error=L["Database users unavailable (HTTP {0}).", status].Value;
-        users=null;return;
+        error = L["Database users unavailable (HTTP {0}).", result.Status].Value;
+        users = null; return;
       }
-      using var doc=JsonDocument.Parse(body);
-      users=doc.RootElement.GetProperty("users").EnumerateArray()
-        .Select(x=>x.GetString()??"").ToList();
+      users = result.Users.ToList();
     }
-    catch(Exception e) when(e is HttpRequestException or JsonException or ArgumentException or InvalidOperationException)
+    catch(Exception e) when(e is HttpRequestException or ArgumentException or InvalidOperationException)
     { error=e.Message; users=null; }
     finally { loading=false; }
   }
@@ -99,8 +98,8 @@ else
     deleting=true; deleteMessage=null;
     try
     {
-      var (status,body)=await Session.DeleteDatabaseAsync(Database,confirmation);
-      if(status==200)
+      var (status,errorCode)=await DatabaseOps.DeleteAsync(Database,confirmation);
+      if(errorCode is null && status is >= 200 and < 300)
       {
         confirmation="";
         Navigation.NavigateTo("/databases");
@@ -108,7 +107,7 @@ else
       }
       deleteMessage=status switch {
         409 => L["Mutations are disabled or the change could not be confirmed."].Value,
-        403 => L["DirectAdmin does not allow deletion."].Value,
+        403 => L["The backend denied deletion."].Value,
         _ => L["Database deletion not confirmed (HTTP {0}).", status].Value
       };
     }

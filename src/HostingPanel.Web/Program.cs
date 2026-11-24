@@ -94,6 +94,7 @@ builder.Services.AddScoped<BackendOperationScope>();
 builder.Services.AddScoped<AccountOperations>();
 builder.Services.AddScoped<DomainOperations>();
 builder.Services.AddScoped<DnsOperations>();
+builder.Services.AddScoped<DatabaseOperations>();
 builder.Services.AddScoped<DirectAdminSession>();
 builder.Services.AddScoped<NavigationContextState>();
 builder.Services.AddScoped<TicketLiveMonitor>();

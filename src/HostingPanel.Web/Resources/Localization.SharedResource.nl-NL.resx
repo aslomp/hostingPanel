@@ -826,4 +826,9 @@
   <data name="Accounts accessible to the current identity." xml:space="preserve"><value>Accounts toegankelijk voor de huidige identiteit.</value></data>
   <data name="All accessible accounts, including resellers and their users." xml:space="preserve"><value>Alle toegankelijke accounts, inclusief resellers en hun gebruikers.</value></data>
   <data name="No accessible accounts." xml:space="preserve"><value>Geen toegankelijke accounts.</value></data>
+  <data name="Database deletion request accepted." xml:space="preserve"><value>Verzoek om database te verwijderen geaccepteerd.</value></data>
+  <data name="Database creation request accepted." xml:space="preserve"><value>Verzoek om database aan te maken geaccepteerd.</value></data>
+  <data name="The backend denied deletion." xml:space="preserve"><value>De backend weigert verwijdering.</value></data>
+  <data name="The backend denied this database operation." xml:space="preserve"><value>De backend weigert deze databasebewerking.</value></data>
+  <data name="The backend did not confirm creation (HTTP {0})." xml:space="preserve"><value>De backend bevestigde de aanmaak niet (HTTP {0}).</value></data>
 </root>

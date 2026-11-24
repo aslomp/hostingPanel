@@ -1,8 +1,9 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/databases"
-@using System.Text.Json
-@inject DirectAdminSession Session
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@inject DatabaseOperations DatabaseOps
 @inject IDialogService Dialogs
 
 <PageTitle>@L["Database management — HostingPanel"]</PageTitle>
@@ -75,8 +76,7 @@ else
   @if (createMessage is not null) { <MudAlert Severity="@(mutationFailed ? Severity.Error : Severity.Success)" Class="my-2">@createMessage</MudAlert> }
 }
 @code {
-  private sealed record OwnedDb(string Owner, string Name, long TableCount, long UserCount, long SizeBytes, long DefinerIssues);
-  private List<OwnedDb>? overall;
+  private List<DatabaseOverviewRow>? overall;
   private List<string> overallWarnings = [];
   private string? overallError;
   private bool overallLoading;
@@ -96,7 +96,7 @@ else
       if (result is { Canceled: false })
       {
         mutationFailed = false;
-        createMessage = L["Database created. The overview has been refreshed."].Value;
+        createMessage = L["Database creation request accepted."].Value;
         await RefreshAll();
       }
     }
@@ -114,9 +114,9 @@ else
         L["This deletes the database and may cause irreversible data loss. Enter the exact database name to confirm."].Value,
         L["Enter the exact database name to confirm."].Value);
       if (!confirmed || !Session.Connected || identity != Session.Username) return;
-      var (status, _) = await Session.DeleteDatabaseAsync(database, database);
-      mutationFailed = status is < 200 or >= 300;
-      createMessage = mutationFailed ? L["Database deletion not confirmed (HTTP {0}).", status].Value : L["Database deleted."].Value;
+      var (status, errorCode) = await DatabaseOps.DeleteAsync(database, database);
+      mutationFailed = errorCode is not null || status is < 200 or >= 300;
+      createMessage = mutationFailed ? L["Database deletion not confirmed (HTTP {0}).", status].Value : L["Database deletion request accepted."].Value;
       if (!mutationFailed) await RefreshAll();
     }
     catch (Exception ex) when (ex is HttpRequestException or ArgumentException or InvalidOperationException)
@@ -139,17 +139,15 @@ else
     loading = true; error = null;
     try
     {
-      var (status, body) = await Session.GetDatabasesAsync();
-      if(status!=200)
+      var result = await DatabaseOps.ListAsync();
+      if (result.Status != 200 || result.Databases is null)
       {
-        error=L["Database overview unavailable (HTTP {0}).", status].Value;
-        databases=null; return;
+        error = L["Database overview unavailable (HTTP {0}).", result.Status].Value;
+        databases = null; return;
       }
-      using var json=JsonDocument.Parse(body);
-      databases=json.RootElement.GetProperty("databases").EnumerateArray()
-        .Select(x=>x.GetString()??"").ToList();
+      databases = result.Databases.ToList();
     }
-    catch(Exception e) when(e is HttpRequestException or JsonException or ArgumentException or InvalidOperationException)
+    catch(Exception e) when(e is HttpRequestException or ArgumentException or InvalidOperationException)
     { error=e.Message; databases=null; }
     finally {loading=false;}
   }
@@ -162,33 +160,21 @@ else
     do { size /= 1024; index++; } while (size >= 1024 && index < units.Length - 1);
     return size.ToString("N1") + " " + units[index];
   }
-  private static long Number(JsonElement item, string property) =>
-    item.TryGetProperty(property, out var value) && value.TryGetInt64(out var number)
-      ? number : 0;
   private async Task LoadOverall()
   {
     if (overallLoading || !Session.Connected) return;
     overallLoading = true; overallError = null; overall = null;
     try
     {
-      var (status, body) = await Session.GetAccessibleDatabasesAsync();
-      if (status != 200) { overallError = L["Overall database overview: HTTP {0}.", status].Value; return; }
-      using var doc = JsonDocument.Parse(body);
-      overall = doc.RootElement.GetProperty("items").EnumerateArray()
-        .Select(x => {
-          var db = x.GetProperty("database");
-          return new OwnedDb(
-            x.GetProperty("owner").GetString() ?? "",
-            db.GetProperty("database").GetString() ?? "",
-            Number(db, "tableCount"), Number(db, "userCount"),
-            Number(db, "sizeBytes"), Number(db, "definerIssues"));
-        }).ToList();
-      overallWarnings = [];
-      if (doc.RootElement.TryGetProperty("warnings", out var warnings)
-          && warnings.ValueKind == JsonValueKind.Array)
-        overallWarnings = warnings.EnumerateArray().Select(x => x.GetRawText()).ToList();
+      var result = await DatabaseOps.ListAccessibleAsync();
+      if (result.Status != 200 || result.Items is null)
+      {
+        overallError = L["Overall database overview: HTTP {0}.", result.Status].Value; return;
+      }
+      overall = result.Items.ToList();
+      overallWarnings = result.Warnings?.Select(x => $"{x.Account}: {x.Reason} (HTTP {x.Status})").ToList() ?? [];
     }
-    catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+    catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
     { overallError = ex.Message; }
     finally { overallLoading = false; }
   }
