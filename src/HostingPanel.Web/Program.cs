@@ -100,6 +100,7 @@ builder.Services.AddScoped<TicketOperations>();
 builder.Services.AddScoped<ImpersonationOperations>();
 builder.Services.AddScoped<CompatibilityApiClient>();
 builder.Services.AddScoped<SettingsOperations>();
+builder.Services.AddScoped<SystemServiceOperations>();
 builder.Services.AddScoped<NavigationContextState>();
 builder.Services.AddScoped<TicketLiveMonitor>();
 
