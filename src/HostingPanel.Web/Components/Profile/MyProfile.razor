@@ -1,0 +1,82 @@
+@page "/profile"
+@using System.Text.Json
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject PanelSession Session
+@inject SettingsOperations SettingsOps
+
+<PageTitle>@L["My profile"] — HostingPanel</PageTitle>
+<PanelPageHeader>
+    <Breadcrumb>@L["My profile"]</Breadcrumb>
+    <TitleContent>@L["My profile"]</TitleContent>
+    <Description>@Session.Username</Description>
+</PanelPageHeader>
+<MudPaper Class="pa-4 my-3" Elevation="1">
+    <MudText Typo="Typo.h6">@L["Name servers"]</MudText>
+    <MudText Class="mb-3">@L["Default nameservers for new domains. Existing DNS zones are not changed."]</MudText>
+    @if (view is not null)
+    {
+        @if (view.CanEdit)
+        {
+            <MudCheckBox T="bool" @bind-Value="inherit" Label="@L["Use default nameservers"].Value" Disabled="@busy" />
+            <MudTextField T="string" Label="NS1" @bind-Value="ns1" Disabled="@(busy || inherit)" Variant="Variant.Outlined" />
+            <MudTextField T="string" Label="NS2" @bind-Value="ns2" Disabled="@(busy || inherit)" Variant="Variant.Outlined" />
+            <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="@busy" OnClick="Save">@L["Save settings"]</MudButton>
+        }
+        else
+        {
+            <MudText>@L["Nameservers are derived from existing IP and reseller assignments and server defaults."]</MudText>
+        }
+        <MudText Class="mt-3">@L["Effective nameservers"]: @(view.EffectiveNs1 ?? "—"), @(view.EffectiveNs2 ?? "—")</MudText>
+    }
+    @if (message is not null) { <MudAlert Class="mt-3" Severity="@(failed ? Severity.Error : Severity.Success)">@message</MudAlert> }
+    @if (busy) { <MudProgressLinear Indeterminate="true" Class="mt-3" /> }
+</MudPaper>
+<MudButton Href="/change-password" Variant="Variant.Outlined">@L["Change password"]</MudButton>
+
+@code {
+    private sealed record NameserverView(string? Ns1, string? Ns2, string? EffectiveNs1, string? EffectiveNs2, bool CanEdit, bool UsesDefaults);
+    private NameserverView? view;
+    private string? ns1, ns2, message;
+    private bool inherit, busy, failed;
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    protected override Task OnInitializedAsync() => Load();
+    private void Accept(string body)
+    {
+        view = JsonSerializer.Deserialize<NameserverView>(body, JsonOptions) ?? throw new JsonException("Empty response.");
+        inherit = view.UsesDefaults;
+        ns1 = view.Ns1 ?? view.EffectiveNs1;
+        ns2 = view.Ns2 ?? view.EffectiveNs2;
+    }
+    private async Task Load()
+    {
+        if (!Session.Connected) return;
+        busy = true;
+        try
+        {
+            var (status, body) = await SettingsOps.GetProfileNameserversAsync();
+            if (status == 200) Accept(body);
+            else { failed = true; message = L["Could not load nameservers (HTTP {0}).", status]; }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        { failed = true; message = L["Could not load nameservers."]; }
+        finally { busy = false; }
+    }
+    private async Task Save()
+    {
+        if (busy || view?.CanEdit != true) return;
+        busy = true; message = null;
+        try
+        {
+            if (!inherit && (string.IsNullOrWhiteSpace(ns1) || string.IsNullOrWhiteSpace(ns2)))
+            { failed = true; message = L["Specify both nameservers."]; return; }
+            var (status, body) = await SettingsOps.SaveProfileNameserversAsync(JsonSerializer.Serialize(new { ns1 = inherit ? null : ns1, ns2 = inherit ? null : ns2 }));
+            failed = status != 200;
+            if (!failed) Accept(body);
+            message = failed ? L["Could not save nameservers (HTTP {0}).", status] : L["Settings saved."];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        { failed = true; message = L["Could not save nameservers."]; }
+        finally { busy = false; }
+    }
+}
