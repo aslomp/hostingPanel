@@ -15,11 +15,11 @@
 </PanelPageHeader>
 @if(!Session.Connected)
 {
-  <section class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</section>
+  <MudPaper Class="pa-4 my-3" Elevation="1">Maak eerst verbinding via het <a href="/">dashboard</a>.</MudPaper>
 }
 else
 {
-  <section class="card">
+  <MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@L["Database users"]</h2>
     @if(error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
     @if(loading) { <PanelLoading>@L["Loading users…"]</PanelLoading> }
@@ -29,13 +29,13 @@ else
       <tbody>@foreach(var username in users){<tr><td>@username</td></tr>}</tbody></MudSimpleTable>
       @if(users.Count==0) { <p>@L["No users returned by DirectAdmin."]</p> }
     }
-  </section>
-  <section class="card">
+  </MudPaper>
+  <MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@L["Delete database"]</h2>
     <p>@L["This deletes the database and may cause irreversible data loss. Enter the exact database name to confirm."]</p>
     <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@deleting" OnClick="ConfirmDeletion">@L["Permanently delete database"]</MudButton>
     @if(deleteMessage is not null) { <p role="status">@deleteMessage</p> }
-  </section>
+  </MudPaper>
 }
 @code {
   [Parameter] public string Database { get; set; } = "";

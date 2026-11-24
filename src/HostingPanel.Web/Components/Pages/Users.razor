@@ -9,12 +9,12 @@
     <Breadcrumb>@L["Account management"]</Breadcrumb>
     <TitleContent>@L["User management"]</TitleContent>
     <Description>@L["All accounts exposed by DirectAdmin to the current session, including resellers and their users."]</Description>
-    <Actions><div class="form-actions"><a class="btn" href="#account-create">@L["＋ Add user"]</a>
+    <Actions><div class="form-actions"><MudButton Href="#account-create" Variant="Variant.Filled" Color="Color.Primary">@L["＋ Add user"]</MudButton>
     <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@loading">@(loading ? "Laden…" : L["↻ Refresh"].Value)</MudButton></div></Actions>
 </PanelPageHeader>
 @if (!Session.Connected)
 {
-    <div class="card">Verbind eerst via het <a href="/">dashboard</a> met DirectAdmin.</div>
+    <MudPaper Class="pa-4 my-3" Elevation="1">Verbind eerst via het <a href="/">dashboard</a> met DirectAdmin.</MudPaper>
 }
 else if (error is not null)
 {
@@ -26,8 +26,8 @@ else if (loading)
 }
 else if (accounts is not null)
 {
-    <div class="card">
-        <div class="dashboard-section-heading"><h2>@L["All accessible accounts"]</h2><span class="status-pill good">@accounts.Count accounts</span></div>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <div class="dashboard-section-heading"><h2>@L["All accessible accounts"]</h2><MudChip T="string" Size="Size.Small" Color="Color.Success">@accounts.Count accounts</MudChip></div>
         <label for="userFilter">@L["Search users"]</label>
         <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="userFilter" Placeholder="@L["Search username or owner…"].Value" />
         <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>Account</th><th>@L["Role"]</th><th>@L["Created by"]</th><th>@L["Domains"]</th></tr></thead>
@@ -36,14 +36,14 @@ else if (accounts is not null)
         {
             <tr>
                 <td><span style="@($"padding-left:{item.Depth * 18}px")">@(item.Depth > 0 ? "↳ " : "")<a href="@($"/users/{Uri.EscapeDataString(item.Account.Username)}")">@item.Account.Username</a></span></td>
-                <td><span class="status-pill">@item.Account.Role</span></td>
+                <td><MudChip T="string" Size="Size.Small" Color="Color.Default">@item.Account.Role</MudChip></td>
                 <td>@(item.Account.Creator ?? "—")</td>
                 <td><a href="@($"/domains?user={Uri.EscapeDataString(item.Account.Username)}")">@L["View domains"]</a></td>
             </tr>
         }
         </tbody></MudSimpleTable>
         @if (accounts.Count == 0) { <p>@L["No accounts returned by DirectAdmin."]</p> }
-    </div>
+    </MudPaper>
     <div id="account-create"><AccountActions Kind="user" /></div>
 }
 @code {

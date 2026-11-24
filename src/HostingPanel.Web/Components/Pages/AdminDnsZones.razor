@@ -11,20 +11,20 @@
     <TitleContent>@L["DNS management"]</TitleContent>
     <Description>@L["All DNS zones exposed by the backend through DirectAdmin, including independently managed zones."]</Description>
     <Actions><div class="form-actions">
-      <a href="#dns-create" class="btn">@L["＋ Add DNS zone"]</a>
+      <MudButton Href="#dns-create" Variant="Variant.Filled" Color="Color.Primary">@L["＋ Add DNS zone"]</MudButton>
       <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Reload" Disabled="@loading">@(loading ? "Laden…" : L["↻ Refresh"].Value)</MudButton>
     </div></Actions>
 </PanelPageHeader>
 @if (!Session.Connected)
 {
-    <section class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</section>
+    <MudPaper Class="pa-4 my-3" Elevation="1">Maak eerst verbinding via het <a href="/">dashboard</a>.</MudPaper>
 }
 else
 {
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <div class="dashboard-section-heading">
           <h2>DNS-zones</h2>
-          @if (zones is not null) { <span class="status-pill good">@zones.Count zones</span> }
+          @if (zones is not null) { <MudChip T="string" Size="Size.Small" Color="Color.Success">@zones.Count zones</MudChip> }
         </div>
         <label for="dnsSearch">@L["Search DNS zones"]</label>
         <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dnsSearch" Placeholder="@L["Search domain name…"].Value" />
@@ -53,8 +53,8 @@ else
                     <tr>
                         <td><a href="@($"/domains/{Uri.EscapeDataString(zone.Domain)}/dns")">@zone.Domain</a></td>
                         <td>@(string.IsNullOrWhiteSpace(zone.Owner) ? "—" : zone.Owner)</td>
-                        <td><span class="status-pill @(zone.LocalData is true ? "good" : "muted")">@Display(zone.LocalData)</span></td>
-                        <td><span class="status-pill @(zone.LocalMail is true ? "good" : "muted")">@Display(zone.LocalMail)</span></td>
+                        <td><MudChip T="string" Size="Size.Small" Color="@(zone.LocalData is true ? Color.Success : Color.Default)">@Display(zone.LocalData)</MudChip></td>
+                        <td><MudChip T="string" Size="Size.Small" Color="@(zone.LocalMail is true ? Color.Success : Color.Default)">@Display(zone.LocalMail)</MudChip></td>
                     </tr>
                 }
                 </tbody>
@@ -65,8 +65,8 @@ else
                 <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(loading || currentPage * PageSize >= Visible.Count)" OnClick="Next">@L["Next page"]</MudButton>
             </div>
         }
-    </section>
-    <section class="card" id="dns-create">
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1" id="dns-create">
         <h2>@L["Create standalone DNS zone"]</h2>
         <p>@L["Use the documented DirectAdmin DNS admin API. The backend checks permissions."]</p>
         <div class="form-grid">
@@ -76,13 +76,13 @@ else
           <div><label>Nameserver 2</label><MudTextField T="string" @bind-Value="zoneNs2" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="ns2.example.com" /></div>
         </div>
         <div class="form-actions"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(changing || string.IsNullOrWhiteSpace(zoneDomain))" OnClick="CreateZone">@L["Create DNS zone"]</MudButton></div>
-    </section>
-    <section class="card">
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Delete standalone DNS zone"]</h2>
         <p>@L["Delete only the specified DNS zone; this is not the same as deleting a hosting domain."]</p>
         <label>@L["Domain"]</label><MudTextField T="string" @bind-Value="deleteDomain" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@(changing || string.IsNullOrWhiteSpace(deleteDomain))" OnClick="ConfirmDeletion">@L["Delete DNS zone"]</MudButton>
-    </section>
+    </MudPaper>
     @if (zoneMessage is not null) { <p role="status">@zoneMessage</p> }
 }
 @code {

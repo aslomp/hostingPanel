@@ -10,19 +10,19 @@
     <TitleContent>@L["Database management"]</TitleContent>
     <Description>@L["Databases belonging to your account and all subordinate accounts accessible through the backend."]</Description>
     <Actions><div class="form-actions">
-    <a class="btn" href="#database-create">@L["＋ Create database"]</a>
+    <MudButton Href="#database-create" Variant="Variant.Filled" Color="Color.Primary">@L["＋ Create database"]</MudButton>
     <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(loading || overallLoading)" OnClick="RefreshAll">@L["↻ Refresh"]</MudButton>
   </div></Actions>
 </PanelPageHeader>
 @if (!Session.Connected)
 {
-  <section class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</section>
+  <MudPaper Class="pa-4 my-3" Elevation="1">Maak eerst verbinding via het <a href="/">dashboard</a>.</MudPaper>
 }
 else
 {
-  <section class="card">
+  <MudPaper Class="pa-4 my-3" Elevation="1">
     <div class="dashboard-section-heading"><h2>@L["All accessible databases"]</h2>
-      @if (overall is not null) { <span class="status-pill @(overallWarnings.Count == 0 ? "good" : "warning")">@overall.Count gevonden</span> }
+      @if (overall is not null) { <MudChip T="string" Size="Size.Small" Color="@(overallWarnings.Count == 0 ? Color.Success : Color.Warning)">@overall.Count gevonden</MudChip> }
     </div>
     <p>@L["Includes databases of subordinate accounts where DirectAdmin permits access."]</p>
     <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@overallLoading" OnClick="LoadOverall">@L["Refresh overview"]</MudButton>
@@ -40,7 +40,7 @@ else
             <td><a href="@($"/users/{Uri.EscapeDataString(item.Owner)}")">@item.Owner</a></td>
             <td><strong>@item.Name</strong></td>
             <td>@item.TableCount.ToString("N0")</td><td>@item.UserCount.ToString("N0")</td>
-            <td>@FormatBytes(item.SizeBytes)</td><td><span class="status-pill @(item.DefinerIssues == 0 ? "good" : "warning")">@item.DefinerIssues</span></td>
+            <td>@FormatBytes(item.SizeBytes)</td><td><MudChip T="string" Size="Size.Small" Color="@(item.DefinerIssues == 0 ? Color.Success : Color.Warning)">@item.DefinerIssues</MudChip></td>
           </tr>
         }
       </tbody></MudSimpleTable>
@@ -50,8 +50,8 @@ else
         <p class="error">@warning</p>
       }
     }
-  </section>
-  <section class="card">
+  </MudPaper>
+  <MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@L["Databases in the current session"]</h2>
     <p>@L["Manage databases in the current session. For other accounts, use backend-supported session switching."]</p>
 
@@ -70,8 +70,8 @@ else
       </tbody></MudSimpleTable>
       @if(databases.Count==0) { <p>@L["No databases found."]</p> }
     }
-  </section>
-  <section class="card" id="database-create">
+  </MudPaper>
+  <MudPaper Class="pa-4 my-3" Elevation="1" id="database-create">
     <MudForm @ref="createForm">
     <h2>@L["Create database with user"]</h2>
     <p>@L["DirectAdmin adds the account prefix where necessary. The exact name is retrieved from the backend after creation."]</p>
@@ -89,7 +89,7 @@ else
     </div>
     </MudForm>
     @if (createMessage is not null) { <p role="status">@createMessage</p> }
-  </section>
+  </MudPaper>
 }
 @code {
   private MudForm createForm = default!;

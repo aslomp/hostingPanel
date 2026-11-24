@@ -27,7 +27,7 @@
 }
 @if (!Session.Connected)
 {
-    <div class="card">Verbind eerst via het <a href="/">dashboard</a>.</div>
+    <MudPaper Class="pa-4 my-3" Elevation="1">Verbind eerst via het <a href="/">dashboard</a>.</MudPaper>
 }
 else if (loading)
 {
@@ -35,12 +35,12 @@ else if (loading)
 }
 else if (error is not null)
 {
-    <div class="card"><MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert></div>
+    <MudPaper Class="pa-4 my-3" Elevation="1"><MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert></MudPaper>
 }
 else if (settings is not null)
 {
     <div class="tiles">
-        <section class="card">
+        <MudPaper Class="pa-4 my-3" Elevation="1">
             <h2>Account</h2>
             <p>@L["Live account information from the legacy DirectAdmin server."]</p>
             <MudSimpleTable Dense="true" Hover="true" Striped="true"><tbody>
@@ -57,8 +57,8 @@ else if (settings is not null)
                 }
             </tbody></MudSimpleTable>
             <p><a href="@($"/domains?user={Uri.EscapeDataString(Username)}")">@L["View this user's domains"]</a></p>
-        </section>
-        <section class="card">
+        </MudPaper>
+        <MudPaper Class="pa-4 my-3" Elevation="1">
             <h2>@L["Hosting package"]</h2>
             @if (package is not null)
             {
@@ -85,9 +85,9 @@ else if (settings is not null)
             {
                 <p>@L["The package returned no additional configuration fields."]</p>
             }
-        </section>
+        </MudPaper>
     </div>
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["All available user settings"]</h2>
         <p>@L["Original DirectAdmin field names, with confidential values filtered."]</p>
         <MudSimpleTable Dense="true" Hover="true" Striped="true"><thead><tr><th>@L["Setting"]</th><th>@L["Value"]</th></tr></thead><tbody>
@@ -96,8 +96,8 @@ else if (settings is not null)
                 <tr><th>@field.Key</th><td>@field.Value</td></tr>
             }
         </tbody></MudSimpleTable>
-    </section>
-    <section class="card">
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Resource usage"]</h2>
         <p>@L["Usage returned by DirectAdmin for this user."]</p>
         @if (usageError is not null) { <p class="error" role="status">@usageError</p> }
@@ -110,7 +110,7 @@ else if (settings is not null)
                 }
             </tbody></MudSimpleTable>
         }
-    </section>
+    </MudPaper>
 }
 @code {
     [Parameter] public string Username { get; set; } = "";

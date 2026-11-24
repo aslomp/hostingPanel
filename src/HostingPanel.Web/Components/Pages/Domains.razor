@@ -18,11 +18,11 @@
 
 @if (!Session.Connected)
 {
-    <div class="card"><p>Verbind eerst via het <a href="/">dashboard</a>.</p></div>
+    <MudPaper Class="pa-4 my-3" Elevation="1"><p>Verbind eerst via het <a href="/">dashboard</a>.</p></MudPaper>
 }
 else
 {
-    <div class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Domains of an account"]</h2>
         <p>@L["Leave blank to list all accessible domains, or enter an account to filter."]</p>
         <label for="owner">@L["Username (optional)"]</label>
@@ -47,9 +47,9 @@ else
             </MudSimpleTable>
             @if (domains.Count == 0) { <p>@L["No domains found for this account."]</p> }
         }
-    </div>
+    </MudPaper>
 
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Add domain"]</h2>
         <p>@L["Create a website for the signed-in account."]</p>
         <MudForm @ref="createForm">
@@ -65,7 +65,7 @@ else
         {
             <p role="status">@mutationStatus</p>
         }
-    </section>
+    </MudPaper>
 
 }
 @code {

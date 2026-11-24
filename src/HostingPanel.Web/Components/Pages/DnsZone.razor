@@ -14,11 +14,11 @@
 </PanelPageHeader>
 @if (!Session.Connected)
 {
-    <div class="card">Verbind eerst via het <a href="/">dashboard</a>.</div>
+    <MudPaper Class="pa-4 my-3" Elevation="1">Verbind eerst via het <a href="/">dashboard</a>.</MudPaper>
 }
 else
 {
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>DNS-records</h2>
         @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
         @if (busy) { <PanelLoading>@L["Loading DNS zone…"]</PanelLoading> }
@@ -41,8 +41,8 @@ else
                 </tbody>
             </MudSimpleTable>
         }
-    </section>
-    <section class="card">
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@(action == "add" ? L["Add DNS record"].Value : L["Edit DNS record"].Value)</h2>
         <p>@L["DirectAdmin determines whether the change is permitted."]</p>
         <label for="dnsType">Type</label>
@@ -63,7 +63,7 @@ else
             <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Reset">@L["New record"]</MudButton>
         </div>
         @if (message is not null) { <p role="status">@message</p> }
-    </section>
+    </MudPaper>
 }
 @code {
     [Parameter] public string Domain { get; set; } = "";
