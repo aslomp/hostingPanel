@@ -14,7 +14,7 @@
     <label>@L["New password"]</label><input type="password" @bind="password" autocomplete="new-password" />
     <label>@L["Confirm password"]</label><input type="password" @bind="passwordConfirmation" autocomplete="new-password" />
     <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(package) || password != passwordConfirmation || password.Length < 5)" @onclick="Create">
-        @(busy ? "Verwerken…" : L["Create account"].Value)
+        @(busy ? L["Processing…"].Value : L["Create account"].Value)
     </button>
 </section>
 <section class="card">

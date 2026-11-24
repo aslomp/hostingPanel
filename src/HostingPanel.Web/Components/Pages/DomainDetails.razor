@@ -9,9 +9,9 @@
     <div>
         <div class="eyebrow"><a href="/domains">@L["Domain management"]</a> / Details</div>
         <h1>@Domain</h1>
-        <p>Domeinconfiguratie en instellingen uit DirectAdmin. <a href="@($"/domains/{Uri.EscapeDataString(Domain)}/dns")">@L["Manage DNS records"]</a></p>
+        <p>@L["Domain configuration and settings from DirectAdmin."] <a href="@($"/domains/{Uri.EscapeDataString(Domain)}/dns")">@L["Manage DNS records"]</a></p>
     </div>
-    <button @onclick="Refresh" disabled="@loading">@(loading ? "Laden…" : L["Refresh"].Value)</button>
+    <button @onclick="Refresh" disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</button>
 </div>
 
 @if (!Session.Connected)

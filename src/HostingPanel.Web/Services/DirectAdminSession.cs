@@ -28,7 +28,7 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
     public void SetCredentials(string username, string loginKey)
     {
         if (string.IsNullOrWhiteSpace(loginKey) || !IsValidAccountName(username))
-            throw new ArgumentException("Geldige gebruikersnaam en login key zijn verplicht.");
+            throw new ArgumentException("A valid username and login key are required.");
         ticketChannels.Revoke(_ticketChannel);
         _ticketChannel = ticketChannels.Register();
         _username = username.Trim();
@@ -60,7 +60,7 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
     {
         if (!Connected) throw new InvalidOperationException("Maak eerst verbinding met DirectAdmin.");
         if (!IsAllowedEndpoint(endpoint))
-            throw new ArgumentException("Alleen relatieve DirectAdmin API-paden zijn toegestaan.", nameof(endpoint));
+            throw new ArgumentException("Only relative DirectAdmin API paths are allowed.", nameof(endpoint));
 
         return await SendAsync(HttpMethod.Get, endpoint, null, cancellationToken);
     }
@@ -121,9 +121,9 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         {
             string error = status switch
             {
-                401 or 403 => "DirectAdmin staat aanmelden als deze gebruiker niet toe.",
-                501 => "De DirectAdmin-server ondersteunt de vereiste sessievalidatie niet.",
-                _ => $"Impersonation kon niet worden gevalideerd (HTTP {status})."
+                401 or 403 => "DirectAdmin does not permit signing in as this user.",
+                501 => "The DirectAdmin server does not support the required session validation.",
+                _ => $"Impersonation could not be validated (HTTP {status})."
             };
             throw new UnauthorizedAccessException(error);
         }
@@ -134,7 +134,7 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
             allowed.ValueKind != JsonValueKind.True ||
             !response.RootElement.TryGetProperty("effectiveUsername", out var actual) ||
             !username.Equals(actual.GetString(), StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("De doelidentiteit kon niet worden bevestigd.");
+            throw new InvalidOperationException("The target identity could not be confirmed.");
         ticketChannels.Revoke(_ticketChannel);
         _ticketChannel = ticketChannels.Register();
         _impersonatedUsername = username;
@@ -384,7 +384,7 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
     {
         var (status, body) = await GetRawAsync("api/search/users?limit=1000", cancellationToken);
         if (status == 401 || status == 403)
-            throw new UnauthorizedAccessException("DirectAdmin heeft de aanmelding geweigerd.");
+            throw new UnauthorizedAccessException("DirectAdmin rejected the sign-in.");
         if (status is < 200 or >= 300)
             throw new HttpRequestException($"DirectAdmin reageert met HTTP {status}.");
         return DirectAdminUsersParser.Parse(body);

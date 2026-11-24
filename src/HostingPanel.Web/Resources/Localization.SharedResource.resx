@@ -10,6 +10,7 @@
   <data name="＋ Add user" xml:space="preserve"><value>＋ Add user</value></data>
   <data name="＋ Create database" xml:space="preserve"><value>＋ Create database</value></data>
   <data name="＋ New ticket" xml:space="preserve"><value>＋ New ticket</value></data>
+  <data name="A valid username and login key are required." xml:space="preserve"><value>A valid username and login key are required.</value></data>
   <data name="About the control panel" xml:space="preserve"><value>About the control panel</value></data>
   <data name="Account" xml:space="preserve"><value>Account</value></data>
   <data name="Account management" xml:space="preserve"><value>Account management</value></data>
@@ -20,7 +21,9 @@
   <data name="Account overview" xml:space="preserve"><value>Account overview</value></data>
   <data name="Account settings, assigned hosting package and package limits available in DirectAdmin." xml:space="preserve"><value>Account settings, assigned hosting package and package limits available in DirectAdmin.</value></data>
   <data name="Account tree — HostingPanel" xml:space="preserve"><value>Account tree — HostingPanel</value></data>
+  <data name="ACME configuration" xml:space="preserve"><value>ACME configuration</value></data>
   <data name="ACME JSON is missing one or more required contract fields." xml:space="preserve"><value>ACME JSON is missing one or more required contract fields.</value></data>
+  <data name="ACME logs" xml:space="preserve"><value>ACME logs</value></data>
   <data name="ACME settings" xml:space="preserve"><value>ACME settings</value></data>
   <data name="Action" xml:space="preserve"><value>Action</value></data>
   <data name="Action {0}: HTTP {1}. {2}" xml:space="preserve"><value>Action {0}: HTTP {1}. {2}</value></data>
@@ -52,10 +55,14 @@
   <data name="Apply patch" xml:space="preserve"><value>Apply patch</value></data>
   <data name="Assigned package:" xml:space="preserve"><value>Assigned package:</value></data>
   <data name="Audit logs — summary" xml:space="preserve"><value>Audit logs — summary</value></data>
+  <data name="Available log sources from the DirectAdmin API." xml:space="preserve"><value>Available log sources from the DirectAdmin API.</value></data>
   <data name="Available updates and update history directly from the backend." xml:space="preserve"><value>Available updates and update history directly from the backend.</value></data>
   <data name="Available upgrades" xml:space="preserve"><value>Available upgrades</value></data>
+  <data name="Available users" xml:space="preserve"><value>Available users</value></data>
+  <data name="Available web server information through the official API." xml:space="preserve"><value>Available web server information through the official API.</value></data>
   <data name="Backend did not return the overview (HTTP {0})." xml:space="preserve"><value>Backend did not return the overview (HTTP {0}).</value></data>
   <data name="Backend disconnected" xml:space="preserve"><value>Backend disconnected</value></data>
+  <data name="Backend maintenance tasks." xml:space="preserve"><value>Backend maintenance tasks.</value></data>
   <data name="Backend-accessible accounts and reseller configuration, without UI role filtering." xml:space="preserve"><value>Backend-accessible accounts and reseller configuration, without UI role filtering.</value></data>
   <data name="Backup and restore" xml:space="preserve"><value>Backup and restore</value></data>
   <data name="Backups" xml:space="preserve"><value>Backups</value></data>
@@ -69,6 +76,8 @@
   <data name="Certificate information" xml:space="preserve"><value>Certificate information</value></data>
   <data name="Certificate status" xml:space="preserve"><value>Certificate status</value></data>
   <data name="Certificate status and ACME configuration for the DirectAdmin server." xml:space="preserve"><value>Certificate status and ACME configuration for the DirectAdmin server.</value></data>
+  <data name="Certificates" xml:space="preserve"><value>Certificates</value></data>
+  <data name="Certificates, ACME configuration and available domains." xml:space="preserve"><value>Certificates, ACME configuration and available domains.</value></data>
   <data name="Change account limit" xml:space="preserve"><value>Change account limit</value></data>
   <data name="Change account status" xml:space="preserve"><value>Change account status</value></data>
   <data name="Change ACME configuration" xml:space="preserve"><value>Change ACME configuration</value></data>
@@ -98,6 +107,7 @@
   <data name="Configuration" xml:space="preserve"><value>Configuration</value></data>
   <data name="Configuration overview" xml:space="preserve"><value>Configuration overview</value></data>
   <data name="Configuration source" xml:space="preserve"><value>Configuration source</value></data>
+  <data name="Configuration, versions, updates and execution status." xml:space="preserve"><value>Configuration, versions, updates and execution status.</value></data>
   <data name="Configure whether DirectAdmin monitors the selected service." xml:space="preserve"><value>Configure whether DirectAdmin monitors the selected service.</value></data>
   <data name="Confirm account name" xml:space="preserve"><value>Confirm account name</value></data>
   <data name="Confirm deletion" xml:space="preserve"><value>Confirm deletion</value></data>
@@ -113,6 +123,7 @@
   <data name="Connected account" xml:space="preserve"><value>Connected account</value></data>
   <data name="Connected to DirectAdmin" xml:space="preserve"><value>Connected to DirectAdmin</value></data>
   <data name="Control panel" xml:space="preserve"><value>Control panel</value></data>
+  <data name="cPanel import" xml:space="preserve"><value>cPanel import</value></data>
   <data name="Create" xml:space="preserve"><value>Create</value></data>
   <data name="Create account" xml:space="preserve"><value>Create account</value></data>
   <data name="Create administrator" xml:space="preserve"><value>Create administrator</value></data>
@@ -132,8 +143,13 @@
   <data name="Current session, active sessions and session management from DirectAdmin." xml:space="preserve"><value>Current session, active sessions and session management from DirectAdmin.</value></data>
   <data name="Custom HTTPD configurations" xml:space="preserve"><value>Custom HTTPD configurations</value></data>
   <data name="CustomBuild" xml:space="preserve"><value>CustomBuild</value></data>
+  <data name="CustomBuild logs" xml:space="preserve"><value>CustomBuild logs</value></data>
+  <data name="CustomBuild options" xml:space="preserve"><value>CustomBuild options</value></data>
+  <data name="Customize Evolution" xml:space="preserve"><value>Customize Evolution</value></data>
   <data name="Customize Evolution theme" xml:space="preserve"><value>Customize Evolution theme</value></data>
   <data name="Dashboard" xml:space="preserve"><value>Dashboard</value></data>
+  <data name="Data from DirectAdmin" xml:space="preserve"><value>Data from DirectAdmin</value></data>
+  <data name="Data received from DirectAdmin (HTTP {0})." xml:space="preserve"><value>Data received from DirectAdmin (HTTP {0}).</value></data>
   <data name="Data unavailable" xml:space="preserve"><value>Data unavailable</value></data>
   <data name="Database connection" xml:space="preserve"><value>Database connection</value></data>
   <data name="Database created. The overview has been refreshed." xml:space="preserve"><value>Database created. The overview has been refreshed.</value></data>
@@ -142,6 +158,8 @@
   <data name="Database management — HostingPanel" xml:space="preserve"><value>Database management — HostingPanel</value></data>
   <data name="Database name" xml:space="preserve"><value>Database name</value></data>
   <data name="Database overview unavailable (HTTP {0})." xml:space="preserve"><value>Database overview unavailable (HTTP {0}).</value></data>
+  <data name="Database processes" xml:space="preserve"><value>Database processes</value></data>
+  <data name="Database processes and server load." xml:space="preserve"><value>Database processes and server load.</value></data>
   <data name="Database user" xml:space="preserve"><value>Database user</value></data>
   <data name="Database users" xml:space="preserve"><value>Database users</value></data>
   <data name="Database users and management operations through DirectAdmin." xml:space="preserve"><value>Database users and management operations through DirectAdmin.</value></data>
@@ -163,6 +181,7 @@
   <data name="Deletion not confirmed: backend HTTP {0}." xml:space="preserve"><value>Deletion not confirmed: backend HTTP {0}.</value></data>
   <data name="DirectAdmin adds the account prefix where necessary. The exact name is retrieved from the backend after creation." xml:space="preserve"><value>DirectAdmin adds the account prefix where necessary. The exact name is retrieved from the backend after creation.</value></data>
   <data name="DirectAdmin API" xml:space="preserve"><value>DirectAdmin API</value></data>
+  <data name="DirectAdmin configuration" xml:space="preserve"><value>DirectAdmin configuration</value></data>
   <data name="DirectAdmin configuration and server settings through the official API." xml:space="preserve"><value>DirectAdmin configuration and server settings through the official API.</value></data>
   <data name="DirectAdmin confirmed deletion of &apos;{0}&apos;." xml:space="preserve"><value>DirectAdmin confirmed deletion of &apos;{0}&apos;.</value></data>
   <data name="DirectAdmin confirmed the DNS change" xml:space="preserve"><value>DirectAdmin confirmed the DNS change</value></data>
@@ -189,24 +208,30 @@
   <data name="DirectAdmin did not confirm creation (HTTP {0})." xml:space="preserve"><value>DirectAdmin did not confirm creation (HTTP {0}).</value></data>
   <data name="DirectAdmin did not confirm the reply (HTTP {0}): {1}" xml:space="preserve"><value>DirectAdmin did not confirm the reply (HTTP {0}): {1}</value></data>
   <data name="DirectAdmin does not allow deletion." xml:space="preserve"><value>DirectAdmin does not allow deletion.</value></data>
+  <data name="DirectAdmin does not permit signing in as this user." xml:space="preserve"><value>DirectAdmin does not permit signing in as this user.</value></data>
   <data name="DirectAdmin evaluates read and write operations separately." xml:space="preserve"><value>DirectAdmin evaluates read and write operations separately.</value></data>
   <data name="DirectAdmin Evolution-inspired management, with live data from the connected backend." xml:space="preserve"><value>DirectAdmin Evolution-inspired management, with live data from the connected backend.</value></data>
   <data name="DirectAdmin rejected the sign-in." xml:space="preserve"><value>DirectAdmin rejected the sign-in.</value></data>
   <data name="DirectAdmin reported a conflict for this DNS change." xml:space="preserve"><value>DirectAdmin reported a conflict for this DNS change.</value></data>
   <data name="DirectAdmin reported a conflict for this domain operation." xml:space="preserve"><value>DirectAdmin reported a conflict for this domain operation.</value></data>
   <data name="DirectAdmin responded with HTTP {0}." xml:space="preserve"><value>DirectAdmin responded with HTTP {0}.</value></data>
+  <data name="DirectAdmin returned HTTP {0}." xml:space="preserve"><value>DirectAdmin returned HTTP {0}.</value></data>
   <data name="DirectAdmin session check: HTTP {0}." xml:space="preserve"><value>DirectAdmin session check: HTTP {0}.</value></data>
   <data name="DirectAdmin validates the package, IP address and permissions of the signed-in identity." xml:space="preserve"><value>DirectAdmin validates the package, IP address and permissions of the signed-in identity.</value></data>
   <data name="DirectAdmin-compatible API" xml:space="preserve"><value>DirectAdmin-compatible API</value></data>
+  <data name="Directory contents" xml:space="preserve"><value>Directory contents</value></data>
+  <data name="Directory tree" xml:space="preserve"><value>Directory tree</value></data>
   <data name="Disable" xml:space="preserve"><value>Disable</value></data>
   <data name="Disabled" xml:space="preserve"><value>Disabled</value></data>
   <data name="Disconnect" xml:space="preserve"><value>Disconnect</value></data>
   <data name="Disk space (MB)" xml:space="preserve"><value>Disk space (MB)</value></data>
   <data name="Disk space (MiB or unlimited)" xml:space="preserve"><value>Disk space (MiB or unlimited)</value></data>
+  <data name="Disk usage" xml:space="preserve"><value>Disk usage</value></data>
   <data name="Dismiss notification" xml:space="preserve"><value>Dismiss notification</value></data>
   <data name="DNS change not confirmed (HTTP {0})." xml:space="preserve"><value>DNS change not confirmed (HTTP {0}).</value></data>
   <data name="DNS management" xml:space="preserve"><value>DNS management</value></data>
   <data name="DNS management — HostingPanel" xml:space="preserve"><value>DNS management — HostingPanel</value></data>
+  <data name="DNS settings are available through the separate DNS management page." xml:space="preserve"><value>DNS settings are available through the separate DNS management page.</value></data>
   <data name="DNS zone unavailable: HTTP {0}. Check domain permissions." xml:space="preserve"><value>DNS zone unavailable: HTTP {0}. Check domain permissions.</value></data>
   <data name="DNS zones unavailable (HTTP {0})." xml:space="preserve"><value>DNS zones unavailable (HTTP {0}).</value></data>
   <data name="Domain" xml:space="preserve"><value>Domain</value></data>
@@ -216,13 +241,16 @@
   <data name="Domain management — HostingPanel" xml:space="preserve"><value>Domain management — HostingPanel</value></data>
   <data name="Domain name" xml:space="preserve"><value>Domain name</value></data>
   <data name="Domain operation not confirmed: HTTP {0}." xml:space="preserve"><value>Domain operation not confirmed: HTTP {0}.</value></data>
+  <data name="Domain SSL" xml:space="preserve"><value>Domain SSL</value></data>
   <data name="Domains" xml:space="preserve"><value>Domains</value></data>
   <data name="Domains of an account" xml:space="preserve"><value>Domains of an account</value></data>
   <data name="Edit" xml:space="preserve"><value>Edit</value></data>
   <data name="Edit DNS record" xml:space="preserve"><value>Edit DNS record</value></data>
   <data name="Email accounts" xml:space="preserve"><value>Email accounts</value></data>
   <data name="Email address" xml:space="preserve"><value>Email address</value></data>
+  <data name="Email logs" xml:space="preserve"><value>Email logs</value></data>
   <data name="Email server configuration" xml:space="preserve"><value>Email server configuration</value></data>
+  <data name="Email statistics" xml:space="preserve"><value>Email statistics</value></data>
   <data name="Enable" xml:space="preserve"><value>Enable</value></data>
   <data name="Enabled" xml:space="preserve"><value>Enabled</value></data>
   <data name="Enter ACME to confirm changes" xml:space="preserve"><value>Enter ACME to confirm changes</value></data>
@@ -235,6 +263,8 @@
   <data name="Enter the account name to confirm" xml:space="preserve"><value>Enter the account name to confirm</value></data>
   <data name="Enter the exact domain name to confirm" xml:space="preserve"><value>Enter the exact domain name to confirm</value></data>
   <data name="Enter the hostname to confirm" xml:space="preserve"><value>Enter the hostname to confirm</value></data>
+  <data name="Enter the required identifier first." xml:space="preserve"><value>Enter the required identifier first.</value></data>
+  <data name="Enter the required value" xml:space="preserve"><value>Enter the required value</value></data>
   <data name="Enter the same ID to confirm" xml:space="preserve"><value>Enter the same ID to confirm</value></data>
   <data name="Enter the same PID to confirm" xml:space="preserve"><value>Enter the same PID to confirm</value></data>
   <data name="Enter the service name to confirm" xml:space="preserve"><value>Enter the service name to confirm</value></data>
@@ -249,6 +279,9 @@
   <data name="Extra programs" xml:space="preserve"><value>Extra programs</value></data>
   <data name="Failed to retrieve user data (HTTP {0}). Check DirectAdmin permissions." xml:space="preserve"><value>Failed to retrieve user data (HTTP {0}). Check DirectAdmin permissions.</value></data>
   <data name="File management" xml:space="preserve"><value>File management</value></data>
+  <data name="File systems" xml:space="preserve"><value>File systems</value></data>
+  <data name="Files" xml:space="preserve"><value>Files</value></data>
+  <data name="Files and directories of the signed-in DirectAdmin identity." xml:space="preserve"><value>Files and directories of the signed-in DirectAdmin identity.</value></data>
   <data name="Filter domains" xml:space="preserve"><value>Filter domains</value></data>
   <data name="for example nginx" xml:space="preserve"><value>for example nginx</value></data>
   <data name="For example, an existing user" xml:space="preserve"><value>For example, an existing user</value></data>
@@ -256,18 +289,24 @@
   <data name="From" xml:space="preserve"><value>From</value></data>
   <data name="General" xml:space="preserve"><value>General</value></data>
   <data name="General information" xml:space="preserve"><value>General information</value></data>
+  <data name="Global options" xml:space="preserve"><value>Global options</value></data>
   <data name="Global statistics" xml:space="preserve"><value>Global statistics</value></data>
   <data name="High" xml:space="preserve"><value>High</value></data>
   <data name="Hosting administration / Dashboard" xml:space="preserve"><value>Hosting administration / Dashboard</value></data>
   <data name="Hosting package" xml:space="preserve"><value>Hosting package</value></data>
   <data name="HostingPanel uses the same management groups as DirectAdmin Evolution. Permissions and available resources are provided by the backend." xml:space="preserve"><value>HostingPanel uses the same management groups as DirectAdmin Evolution. Permissions and available resources are provided by the backend.</value></data>
   <data name="Hostname" xml:space="preserve"><value>Hostname</value></data>
+  <data name="Identifier" xml:space="preserve"><value>Identifier</value></data>
   <data name="Impersonation active:" xml:space="preserve"><value>Impersonation active:</value></data>
+  <data name="Impersonation could not be validated (HTTP {0})." xml:space="preserve"><value>Impersonation could not be validated (HTTP {0}).</value></data>
   <data name="Import cPanel" xml:space="preserve"><value>Import cPanel</value></data>
+  <data name="Import task logs by task ID." xml:space="preserve"><value>Import task logs by task ID.</value></data>
   <data name="Includes databases of subordinate accounts where DirectAdmin permits access." xml:space="preserve"><value>Includes databases of subordinate accounts where DirectAdmin permits access.</value></data>
   <data name="Incomplete: {0} accounts could not be read." xml:space="preserve"><value>Incomplete: {0} accounts could not be read.</value></data>
+  <data name="Information" xml:space="preserve"><value>Information</value></data>
   <data name="Inspect service" xml:space="preserve"><value>Inspect service</value></data>
   <data name="Integration" xml:space="preserve"><value>Integration</value></data>
+  <data name="Invalid API path." xml:space="preserve"><value>Invalid API path.</value></data>
   <data name="Invalid DNS record data." xml:space="preserve"><value>Invalid DNS record data.</value></data>
   <data name="Invalid domain name or confirmation." xml:space="preserve"><value>Invalid domain name or confirmation.</value></data>
   <data name="Invalid hostname." xml:space="preserve"><value>Invalid hostname.</value></data>
@@ -281,6 +320,9 @@
   <data name="JSON must contain engineEnabled (bool) and disabledRules (array)." xml:space="preserve"><value>JSON must contain engineEnabled (bool) and disabledRules (array).</value></data>
   <data name="Language" xml:space="preserve"><value>Language</value></data>
   <data name="Leave blank for all domains accessible through DirectAdmin (admin: server-wide; reseller: own accounts; user: own domains). Enter an account to filter." xml:space="preserve"><value>Leave blank for all domains accessible through DirectAdmin (admin: server-wide; reseller: own accounts; user: own domains). Enter an account to filter.</value></data>
+  <data name="License" xml:space="preserve"><value>License</value></data>
+  <data name="License information and verification." xml:space="preserve"><value>License information and verification.</value></data>
+  <data name="License proof" xml:space="preserve"><value>License proof</value></data>
   <data name="Licensing" xml:space="preserve"><value>Licensing</value></data>
   <data name="Limit" xml:space="preserve"><value>Limit</value></data>
   <data name="Limit not confirmed: backend HTTP {0}." xml:space="preserve"><value>Limit not confirmed: backend HTTP {0}.</value></data>
@@ -290,14 +332,19 @@
   <data name="Live notifications via SignalR" xml:space="preserve"><value>Live notifications via SignalR</value></data>
   <data name="Live resources" xml:space="preserve"><value>Live resources</value></data>
   <data name="Live service list, details and management actions; the backend determines which operations are permitted." xml:space="preserve"><value>Live service list, details and management actions; the backend determines which operations are permitted.</value></data>
+  <data name="Load" xml:space="preserve"><value>Load</value></data>
   <data name="Loading account tree…" xml:space="preserve"><value>Loading account tree…</value></data>
   <data name="Loading databases…" xml:space="preserve"><value>Loading databases…</value></data>
   <data name="Loading DNS zone…" xml:space="preserve"><value>Loading DNS zone…</value></data>
   <data name="Loading users…" xml:space="preserve"><value>Loading users…</value></data>
+  <data name="Loading…" xml:space="preserve"><value>Loading…</value></data>
   <data name="Local data" xml:space="preserve"><value>Local data</value></data>
   <data name="Local mail" xml:space="preserve"><value>Local mail</value></data>
   <data name="Local overrides" xml:space="preserve"><value>Local overrides</value></data>
+  <data name="Login and security events from the available API." xml:space="preserve"><value>Login and security events from the available API.</value></data>
+  <data name="Login history" xml:space="preserve"><value>Login history</value></data>
   <data name="Low" xml:space="preserve"><value>Low</value></data>
+  <data name="Mail queue" xml:space="preserve"><value>Mail queue</value></data>
   <data name="Main navigation" xml:space="preserve"><value>Main navigation</value></data>
   <data name="Maintenance" xml:space="preserve"><value>Maintenance</value></data>
   <data name="Manage accounts" xml:space="preserve"><value>Manage accounts</value></data>
@@ -312,6 +359,7 @@
   <data name="Manage user packages" xml:space="preserve"><value>Manage user packages</value></data>
   <data name="Management" xml:space="preserve"><value>Management</value></data>
   <data name="Management sections" xml:space="preserve"><value>Management sections</value></data>
+  <data name="Memory" xml:space="preserve"><value>Memory</value></data>
   <data name="Message" xml:space="preserve"><value>Message</value></data>
   <data name="Message all users" xml:space="preserve"><value>Message all users</value></data>
   <data name="Message templates" xml:space="preserve"><value>Message templates</value></data>
@@ -325,8 +373,11 @@
   <data name="Modify local DirectAdmin overrides" xml:space="preserve"><value>Modify local DirectAdmin overrides</value></data>
   <data name="ModSecurity and ClamAV" xml:space="preserve"><value>ModSecurity and ClamAV</value></data>
   <data name="ModSecurity and ClamAV through the official DirectAdmin API." xml:space="preserve"><value>ModSecurity and ClamAV through the official DirectAdmin API.</value></data>
+  <data name="ModSecurity audit" xml:space="preserve"><value>ModSecurity audit</value></data>
   <data name="ModSecurity for domain" xml:space="preserve"><value>ModSecurity for domain</value></data>
+  <data name="Move users" xml:space="preserve"><value>Move users</value></data>
   <data name="Move users between resellers" xml:space="preserve"><value>Move users between resellers</value></data>
+  <data name="Multi-server configuration has no separate modern Swagger contract." xml:space="preserve"><value>Multi-server configuration has no separate modern Swagger contract.</value></data>
   <data name="Multi-server setup" xml:space="preserve"><value>Multi-server setup</value></data>
   <data name="Mutations are disabled or the change could not be confirmed." xml:space="preserve"><value>Mutations are disabled or the change could not be confirmed.</value></data>
   <data name="Mutations are disabled or the setting is unavailable." xml:space="preserve"><value>Mutations are disabled or the setting is unavailable.</value></data>
@@ -364,6 +415,8 @@
   <data name="Obtain certificate" xml:space="preserve"><value>Obtain certificate</value></data>
   <data name="on behalf of administrator" xml:space="preserve"><value>on behalf of administrator</value></data>
   <data name="on the DirectAdmin server." xml:space="preserve"><value>on the DirectAdmin server.</value></data>
+  <data name="Only relative DirectAdmin API paths are allowed." xml:space="preserve"><value>Only relative DirectAdmin API paths are allowed.</value></data>
+  <data name="Options" xml:space="preserve"><value>Options</value></data>
   <data name="or a username accepted by DirectAdmin." xml:space="preserve"><value>or a username accepted by DirectAdmin.</value></data>
   <data name="Origin" xml:space="preserve"><value>Origin</value></data>
   <data name="Original DirectAdmin field names, with confidential values filtered." xml:space="preserve"><value>Original DirectAdmin field names, with confidential values filtered.</value></data>
@@ -380,6 +433,8 @@
   <data name="Permanently delete database" xml:space="preserve"><value>Permanently delete database</value></data>
   <data name="Permission to modify the DNS zone denied." xml:space="preserve"><value>Permission to modify the DNS zone denied.</value></data>
   <data name="PHP settings" xml:space="preserve"><value>PHP settings</value></data>
+  <data name="PHP versions, options and available software from CustomBuild." xml:space="preserve"><value>PHP versions, options and available software from CustomBuild.</value></data>
+  <data name="Plugin installation and activation status." xml:space="preserve"><value>Plugin installation and activation status.</value></data>
   <data name="Plugin management" xml:space="preserve"><value>Plugin management</value></data>
   <data name="Prepare domain operation" xml:space="preserve"><value>Prepare domain operation</value></data>
   <data name="Previous page" xml:space="preserve"><value>Previous page</value></data>
@@ -402,6 +457,7 @@
   <data name="Request certificate" xml:space="preserve"><value>Request certificate</value></data>
   <data name="Requesting a new server certificate is a backend operation and may change server configuration." xml:space="preserve"><value>Requesting a new server certificate is a backend operation and may change server configuration.</value></data>
   <data name="Requires fields" xml:space="preserve"><value>Requires fields</value></data>
+  <data name="Reseller account" xml:space="preserve"><value>Reseller account</value></data>
   <data name="Reseller details" xml:space="preserve"><value>Reseller details</value></data>
   <data name="Reseller management" xml:space="preserve"><value>Reseller management</value></data>
   <data name="Reseller packages" xml:space="preserve"><value>Reseller packages</value></data>
@@ -454,6 +510,7 @@
   <data name="Security" xml:space="preserve"><value>Security</value></data>
   <data name="Security — HostingPanel" xml:space="preserve"><value>Security — HostingPanel</value></data>
   <data name="Security and API" xml:space="preserve"><value>Security and API</value></data>
+  <data name="Security status" xml:space="preserve"><value>Security status</value></data>
   <data name="Select a service and an exact management action. No actions are hidden based on a local user role." xml:space="preserve"><value>Select a service and an exact management action. No actions are hidden based on a local user role.</value></data>
   <data name="Send a new request to the DirectAdmin backend." xml:space="preserve"><value>Send a new request to the DirectAdmin backend.</value></data>
   <data name="Send reply" xml:space="preserve"><value>Send reply</value></data>
@@ -478,7 +535,10 @@
   <data name="Settings are saved separately without changing other DirectAdmin checkboxes." xml:space="preserve"><value>Settings are saved separately without changing other DirectAdmin checkboxes.</value></data>
   <data name="Show all users" xml:space="preserve"><value>Show all users</value></data>
   <data name="Sign in as this user" xml:space="preserve"><value>Sign in as this user</value></data>
+  <data name="Sign in first using the" xml:space="preserve"><value>Sign in first using the</value></data>
   <data name="Size (bytes)" xml:space="preserve"><value>Size (bytes)</value></data>
+  <data name="Skin files and presentation options." xml:space="preserve"><value>Skin files and presentation options.</value></data>
+  <data name="Skin name" xml:space="preserve"><value>Skin name</value></data>
   <data name="Source" xml:space="preserve"><value>Source</value></data>
   <data name="SSL certificates" xml:space="preserve"><value>SSL certificates</value></data>
   <data name="Start ClamAV scan" xml:space="preserve"><value>Start ClamAV scan</value></data>
@@ -500,11 +560,13 @@
   <data name="System information" xml:space="preserve"><value>System information</value></data>
   <data name="System information — HostingPanel" xml:space="preserve"><value>System information — HostingPanel</value></data>
   <data name="System information &amp; files" xml:space="preserve"><value>System information &amp; files</value></data>
+  <data name="System logs" xml:space="preserve"><value>System logs</value></data>
   <data name="System packages" xml:space="preserve"><value>System packages</value></data>
   <data name="System services" xml:space="preserve"><value>System services</value></data>
   <data name="System services — HostingPanel" xml:space="preserve"><value>System services — HostingPanel</value></data>
   <data name="System updates — HostingPanel" xml:space="preserve"><value>System updates — HostingPanel</value></data>
   <data name="Tables" xml:space="preserve"><value>Tables</value></data>
+  <data name="Task log" xml:space="preserve"><value>Task log</value></data>
   <data name="Terminate all other sessions" xml:space="preserve"><value>Terminate all other sessions</value></data>
   <data name="Terminate one session" xml:space="preserve"><value>Terminate one session</value></data>
   <data name="Terminate other sessions" xml:space="preserve"><value>Terminate other sessions</value></data>
@@ -512,25 +574,45 @@
   <data name="Test connection" xml:space="preserve"><value>Test connection</value></data>
   <data name="Test domain rejected (HTTP {0}). Use a valid domain name." xml:space="preserve"><value>Test domain rejected (HTTP {0}). Use a valid domain name.</value></data>
   <data name="Test or change database connection" xml:space="preserve"><value>Test or change database connection</value></data>
+  <data name="The API offers message lists but no message template management contract." xml:space="preserve"><value>The API offers message lists but no message template management contract.</value></data>
+  <data name="The API provides message read and delete operations but no broadcast creation operation." xml:space="preserve"><value>The API provides message read and delete operations but no broadcast creation operation.</value></data>
   <data name="The backend controls access rights." xml:space="preserve"><value>The backend controls access rights.</value></data>
   <data name="The backend determines available data and actions. No account roles are assumed." xml:space="preserve"><value>The backend determines available data and actions. No account roles are assumed.</value></data>
   <data name="The backend determines which sessions may be terminated. This operation preserves the current session." xml:space="preserve"><value>The backend determines which sessions may be terminated. This operation preserves the current session.</value></data>
   <data name="The backend did not confirm the change (HTTP {0})." xml:space="preserve"><value>The backend did not confirm the change (HTTP {0}).</value></data>
   <data name="The backend did not return the ticket list (HTTP {0})." xml:space="preserve"><value>The backend did not return the ticket list (HTTP {0}).</value></data>
+  <data name="The backend may offer additional legacy functionality, which requires a separate adapter." xml:space="preserve"><value>The backend may offer additional legacy functionality, which requires a separate adapter.</value></data>
   <data name="The backend returned no databases for accessible accounts." xml:space="preserve"><value>The backend returned no databases for accessible accounts.</value></data>
   <data name="The complete pinned DirectAdmin specification; not every operation is implemented in HostingPanel yet." xml:space="preserve"><value>The complete pinned DirectAdmin specification; not every operation is implemented in HostingPanel yet.</value></data>
   <data name="The configuration may contain sensitive DNS provider settings. Only the backend determines whether saving is permitted." xml:space="preserve"><value>The configuration may contain sensitive DNS provider settings. Only the backend determines whether saving is permitted.</value></data>
+  <data name="The current API specification provides no suitable read operation for this feature. No data is fabricated." xml:space="preserve"><value>The current API specification provides no suitable read operation for this feature. No data is fabricated.</value></data>
+  <data name="The current Swagger does not contain an administrator creation operation. Account data can be viewed." xml:space="preserve"><value>The current Swagger does not contain an administrator creation operation. Account data can be viewed.</value></data>
+  <data name="The current Swagger does not contain IP address management. Server information is read-only." xml:space="preserve"><value>The current Swagger does not contain IP address management. Server information is read-only.</value></data>
   <data name="The database configuration contract is incomplete." xml:space="preserve"><value>The database configuration contract is incomplete.</value></data>
+  <data name="The DirectAdmin server does not support the required session validation." xml:space="preserve"><value>The DirectAdmin server does not support the required session validation.</value></data>
+  <data name="The modern API defines no operation for moving accounts between resellers." xml:space="preserve"><value>The modern API defines no operation for moving accounts between resellers.</value></data>
+  <data name="The modern API defines no system backup or restore operation." xml:space="preserve"><value>The modern API defines no system backup or restore operation.</value></data>
+  <data name="The modern API offers file management within the backend context, not a general system file editor." xml:space="preserve"><value>The modern API offers file management within the backend context, not a general system file editor.</value></data>
+  <data name="The modern API offers mail statistics but no queue management." xml:space="preserve"><value>The modern API offers mail statistics but no queue management.</value></data>
+  <data name="The modern Swagger provides no operation for backup management." xml:space="preserve"><value>The modern Swagger provides no operation for backup management.</value></data>
+  <data name="The modern Swagger provides no operation for individual cron jobs." xml:space="preserve"><value>The modern Swagger provides no operation for individual cron jobs.</value></data>
+  <data name="The modern Swagger provides no read operation for global cron jobs." xml:space="preserve"><value>The modern Swagger provides no read operation for global cron jobs.</value></data>
   <data name="The overview includes accounts exposed by DirectAdmin to the current identity." xml:space="preserve"><value>The overview includes accounts exposed by DirectAdmin to the current identity.</value></data>
   <data name="The package must exist on the backend. The change is verified against the user configuration after saving." xml:space="preserve"><value>The package must exist on the backend. The change is verified against the user configuration after saving.</value></data>
   <data name="The package returned no additional configuration fields." xml:space="preserve"><value>The package returned no additional configuration fields.</value></data>
   <data name="The patch must be a JSON object." xml:space="preserve"><value>The patch must be a JSON object.</value></data>
+  <data name="The pinned API contains no general email account overview." xml:space="preserve"><value>The pinned API contains no general email account overview.</value></data>
+  <data name="The pinned modern Swagger has no general backup/restore operation." xml:space="preserve"><value>The pinned modern Swagger has no general backup/restore operation.</value></data>
   <data name="The request cannot be processed right now. Try again or check server logs." xml:space="preserve"><value>The request cannot be processed right now. Try again or check server logs.</value></data>
+  <data name="The target identity could not be confirmed." xml:space="preserve"><value>The target identity could not be confirmed.</value></data>
   <data name="The user navigation is a display mode. The backend determines access." xml:space="preserve"><value>The user navigation is a display mode. The backend determines access.</value></data>
+  <data name="Theme settings through the skin API." xml:space="preserve"><value>Theme settings through the skin API.</value></data>
   <data name="Themes" xml:space="preserve"><value>Themes</value></data>
   <data name="This can change system software. Explicit confirmation is required." xml:space="preserve"><value>This can change system software. Explicit confirmation is required.</value></data>
   <data name="This deletes an account through DirectAdmin. Enter the exact account name to confirm." xml:space="preserve"><value>This deletes an account through DirectAdmin. Enter the exact account name to confirm.</value></data>
   <data name="This deletes the database and may cause irreversible data loss. Enter the exact database name to confirm." xml:space="preserve"><value>This deletes the database and may cause irreversible data loss. Enter the exact database name to confirm.</value></data>
+  <data name="This external plugin has no dedicated route in the modern DirectAdmin API." xml:space="preserve"><value>This external plugin has no dedicated route in the modern DirectAdmin API.</value></data>
+  <data name="This navigation page does not exist." xml:space="preserve"><value>This navigation page does not exist.</value></data>
   <data name="This PATCH uses only" xml:space="preserve"><value>This PATCH uses only</value></data>
   <data name="Ticket details" xml:space="preserve"><value>Ticket details</value></data>
   <data name="Ticket management" xml:space="preserve"><value>Ticket management</value></data>
@@ -544,10 +626,12 @@
   <data name="Time zone (IANA)" xml:space="preserve"><value>Time zone (IANA)</value></data>
   <data name="to DirectAdmin." xml:space="preserve"><value>to DirectAdmin.</value></data>
   <data name="Transaction ID from update history" xml:space="preserve"><value>Transaction ID from update history</value></data>
+  <data name="Trash" xml:space="preserve"><value>Trash</value></data>
   <data name="Try again" xml:space="preserve"><value>Try again</value></data>
   <data name="TTL (optional, 60–604800 seconds)" xml:space="preserve"><value>TTL (optional, 60–604800 seconds)</value></data>
   <data name="Unavailable" xml:space="preserve"><value>Unavailable</value></data>
   <data name="Unexpected domain list." xml:space="preserve"><value>Unexpected domain list.</value></data>
+  <data name="Unknown page" xml:space="preserve"><value>Unknown page</value></data>
   <data name="Unread" xml:space="preserve"><value>Unread</value></data>
   <data name="Update history" xml:space="preserve"><value>Update history</value></data>
   <data name="Update transaction log" xml:space="preserve"><value>Update transaction log</value></data>
@@ -565,6 +649,7 @@
   <data name="Users" xml:space="preserve"><value>Users</value></data>
   <data name="Users and packages" xml:space="preserve"><value>Users and packages</value></data>
   <data name="Value" xml:space="preserve"><value>Value</value></data>
+  <data name="Versions" xml:space="preserve"><value>Versions</value></data>
   <data name="View" xml:space="preserve"><value>View</value></data>
   <data name="View all messages" xml:space="preserve"><value>View all messages</value></data>
   <data name="View API documentation and responses" xml:space="preserve"><value>View API documentation and responses</value></data>

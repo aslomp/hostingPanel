@@ -25,7 +25,7 @@ else
     </section>
     <section class="card">
         <h2>@L["Modify local DirectAdmin overrides"]</h2>
-        <p>Deze PATCH gebruikt uitsluitend <code>/api/server-settings/directadmin-conf/local</code>@L[". Specify only fields you want to change."]</p>
+        <p>@L["This PATCH uses only"] <code>/api/server-settings/directadmin-conf/local</code>@L[". Specify only fields you want to change."]</p>
         <textarea rows="10" @bind="patch" spellcheck="false" placeholder="{}"></textarea>
         <label>@L["Enter PATCH to confirm"]</label><input @bind="confirmation" />
         <button class="primary" disabled="@(busy || confirmation != "PATCH")" @onclick="Apply">@L["Apply patch"]</button>
