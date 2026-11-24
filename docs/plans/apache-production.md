@@ -3,7 +3,6 @@
 # Production-grade shared Apache hosting — implementation plan
 
 Status: P0 implementation started; runtime acceptance pending.
-Status: proposed; implementation and runtime acceptance pending.
 Scope: Kubernetes backend only. Preserve DirectAdmin API compatibility and existing /home/<account>/domains/<domain>/public_html layout.
 
 ## Architecture decisions
