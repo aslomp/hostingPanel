@@ -32,6 +32,8 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
         var rows = await db.ReconciliationOperations.Where(x => x.ResourceType == "website"
             && x.Status == "pending").ToListAsync(ct);
+        if (rows.Count == 0) return;
+        await KubectlAsync(BuildRuntimeManifest(), ct, "apply", "--server-side", "--field-manager=hostingpanel", "-f", "-");
         foreach (var group in rows.GroupBy(x => x.ResourceId))
         {
             var latest = group.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).First();
@@ -83,14 +85,20 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         if (Flag("cgi", false)) throw new InvalidOperationException("CGI is not supported");
         var name = "site-" + domain.Id.ToString("N");
         var labels = new Dictionary<string,string> { ["app.kubernetes.io/name"] = name };
-        var root = "/var/www/html";
+        var root = "/var/www/sites/" + domain.Id.ToString("N");
+        var phpVersion = configuration["KubernetesHosting:DefaultPhpVersion"] ?? "8";
+        if (phpVersion is not ("7" or "8")) throw new InvalidOperationException("Unsupported PHP version");
+        if (php && phpVersion == "7" && !configuration.GetValue<bool>("KubernetesHosting:EnablePhp7"))
+            throw new InvalidOperationException("PHP 7 is disabled");
         var apache = """
             ServerRoot "/usr/local/apache2"
             Listen 8080
             ServerName localhost
             LoadModule mpm_event_module modules/mod_mpm_event.so
             LoadModule authz_core_module modules/mod_authz_core.so
-                        LoadModule dir_module modules/mod_dir.so
+            LoadModule unixd_module modules/mod_unixd.so
+            LoadModule log_config_module modules/mod_log_config.so
+            LoadModule dir_module modules/mod_dir.so
             LoadModule mime_module modules/mod_mime.so
                         LoadModule proxy_module modules/mod_proxy.so
             LoadModule proxy_fcgi_module modules/mod_proxy_fcgi.so
@@ -102,25 +110,22 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             TypesConfig conf/mime.types
             """ + "\n<VirtualHost *:8080>\nServerName " + host + "\nDocumentRoot " + root +
             "\n<Directory " + root + ">\nOptions -Indexes -ExecCGI -Includes\nAllowOverride None\nRequire all granted\nDirectoryIndex index.php index.html\n</Directory>\n" +
-            (php ? "<FilesMatch \\"\\\\.php$\\">\nSetHandler \\"proxy:fcgi://127.0.0.1:9000\\"\n</FilesMatch>\n"
-            : "<FilesMatch \\"\\\\.php$\\">\nRequire all denied\n</FilesMatch>\n") + "</VirtualHost>\n";
-        var fpm = "[www]\nlisten = 127.0.0.1:9000\n";
-        var checksum = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(apache + fpm)));
+            (php ? "<FilesMatch \"\\.php$\">\nSetHandler \"proxy:fcgi://php-fpm-" + phpVersion + ":9000\"\n</FilesMatch>\n"
+            : "<FilesMatch \"\\.php$\">\nRequire all denied\n</FilesMatch>\n") + "</VirtualHost>\n";
+        var checksum = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(apache)));
         object Meta() => new { name, @namespace = Namespace, labels };
         object DataMount(bool readOnly) => new { name = "data", mountPath = root, readOnly };
-        var containers = new List<object> {
+        var containers = new object[] {
             new { name = "apache", image = configuration["KubernetesHosting:ApacheImage"] ?? "httpd:2.4",
-                args = new[] { "httpd-foreground", "-f", "/etc/site/httpd.conf" },
+                command = new[] { "httpd-foreground" }, args = new[] { "-f", "/etc/site/httpd.conf" },
                 ports = new[] { new { containerPort = 8080 } },
                 readinessProbe = new { tcpSocket = new { port = 8080 } },
                 volumeMounts = new object[] { DataMount(true), new { name = "config", mountPath = "/etc/site", readOnly = true } } }
         };
-        if (php) containers.Add(new { name = "php", image = configuration["KubernetesHosting:PhpImage"] ?? "php:8.4-fpm",
-            volumeMounts = new object[] { DataMount(false), new { name = "config", mountPath = "/usr/local/etc/php-fpm.d/zzz-site.conf", subPath = "fpm.conf", readOnly = true } } });
         var export = Required("NfsPath").TrimEnd('/');
         if (!export.StartsWith('/')) throw new InvalidOperationException("NFS path must be absolute");
         var resources = new object[] {
-            new { apiVersion = "v1", kind = "ConfigMap", metadata = Meta(), data = new Dictionary<string,string> { ["httpd.conf"] = apache, ["fpm.conf"] = fpm } },
+            new { apiVersion = "v1", kind = "ConfigMap", metadata = Meta(), data = new Dictionary<string,string> { ["httpd.conf"] = apache } },
             new { apiVersion = "apps/v1", kind = "Deployment", metadata = Meta(), spec = new {
                 replicas = 1, selector = new { matchLabels = labels }, template = new {
                     metadata = new { labels, annotations = new Dictionary<string,string> { ["hostingpanel/config-sha256"] = checksum } },
@@ -137,6 +142,37 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 hostnames = new[] { host }, rules = new[] { new { backendRefs = new[] { new { name, port = 80 } } } }
             } }
         };
+        return JsonSerializer.Serialize(new { apiVersion = "v1", kind = "List", items = resources });
+    }
+
+    private string BuildRuntimeManifest()
+    {
+        if (!configuration.GetValue<bool>("KubernetesHosting:AllowSharedPhpRuntime"))
+            throw new InvalidOperationException("Shared PHP requires explicit trust in all hosted PHP applications.");
+        var resources = new List<object>();
+        foreach (var version in new[] { "8", "7" })
+        {
+            if (version == "7" && !configuration.GetValue<bool>("KubernetesHosting:EnablePhp7")) continue;
+            var name = "php-fpm-" + version;
+            var labels = new Dictionary<string,string> { ["app.kubernetes.io/name"] = name };
+            object Meta() => new { name, @namespace = Namespace, labels };
+            var image = version == "7" ? Required("Php7Image") : configuration["KubernetesHosting:Php8Image"] ?? "php:8.4-fpm";
+            resources.Add(new { apiVersion = "apps/v1", kind = "Deployment", metadata = Meta(), spec = new {
+                replicas = 1, selector = new { matchLabels = labels }, template = new {
+                    metadata = new { labels }, spec = new {
+                        automountServiceAccountToken = false,
+                        containers = new[] { new { name = "php-fpm", image,
+                            ports = new[] { new { containerPort = 9000 } },
+                            readinessProbe = new { tcpSocket = new { port = 9000 } },
+                            volumeMounts = new[] { new { name = "sites", mountPath = "/var/www/sites" } } } },
+                        volumes = new[] { new { name = "sites", nfs = new { server = Required("NfsServer"), path = Required("NfsPath") } } }
+                    }
+                }
+            } });
+            resources.Add(new { apiVersion = "v1", kind = "Service", metadata = Meta(), spec = new {
+                type = "ClusterIP", selector = labels, ports = new[] { new { port = 9000, targetPort = 9000 } }
+            } });
+        }
         return JsonSerializer.Serialize(new { apiVersion = "v1", kind = "List", items = resources });
     }
 
