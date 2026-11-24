@@ -34,7 +34,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         // Older persisted settings lack the DNS properties. Fill only new keys from deployment defaults.
         var stored = document.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
         using var defaults = JsonDocument.Parse(BackendSettingsSchema.Serialize(configuredSettings));
-        foreach (var key in new[] { nameof(KubernetesBackendSettings.DnsAutoCreateZones), nameof(KubernetesBackendSettings.DnsWebIp), nameof(KubernetesBackendSettings.DnsNs1), nameof(KubernetesBackendSettings.DnsNs2) })
+        foreach (var key in new[] { nameof(KubernetesBackendSettings.DnsAutoCreateZones), nameof(KubernetesBackendSettings.DnsWebIp), nameof(KubernetesBackendSettings.DnsNs1), nameof(KubernetesBackendSettings.DnsNs2), nameof(KubernetesBackendSettings.IpAddresses) })
             stored.TryAdd(key, defaults.RootElement.GetProperty(key).Clone());
         if (!BackendSettingsSchema.TryRead<KubernetesBackendSettings>(JsonSerializer.SerializeToElement(stored),
             out var settings, out _))
@@ -62,16 +62,15 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         var current = await GetEffectiveSettingsAsync(ct);
         if (update.Revision != BackendSettingsSchema.Revision(current))
             return Results.Conflict(new { type = "SETTINGS_CHANGED" });
-        if (BackendSettingsSchema.Revision(current) != BackendSettingsSchema.Revision(proposed!))
         {
             var row = await db.Configuration.SingleOrDefaultAsync(x => x.Key == SettingsKey, ct);
             if (row is null) { row = new PanelConfiguration { Key = SettingsKey }; db.Configuration.Add(row); }
             row.ValueJson = BackendSettingsSchema.Serialize(proposed!);
-            Schedule("backend-settings", Guid.Empty, "update", JsonSerializer.Deserialize<JsonElement>(row.ValueJson));
+
             await db.SaveChangesAsync(ct);
         }
         await tx.CommitAsync(ct);
-        return Results.Ok(BackendSettingsSchema.Describe("Kubernetes", proposed!));
+        return Results.Ok(BackendSettingsSchema.Describe("Kubernetes", await GetEffectiveSettingsAsync(ct)));
     }
 
     public IAccountCatalog AccountCatalog => this;

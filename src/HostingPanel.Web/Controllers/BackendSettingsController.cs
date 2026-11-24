@@ -6,14 +6,20 @@ namespace HostingPanel.Api.Controllers;
 public sealed class BackendSettingsController(IHostingBackend backend) : BackendController
 {
     [HttpGet("/hosting/backend-settings")]
-    public Task<IResult> Get(CancellationToken ct) =>
-        !TryGetBasic(HttpContext, out var auth) ? Task.FromResult(Results.Unauthorized()) :
-        backend.Settings?.ReadAsync(auth, ct) ?? Task.FromResult(Results.StatusCode(501));
+    public async Task Get(CancellationToken ct)
+    {
+        var result = !TryGetBasic(HttpContext, out var auth) ? Results.Unauthorized() :
+            backend.Settings is { } settings ? await settings.ReadAsync(auth, ct) : Results.StatusCode(501);
+        await result.ExecuteAsync(HttpContext);
+    }
 
     [HttpPut("/hosting/backend-settings")]
-    public Task<IResult> Put([FromBody] BackendSettingsUpdate update, CancellationToken ct) =>
-        !TryGetBasic(HttpContext, out var auth) ? Task.FromResult(Results.Unauthorized()) :
-        backend.Settings?.WriteAsync(auth, update, ct) ?? Task.FromResult(Results.StatusCode(501));
+    public async Task Put([FromBody] BackendSettingsUpdate update, CancellationToken ct)
+    {
+        var result = !TryGetBasic(HttpContext, out var auth) ? Results.Unauthorized() :
+            backend.Settings is { } settings ? await settings.WriteAsync(auth, update, ct) : Results.StatusCode(501);
+        await result.ExecuteAsync(HttpContext);
+    }
 
     [HttpGet("/hosting/session")]
     public async Task<IResult> Session(CancellationToken ct) =>
