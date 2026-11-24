@@ -103,7 +103,7 @@ data:
             DirectoryIndex index.html
         </Directory>
     </VirtualHost>
-    IncludeOptional /vhosts/current/*.conf
+    IncludeOptional /runtime/current/*.conf
   sync.py: |
     import hashlib, json, os, pathlib, re, shutil, ssl, subprocess, time, urllib.request
     root = pathlib.Path("/vhosts")
@@ -157,39 +157,60 @@ data:
         temp.symlink_to(target.name)
         os.replace(temp, current)
         try:
-            subprocess.run(["httpd", "-t", "-f", "/etc/hostingpanel/httpd.conf"], check=True, timeout=15)
-            if process is not None:
-                subprocess.run(["httpd", "-k", "graceful", "-f", "/etc/hostingpanel/httpd.conf"], check=True, timeout=15)
+            pass
         except Exception:
             temp.symlink_to(old)
             os.replace(temp, current)
             raise
         for item in root.iterdir():
-            if item.is_dir() and not item.is_symlink() and item != target and item != initial:
+            if item.is_dir() and not item.is_symlink() and item != target and item != initial and item.name != old:
                 shutil.rmtree(item)
-    process = None
     while True:
-        try:
-            sync()
-            break
-        except Exception as exc:
-            print("Initial vhost sync failed:", exc, flush=True)
-            time.sleep(5)
-    process = subprocess.Popen(["httpd", "-DFOREGROUND", "-f", "/etc/hostingpanel/httpd.conf"])
-    import signal
-    def stop(signum, frame):
-        process.terminate()
-    signal.signal(signal.SIGTERM, stop)
-    signal.signal(signal.SIGINT, stop)
-    while process.poll() is None:
-        time.sleep(5)
-        if process.poll() is not None:
-            break
         try:
             sync()
         except Exception as exc:
             print("Vhost sync failed:", exc, flush=True)
-    raise SystemExit(process.wait())
+        time.sleep(5)
+  run.sh: |
+    #!/bin/sh
+    set -eu
+    mkdir -p /runtime/initial
+    if [ ! -L /runtime/current ]; then ln -s initial /runtime/current; fi
+    httpd -t -f /etc/hostingpanel/httpd.conf
+    httpd -DFOREGROUND -f /etc/hostingpanel/httpd.conf &
+    pid=$!
+    trap 'kill -TERM "$pid" 2>/dev/null || true; wait "$pid" || true; exit 0' TERM INT
+    applied="$(readlink /runtime/current)"
+    while kill -0 "$pid" 2>/dev/null; do
+      candidate="$(readlink /vhosts/current 2>/dev/null || true)"
+      case "$candidate" in
+        ""|initial) ;;
+        *)
+          if [ "$candidate" != "$applied" ] && [ -d "/vhosts/$candidate" ]; then
+            mkdir -p "/runtime/$candidate"
+            if ! cp -a "/vhosts/$candidate/." "/runtime/$candidate/"; then
+              rm -rf "/runtime/$candidate"
+              sleep 5
+              continue
+            fi
+            ln -s "$candidate" /runtime/next
+            mv -Tf /runtime/next /runtime/current
+            if httpd -t -f /etc/hostingpanel/httpd.conf && httpd -k graceful -f /etc/hostingpanel/httpd.conf; then
+              old="$applied"
+              applied="$candidate"
+              if [ "$old" != initial ]; then rm -rf "/runtime/$old"; fi
+            else
+              ln -s "$applied" /runtime/next
+              mv -Tf /runtime/next /runtime/current
+              rm -rf "/runtime/$candidate"
+            fi
+          fi
+          ;;
+      esac
+      sleep 5
+    done
+    wait "$pid"
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -206,21 +227,17 @@ spec:
         hostingpanel/apache-config: "shared-vhosts-v1"
     spec:
       serviceAccountName: apache-vhosts
-      automountServiceAccountToken: true
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
         runAsGroup: 1001
+        fsGroup: 1001
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: apache
           image: {{ .Values.kubernetesHosting.apacheImage | quote }}
-          command: ["python3", "/etc/hostingpanel/sync.py"]
-          env:
-            - name: POD_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
+          command: ["/bin/sh", "/etc/hostingpanel/run.sh"]
           ports: [{name: http, containerPort: 8080}]
           securityContext:
             allowPrivilegeEscalation: false
@@ -231,9 +248,36 @@ spec:
             httpGet: {path: /, port: http}
           volumeMounts:
             - {name: config, mountPath: /etc/hostingpanel, readOnly: true}
-            - {name: vhosts, mountPath: /vhosts}
+            - {name: vhosts, mountPath: /vhosts, readOnly: true}
+            - {name: runtime, mountPath: /runtime}
             - {name: sites, mountPath: /home, readOnly: true}
+        - name: vhost-sync
+          image: {{ .Values.kubernetesHosting.vhostSyncImage | quote }}
+          command: ["python3", "/etc/hostingpanel/sync.py"]
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: config, mountPath: /etc/hostingpanel, readOnly: true}
+            - {name: vhosts, mountPath: /vhosts}
+            - {name: api-access, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
       volumes:
+        - name: runtime
+          emptyDir: {}
+        - name: api-access
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+              - configMap:
+                  name: kube-root-ca.crt
+                  items: [{key: ca.crt, path: ca.crt}]
         - name: config
           configMap:
             name: apache-baseline
