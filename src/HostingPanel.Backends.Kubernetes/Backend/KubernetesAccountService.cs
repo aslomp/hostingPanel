@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HostingPanel.Api;
 
-public sealed class KubernetesAccountService(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesProvisioningService provisioning, KubernetesOperationQueue operations) : IAccountCatalog, IAccountMutations, IAccountOverview, IUserDetails, IImpersonation
+public sealed class KubernetesAccountService(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesProvisioningService provisioning, KubernetesOperationQueue operations) : IAccountCatalog, IAccountPackages, IAccountMutations, IAccountOverview, IUserDetails, IImpersonation
 {
     public async Task<AccountCatalogResult> ListAsync(AuthenticationHeaderValue auth, CancellationToken ct)
     {
@@ -22,6 +22,19 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         var names = items.ToDictionary(a => a.Id, a => a.Username);
         return new(200, items.Select(a => new VisibleAccount(a.Username, a.Kind,
             a.CreatorId is { } id && names.TryGetValue(id, out var creator) ? creator : null)).ToArray(), null);
+    }
+
+    public async Task<AccountPackagesResult> ListAsync(string kind, AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        var principal = await identity.AuthenticateAsync(auth, ct);
+        if (principal is null) return new(401, null, "UNAUTHORIZED");
+        if (kind is not ("user" or "reseller")) return new(400, null, "INVALID_ACCOUNT_KIND");
+        if (principal.Kind is not ("admin" or "reseller") || (principal.Kind == "reseller" && kind != "user"))
+            return new(403, null, "ACCESS_DENIED");
+        var names = await db.Packages.AsNoTracking()
+            .Where(p => p.OwnerId == principal.Id || p.OwnerId == null)
+            .OrderBy(p => p.Name).Select(p => p.Name).ToArrayAsync(ct);
+        return new(200, names, null);
     }
 
     public async Task<AccountOperationResult> CreateAsync(CreateHostingAccount input, AuthenticationHeaderValue auth, CancellationToken ct)
