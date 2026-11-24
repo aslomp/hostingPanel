@@ -1,40 +1,62 @@
 @inherits LayoutComponentBase
+@implements IDisposable
 @inject DirectAdminSession Session
+@inject NavigationContextState NavContext
 @inject NavigationManager Navigation
 
 <div class="shell">
-  <aside class="sidebar">
+  <aside class="sidebar" aria-label="Hoofdnavigatie">
     <a class="brand" href="/">◈ <span>HostingPanel<small>CONTROL CENTER</small></span></a>
-    <div class="nav-caption">Navigatie</div>
+    <div class="nav-caption">Navigatiecontext</div>
+    <div class="nav-context-switch" role="group" aria-label="Navigatiecontext">
+      <button type="button" class="@(NavContext.Mode == "admin" ? "active" : "")"
+              aria-pressed="@(NavContext.Mode == "admin")"
+              @onclick='() => SetContext("admin")'>Beheerder</button>
+      <button type="button" class="@(NavContext.Mode == "user" ? "active" : "")"
+              aria-pressed="@(NavContext.Mode == "user")"
+              @onclick='() => SetContext("user")'>Gebruiker</button>
+    </div>
+    <div class="nav-caption">@(NavContext.Mode == "admin" ? "Beheerdersfuncties" : "Gebruikersfuncties")</div>
+    <label class="sidebar-search-label" for="hosting-nav-search">Zoek naar pagina's</label>
+    <input id="hosting-nav-search" class="sidebar-search" type="search"
+           placeholder="Zoek naar pagina's..." @bind="navSearch" @bind:event="oninput" />
     <NavLink href="/" Match="NavLinkMatch.All">▦ Dashboard</NavLink>
-    <details open>
-      <summary>Accountbeheer</summary>
-      <NavLink href="/users">Toon alle gebruikers</NavLink>
-      <NavLink href="/resellers">Resellers en pakketten</NavLink>
-      <NavLink href="/change-password">Wachtwoord wijzigen</NavLink>
-      <NavLink href="/domains">Domeinbeheer</NavLink>
-      <NavLink href="/databases">Databasebeheer</NavLink>
-      <NavLink href="/api-browser">DirectAdmin API</NavLink>
-    </details>
-    <details open>
-      <summary>Serverbeheer</summary>
-      <NavLink href="/dns-zones">DNS Beheer</NavLink>
-      <NavLink href="/system-info">Systeeminformatie</NavLink>
-      <NavLink href="/system-services">Services</NavLink>
-      <NavLink href="/server-settings">Serverinstellingen</NavLink>
-      <NavLink href="/server-tls">Server TLS</NavLink>
-      <NavLink href="/system-updates">Pakketten en updates</NavLink>
-      <NavLink href="/security">ModSecurity en ClamAV</NavLink>
-    </details>
-    <details open>
-      <summary>Sessies</summary>
-      <NavLink href="/sessions">Actieve sessies</NavLink>
-    </details>
-    <p class="nav-note">DirectAdmin-compatibele API<br />Business UI — eerste verticale slice</p>
+    <nav class="sidebar-scroll" aria-label="Beheeronderdelen">
+      @foreach (var navGroup in FilteredSections)
+      {
+        <details class="nav-section" open>
+          <summary><span class="nav-icon" aria-hidden="true">@navGroup.Icon</span>@navGroup.Title</summary>
+          <div class="nav-section-items">
+            @foreach (var item in navGroup.Items)
+            {
+              <NavLink href="@item.Path" class="nav-item">
+                <span class="nav-icon" aria-hidden="true">@item.Icon</span>
+                <span>@item.Label</span>
+                @if (!item.Implemented)
+                {
+                  <span class="nav-pending" title="Nog niet geïmplementeerd" aria-label="Nog niet geïmplementeerd">○</span>
+                }
+              </NavLink>
+            }
+          </div>
+        </details>
+      }
+    </nav>
+    <p class="nav-note">DirectAdmin-compatibele API<br />De backend bepaalt de toegangsrechten.</p>
   </aside>
   <div class="workspace">
-    <header class="topbar"><span>HostingPanel / beheer</span>
-      <span>@(Session.Connected ? Session.Username : "Niet verbonden")</span>
+    <header class="topbar">
+      <div class="crumb">
+        <a href="/">HostingPanel</a><span aria-hidden="true">/</span>
+        <strong>@CurrentPage</strong>
+      </div>
+      <div class="session-identity">
+        <TicketNotifications @key="Session.TicketChannel" />
+        <span>@(Session.Connected ? "Verbonden account" : "Backend niet verbonden")
+          <strong>@(Session.Connected ? Session.Username : "Niet aangemeld")</strong>
+        </span>
+        <span class="session-avatar" aria-hidden="true">@(Session.Connected ? Session.Username[..Math.Min(2,Session.Username.Length)].ToUpperInvariant() : "HP")</span>
+      </div>
     </header>
     @if (Session.IsImpersonating)
     {
@@ -49,6 +71,153 @@
 </div>
 
 @code {
+    protected override void OnInitialized()
+    {
+        Session.Changed += OnSessionChanged;
+        NavContext.Changed += OnSessionChanged;
+    }
+    private void OnSessionChanged() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose()
+    {
+        Session.Changed -= OnSessionChanged;
+        NavContext.Changed -= OnSessionChanged;
+    }
+
+    private string navSearch = "";
+    private void SetContext(string value)
+    {
+        NavContext.Select(value);
+        navSearch = "";
+    }
+    private string CurrentPage
+    {
+        get
+        {
+            var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', 2)[0].Trim('/');
+            if (string.IsNullOrWhiteSpace(path)) return "Dashboard";
+            var item = AllSections.SelectMany(navSection => navSection.Items)
+                .FirstOrDefault(link => link.Path.Trim('/').Equals(path, StringComparison.OrdinalIgnoreCase));
+            return item?.Label ?? path.Split('/')[0].Replace('-', ' ');
+        }
+    }
+    private IEnumerable<NavSection> CurrentSections =>
+        NavContext.Mode == "user" ? UserSections : AdminSections;
+    private IEnumerable<NavSection> FilteredSections => string.IsNullOrWhiteSpace(navSearch)
+        ? CurrentSections
+        : CurrentSections.Select(section => section with {
+            Items = section.Title.Contains(navSearch, StringComparison.OrdinalIgnoreCase)
+                ? section.Items
+                : section.Items.Where(item => item.Label.Contains(navSearch,
+                    StringComparison.OrdinalIgnoreCase)).ToArray()
+        }).Where(section => section.Items.Length > 0);
+
+    private sealed record NavItem(string Label, string Icon, string Path, bool Implemented = true);
+    private sealed record NavSection(string Title, string Icon, NavItem[] Items);
+
+    private static NavItem Live(string label, string icon, string path) => new(label, icon, path);
+    private static NavItem Planned(string label, string icon, string key) =>
+        new(label, icon, "/navigation/" + key);
+
+    // Match the section and item order in the reference index.html.
+    // All items remain visible for every account: DirectAdmin authorizes each request.
+    private static readonly NavSection[] AllSections =
+    [
+        new("Accountbeheer", "♙",
+        [
+            Live("Nieuwe Gebruiker Toevoegen", "♙", "/users"),
+            Live("Toon Alle Gebruikers", "♧", "/users"),
+            Live("Mijn Gebruikers", "♙", "/users"),
+            Live("Beheer gebruikers pakketten", "▤", "/users"),
+            Planned("Verplaats Gebruikers tussen Resellers", "⇄", "move-users"),
+            Planned("Berichtsjablonen", "✉", "message-templates"),
+            Live("Wachtwoorden wijzigen", "⚿", "/change-password"),
+            Live("Reseller Aanmaken", "♙", "/resellers"),
+            Live("Resellers", "♙", "/resellers"),
+            Live("Beheer Reseller Pakketten", "▤", "/resellers"),
+            Planned("Admin Aanmaken", "♙", "create-admin"),
+            Live("Administrators", "♙", "/users")
+        ]),
+        new("Server Beheer", "▣",
+        [
+            Live("Administrator instellingen", "⚙", "/server-settings"),
+            Planned("Aangepaste HTTPD configuraties", "▤", "httpd-config"),
+            Live("DNS Beheer", "◎", "/dns-zones"),
+            Planned("IP Beheer", "⌁", "ip-management"),
+            Planned("Naam Servers", "◇", "name-servers"),
+            Planned("Multi Server Instellen", "▦", "multi-server"),
+            Planned("PHP Instellingen", "⌘", "php-settings"),
+            Live("Server TLS Certificaat", "♢", "/server-tls"),
+            Planned("CustomBuild", "⚒", "custombuild")
+        ]),
+        new("Admin Gereedschap", "⚒",
+        [
+            Planned("Back-up en herstel", "◷", "backup-restore"),
+            Planned("Brute Force Monitor", "♢", "brute-force-monitor"),
+            Planned("Proces Monitor", "▥", "process-monitor"),
+            Planned("Beheer van e-mail wachtrij", "✉", "mail-queue"),
+            Live("Systeem Services", "⚙", "/system-services"),
+            Planned("Systeem Backup", "▣", "system-backup"),
+            Planned("cPanel Importeren", "⇩", "cpanel-import"),
+            Planned("Bericht aan Alle Gebruikers", "✉", "broadcast"),
+            Planned("Thema’s", "◈", "themes"),
+            Planned("Evolution Thema Aanpassen", "◈", "evolution-theme"),
+            Planned("Onderhoud", "⚒", "maintenance")
+        ]),
+        new("Systeem Info & Bestanden", "▤",
+        [
+            Planned("Cron Taken van alle Gebruikers", "◷", "global-cron"),
+            Planned("Systeem bestand editor", "▤", "system-file-editor"),
+            Planned("Bekijk Logboek", "☷", "system-logs"),
+            Live("Globale Statistieken", "◴", "/system-info")
+        ]),
+        new("Extra Programma's", "▦",
+        [
+            Planned("Plugin Beheer", "▦", "plugin-manager"),
+            Planned("ConfigServer Security & Firewall", "♢", "csf")
+        ]),
+        new("Support", "?",
+        [
+            Live("Beheer Tickets", "☏", "/tickets"),
+            Live("Ticket Aanmaken", "✉", "/tickets/new"),
+            Live("Updates", "↻", "/system-updates"),
+            Planned("Licensering", "♧", "licensing")
+        ]),
+        new("Aanvullende HostingPanel-functies", "⌘",
+        [
+            Live("Sessies", "◷", "/sessions"),
+            Live("Resellerbeheer", "♙", "/resellers"),
+            Live("Databasebeheer", "▦", "/databases"),
+            Live("Systeeminformatie", "▤", "/system-info"),
+            Live("ModSecurity en ClamAV", "♢", "/security"),
+            Live("DirectAdmin API", "⌘", "/api-browser")
+        ])
+    ];
+
+    private static readonly NavSection[] AdminSections =
+        AllSections.Where(section => section.Title != "Gebruiker").ToArray();
+
+    private static readonly NavSection[] UserSections =
+    [
+        new("Gebruiker", "♙",
+        [
+            Live("Domeinbeheer", "◎", "/domains"),
+            Planned("E-mailaccounts", "✉", "email-accounts"),
+            Planned("Bestandsbeheer", "▤", "file-manager"),
+            Live("Databases", "▦", "/databases"),
+            Planned("SSL certificaten", "♢", "domain-ssl"),
+            Live("DNS Beheer", "◎", "/dns-zones"),
+            Planned("Cron Taken", "◷", "cron-jobs"),
+            Planned("Back-ups", "◷", "user-backups")
+        ]),
+        new("Ondersteuning", "☏",
+        [
+            Live("Tickets", "☏", "/tickets"),
+            Live("Nieuw ticket", "✉", "/tickets/new"),
+            Live("Berichten", "✉", "/messages"),
+            Live("Wachtwoord wijzigen", "⚿", "/change-password")
+        ])
+    ];
+
     private void ReturnToAdministrator()
     {
         Session.EndImpersonation();

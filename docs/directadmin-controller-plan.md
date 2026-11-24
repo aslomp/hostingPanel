@@ -668,3 +668,36 @@ De volledige 326-operaties-inventarisatie onderaan blijft behouden als referenti
 - De officiële Swagger is de **nieuwe** `/api/*` API; legacy CMD-endpoints zijn geen afwezige operaties maar een apart compatibiliteitsspoor.
 - De indeling is logisch en contractneutraal, geen claim dat al deze features ondersteund worden door de achterliggende hostingbackend. Niet-ondersteunde operaties moeten de backenduitkomst retourneren.
 - Buiten scope van deze inventarisatie: details van alle legacy CMD-acties en een volledige conformance van de request/response DTO's; die verdienen aparte mappings en tests.
+
+## Ticketbeheer, berichten en SignalR — 2026-11-23
+
+**Gebouwd:** `TicketController` en `TicketService` leveren een resource-eigen inbox
+(`GET /hosting/tickets/inbox`), details, ticketcreatie, antwoorden en statuswijzigingen.
+De service leest de officiële DirectAdmin-lijsten `/api/tickets`,
+`/api/ticket-requests` en `/api/messages`. Legacy write-operaties gebruiken
+`CMD_API_TICKET_CREATE`, `CMD_API_TICKET` en `CMD_API_TICKET_MANAGE`, met
+backendstatus en foutafhandeling als autoriteit. De bestaande officiële Swagger
+method/path-combinaties blijven ongewijzigd.
+
+**SignalR:** HostingPanel.Web exposeert `/hubs/tickets` via `TicketHub`.
+Per Blazor-circuit bestaat een cryptografisch willekeurig kanaal. Een scoped
+`TicketLiveMonitor` leest voor de actieve DirectAdmin-identiteit iedere 15 seconden
+de inbox en pusht gewijzigde berichten en antwoorden via `IHubContext<TicketHub>`.
+Een echte `HubConnection` ontvangt `InboxChanged` en actualiseert de notificatie
+en open ticket-/berichtpagina's. Omdat DirectAdmin geen ticket push-event in de
+gepinde Swagger heeft, gebruikt alleen de server polling; de browser ontvangt
+geen polling-implementatie vermomd als push. Tokens worden bij afmelden,
+impersonation-wissel en circuit-disposal ongeldig gemaakt.
+
+**Navigatie:** Admin en Gebruiker zijn handmatig te kiezen *weergavecontexten*,
+opgeslagen in scoped `NavigationContextState` en dus onafhankelijk van rechten.
+Beide hebben een eigen menu en dashboard. Er is geen rolgebaseerde verberging of
+autorisatiecheck in de Blazor-navigatie toegevoegd.
+
+**Tests:** `TicketIntegrationTests` test backend-inbox, ticketformulieren,
+replies, statuswijziging, backend-afwijzingen en tokenrevoke met een fake backend.
+GitHub Actions smoketest `/tickets`, `/tickets/new`, `/messages` en echte
+HTTP-negotiation van de SignalR-hub. Voor productieverificatie blijft een
+end-to-end write-test op een *gecontroleerde* DirectAdmin-server nodig.
+
+---

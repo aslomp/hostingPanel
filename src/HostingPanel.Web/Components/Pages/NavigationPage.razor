@@ -1,0 +1,255 @@
+@page "/navigation/{Key}"
+@using System.Text.Json
+@inject DirectAdminSession Session
+
+<PageTitle>@Title — HostingPanel</PageTitle>
+<div class="page-header">
+    <div>
+        <div class="eyebrow">@Category</div>
+        <h1>@Title</h1>
+        <p>@Description</p>
+    </div>
+    <button disabled="@busy" @onclick="Load">Vernieuwen</button>
+</div>
+
+@if (!Session.Connected)
+{
+    <section class="card">Meld je eerst aan via het <a href="/">dashboard</a>.</section>
+}
+else
+{
+    <section class="card">
+        <h2>Gegevens uit DirectAdmin</h2>
+        @if (Sources.Count == 0)
+        {
+            <p>Voor deze functie biedt de huidige API-specificatie geen passende leesoperatie. Er worden geen gegevens verzonnen.</p>
+            <p>De backend kan aanvullende legacy-functionaliteit aanbieden; hiervoor is een afzonderlijke adapter nodig.</p>
+        }
+        else
+        {
+            <label for="data-source">Informatie</label>
+            <select id="data-source" @bind="selected">
+                @foreach (var source in Sources)
+                {
+                    <option value="@source.Path">@source.Label</option>
+                }
+            </select>
+            @if (selected.Contains("{domain}", StringComparison.Ordinal) ||
+                 selected.Contains("{username}", StringComparison.Ordinal) ||
+                 selected.Contains("{skin}", StringComparison.Ordinal) ||
+                 selected.Contains("{id}", StringComparison.Ordinal))
+            {
+                <label for="resource-name">@(selected.Contains("{domain}") ? "Domeinnaam" :
+                    selected.Contains("{username}") ? "Gebruikersnaam" :
+                    selected.Contains("{skin}") ? "Skinnaam" : "Identificatie")</label>
+                <input id="resource-name" @bind="resource" placeholder="Vul de benodigde waarde in" />
+            }
+            @if (Key == "file-manager")
+            {
+                <label for="file-path">Directory</label>
+                <input id="file-path" @bind="directory" placeholder="." />
+            }
+            <button class="primary" disabled="@busy" @onclick="Load">Ophalen</button>
+            @if (!string.IsNullOrEmpty(statusText))
+            {
+                <p role="status">@statusText</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(response))
+            {
+                <JsonOverview Json="@response" />
+            }
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public string Key { get; set; } = "";
+    private sealed record DataSource(string Label, string Path);
+    private sealed record PageDefinition(string Title, string Category, string Description, DataSource[] Sources);
+    private string selected = "", resource = "", directory = ".";
+    private string? response, statusText;
+    private bool busy;
+    private string Title => Definition.Title;
+    private string Category => Definition.Category;
+    private string Description => Definition.Description;
+    private IReadOnlyList<DataSource> Sources => Definition.Sources;
+    private PageDefinition Definition => Pages.TryGetValue(Key, out var page) ? page
+        : new("Onbekende pagina", "HostingPanel", "Deze navigatiepagina bestaat niet.", []);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        selected = Sources.FirstOrDefault()?.Path ?? "";
+        response = null;
+        statusText = null;
+        if (Session.Connected && selected.Length != 0 && !selected.Contains('{'))
+            await Load();
+    }
+
+    private async Task Load()
+    {
+        if (busy || !Session.Connected || string.IsNullOrWhiteSpace(selected)) return;
+        var path = selected;
+        foreach (var placeholder in new[] { "{domain}", "{username}", "{skin}", "{id}" })
+        {
+            if (!path.Contains(placeholder, StringComparison.Ordinal)) continue;
+            if (string.IsNullOrWhiteSpace(resource))
+            {
+                statusText = "Vul eerst de benodigde identificatie in.";
+                return;
+            }
+            path = path.Replace(placeholder, Uri.EscapeDataString(resource.Trim()),
+                StringComparison.Ordinal);
+        }
+        if (Key == "file-manager" && (path == "api/filemanager/list" || path == "api/filemanager/tree"))
+            path += "?path=" + Uri.EscapeDataString(directory);
+        if (path is "api/email-logs" or "api/email-logs-summary")
+            path += "?from=" + Uri.EscapeDataString(DateTimeOffset.UtcNow.AddDays(-1).ToString("O"));
+        if (!DirectAdminSession.IsAllowedEndpoint(path))
+        {
+            statusText = "Ongeldig API-pad.";
+            return;
+        }
+        busy = true;
+        try
+        {
+            var (status, body) = await Session.GetRawAsync(path);
+            statusText = status is >= 200 and < 300
+                ? "Gegevens ontvangen van DirectAdmin (HTTP " + status + ")."
+                : "DirectAdmin retourneerde HTTP " + status + ".";
+            response = body;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            statusText = ex.Message;
+            response = null;
+        }
+        finally { busy = false; }
+    }
+
+    private static PageDefinition P(string title, string category, string description,
+        params DataSource[] sources) => new(title, category, description, sources);
+    private static DataSource S(string label, string path) => new(label, path);
+
+    // Only actual paths in the pinned DirectAdmin Swagger are used here.
+    // An empty mapping means the public contract has no matching read operation.
+    private static readonly IReadOnlyDictionary<string, PageDefinition> Pages =
+        new Dictionary<string, PageDefinition>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["move-users"] = P("Verplaats gebruikers", "Accountbeheer",
+                "De moderne API beschrijft geen operatie om accounts tussen resellers te verplaatsen.",
+                S("Beschikbare gebruikers", "api/search/users?limit=1000"),
+                S("Reselleraccount", "api/resellers/{username}/config")),
+            ["message-templates"] = P("Berichtsjablonen", "Accountbeheer",
+                "De API biedt berichtenoverzichten, maar geen beheercontract voor berichtsjablonen.",
+                S("Berichten", "api/messages/list")),
+            ["create-admin"] = P("Administrator aanmaken", "Accountbeheer",
+                "De huidige Swagger bevat geen administrator-create-operatie. Accountgegevens kunnen wel worden bekeken.",
+                S("Accounts", "api/search/users?limit=1000")),
+            ["httpd-config"] = P("Aangepaste HTTPD-configuraties", "Serverbeheer",
+                "Beschikbare webserverinformatie via de officiële API.",
+                S("DirectAdmin-configuratie", "api/server-settings/directadmin-conf/active"),
+                S("CustomBuild-opties", "api/custombuild/options-v2")),
+            ["ip-management"] = P("IP-beheer", "Serverbeheer",
+                "De huidige Swagger bevat geen IP-adresbeheer. Serverinformatie is alleen ter inzage.",
+                S("Systeeminformatie", "api/info"),
+                S("Bestandssystemen", "api/system-info/fs")),
+            ["name-servers"] = P("Nameservers", "Serverbeheer",
+                "DNS-instellingen zijn beschikbaar via het afzonderlijke DNS-beheer.",
+                S("DirectAdmin-configuratie", "api/server-settings/directadmin-conf/active")),
+            ["multi-server"] = P("Multi-server", "Serverbeheer",
+                "Multi-serverconfiguratie heeft geen afzonderlijk modern Swagger-contract.",
+                S("DirectAdmin-configuratie", "api/server-settings/directadmin-conf/active")),
+            ["php-settings"] = P("PHP-instellingen", "Serverbeheer",
+                "PHP-versies, opties en beschikbare software uit CustomBuild.",
+                S("CustomBuild-opties", "api/custombuild/options-v2"),
+                S("Software", "api/custombuild/software"),
+                S("Versies", "api/custombuild/versions")),
+            ["custombuild"] = P("CustomBuild", "Serverbeheer",
+                "Configuratie, versies, updates en uitvoeringsstatus.",
+                S("Opties", "api/custombuild/options-v2"),
+                S("Updates", "api/custombuild/updates"),
+                S("Software", "api/custombuild/software"),
+                S("Versies", "api/custombuild/versions"),
+                S("Status", "api/custombuild/state"),
+                S("Acties", "api/custombuild/actions"),
+                S("Logs", "api/custombuild/logs")),
+            ["backup-restore"] = P("Back-up en herstel", "Admin gereedschap",
+                "Er is geen algemene backup/restore-operatie in de gepinde moderne Swagger."),
+            ["brute-force-monitor"] = P("Brute Force Monitor", "Admin gereedschap",
+                "Login- en beveiligingsgebeurtenissen uit de beschikbare API.",
+                S("Inloggeschiedenis", "api/login-history"),
+                S("ModSecurity-audit", "api/modsecurity-audit-log/summary")),
+            ["process-monitor"] = P("Procesmonitor", "Admin gereedschap",
+                "Databaseprocessen en serverbelasting.",
+                S("Databaseprocessen", "api/db-monitor/processes"),
+                S("CPU", "api/system-info/cpu"),
+                S("Belasting", "api/system-info/load"),
+                S("Geheugen", "api/system-info/memory")),
+            ["mail-queue"] = P("E-mailwachtrij", "Admin gereedschap",
+                "De moderne API heeft mailstatistiek, maar geen wachtrijbeheer.",
+                S("E-maillogs", "api/email-logs"),
+                S("E-mailstatistiek", "api/email-logs-summary")),
+            ["system-backup"] = P("Systeemback-up", "Admin gereedschap",
+                "De moderne API definieert geen systeembackup- of hersteloperatie."),
+            ["cpanel-import"] = P("cPanel-import", "Admin gereedschap",
+                "Logbestanden van importtaken op basis van hun taak-ID.",
+                S("Taaklog", "api/cpanel-import/tasks/{id}/log")),
+            ["broadcast"] = P("Bericht aan alle gebruikers", "Admin gereedschap",
+                "De API bevat lees- en verwijderoperaties voor berichten, maar geen broadcast-create-operatie.",
+                S("Berichten", "api/messages/list")),
+            ["themes"] = P("Thema's", "Admin gereedschap",
+                "Thema-instellingen via de skin-API.",
+                S("Metadata", "api/skin-customization/{skin}/metadata"),
+                S("Opties", "api/skin-options/{skin}"),
+                S("Globale opties", "api/skin-global-options/{skin}")),
+            ["evolution-theme"] = P("Evolution aanpassen", "Admin gereedschap",
+                "Skinbestanden en presentatieopties.",
+                S("Metadata", "api/skin-customization/{skin}/metadata"),
+                S("Menu", "api/skin-customization/{skin}/menu"),
+                S("Opties", "api/skin-options/{skin}")),
+            ["maintenance"] = P("Onderhoud", "Admin gereedschap",
+                "Backendonderhoudstaken.",
+                S("Onderhoud", "api/maintenance")),
+            ["global-cron"] = P("Cron van alle gebruikers", "Systeeminfo",
+                "Voor globale crontaken is geen leesoperatie in de moderne Swagger."),
+            ["system-file-editor"] = P("Systeembestandeditor", "Systeeminfo",
+                "De moderne API biedt bestandsbeheer binnen de backendcontext, geen algemene systeembestandeditor.",
+                S("Bestanden", "api/filemanager/list")),
+            ["system-logs"] = P("Systeemlogs", "Systeeminfo",
+                "Beschikbare logbronnen uit de DirectAdmin-API.",
+                S("CustomBuild-logs", "api/custombuild/logs"),
+                S("Inloggeschiedenis", "api/login-history"),
+                S("E-maillogs", "api/email-logs"),
+                S("ModSecurity-audit", "api/modsecurity-audit-log/summary")),
+            ["plugin-manager"] = P("Pluginbeheer", "Extra programma's",
+                "Installatie- en activatiestatus van plugins.",
+                S("Pluginbeheer", "api/plugin-manager/plugins"),
+                S("Plugins", "api/plugins/list")),
+            ["csf"] = P("ConfigServer Firewall", "Extra programma's",
+                "Deze externe plugin heeft geen eigen route in de moderne DirectAdmin-API.",
+                S("Beveiligingsstatus", "api/security-txt/status")),
+            ["licensing"] = P("Licentie", "Support",
+                "Licentiegegevens en verificatie.",
+                S("Licentie", "api/license"),
+                S("Licentiebewijs", "api/license/proof")),
+            ["email-accounts"] = P("E-mailaccounts", "Gebruiker",
+                "De gepinde API bevat geen algemeen e-mailaccountoverzicht.",
+                S("E-mailstatistiek", "api/email-logs-summary")),
+            ["file-manager"] = P("Bestandsbeheer", "Gebruiker",
+                "Bestanden en mappen van de aangemelde DirectAdmin-identiteit.",
+                S("Mapinhoud", "api/filemanager/list"),
+                S("Directorystructuur", "api/filemanager/tree"),
+                S("Schijfgebruik", "api/filemanager/disk-usage"),
+                S("Prullenbak", "api/filemanager/trash")),
+            ["domain-ssl"] = P("Domein-SSL", "Gebruiker",
+                "Certificaten, ACME-configuratie en beschikbare domeinen.",
+                S("Domeinen", "api/domain-tls/domains"),
+                S("Certificaten", "api/domain-tls/domains/{domain}/certs"),
+                S("ACME-configuratie", "api/domain-tls/domains/{domain}/acme-config"),
+                S("ACME-logs", "api/domain-tls/domains/{domain}/acme-logs")),
+            ["cron-jobs"] = P("Cron-taken", "Gebruiker",
+                "Voor individuele crontaken is geen operatie in de moderne Swagger."),
+            ["user-backups"] = P("Back-ups", "Gebruiker",
+                "Voor back-upbeheer is geen operatie in de moderne Swagger.")
+        };
+}

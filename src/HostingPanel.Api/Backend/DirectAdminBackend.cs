@@ -18,6 +18,7 @@ public interface IHostingBackend
     DomainManagementService Domains { get; }
     DnsZoneService Dns { get; }
     FileAccessService FileAccess { get; }
+    TicketService Tickets { get; }
     IHttpClientFactory Clients { get; }
 }
 
@@ -33,6 +34,7 @@ public sealed class DirectAdminBackend(
     DomainManagementService domains,
     DnsZoneService dns,
     FileAccessService fileAccess,
+    TicketService tickets,
     IHttpClientFactory clients) : IHostingBackend
 {
     public AccountCatalogService AccountCatalog => accountCatalog;
@@ -46,6 +48,7 @@ public sealed class DirectAdminBackend(
     public DomainManagementService Domains => domains;
     public DnsZoneService Dns => dns;
     public FileAccessService FileAccess => fileAccess;
+    public TicketService Tickets => tickets;
     public IHttpClientFactory Clients => clients;
 }
 

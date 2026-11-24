@@ -65,11 +65,23 @@ jobs:
           curl -fsS http://127.0.0.1:5089/_framework/blazor.web.js -o /tmp/hp-script
           test "$(wc -c </tmp/hp-script)" -gt 1000
           # All prioritized management pages must render without runtime exceptions.
-          for route in system-info system-services server-settings system-updates server-tls security sessions resellers change-password dns-zones; do
+          for route in system-info system-services server-settings system-updates server-tls security sessions resellers change-password dns-zones tickets tickets/new messages; do
             echo "Rendering /$route"
-            curl -fsS "http://127.0.0.1:5089/$route" -o "/tmp/hp-$route.html"
-            grep -qi 'HostingPanel' "/tmp/hp-$route.html"
+            out="/tmp/hp-$(printf %s "$route" | tr / -).html"
+            curl -fsS "http://127.0.0.1:5089/$route" -o "$out"
+            grep -qi 'HostingPanel' "$out"
           done
+          # Verify that the SignalR endpoint actually negotiates a connection.
+          curl -fsS -X POST 'http://127.0.0.1:5089/hubs/tickets/negotiate?negotiateVersion=1' \
+            -o /tmp/hp-signalr-negotiate
+          python3 - <<'PY'
+          import json
+          with open('/tmp/hp-signalr-negotiate') as f:
+              negotiated = json.load(f)
+          assert negotiated.get('connectionToken')
+          assert negotiated.get('availableTransports')
+          print('SignalR ticket hub negotiation: OK')
+          PY
 
       - name: Validate pinned Swagger and static API endpoint
         shell: bash
