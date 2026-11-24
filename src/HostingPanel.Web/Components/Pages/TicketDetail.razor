@@ -2,13 +2,15 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/tickets/{Id:long}"
 @using System.Text.Json
-@inject DirectAdminSession Session
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@inject TicketOperations TicketOps
 @implements IDisposable
 @inject NavigationManager Navigation
 <PageTitle>Ticket #@Id — HostingPanel</PageTitle>
 <PanelPageHeader>
     <Breadcrumb><a href="/tickets">@L["Ticket management"]</a> / Ticket #@Id</Breadcrumb>
-    <TitleContent>@(ticket is null ? $"Ticket #{Id}" : Text(ticket.Value, "subject"))</TitleContent>
+    <TitleContent>@(ticket is null ? $"Ticket #{Id}" : ticket.Subject)</TitleContent>
     <Description>@L["Messages and replies from DirectAdmin."]</Description>
     <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="Load">@L["↻ Refresh"]</MudButton></Actions>
 </PanelPageHeader>
@@ -26,18 +28,18 @@ else
             <div class="dashboard-section-heading"><h2>@L["Ticket details"]</h2>
                 <MudChip T="string" Size="Size.Small" Color="@(IsOpen ? Color.Success : Color.Default)">@(IsOpen ? "Open" : L["Closed"].Value)</MudChip></div>
             <MudGrid Spacing="3">
-                <MudItem xs="12" sm="4"><label>@L["Sender"]</label><p>@Text(ticket.Value, "fromName") (@Text(ticket.Value, "from"))</p></MudItem>
-                <MudItem xs="12" sm="4"><label>@L["Date"]</label><p>@Text(ticket.Value, "timestamp")</p></MudItem>
-                <MudItem xs="12" sm="4"><label>@L["Ticket number"]</label><p>@Text(ticket.Value, "legacyId")</p></MudItem>
+                <MudItem xs="12" sm="4"><label>@L["Sender"]</label><p>@ticket.FromName (@ticket.From)</p></MudItem>
+                <MudItem xs="12" sm="4"><label>@L["Date"]</label><p>@ticket.Timestamp</p></MudItem>
+                <MudItem xs="12" sm="4"><label>@L["Ticket number"]</label><p>@ticket.LegacyId</p></MudItem>
             </MudGrid>
             <MudDivider Class="my-4" />
-            <p class="ticket-message">@Text(ticket.Value, "message")</p>
+            <p class="ticket-message">@ticket.Message</p>
         </MudPaper>
-        @if (ticket.Value.TryGetProperty("replies", out var replies) && replies.ValueKind == JsonValueKind.Array)
+        @if (ticket.Replies is { } replies)
         {
             <MudPaper Class="pa-4 my-3" Elevation="1">
-                <h2>@L["Conversation ({0} replies)", replies.GetArrayLength()]</h2>
-                @foreach (var reply in replies.EnumerateArray())
+                <h2>@L["Conversation ({0} replies)", replies.Length]</h2>
+                @foreach (var reply in replies)
                 {
                     <article class="ticket-reply">
                         <header><strong>@Text(reply, "fromName")</strong>
@@ -68,11 +70,11 @@ else
 @code {
     [Parameter] public long Id { get; set; }
     [SupplyParameterFromQuery(Name = "source")] public string Source { get; set; } = "request";
-    private JsonElement? ticket;
+    private TicketEntry? ticket;
     private string recipient = "creator", replyMessage = "";
     private string? error, feedback;
     private bool loading, sending;
-    private bool IsOpen => ticket is not null && ticket.Value.TryGetProperty("open", out var v) && v.ValueKind == JsonValueKind.True;
+    private bool IsOpen => ticket?.Open == true;
     private static string Text(JsonElement item, string name) =>
         item.TryGetProperty(name, out var value) ? value.ToString() : "";
 
@@ -90,12 +92,10 @@ else
         loading = true; error = null;
         try
         {
-            var (status, body) = await Session.GetRawAsync(
-                $"hosting/tickets/{Id}?source={Uri.EscapeDataString(Source)}");
-            if (status != 200) { error = L["Ticket unavailable (HTTP {0}).", status].Value; ticket = null; return; }
-            using var json = JsonDocument.Parse(body);
-            ticket = json.RootElement.Clone();
-            recipient = Source == "received" ? Text(ticket.Value, "from") : "creator";
+            var (status, entry) = await TicketOps.GetAsync(Id, Source);
+            if (status != 200 || entry is null) { error = L["Ticket unavailable (HTTP {0}).", status].Value; ticket = null; return; }
+            ticket = entry;
+            recipient = Source == "received" ? ticket.From : "creator";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException)
         { error = ex.Message; ticket = null; }
@@ -107,14 +107,9 @@ else
         sending = true; feedback = null;
         try
         {
-            var data = JsonSerializer.Serialize(new {
-                message = replyMessage, recipient, subject = Text(ticket.Value, "subject"), source = Source
-            });
-            var legacyId = Text(ticket.Value, "legacyId");
-            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post,
-                $"hosting/tickets/{Uri.EscapeDataString(legacyId)}/replies", data);
-            if (status == 200) { replyMessage = ""; await Load(); }
-            else feedback = L["DirectAdmin did not confirm the reply (HTTP {0}): {1}", status, body].Value;
+            var (status, body) = await TicketOps.ReplyAsync(ticket.LegacyId, new TicketReplyRequest(replyMessage, recipient, ticket.Subject, Source));
+            if (body is null && status is >= 200 and < 300) { replyMessage = ""; await Load(); }
+            else feedback = L["The backend did not confirm the reply (HTTP {0}): {1}", status, body].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException)
         { feedback = ex.Message; }
@@ -126,10 +121,8 @@ else
         sending = true; feedback = null;
         try
         {
-            var payload = JsonSerializer.Serialize(new { source = Source, open = !IsOpen });
-            var (status, body) = await Session.RequestApiAsync(HttpMethod.Put,
-                "hosting/tickets/" + Uri.EscapeDataString(Text(ticket.Value, "legacyId")) + "/status", payload);
-            if (status == 200) await Load();
+            var (status, body) = await TicketOps.SetStatusAsync(ticket.LegacyId, new TicketStatusChange(Source, !IsOpen));
+            if (body is null && status is >= 200 and < 300) await Load();
             else feedback = L["Status change not confirmed (HTTP {0}): {1}", status, body].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)

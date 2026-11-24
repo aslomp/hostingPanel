@@ -1,8 +1,9 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/tickets"
-@using System.Text.Json
-@inject DirectAdminSession Session
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@inject TicketOperations TicketOps
 @implements IDisposable
 <PageTitle>Tickets — HostingPanel</PageTitle>
 
@@ -73,15 +74,13 @@ else
 }
 
 @code {
-    private sealed record TicketRow(long Id, string Source, string Subject, string From, string FromName,
-        bool Open, bool Unread, int Priority, string Timestamp);
-    private List<TicketRow>? tickets;
+    private List<TicketEntry>? tickets;
     private string search = "", filter = "all";
     private string? error, warning;
     private int messageCount;
     private bool loading;
 
-    private IReadOnlyList<TicketRow> Visible => (tickets ?? []).Where(t =>
+    private IReadOnlyList<TicketEntry> Visible => (tickets ?? []).Where(t =>
         (filter switch {
             "received" => t.Source == "received", "request" => t.Source == "request",
             "open" => t.Open, "closed" => !t.Open, "unread" => t.Unread, _ => true
@@ -107,28 +106,14 @@ else
         loading = true; error = null; warning = null;
         try
         {
-            var (status, body) = await Session.GetRawAsync("hosting/tickets/inbox");
-            if (status != 200) { error = L["The backend did not return the ticket list (HTTP {0}).", status].Value; tickets = null; return; }
-            using var json = JsonDocument.Parse(body);
-            var root = json.RootElement;
-            tickets = root.GetProperty("tickets").EnumerateArray()
-                .Select(x => new TicketRow(
-                    x.GetProperty("id").GetInt64(), Text(x, "source"),
-                    Text(x, "subject"), Text(x, "from"), Text(x, "fromName"),
-                    Flag(x, "open"), Flag(x, "unread"),
-                    x.GetProperty("priority").GetInt32(), Text(x, "timestamp")))
-                .ToList();
-            messageCount = root.GetProperty("messages").GetArrayLength();
-            if (root.TryGetProperty("warnings", out var warnings) && warnings.GetArrayLength() > 0)
-                warning = string.Join(", ", warnings.EnumerateArray().Select(x => x.GetString()));
+            var (status, inbox, _) = await TicketOps.InboxAsync();
+            if (status != 200 || inbox is null) { error = L["The backend did not return the ticket list (HTTP {0}).", status].Value; tickets = null; return; }
+            tickets = inbox.Tickets.ToList();
+            messageCount = inbox.Messages.Count;
+            if (inbox.Warnings.Count > 0) warning = string.Join(", ", inbox.Warnings);
         }
-        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         { error = ex.Message; tickets = null; }
         finally { loading = false; }
     }
-    private static string Text(JsonElement e, string key) =>
-        e.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString() ?? "" : "";
-    private static bool Flag(JsonElement e, string key) =>
-        e.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.True;
 }

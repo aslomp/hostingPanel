@@ -5,6 +5,9 @@ namespace HostingPanel.Web.Services;
 
 public sealed class AccountOperations(BackendOperationScope scope)
 {
+    public Task<AccountOverviewResult> OverviewAsync(string username, CancellationToken ct = default) =>
+        scope.RunAsync<IAccountOverview, AccountOverviewResult>((p, auth, token) => p.GetAsync(username, auth, token), ct);
+
     public Task<AccountCatalogResult> ListAsync(CancellationToken ct = default) =>
         scope.RunAsync<IAccountCatalog, AccountCatalogResult>((p, auth, token) => p.ListAsync(auth, token), ct);
 
