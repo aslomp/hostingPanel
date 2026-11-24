@@ -28,7 +28,7 @@ else if (accounts is not null)
     <div class="card">
         <div class="dashboard-section-heading"><h2>@L["All accessible accounts"]</h2><span class="status-pill good">@accounts.Count accounts</span></div>
         <label for="userFilter">@L["Search users"]</label>
-        <input id="userFilter" type="search" @bind="search" @bind:event="oninput" placeholder="@L["Search username or owner…"]" />
+        <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="userFilter" Placeholder="@L["Search username or owner…"].Value" />
         <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>Account</th><th>@L["Role"]</th><th>@L["Created by"]</th><th>@L["Domains"]</th></tr></thead>
         <tbody>
         @foreach (var item in Visible)

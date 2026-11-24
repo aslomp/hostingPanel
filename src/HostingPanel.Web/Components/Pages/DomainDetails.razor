@@ -55,19 +55,19 @@ else
             <h2>@L["Change domain settings"]</h2>
             <p>@L["Each setting is saved separately."]</p>
             <label for="domainPhp">PHP</label>
-            <select id="domainPhp" @bind="php"><option value="ON">@L["Enabled"]</option><option value="OFF">@L["Disabled"]</option></select>
+            <MudSelect T="string" @bind-Value="php" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="domainPhp"><MudSelectItem T="string" Value='@("ON")'>@L["Enabled"]</MudSelectItem><MudSelectItem T="string" Value='@("OFF")'>@L["Disabled"]</MudSelectItem></MudSelect>
             <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SavePhp">@L["Save PHP"]</MudButton>
             <label for="domainSsl">SSL / HTTPS</label>
-            <select id="domainSsl" @bind="ssl"><option value="ON">@L["Enabled"]</option><option value="OFF">@L["Disabled"]</option></select>
+            <MudSelect T="string" @bind-Value="ssl" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="domainSsl"><MudSelectItem T="string" Value='@("ON")'>@L["Enabled"]</MudSelectItem><MudSelectItem T="string" Value='@("OFF")'>@L["Disabled"]</MudSelectItem></MudSelect>
             <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SaveSsl">@L["Save SSL"]</MudButton>
             <label for="domainCgi">CGI</label>
-            <select id="domainCgi" @bind="cgi"><option value="ON">@L["Enabled"]</option><option value="OFF">@L["Disabled"]</option></select>
+            <MudSelect T="string" @bind-Value="cgi" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="domainCgi"><MudSelectItem T="string" Value='@("ON")'>@L["Enabled"]</MudSelectItem><MudSelectItem T="string" Value='@("OFF")'>@L["Disabled"]</MudSelectItem></MudSelect>
             <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SaveCgi">@L["Save CGI"]</MudButton>
             <label for="domainBandwidth">@L["Bandwidth (MiB or unlimited)"]</label>
-            <input id="domainBandwidth" @bind="bandwidth" />
+            <MudTextField T="string" @bind-Value="bandwidth" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="domainBandwidth" />
             <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SaveBandwidth">@L["Save bandwidth"]</MudButton>
             <label for="domainQuota">@L["Disk space (MiB or unlimited)"]</label>
-            <input id="domainQuota" @bind="quota" />
+            <MudTextField T="string" @bind-Value="quota" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="domainQuota" />
             <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SaveQuota">@L["Save quota"]</MudButton>
             @if (saving) { <p role="status">@L["Saving change…"]</p> }
             @if (saveMessage is not null) { <p role="status">@saveMessage</p> }

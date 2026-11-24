@@ -33,7 +33,7 @@ else
     {
       <p>@overall.Count databases gevonden. @(overallWarnings.Count == 0 ? L["Complete inventory."].Value : L["Incomplete: {0} accounts could not be read.", overallWarnings.Count].Value)</p>
       <label for="overallDbFilter">@L["Search databases"]</label>
-      <input id="overallDbFilter" type="search" @bind="overallSearch" @bind:event="oninput" placeholder="@L["Search database or owner…"]" />
+      <MudTextField T="string" @bind-Value="overallSearch" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="overallDbFilter" Placeholder="@L["Search database or owner…"].Value" />
       <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>@L["Owner"]</th><th>Database</th><th>@L["Tables"]</th><th>@L["Users"]</th><th>@L["Size (bytes)"]</th><th>Definer issues</th></tr></thead><tbody>
         @foreach (var item in overall.Where(x => x.Owner.Contains(overallSearch, StringComparison.OrdinalIgnoreCase) || x.Name.Contains(overallSearch, StringComparison.OrdinalIgnoreCase)))
         {
@@ -61,7 +61,7 @@ else
     @if (databases is not null)
     {
       <label for="dbFilter">Zoek database (@databases.Count)</label>
-      <input id="dbFilter" @bind="search" @bind:event="oninput" placeholder="@L["Database name"]" />
+      <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbFilter" Placeholder="@L["Database name"].Value" />
       <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>Database</th><th>@L["Actions"]</th></tr></thead><tbody>
         @foreach(var database in databases.Where(x => x.Contains(search,StringComparison.OrdinalIgnoreCase)))
         {
@@ -77,11 +77,11 @@ else
     <p>@L["DirectAdmin adds the account prefix where necessary. The exact name is retrieved from the backend after creation."]</p>
     <div class="form-grid">
       <div><label for="databaseName">@L["Database name"]</label>
-        <input id="databaseName" @bind="newDatabase" autocomplete="off" placeholder="app" /></div>
+        <MudTextField T="string" @bind-Value="newDatabase" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="databaseName" AutoComplete="off" Placeholder="app" /></div>
       <div><label for="dbUsername">@L["Database user"]</label>
-        <input id="dbUsername" @bind="newUser" autocomplete="off" placeholder="app" /></div>
+        <MudTextField T="string" @bind-Value="newUser" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbUsername" AutoComplete="off" Placeholder="app" /></div>
       <div><label for="dbPassword">@L["Password"]</label>
-        <input id="dbPassword" type="password" @bind="newPassword" autocomplete="new-password" /></div>
+        <MudTextField T="string" @bind-Value="newPassword" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbPassword" AutoComplete="new-password" InputType="InputType.Password" /></div>
     </div>
     <div class="form-actions"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@creating" OnClick="Create">
       @(creating ? "Aanmaken…" : L["Create database"].Value)

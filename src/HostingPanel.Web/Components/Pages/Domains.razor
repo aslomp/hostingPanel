@@ -27,7 +27,7 @@ else
         <h2>@L["Domains of an account"]</h2>
         <p>@L["Leave blank to list all accessible domains, or enter an account to filter."]</p>
         <label for="owner">@L["Username (optional)"]</label>
-        <input id="owner" @bind="owner" placeholder="@L["For example, an existing user"]" />
+        <MudTextField T="string" @bind-Value="owner" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="owner" Placeholder="@L["For example, an existing user"].Value" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Refresh" Disabled="@loading">@L["Retrieve"]</MudButton>
         @if (error is not null) { <p class="error" role="alert">@error</p> }
         @if (warning is not null) { <p role="status">Niet alle accountgegevens zijn beschikbaar: @warning</p> }
@@ -36,7 +36,7 @@ else
         {
             <p>@domains.Count domein(en) gevonden.</p>
             <label for="domainFilter">@L["Filter domains"]</label>
-            <input id="domainFilter" @bind="filter" @bind:event="oninput" placeholder="@L["Search domain name"]" />
+            <MudTextField T="string" @bind-Value="filter" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="domainFilter" Placeholder="@L["Search domain name"].Value" />
             <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true">
                 <thead><tr><th>@L["Domain"]</th><th>Account</th><th>@L["Provisioning"]</th><th>@L["Actions"]</th></tr></thead>
                 <tbody>
@@ -54,11 +54,11 @@ else
         <h2>@L["Add domain"]</h2>
         <p>@L["Create a website for the signed-in account."]</p>
         <label for="newDomain">@L["Domain name"]</label>
-        <input id="newDomain" @bind="testDomain" placeholder="example.com" />
+        <MudTextField T="string" @bind-Value="testDomain" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="newDomain" Placeholder="example.com" />
         <div class="domain-options">
-            <label><input type="checkbox" @bind="php" /> PHP</label>
-            <label><input type="checkbox" @bind="ssl" /> SSL</label>
-            <label><input type="checkbox" @bind="cgi" /> CGI</label>
+            <MudCheckBox T="bool" @bind-Value="php" Label="PHP" />
+            <MudCheckBox T="bool" @bind-Value="ssl" Label="SSL" />
+            <MudCheckBox T="bool" @bind-Value="cgi" Label="CGI" />
         </div>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(mutationBusy || string.IsNullOrWhiteSpace(testDomain))" OnClick="CreateDomain">@L["Add domain"]</MudButton>
         @if (mutationStatus is not null)
@@ -72,7 +72,7 @@ else
             <h2>@L["Delete domain"]: @deleteDomain</h2>
             <p class="error" role="alert"><strong>@L["Permanently delete this domain? This cannot be undone."]</strong> @L["All domain website files, DNS records, routes and certificates will be removed."]</p>
             <label for="confirmDomain">@L["Enter the exact domain name to confirm."]</label>
-            <input id="confirmDomain" @bind="confirmation" autocomplete="off" />
+            <MudTextField T="string" @bind-Value="confirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="confirmDomain" AutoComplete="off" />
             <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@(mutationBusy || confirmation != deleteDomain)" OnClick="DeleteDomain">@L["Permanently delete"]</MudButton>
             <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@mutationBusy" OnClick="CancelDelete">@L["Cancel"]</MudButton>
         </section>
