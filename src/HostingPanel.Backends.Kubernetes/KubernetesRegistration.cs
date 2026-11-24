@@ -109,5 +109,12 @@ public static class KubernetesRegistration
         }
     }
 
+    // Existing installations with no packages also need a usable initial package.
+    if (!await db.Packages.AnyAsync())
+    {
+        db.Packages.Add(new HostingPackage { Name = "default", LimitsJson = "{}" });
+        await db.SaveChangesAsync();
+    }
+
     }
 }
