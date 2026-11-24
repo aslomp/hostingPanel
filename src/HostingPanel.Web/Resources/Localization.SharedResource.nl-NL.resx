@@ -856,4 +856,5 @@
   <data name="Filesystems" xml:space="preserve"><value>Bestandssystemen</value></data>
   <data name="Uptime" xml:space="preserve"><value>Uptime</value></data>
   <data name="Services" xml:space="preserve"><value>Services</value></data>
+  <data name="dashboard" xml:space="preserve"><value>dashboard</value></data>
 </root>
