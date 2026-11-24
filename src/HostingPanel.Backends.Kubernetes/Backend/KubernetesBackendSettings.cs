@@ -14,7 +14,6 @@ public enum KubernetesIngressProvider
 public sealed record HostingIpAddress(string Address, int PrefixLength, string Status, string Device, string NameServer, bool Global = false, string[]? Resellers = null, string[]? AssignedUsers = null);
 
 public sealed record AcmeIssuerMapping(string Id, string Name, string IssuerName, string IssuerKind = "ClusterIssuer", bool Staging = false, bool SupportsWildcard = false);
-public sealed record DnsNameserverPair(string Ns1, string Ns2);
 public sealed class KubernetesBackendSettings : IBackendSettings
 {
     [Display(Name = "Ingress provider", Description = "Desired routing implementation for hosted domains. Reconciliation is not implemented yet.")]
@@ -49,9 +48,6 @@ public sealed class KubernetesBackendSettings : IBackendSettings
 
     [Display(Name = "TLS ListenerSet", Description = "Existing ListenerSet in the hosting namespace. Must match the Helm listenerSetName permission.")]
     public string TlsListenerSetName { get; set; } = "";
-
-    [Display(Name = "Account DNS overrides", Description = "Optional nameserver pairs keyed by username. Empty or absent entries inherit the creator's settings or server defaults.")]
-    public Dictionary<string, DnsNameserverPair> DnsAccountNameservers { get; set; } = new();
 
     [JsonIgnore]
     public IBackendSettingsValidator Validator { get; } = new KubernetesBackendSettingsValidator();
@@ -109,15 +105,7 @@ public sealed class KubernetesBackendSettingsValidator : IBackendSettingsValidat
             errors[nameof(typed.AcmePackageProviders)] = ["Invalid package GUID or unknown provider."];
         if (typed.TlsListenerSetName.Length > 0 && !DnsLabel(typed.TlsListenerSetName))
             errors[nameof(typed.TlsListenerSetName)] = ["Invalid ListenerSet name."];
-        if (typed.DnsAccountNameservers is null || typed.DnsAccountNameservers.Any(x =>
-            string.IsNullOrWhiteSpace(x.Key) || x.Value is null ||
-            !(string.IsNullOrWhiteSpace(x.Value.Ns1) && string.IsNullOrWhiteSpace(x.Value.Ns2)) &&
-            (!ValidNameserver(x.Value.Ns1) || !ValidNameserver(x.Value.Ns2) ||
-             string.Equals(x.Value.Ns1.TrimEnd('.'), x.Value.Ns2.TrimEnd('.'), StringComparison.OrdinalIgnoreCase))))
-            errors[nameof(typed.DnsAccountNameservers)] = ["Provide two distinct nameservers or leave both empty to inherit."];
         return errors;
     }
-    private static bool ValidNameserver(string? value) => !string.IsNullOrWhiteSpace(value) &&
-        value.Length <= 254 && value.TrimEnd('.').Contains('.') && Uri.CheckHostName(value.TrimEnd('.')) == UriHostNameType.Dns;
     private static bool DnsLabel(string? s) => s is { Length: > 0 and <= 63 } && char.IsAsciiLetterOrDigit(s[0]) && char.IsAsciiLetterOrDigit(s[^1]) && s.All(c => char.IsAsciiDigit(c) || c is >= 'a' and <= 'z' or '-');
 }

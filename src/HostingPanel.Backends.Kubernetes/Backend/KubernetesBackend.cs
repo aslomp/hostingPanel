@@ -33,8 +33,10 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
         using var document = JsonDocument.Parse(row.ValueJson);
         // Older persisted settings lack the DNS properties. Fill only new keys from deployment defaults.
         var stored = document.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
+        // Discard the redundant setting introduced by PR #34, including persisted copies.
+        stored.Remove("DnsAccountNameservers");
         using var defaults = JsonDocument.Parse(BackendSettingsSchema.Serialize(configuredSettings));
-        foreach (var key in new[] { nameof(KubernetesBackendSettings.DnsAutoCreateZones), nameof(KubernetesBackendSettings.DnsWebIp), nameof(KubernetesBackendSettings.DnsNs1), nameof(KubernetesBackendSettings.DnsNs2), nameof(KubernetesBackendSettings.IpAddresses), nameof(KubernetesBackendSettings.AcmeProviders), nameof(KubernetesBackendSettings.AcmeDefaultProvider), nameof(KubernetesBackendSettings.AcmeUserProviders), nameof(KubernetesBackendSettings.AcmePackageProviders), nameof(KubernetesBackendSettings.TlsListenerSetName), nameof(KubernetesBackendSettings.DnsAccountNameservers) })
+        foreach (var key in new[] { nameof(KubernetesBackendSettings.DnsAutoCreateZones), nameof(KubernetesBackendSettings.DnsWebIp), nameof(KubernetesBackendSettings.DnsNs1), nameof(KubernetesBackendSettings.DnsNs2), nameof(KubernetesBackendSettings.IpAddresses), nameof(KubernetesBackendSettings.AcmeProviders), nameof(KubernetesBackendSettings.AcmeDefaultProvider), nameof(KubernetesBackendSettings.AcmeUserProviders), nameof(KubernetesBackendSettings.AcmePackageProviders), nameof(KubernetesBackendSettings.TlsListenerSetName) })
             stored.TryAdd(key, defaults.RootElement.GetProperty(key).Clone());
         if (!BackendSettingsSchema.TryRead<KubernetesBackendSettings>(JsonSerializer.SerializeToElement(stored),
             out var settings, out _))
@@ -151,9 +153,25 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
             eligible.OrderByDescending(x => x.Address == dnsSettings.DnsWebIp).ThenBy(x => x.Address, StringComparer.Ordinal)
                 .Take(1).Select(x => x.Address).ToArray();
         if (selected.Length == 0) return "NO_ASSIGNED_IP";
-        var nameservers = await ResolveNameserversAsync(dnsSettings, owner, ct);
-        var ns1 = nameservers.Ns1.TrimEnd('.');
-        var ns2 = nameservers.Ns2.TrimEnd('.');
+        // The existing IP management entries carry nameserver assignments.
+        // Do not maintain a second account-specific configuration.
+        var assignedNameservers = dnsSettings.IpAddresses
+            .Where(x => (x.AssignedUsers ?? []).Contains(owner.Username))
+            .Select(x => x.NameServer);
+        var resellerNameservers = dnsSettings.IpAddresses
+            .Where(x => (x.Resellers ?? []).Contains(owner.Username) ||
+                (parent is not null && (x.Resellers ?? []).Contains(parent.Username)) ||
+                (parent is not null && (x.AssignedUsers ?? []).Contains(parent.Username)))
+            .Select(x => x.NameServer);
+        var nameservers = assignedNameservers.Concat(resellerNameservers)
+            .Concat(new[] { dnsSettings.DnsNs1, dnsSettings.DnsNs2 })
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.TrimEnd('.'))
+            .Where(ValidDomain)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(2).ToArray();
+        var ns1 = nameservers.ElementAtOrDefault(0) ?? "";
+        var ns2 = nameservers.ElementAtOrDefault(1) ?? "";
         if (selected.Any(x => !System.Net.IPAddress.TryParse(x, out _)) ||
             !ValidDomain(ns1) || !ValidDomain(ns2) || string.Equals(ns1, ns2, StringComparison.OrdinalIgnoreCase))
             return "DNS_DEFAULTS_NOT_CONFIGURED";
@@ -166,23 +184,6 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
             db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "@", Type = "NS", Value = ns.ToLowerInvariant() + "." });
         Schedule("dns-zone", zone.Id, "create", new { zone.Name });
         return null;
-    }
-
-    private async Task<DnsNameserverPair> ResolveNameserversAsync(KubernetesBackendSettings settings, HostingAccount owner, CancellationToken ct)
-    {
-        var visited = new HashSet<Guid>();
-        HostingAccount? current = owner;
-        while (current is not null && visited.Add(current.Id))
-        {
-            if (settings.DnsAccountNameservers.TryGetValue(current.Username, out var pair) &&
-                !string.IsNullOrWhiteSpace(pair.Ns1) && !string.IsNullOrWhiteSpace(pair.Ns2))
-                return pair;
-            var creator = current.CreatorId;
-            current = creator is { } id
-                ? db.Accounts.Local.FirstOrDefault(x => x.Id == id) ?? await db.Accounts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct)
-                : null;
-        }
-        return new(settings.DnsNs1, settings.DnsNs2);
     }
 
     private async Task<Dictionary<string,int>> UsedIpsAsync(CancellationToken ct)
