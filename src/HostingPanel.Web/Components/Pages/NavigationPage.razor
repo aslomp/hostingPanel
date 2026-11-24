@@ -12,6 +12,10 @@ else if (Key == "name-servers")
 {
     <BackendSettings @key="Key" NameserversOnly="true" />
 }
+else if (Key == "file-manager")
+{
+    <FileManagerOverview @key="Key" />
+}
 else if (Key == "domain-ssl")
 {
     <DomainSslOverview @key="Key" />
@@ -94,7 +98,7 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
-        if (Key is "ip-management" or "name-servers" or "domain-ssl") return;
+        if (Key is "ip-management" or "name-servers" or "domain-ssl" or "file-manager") return;
         selected = Sources.FirstOrDefault()?.Path ?? "";
         response = null;
         statusText = null;
