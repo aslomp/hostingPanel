@@ -108,7 +108,7 @@ else
     private static bool Matches(bool? value, string filter) =>
         filter == "all" || (value is not null && (filter == "yes") == value.Value);
 
-    private static string Display(bool? value) =>
+    private string Display(bool? value) =>
         value switch { true => "Ja", false => "Nee", null => L["Unavailable"].Value };
 
     protected override async Task OnInitializedAsync()
