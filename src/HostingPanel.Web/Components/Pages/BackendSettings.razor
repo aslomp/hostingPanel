@@ -37,17 +37,17 @@ else
                     <tbody>
                     @foreach (var ip in addresses)
                     {
-                        <tr><td><input type="checkbox" @bind="ip.Selected" /></td><td><input @bind="ip.Address" /></td>
-                        <td><select @bind="ip.Status"><option value="server">server</option><option value="shared">shared</option><option value="available">available</option><option value="owned">dedicated</option></select></td>
-                        <td><input @bind="ip.Device" /></td>
+                        <tr><td><MudCheckBox T="bool" @bind-Value="ip.Selected" /></td><td><MudTextField T="string" @bind-Value="ip.Address" Margin="Margin.Dense" Immediate="true" /></td>
+                        <td><MudSelect T="string" @bind-Value="ip.Status" Margin="Margin.Dense"><MudSelectItem T="string" Value='@("server")'>server</MudSelectItem><MudSelectItem T="string" Value='@("shared")'>shared</MudSelectItem><MudSelectItem T="string" Value='@("available")'>available</MudSelectItem><MudSelectItem T="string" Value='@("owned")'>dedicated</MudSelectItem></MudSelect></td>
+                        <td><MudTextField T="string" @bind-Value="ip.Device" Margin="Margin.Dense" Immediate="true" /></td>
                         <td>@foreach (var reseller in inventory?.Resellers ?? [])
-                        { <label><input type="checkbox" checked="@ip.Resellers.Contains(reseller)" @onchange="e => Assign(ip, reseller, e.Value is true)" />@reseller</label> }</td>
+                        { <MudCheckBox T="bool" Value="@ip.Resellers.Contains(reseller)" ValueChanged="@(v => Assign(ip, reseller, v))" Label="@reseller" /> }</td>
                         <td>@(inventory?.Users.GetValueOrDefault(ip.Address) ?? 0)
                         @foreach (var user in inventory?.AccountNames ?? [])
-                        { <label><input type="checkbox" checked="@ip.AssignedUsers.Contains(user)" @onchange="e => AssignUser(ip, user, e.Value is true)" />@user</label> }
+                        { <MudCheckBox T="bool" Value="@ip.AssignedUsers.Contains(user)" ValueChanged="@(v => AssignUser(ip, user, v))" Label="@user" /> }
                         </td>
-                        <td><input type="checkbox" @bind="ip.Global" /></td><td><input @bind="ip.NameServer" /></td>
-                        <td><input type="number" min="0" max="128" @bind="ip.PrefixLength" /></td>
+                        <td><MudCheckBox T="bool" @bind-Value="ip.Global" /></td><td><MudTextField T="string" @bind-Value="ip.NameServer" Margin="Margin.Dense" Immediate="true" /></td>
+                        <td><MudNumericField T="int" Min="0" Max="128" @bind-Value="ip.PrefixLength" Margin="Margin.Dense" /></td>
                         <td><button disabled="@busy" @onclick="() => RemoveIp(ip)">@L["Delete"]</button></td></tr>
                     }
                     </tbody>
@@ -59,10 +59,10 @@ else
                 { <tr><td>@device.Address</td><td>@device.Device</td><td><button disabled="@(busy || addresses.Any(x => x.Address == device.Address))" @onclick="() => ImportDevice(device)">@L["Add IP"]</button></td></tr> }
                 </tbody></MudSimpleTable>
                 <p>@L["Select the default public web IP for new domains."]</p>
-                <select @bind="draftWebIp"><option value="">@L["Not set"]</option>
+                <MudSelect T="string" @bind-Value="draftWebIp" Margin="Margin.Dense"><MudSelectItem T="string" Value='@("")'>@L["Not set"]</MudSelectItem>
                     @foreach (var ip in addresses.Where(x => x.Status is "server" or "shared"))
-                    { <option value="@ip.Address">@ip.Address</option> }
-                </select>
+                    { <MudSelectItem T="string" Value='@ip.Address'>@ip.Address</MudSelectItem> }
+                </MudSelect>
                 <div class="form-actions"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@busy" OnClick="Save">@L["Save settings"]</MudButton></div>
             }
             @if (NameserversOnly && view.Fields.Any(f => f.Name == "IpAddresses"))
@@ -70,8 +70,8 @@ else
                 <div class="form-actions"><button class="primary" disabled="@busy" @onclick="() => editingNs = !editingNs">+ @L["Create nameservers"]</button></div>
                 @if (editingNs)
                 {
-                    <select @bind="nsAddress"><option value="">@L["Select IP"]</option>@foreach (var ip in addresses) { <option value="@ip.Address">@ip.Address</option> }</select>
-                    <input @bind="nsName" placeholder="ns1.example.com" />
+                    <MudSelect T="string" @bind-Value="nsAddress" Margin="Margin.Dense"><MudSelectItem T="string" Value='@("")'>@L["Select IP"]</MudSelectItem>@foreach (var ip in addresses) { <MudSelectItem T="string" Value='@ip.Address'>@ip.Address</MudSelectItem> }</MudSelect>
+                    <MudTextField T="string" @bind-Value="nsName" Placeholder="ns1.example.com" Margin="Margin.Dense" Immediate="true" />
                     <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="SetNs">@L["Assign"]</MudButton>
                 }
                 <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>IP</th><th>@L["Status"]</th><th>@L["Users"]</th><th>@L["Name server"]</th><th></th></tr></thead>
@@ -94,33 +94,31 @@ else
                             @if (field.Description is not null) { <p>@field.Description</p> }
                             @if (field.Type == "enum")
                             {
-                                <select id="@id" value="@draft[field.Name]" @onchange="e => Set(field.Name, e.Value?.ToString())" disabled="@busy">
-                                    @if (field.Nullable) { <option value="">@L["Not set"]</option> }
+                                <MudSelect T="string" InputId="@id" Value="@draft[field.Name]" ValueChanged="@(v => Set(field.Name, v))" Disabled="@busy" Margin="Margin.Dense">
+                                    @if (field.Nullable) { <MudSelectItem T="string" Value='@("")'>@L["Not set"]</MudSelectItem> }
                                     @foreach (var option in field.Options)
                                     {
-                                        <option value="@option.Value">@option.Label</option>
+                                        <MudSelectItem T="string" Value='@option.Value'>@option.Label</MudSelectItem>
                                     }
-                                </select>
+                                </MudSelect>
                             }
                             else if (field.Type == "boolean" && !field.Nullable)
                             {
-                                <input id="@id" type="checkbox" checked="@(draft[field.Name] == "true")"
-                                    @onchange='e => Set(field.Name, e.Value is true ? "true" : "false")' disabled="@busy" />
+                                <MudCheckBox T="bool" Value='@(draft[field.Name] == "true")' ValueChanged='@(v => Set(field.Name, v ? "true" : "false"))' Disabled="@busy" />
                             }
                             else if (field.Type == "boolean")
                             {
-                                <select id="@id" value="@draft[field.Name]" @onchange="e => Set(field.Name, e.Value?.ToString())" disabled="@busy">
-                                    <option value="">@L["Not set"]</option><option value="true">@L["Yes"]</option><option value="false">@L["No"]</option>
-                                </select>
+                                <MudSelect T="string" InputId="@id" Value="@draft[field.Name]" ValueChanged="@(v => Set(field.Name, v))" Disabled="@busy" Margin="Margin.Dense">
+                                    <MudSelectItem T="string" Value='@("")'>@L["Not set"]</MudSelectItem><MudSelectItem T="string" Value='@("true")'>@L["Yes"]</MudSelectItem><MudSelectItem T="string" Value='@("false")'>@L["No"]</MudSelectItem>
+                                </MudSelect>
                             }
                             else if (field.Type == "json")
                             {
-                                <textarea id="@id" rows="4" value="@draft[field.Name]" @onchange="e => Set(field.Name, e.Value?.ToString())" disabled="@busy"></textarea>
+                                <MudTextField T="string" InputId="@id" Lines="4" Value="@draft[field.Name]" ValueChanged="@(v => Set(field.Name, v))" Disabled="@busy" Immediate="true" />
                             }
                             else
                             {
-                                <input id="@id" type="text" inputmode="@(field.Type == "number" ? "decimal" : "text")"
-                                    value="@draft[field.Name]" @onchange="e => Set(field.Name, e.Value?.ToString())" disabled="@busy" />
+                                <MudTextField T="string" InputId="@id" Value="@draft[field.Name]" ValueChanged="@(v => Set(field.Name, v))" Disabled="@busy" Immediate="true" />
                             }
                             @if (field.Nullable && field.Type == "string")
                             {
