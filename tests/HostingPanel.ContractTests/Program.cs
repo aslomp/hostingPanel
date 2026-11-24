@@ -6,6 +6,7 @@ using System.Text;
 
 var checks = new List<(string Description, Action Test)>
 {
+    ("Latest UI reads discard superseded results and cancel on disposal", LatestReadTests.Run),
     ("DNS capability is implemented by both providers", () =>
     {
         Require(typeof(HostingPanel.Api.IDNSProvider).IsAssignableFrom(typeof(DnsZoneService)));

@@ -38,34 +38,57 @@ else
     @if(deleteMessage is not null) { <p role="status">@deleteMessage</p> }
   </MudPaper>
 }
+@implements IDisposable
 @code {
   [Parameter] public string Database { get; set; } = "";
   private List<string>? users;
   private string? error, deleteMessage;
   private string confirmation="";
-  private bool loading, deleting;
-  protected override async Task OnParametersSetAsync()
-  {
-    if(Session.Connected) await Load();
-  }
-  private async Task Load()
-  {
-    if(loading || !Session.Connected) return;
-    loading=true; error=null;
-    try
+  private readonly LatestRead read = new();
+  private bool loading => read.Loading;
+  private bool deleting;
+    private bool disposed;
+    protected override void OnInitialized() => Session.Changed += SessionChanged;
+    protected override Task OnParametersSetAsync() => Load();
+    private void SessionChanged() => _ = InvokeAsync(async () =>
     {
-      var result = await DatabaseOps.UsersAsync(Database);
-      if (result.Status != 200 || result.Users is null)
-      {
-        error = L["Database users unavailable (HTTP {0}).", result.Status].Value;
-        users = null; return;
-      }
-      users = result.Users.ToList();
+        if (disposed) return;
+        var task = Load();
+        StateHasChanged();
+        await task;
+        if (!disposed) StateHasChanged();
+    });
+    public void Dispose()
+    {
+        disposed = true;
+        Session.Changed -= SessionChanged;
+        read.Dispose();
     }
-    catch(Exception e) when(e is HttpRequestException or ArgumentException or InvalidOperationException)
-    { error=e.Message; users=null; }
-    finally { loading=false; }
-  }
+
+    private Task Load()
+    {
+        if (disposed) return Task.CompletedTask;
+        users = null; error = null;
+        if (!Session.Connected)
+        {
+            read.Cancel();
+            return Task.CompletedTask;
+        }
+        var target = Database;
+        var channel = Session.TicketChannel;
+        return read.RunAsync(ct => DatabaseOps.UsersAsync(target, ct),
+            () => Session.Connected && Session.TicketChannel == channel && Database == target,
+            result =>
+            {
+                if (result.Status != 200 || result.Users is null)
+                {
+                    error = L["Database users unavailable (HTTP {0}).", result.Status].Value;
+                    return;
+                }
+                users = result.Users.ToList();
+            }, ex => error = ex.Message);
+    }
+
   private bool deleteDialogOpen;
   private async Task ConfirmDeletion()
   {
