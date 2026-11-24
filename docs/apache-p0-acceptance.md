@@ -6,6 +6,12 @@
 - The ConfigMap reader has namespace-wide list access; the label selector is not an RBAC boundary. Keep hosting resources in a dedicated namespace and do not store confidential data in ConfigMaps.
 - Shared PHP is a trusted-application mode, not an isolation guarantee. Keep the opt-in disabled for untrusted hosting. Do not weaken storage or runtime protections to resolve compatibility problems.
 
+## Responsibility boundaries
+
+Keep NfsDirectoryProvisioner as a single storage lifecycle component. Application authorization decides who may manage an account or domain; storage provisioning must independently preserve the intended operation scope and existing data. Runtime and storage infrastructure enforce effective access continuously. Provisioning-time mode checks are not proof of isolation.
+
+Preserve existing customer ownership, permissions and ACLs; do not automatically normalize existing directories. Keep the current defensive checks until compatibility with legitimate account-owned groups and ACLs can be verified in a disposable NFS environment. Do not treat a warning as a substitute for an enforced account boundary. Document unsupported configurations and leave destructive operations fail-closed when their safety cannot be established.
+
 ## Acceptance evidence required
 Record the image digests, rendered chart, loaded Apache modules, configuration test output, public listener and health listener smoke-test results, and deployment revision. Use only synthetic accounts and disposable test data in an isolated test environment.
 
