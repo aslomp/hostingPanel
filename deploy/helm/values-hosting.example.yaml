@@ -1,0 +1,37 @@
+# helm upgrade --install admin deploy/helm/hostingpanel -n hosting --create-namespace -f deploy/helm/values-hosting.example.yaml
+backend: Kubernetes
+web:
+  image:
+    repository: harbor.eagleconnect.nl/hosting/admin
+    tag: latest
+    pullPolicy: Always
+# Set to an existing image pull secret if Harbor requires authentication.
+imagePullSecrets: []
+bootstrap:
+  existingSecret: hostingpanel-bootstrap
+sqlite:
+  size: 1Gi
+  storageClassName: ""
+ingress:
+  enabled: false
+kubernetesHosting:
+  enabled: true
+  kubectlVersion: v1.35.5
+  nfsServer: ""
+  nfsPath: ""
+  provisioningClaim: ""
+  gatewayName: ""
+  gatewayNamespace: envoy-gateway-system
+  httpListener: http
+  httpsListener: https
+  apacheImage: httpd:2.4
+  phpImage: php:8.6.0-fpm
+  phpReplicas: 1
+  # Explicit opt-in: only mutually trusted PHP applications until tenant
+  # isolation is validated on the actual cluster.
+  allowSharedPhpRuntime: true
+  baselineApache: true
+  panelRoute:
+    enabled: false
+    hostname: ""
+    listener: https

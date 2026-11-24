@@ -1,0 +1,136 @@
+{{- if and (eq .Values.backend "Kubernetes") .Values.kubernetesHosting.enabled }}
+{{- $name := include "hostingpanel.name" . }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}-controller
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}-controller
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "services"]
+    verbs: ["get", "list", "create", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "create", "patch", "delete"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["httproutes"]
+    verbs: ["get", "list", "create", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "create", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}-controller
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}-controller
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}-controller
+{{- if .Values.kubernetesHosting.baselineApache }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: apache-baseline
+data:
+  httpd.conf: |
+    ServerRoot "/usr/local/apache2"
+    Listen 8080
+    ServerName localhost
+    LoadModule mpm_event_module modules/mod_mpm_event.so
+    LoadModule unixd_module modules/mod_unixd.so
+    LoadModule authz_core_module modules/mod_authz_core.so
+    LoadModule log_config_module modules/mod_log_config.so
+    LoadModule dir_module modules/mod_dir.so
+    LoadModule mime_module modules/mod_mime.so
+    PidFile /tmp/httpd.pid
+    ErrorLog /proc/self/fd/2
+    CustomLog /proc/self/fd/1 common
+    TypesConfig conf/mime.types
+    User daemon
+    Group daemon
+    DocumentRoot "/usr/local/apache2/htdocs"
+    <Directory "/usr/local/apache2/htdocs">
+        Options -Indexes
+        AllowOverride None
+        Require all granted
+        DirectoryIndex index.html
+    </Directory>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apache-baseline
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: apache-baseline}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: apache-baseline}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: apache
+          image: {{ .Values.kubernetesHosting.apacheImage | quote }}
+          command: ["httpd", "-DFOREGROUND", "-f", "/etc/hostingpanel/httpd.conf"]
+          ports: [{name: http, containerPort: 8080}]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          readinessProbe:
+            httpGet: {path: /, port: http}
+          livenessProbe:
+            httpGet: {path: /, port: http}
+          volumeMounts:
+            - {name: config, mountPath: /etc/hostingpanel, readOnly: true}
+      volumes:
+        - name: config
+          configMap:
+            name: apache-baseline
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: apache-baseline
+spec:
+  type: ClusterIP
+  selector: {app.kubernetes.io/name: apache-baseline}
+  ports: [{name: http, port: 80, targetPort: http}]
+{{- end }}
+{{- if .Values.kubernetesHosting.panelRoute.enabled }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $name }}-web
+spec:
+  parentRefs:
+    - name: {{ required "gatewayName is required" .Values.kubernetesHosting.gatewayName | quote }}
+      namespace: {{ .Values.kubernetesHosting.gatewayNamespace | quote }}
+      sectionName: {{ .Values.kubernetesHosting.panelRoute.listener | quote }}
+  hostnames:
+    - {{ required "panelRoute.hostname is required" .Values.kubernetesHosting.panelRoute.hostname | quote }}
+  rules:
+    - backendRefs:
+        - name: {{ $name }}-web
+          port: 8080
+{{- end }}
+{{- end }}

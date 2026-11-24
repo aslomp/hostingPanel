@@ -21,3 +21,27 @@ ingress:
   className: ""
   host: panel.example.invalid
   tlsSecret: ""
+
+kubernetesHosting:
+  enabled: false
+  # Match the cluster minor version (within supported kubectl skew).
+  kubectlVersion: v1.35.5
+  toolsImage: curlimages/curl:8.17.0
+  nfsServer: ""
+  nfsPath: ""
+  # Optional existing PVC for the provisioning filesystem. Its root must
+  # correspond to nfsPath and permit the authorized provisioning identity.
+  provisioningClaim: ""
+  gatewayName: ""
+  gatewayNamespace: envoy-gateway-system
+  httpListener: http
+  httpsListener: https
+  apacheImage: httpd:2.4
+  phpImage: php:8.6.0-fpm
+  phpReplicas: 1
+  allowSharedPhpRuntime: false
+  baselineApache: true
+  panelRoute:
+    enabled: false
+    hostname: ""
+    listener: https
