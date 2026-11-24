@@ -8,8 +8,11 @@ public sealed class PhpAccountIdentity
 {
     public Guid AccountId { get; set; }
     public int Number { get; set; }
-    public int Uid => Number;
-    public int Gid => Number;
+    public int Uid => ExistingUid ?? Number;
+    public int Gid => ExistingGid ?? Number;
+    // Runtime-only ownership detected from existing DirectAdmin /home accounts.
+    public int? ExistingUid { get; set; }
+    public int? ExistingGid { get; set; }
     public int Port => Number;
     public string UnixName => "hp" + Number.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }
@@ -27,6 +30,8 @@ public sealed class PhpIdentityModel : IHostingPanelModelExtension, IHostingPane
             e.ToTable("PhpAccountIdentities");
             e.HasKey(x => x.AccountId);
             e.HasIndex(x => x.Number).IsUnique();
+            e.Ignore(x => x.ExistingUid);
+            e.Ignore(x => x.ExistingGid);
             e.Ignore(x => x.Uid);
             e.Ignore(x => x.Gid);
             e.Ignore(x => x.Port);
