@@ -14,7 +14,7 @@ namespace HostingPanel.Api;
 // A single active reconciler per SQLite database. kubectl uses the configured
 // kubeconfig or the in-cluster service account; no shell interpolation.
 public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguration configuration,
-    ILogger<WebsiteReconciler> logger, NfsDirectoryProvisioner storage) : BackgroundService
+    ILogger<WebsiteReconciler> logger, NfsDirectoryProvisioner storage, HostingOperationNotifications notifications) : BackgroundService
 {
     private string? appliedRuntimeHash;
 
@@ -96,6 +96,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 logger.LogWarning(ex, "Could not reconcile website {Id}", group.Key);
             }
             await db.SaveChangesAsync(ct);
+            if (latest.LastError is not null && latest.Attempts == 1) notifications.Publish();
         }
         if (shared)
         {
@@ -117,6 +118,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             row.LastError = null;
         }
         await db.SaveChangesAsync(ct);
+        if (completed.Count > 0) notifications.Publish();
     }
 
     private string Required(string key) => configuration["KubernetesHosting:" + key] is { Length: > 0 } value
