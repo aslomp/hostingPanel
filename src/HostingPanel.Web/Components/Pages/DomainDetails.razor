@@ -3,6 +3,8 @@
 @page "/domains/{Domain}"
 @using System.Text.Json
 @inject DirectAdminSession Session
+@inject HostingPanel.Api.HostingOperationNotifications Operations
+@implements IDisposable
 
 <PageTitle>@Domain — Domeinbeheer</PageTitle>
 <div class="page-header">
@@ -92,9 +94,30 @@ else
     private string php = "OFF", ssl = "OFF", cgi = "OFF";
     private string bandwidth = "", quota = "";
 
+    private bool disposed;
+    protected override void OnInitialized() => Operations.Changed += OperationChanged;
+    private void OperationChanged() { if (!disposed) _ = InvokeAsync(RefreshOperationState); }
+    public void Dispose() { disposed = true; Operations.Changed -= OperationChanged; }
+
     protected override async Task OnParametersSetAsync()
     {
         if (Session.Connected) await Refresh();
+    }
+
+    private async Task RefreshOperationState()
+    {
+        if (disposed || !Session.Connected || fields is null) return;
+        var domain = Domain;
+        try
+        {
+            var state = await Session.GetProvisioningStatusAsync(domain);
+            if (!disposed && domain == Domain && fields is not null && state is not null)
+            {
+                fields["provisioning"] = state;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or OperationCanceledException) { }
     }
 
     private async Task Refresh()
