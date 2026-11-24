@@ -1,0 +1,67 @@
+@using System.Text.Json
+@using System.Text.Json.Nodes
+@inject DirectAdminSession Session
+@if (config is not null)
+{
+    <section class="card">
+        <h2>SSL Certificates / ACME Settings</h2>
+        <label><input type="checkbox" @bind="enabled" /> Automatic certificate renewal</label>
+        <label>ACME provider</label>
+        <select @bind="provider"><option value="">Default (inherited)</option>
+            @foreach (var option in providers) { <option value="@option.Id">@option.Name</option> }
+        </select>
+        <label>Private key</label>
+        <select @bind="keyType"><option>ec256</option><option>ec384</option><option>rsa2048</option><option>rsa3072</option><option>rsa4096</option><option>rsa8192</option></select>
+        <label><input type="checkbox" @bind="wildcard" /> Prefer wildcard</label>
+        <button disabled="@busy" @onclick="Save">Save ACME settings</button>
+        <button disabled="@busy" @onclick="Provision">Request certificate</button>
+        @if (message is not null) { <p role="status">@message</p> }
+    </section>
+}
+@code {
+    [Parameter] public string Domain { get; set; } = "";
+    private sealed record Provider(string Id, string Name);
+    private Provider[] providers = [];
+    private JsonObject? config;
+    private string provider = "", keyType = "ec256";
+    private bool enabled, wildcard, busy;
+    private string? message;
+    private string Endpoint => "api/domain-tls/domains/" + Uri.EscapeDataString(Domain);
+    protected override async Task OnParametersSetAsync()
+    {
+        config = null;
+        try {
+            var (status, body) = await Session.GetRawAsync(Endpoint + "/acme-config");
+            if (status != 200) return;
+            var (ps, pb) = await Session.GetRawAsync("api/session/acme-data");
+            if (ps != 200) return;
+            using var doc = JsonDocument.Parse(pb);
+            providers = doc.RootElement.GetProperty("certProviders").Deserialize<Provider[]>(new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [];
+            config = JsonNode.Parse(body)?.AsObject();
+            if (config is null) return;
+            enabled = config["enabled"]?.GetValue<bool>() ?? false;
+            provider = config["provider"]?.GetValue<string>() ?? "";
+            keyType = config["keyType"]?.GetValue<string>() ?? "ec256";
+            wildcard = config["preferWildcard"]?.GetValue<bool>() ?? false;
+        } catch (Exception ex) when (ex is JsonException or HttpRequestException or InvalidOperationException) { message = ex.Message; }
+    }
+    private async Task Save()
+    {
+        if (busy || config is null) return;
+        busy = true;
+        try {
+            config["enabled"] = enabled; config["provider"] = provider; config["keyType"] = keyType; config["preferWildcard"] = wildcard;
+            var (status, body) = await Session.RequestApiAsync(HttpMethod.Put, Endpoint + "/acme-config", config.ToJsonString());
+            message = status == 204 ? "ACME settings saved." : $"HTTP {status}: {body}";
+        } catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { message = ex.Message; }
+        finally { busy = false; }
+    }
+    private async Task Provision()
+    {
+        if (busy) return;
+        busy = true;
+        try { var (status, body) = await Session.RequestApiAsync(HttpMethod.Post, Endpoint + "/provision-certs?nonblock=true"); message = status == 200 ? "Certificate request submitted." : $"HTTP {status}: {body}"; }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { message = ex.Message; }
+        finally { busy = false; }
+    }
+}

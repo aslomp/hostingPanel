@@ -7,7 +7,6 @@ namespace HostingPanel.Api.Controllers;
 public sealed class SessionController(IHostingBackend backend) : BackendController
 {
     [HttpGet("/api/session")]
-    [HttpGet("/api/session/acme-data")]
     [HttpPost("/api/session/login-as/return")]
     [HttpPost("/api/session/login-as/switch")]
     [HttpGet("/api/session/login-as/user-list")]
@@ -20,4 +19,7 @@ public sealed class SessionController(IHostingBackend backend) : BackendControll
     [HttpPost("/api/sessions/destroy-all-other")]
     [HttpPost("/api/sessions/destroy/{public_id}")]
     public Task ForwardAsync() => backend.ForwardAsync(HttpContext);
+
+    [HttpGet("/api/session/acme-data")]
+    public Task AcmeDataAsync() => backend.HandleCertificateRequestAsync(HttpContext);
 }
