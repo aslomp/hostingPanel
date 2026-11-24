@@ -14,17 +14,17 @@
 </PanelPageHeader>
 @if (!Session.Connected)
 {
-    <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section>
+    <MudPaper Class="pa-4 my-3" Elevation="1">Verbind eerst via het <a href="/">dashboard</a>.</MudPaper>
 }
 else
 {
-    @if (error is not null) { <section class="card"><MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert></section> }
+    @if (error is not null) { <MudPaper Class="pa-4 my-3" Elevation="1"><MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert></MudPaper> }
     @if (loading) { <PanelLoading>@L["Retrieving ticket…"]</PanelLoading> }
     @if (ticket is not null)
     {
-        <section class="card">
+        <MudPaper Class="pa-4 my-3" Elevation="1">
             <div class="dashboard-section-heading"><h2>@L["Ticket details"]</h2>
-                <span class="status-pill @(IsOpen ? "good" : "muted")">@(IsOpen ? "Open" : L["Closed"].Value)</span></div>
+                <MudChip T="string" Size="Size.Small" Color="@(IsOpen ? Color.Success : Color.Default)">@(IsOpen ? "Open" : L["Closed"].Value)</MudChip></div>
             <div class="form-grid">
                 <div><label>@L["Sender"]</label><p>@Text(ticket.Value, "fromName") (@Text(ticket.Value, "from"))</p></div>
                 <div><label>@L["Date"]</label><p>@Text(ticket.Value, "timestamp")</p></div>
@@ -32,10 +32,10 @@ else
             </div>
             <hr class="section-divider" />
             <p class="ticket-message">@Text(ticket.Value, "message")</p>
-        </section>
+        </MudPaper>
         @if (ticket.Value.TryGetProperty("replies", out var replies) && replies.ValueKind == JsonValueKind.Array)
         {
-            <section class="card">
+            <MudPaper Class="pa-4 my-3" Elevation="1">
                 <h2>Gesprek (@replies.GetArrayLength() antwoorden)</h2>
                 @foreach (var reply in replies.EnumerateArray())
                 {
@@ -45,9 +45,9 @@ else
                         <p class="ticket-message">@Text(reply, "message")</p>
                     </article>
                 }
-            </section>
+            </MudPaper>
         }
-        <section class="card">
+        <MudPaper Class="pa-4 my-3" Elevation="1">
             <h2>@L["Replies"]</h2>
             <p>@L["Replies are saved through DirectAdmin. Only backend confirmation is considered successful."]</p>
             <label for="ticketReply">@L["Message"]</label>
@@ -62,7 +62,7 @@ else
                 }
             </div>
             @if (feedback is not null) { <p role="status">@feedback</p> }
-        </section>
+        </MudPaper>
     }
 }
 @code {

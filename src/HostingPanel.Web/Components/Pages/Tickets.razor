@@ -11,19 +11,19 @@
     <TitleContent>@L["Ticket management"]</TitleContent>
     <Description>@L["Received tickets and own requests. DirectAdmin determines which tickets you can view."]</Description>
     <Actions><div class="form-actions">
-        <a class="btn primary" href="/tickets/new">@L["＋ New ticket"]</a>
+        <MudButton Href="/tickets/new" Variant="Variant.Filled" Color="Color.Primary">@L["＋ New ticket"]</MudButton>
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="Load">@L["↻ Refresh"]</MudButton>
     </div></Actions>
 </PanelPageHeader>
 @if (!Session.Connected)
 {
-    <section class="card">Maak verbinding via het <a href="/">dashboard</a>.</section>
+    <MudPaper Class="pa-4 my-3" Elevation="1">Maak verbinding via het <a href="/">dashboard</a>.</MudPaper>
 }
 else
 {
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <div class="dashboard-section-heading"><h2>@L["Ticket overview"]</h2>
-            @if (tickets is not null) { <span class="status-pill">@tickets.Count tickets</span> }
+            @if (tickets is not null) { <MudChip T="string" Size="Size.Small" Color="Color.Default">@tickets.Count tickets</MudChip> }
         </div>
         <div class="form-grid">
             <div><label for="ticketSearch">@L["Search"]</label>
@@ -47,9 +47,9 @@ else
                         @foreach (var ticket in Visible)
                         {
                             <tr>
-                                <td><span class="status-pill @(ticket.Open ? "good" : "muted")">@(ticket.Open ? "Open" : L["Closed"].Value)</span></td>
+                                <td><MudChip T="string" Size="Size.Small" Color="@(ticket.Open ? Color.Success : Color.Default)">@(ticket.Open ? "Open" : L["Closed"].Value)</MudChip></td>
                                 <td><a href="@($"/tickets/{ticket.Id}?source={ticket.Source}")">@ticket.Subject</a>
-                                    @if (ticket.Unread) { <span class="status-pill warning">@L["New"]</span> }</td>
+                                    @if (ticket.Unread) { <MudChip T="string" Size="Size.Small" Color="Color.Warning">@L["New"]</MudChip> }</td>
                                 <td>@(string.IsNullOrWhiteSpace(ticket.FromName) ? ticket.From : ticket.FromName)</td>
                                 <td>@(ticket.Source == "received" ? L["Received"].Value : "Verzonden")</td>
                                 <td>@ticket.Priority</td>
@@ -61,15 +61,15 @@ else
             </div>
             @if (Visible.Count == 0) { <p>@L["No tickets match this filter."]</p> }
         }
-    </section>
-    <section class="card">
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <div class="dashboard-section-heading"><h2>@L["Messages"]</h2><a href="/messages">@L["View all messages"]</a></div>
         @if (messageCount > 0)
         {
-            <p><span class="status-pill warning">@messageCount berichten</span> Nieuwe berichten verschijnen ook via SignalR bovenin de interface.</p>
+            <p><MudChip T="string" Size="Size.Small" Color="Color.Warning">@messageCount berichten</MudChip> Nieuwe berichten verschijnen ook via SignalR bovenin de interface.</p>
         }
         else { <p>@L["No messages in the current backend result."]</p> }
-    </section>
+    </MudPaper>
 }
 
 @code {

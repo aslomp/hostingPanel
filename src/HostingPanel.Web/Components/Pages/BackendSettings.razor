@@ -14,14 +14,14 @@
 </PanelPageHeader>
 @if (!Session.Connected)
 {
-    <section class="card"><a href="/">@L["Connect first via the dashboard."]</a></section>
+    <MudPaper Class="pa-4 my-3" Elevation="1"><a href="/">@L["Connect first via the dashboard."]</a></MudPaper>
 }
 else
 {
     @if (message is not null) { <p role="status">@message</p> }
     @if (view is not null)
     {
-        <section class="card">
+        <MudPaper Class="pa-4 my-3" Elevation="1">
             @if (IpOnly && view.Fields.Any(f => f.Name == "IpAddresses"))
             {
                 <div class="form-actions"><MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddIp" Disabled="@busy">+ @L["Add IP"]</MudButton></div>
@@ -134,7 +134,7 @@ else
                 </div>
                 <div class="form-actions"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@busy" OnClick="Save">@L["Save settings"]</MudButton></div>
             }
-        </section>
+        </MudPaper>
     }
 }
 

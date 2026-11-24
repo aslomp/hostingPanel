@@ -10,24 +10,24 @@
     <Description>@L["Backend-accessible accounts and reseller configuration, without UI role filtering."]</Description>
     <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></Actions>
 </PanelPageHeader>
-@if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
+@if (!Session.Connected) { <MudPaper Class="pa-4 my-3" Elevation="1">Verbind eerst via het <a href="/">dashboard</a>.</MudPaper> }
 else
 {
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Account overview"]</h2>
         <p>@L["The overview includes accounts exposed by DirectAdmin to the current identity."]</p>
         <JsonOverview Json="@accounts" />
-    </section>
-    <section class="card">
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Reseller details"]</h2>
         <label>@L["Username"]</label><MudTextField T="string" @bind-Value="username" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="reseller" />
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="LoadDetails">@L["Retrieve configuration and usage"]</MudButton>
         <h3>@L["Configuration"]</h3><JsonOverview Json="@details" /><h3>@L["Usage"]</h3><JsonOverview Json="@usage" />
-    </section>
-    <section class="card">
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Reseller packages"]</h2>
         <JsonOverview Json="@packages" />
-    </section>
+    </MudPaper>
     @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
     <AccountActions Kind="reseller" />
 }

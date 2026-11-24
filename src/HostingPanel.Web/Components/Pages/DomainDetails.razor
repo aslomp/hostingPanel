@@ -16,24 +16,24 @@
 
 @if (!Session.Connected)
 {
-    <div class="card">Verbind eerst met DirectAdmin via het <a href="/">dashboard</a>.</div>
+    <MudPaper Class="pa-4 my-3" Elevation="1">Verbind eerst met DirectAdmin via het <a href="/">dashboard</a>.</MudPaper>
 }
 else if (loading)
 {
-    <div class="card" role="status">@L["Retrieving domain information…"]</div>
+    <MudPaper Class="pa-4 my-3" Elevation="1" role="status">@L["Retrieving domain information…"]</MudPaper>
 }
 else
 {
     @if (error is not null)
     {
-        <div class="card">
+        <MudPaper Class="pa-4 my-3" Elevation="1">
             <h2>@L["Data unavailable"]</h2>
             <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert>
             <p>@L["The backend evaluates read and write operations separately."]</p>
-        </div>
+        </MudPaper>
     }
     <div class="tiles">
-        <section class="card">
+        <MudPaper Class="pa-4 my-3" Elevation="1">
             <h2>@L["General"]</h2>
             <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><tbody>
                 @foreach (var item in new (string Label, string Key)[] {
@@ -48,8 +48,8 @@ else
                     }
                 }
             </tbody></MudSimpleTable>
-        </section>
-        <section class="card">
+        </MudPaper>
+        <MudPaper Class="pa-4 my-3" Elevation="1">
             <h2>@L["Change domain settings"]</h2>
             <p>@L["Each setting is saved separately."]</p>
             <label for="domainPhp">PHP</label>
@@ -69,10 +69,10 @@ else
             <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SaveQuota">@L["Save quota"]</MudButton>
             @if (saving) { <p role="status">@L["Saving change…"]</p> }
             @if (saveMessage is not null) { <p role="status">@saveMessage</p> }
-        </section>
+        </MudPaper>
     </div>
     <DomainAcmeSettings @key="Domain" Domain="@Domain" />
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Additional domain settings"]</h2>
         <p>@L["Additional settings reported by the backend."]</p>
         <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>@L["Setting"]</th><th>@L["Value"]</th></tr></thead><tbody>
@@ -81,7 +81,7 @@ else
                 <tr><th>@item.Key</th><td>@item.Value</td></tr>
             }
         </tbody></MudSimpleTable>
-    </section>
+    </MudPaper>
 }
 @code {
     [Parameter] public string Domain { get; set; } = "";

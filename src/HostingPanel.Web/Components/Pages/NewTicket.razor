@@ -12,11 +12,11 @@
 </PanelPageHeader>
 @if (!Session.Connected)
 {
-    <section class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</section>
+    <MudPaper Class="pa-4 my-3" Elevation="1">Maak eerst verbinding via het <a href="/">dashboard</a>.</MudPaper>
 }
 else
 {
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <MudForm @ref="form">
         <div class="form-grid">
             <div><label for="ticketRecipient">@L["Recipient"]</label>
@@ -38,7 +38,7 @@ else
         </div>
         @if (feedback is not null) { <p role="status">@feedback</p> }
         </MudForm>
-    </section>
+    </MudPaper>
 }
 @code {
     private MudForm form = default!;

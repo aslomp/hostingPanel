@@ -14,11 +14,11 @@
 </PanelPageHeader>
 @if (!Session.Connected)
 {
-    <section class="card">Maak verbinding via het <a href="/">dashboard</a>.</section>
+    <MudPaper Class="pa-4 my-3" Elevation="1">Maak verbinding via het <a href="/">dashboard</a>.</MudPaper>
 }
 else
 {
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <label for="messageSearch">@L["Search messages"]</label>
         <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="messageSearch" />
         @if (loading) { <PanelLoading>@L["Retrieving messages…"]</PanelLoading> }
@@ -38,15 +38,15 @@ else
                 }
             </tbody></MudSimpleTable>
         }
-    </section>
+    </MudPaper>
     @if (selected is not null)
     {
-        <section class="card">
+        <MudPaper Class="pa-4 my-3" Elevation="1">
             <h2>@Text(selected.Value, "subject")</h2>
             <p>Van @Text(selected.Value, "fromName") · @Text(selected.Value, "timestamp")</p>
             <p class="ticket-message">@Text(selected.Value, "message")</p>
             <div class="form-actions"><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Close">@L["Close"]</MudButton></div>
-        </section>
+        </MudPaper>
     }
 }
 @code {

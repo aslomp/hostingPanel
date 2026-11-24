@@ -3,7 +3,7 @@
 @inject DirectAdminSession Session
 @if (config is not null)
 {
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>SSL Certificates / ACME Settings</h2>
         <MudCheckBox T="bool" @bind-Value="enabled" Label="Automatic certificate renewal" />
         <label>ACME provider</label>
@@ -42,7 +42,7 @@
             </tbody></MudSimpleTable>
         }
         @if (message is not null) { <p role="status">@message</p> }
-    </section>
+    </MudPaper>
 }
 @code {
     [Parameter] public string Domain { get; set; } = "";
