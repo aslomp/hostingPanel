@@ -7,6 +7,7 @@ using HostingPanel.Api.Adapters;
 namespace HostingPanel.Api.Services;
 
 public sealed class LegacyUserDetailsService(IHttpClientFactory clients, IWebHostEnvironment environment)
+: IUserDetails
 {
     public async Task<LegacyDetailResult> GetAsync(string username, string kind,
         AuthenticationHeaderValue authentication, CancellationToken cancellationToken)
