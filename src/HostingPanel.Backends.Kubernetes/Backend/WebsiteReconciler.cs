@@ -33,8 +33,10 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var rows = await db.ReconciliationOperations.Where(x => x.ResourceType == "website"
             && x.Status == "pending").ToListAsync(ct);
         if (rows.Count == 0) return;
+        var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
+        var identities = await PhpIdentityModel.AllocateAsync(db, domains.Select(x => x.OwnerId), ct);
         if (configuration.GetValue<bool>("KubernetesHosting:AllowSharedPhpRuntime"))
-            await KubectlAsync(BuildRuntimeManifest(), ct, "apply", "--server-side", "--field-manager=hostingpanel", "-f", "-");
+            await KubectlAsync(BuildRuntimeManifest(domains, identities), ct, "apply", "--server-side", "--field-manager=hostingpanel", "-f", "-");
         foreach (var group in rows.GroupBy(x => x.ResourceId))
         {
             var latest = group.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).First();
@@ -47,7 +49,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                     await KubectlAsync(null, ct, "delete", "httproute,deployment,service,configmap", name,
                         "--ignore-not-found=true");
                 else
-                    await KubectlAsync(BuildManifest(domain), ct, "apply", "--server-side",
+                    await KubectlAsync(BuildManifest(domain, identities[domain.OwnerId]), ct, "apply", "--server-side",
                         "--field-manager=hostingpanel", "-f", "-");
                 foreach (var row in group)
                 {
@@ -71,7 +73,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
 
     private string Namespace => configuration["KubernetesHosting:Namespace"] ?? "hosting";
 
-    private string BuildManifest(HostedDomain domain)
+    private string BuildManifest(HostedDomain domain, PhpAccountIdentity identity)
     {
         var host = domain.Name;
         if (host.Length > 253 || host.Split('.').Any(label => label.Length is < 1 or > 63
@@ -85,9 +87,9 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var tls = Flag("ssl", true);
         if (Flag("cgi", false)) throw new InvalidOperationException("CGI is not supported");
         var name = "site-" + domain.Id.ToString("N");
-        var labels = new Dictionary<string,string> { ["app.kubernetes.io/name"] = name, ["hostingpanel/component"] = "apache" };
+        var labels = new Dictionary<string,string> { ["app.kubernetes.io/name"] = name, ["hostingpanel/component"] = "apache", ["hostingpanel/account"] = domain.OwnerId.ToString("N") };
         var root = "/var/www/sites/" + domain.Id.ToString("N");
-        var phpVersion = configuration["KubernetesHosting:SitePhpVersions:" + host] ?? configuration["KubernetesHosting:DefaultPhpVersion"] ?? "8";
+        var phpVersion = PhpVersion(domain);
         if (php && !configuration.GetValue<bool>("KubernetesHosting:AllowSharedPhpRuntime"))
             throw new InvalidOperationException("Shared PHP requires explicit trust in all hosted PHP applications.");
         if (phpVersion is not ("7" or "8")) throw new InvalidOperationException("Unsupported PHP version");
@@ -106,14 +108,12 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             LoadModule proxy_module modules/mod_proxy.so
             LoadModule proxy_fcgi_module modules/mod_proxy_fcgi.so
             LoadModule rewrite_module modules/mod_rewrite.so
-            User daemon
-            Group daemon
             ErrorLog /proc/self/fd/2
             CustomLog /proc/self/fd/1 common
             TypesConfig conf/mime.types
-            """ + "\n<VirtualHost *:8080>\nServerName " + host + "\nDocumentRoot " + root +
+            """ + "\nUser #" + identity.Uid + "\nGroup #" + identity.Gid + "\n<VirtualHost *:8080>\nServerName " + host + "\nDocumentRoot " + root +
             "\n<Directory " + root + ">\nOptions -Indexes -ExecCGI -Includes\nAllowOverride None\nRequire all granted\nDirectoryIndex index.php index.html\n</Directory>\n" +
-            (php ? "<FilesMatch \"[.]php$\">\nSetHandler \"proxy:fcgi://php-fpm-" + phpVersion + ":9000\"\n</FilesMatch>\n"
+            (php ? "<FilesMatch \"[.]php$\">\nSetHandler \"proxy:fcgi://php-fpm-" + phpVersion + ":" + identity.Port + "\"\n</FilesMatch>\n"
             : "<FilesMatch \"[.]php$\">\nRequire all denied\n</FilesMatch>\n") + "</VirtualHost>\n";
         var checksum = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(apache)));
         object Meta() => new { name, @namespace = Namespace, labels };
@@ -130,7 +130,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var resources = new object[] {
             new { apiVersion = "v1", kind = "ConfigMap", metadata = Meta(), data = new Dictionary<string,string> { ["httpd.conf"] = apache } },
             new { apiVersion = "apps/v1", kind = "Deployment", metadata = Meta(), spec = new {
-                replicas = 1, selector = new { matchLabels = labels }, template = new {
+                replicas = 1, selector = new { matchLabels = new Dictionary<string,string> { ["app.kubernetes.io/name"] = name } }, template = new {
                     metadata = new { labels, annotations = new Dictionary<string,string> { ["hostingpanel/config-sha256"] = checksum } },
                     spec = new { automountServiceAccountToken = false, containers, volumes = new object[] {
                         new { name = "config", configMap = new { name } },
@@ -148,10 +148,19 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         return JsonSerializer.Serialize(new { apiVersion = "v1", kind = "List", items = resources });
     }
 
-    private string BuildRuntimeManifest()
+    private string PhpVersion(HostedDomain domain) =>
+        configuration["KubernetesHosting:SitePhpVersions:" + domain.Name]
+        ?? configuration["KubernetesHosting:DefaultPhpVersion"] ?? "8";
+
+    private static bool HasPhp(HostedDomain domain)
     {
-        if (!configuration.GetValue<bool>("KubernetesHosting:AllowSharedPhpRuntime"))
-            throw new InvalidOperationException("Shared PHP requires explicit trust in all hosted PHP applications.");
+        using var doc = JsonDocument.Parse(domain.SettingsJson);
+        return !doc.RootElement.TryGetProperty("php", out var flag) || flag.ValueKind != JsonValueKind.False;
+    }
+
+    private string BuildRuntimeManifest(IReadOnlyList<HostedDomain> domains,
+        IReadOnlyDictionary<Guid, PhpAccountIdentity> identities)
+    {
         var resources = new List<object>();
         foreach (var version in new[] { "8", "7" })
         {
@@ -159,25 +168,57 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             var name = "php-fpm-" + version;
             var labels = new Dictionary<string,string> { ["app.kubernetes.io/name"] = name };
             object Meta() => new { name, @namespace = Namespace, labels };
+            var owners = domains.Where(x => HasPhp(x) && PhpVersion(x) == version)
+                .Select(x => x.OwnerId).Distinct().Order().Select(x => identities[x]).ToArray();
+            var pools = new StringBuilder("[global]\nerror_log = /proc/self/fd/2\ndaemonize = no\n");
+            var passwd = new StringBuilder();
+            var group = new StringBuilder();
+            // Keep a non-tenant health listener so an empty runtime is valid.
+            pools.Append("[health]\nuser = www-data\ngroup = www-data\nlisten = 127.0.0.1:9000\npm = ondemand\npm.max_children = 1\n");
+            foreach (var owner in owners)
+            {
+                passwd.AppendLine($"{owner.UnixName}:x:{owner.Uid}:{owner.Gid}:Hosting account:/nonexistent:/usr/sbin/nologin");
+                group.AppendLine($"{owner.UnixName}:x:{owner.Gid}:");
+                pools.AppendLine($"[{owner.UnixName}]");
+                pools.AppendLine($"user = {owner.UnixName}");
+                pools.AppendLine($"group = {owner.UnixName}");
+                pools.AppendLine($"listen = 0.0.0.0:{owner.Port}");
+                pools.AppendLine("pm = ondemand\npm.max_children = 8\npm.process_idle_timeout = 10s\nclear_env = yes\nsecurity.limit_extensions = .php");
+            }
+            var data = new Dictionary<string,string> { ["php-fpm.conf"] = pools.ToString(), ["passwd"] = passwd.ToString(), ["group"] = group.ToString() };
+            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data))));
             var image = version == "7" ? Required("Php7Image") : configuration["KubernetesHosting:Php8Image"] ?? "php:8.4-fpm";
+            resources.Add(new { apiVersion = "v1", kind = "ConfigMap", metadata = Meta(), data });
             resources.Add(new { apiVersion = "apps/v1", kind = "Deployment", metadata = Meta(), spec = new {
-                replicas = 1, selector = new { matchLabels = labels }, template = new {
-                    metadata = new { labels }, spec = new {
+                selector = new { matchLabels = labels }, template = new {
+                    metadata = new { labels, annotations = new Dictionary<string,string> { ["hostingpanel/config-sha256"] = hash } }, spec = new {
                         automountServiceAccountToken = false,
                         containers = new[] { new { name = "php-fpm", image,
-                            ports = new[] { new { containerPort = 9000 } },
-                            readinessProbe = new { tcpSocket = new { port = 9000 } },
-                            volumeMounts = new[] { new { name = "sites", mountPath = "/var/www/sites" } } } },
-                        volumes = new[] { new { name = "sites", nfs = new { server = Required("NfsServer"), path = Required("NfsPath") } } }
+                            command = new[] { "/bin/sh", "-ec" },
+                            args = new[] { "cat /etc/hostingpanel/passwd >> /etc/passwd; cat /etc/hostingpanel/group >> /etc/group; php-fpm -t -y /etc/hostingpanel/php-fpm.conf; exec php-fpm -F -y /etc/hostingpanel/php-fpm.conf" },
+                            securityContext = new { runAsUser = 0, allowPrivilegeEscalation = false },
+                            readinessProbe = new { exec = new { command = new[] { "php-fpm", "-t", "-y", "/etc/hostingpanel/php-fpm.conf" } } },
+                            volumeMounts = new object[] { new { name = "sites", mountPath = "/var/www/sites" },
+                                new { name = "config", mountPath = "/etc/hostingpanel", readOnly = true } } } },
+                        volumes = new object[] { new { name = "sites", nfs = new { server = Required("NfsServer"), path = Required("NfsPath") } },
+                            new { name = "config", configMap = new { name } } }
                     }
                 }
             } });
             resources.Add(new { apiVersion = "networking.k8s.io/v1", kind = "NetworkPolicy", metadata = Meta(), spec = new {
                 podSelector = new { matchLabels = labels }, policyTypes = new[] { "Ingress" },
-                ingress = new[] { new { from = new[] { new { podSelector = new { matchLabels = new Dictionary<string,string> { ["hostingpanel/component"] = "apache" } } } }, ports = new[] { new { protocol = "TCP", port = 9000 } } } }
+                ingress = owners.Select(owner => new {
+                    from = new[] { new { podSelector = new { matchLabels = new Dictionary<string,string> {
+                        ["hostingpanel/component"] = "apache", ["hostingpanel/account"] = owner.AccountId.ToString("N") } } } },
+                    ports = new[] { new { protocol = "TCP", port = owner.Port } }
+                }).ToArray()
             } });
+            // One service per version, with one named TCP port per account.
+            var ports = owners.Select(owner => new { name = owner.UnixName, port = owner.Port, targetPort = owner.Port }).ToList();
+            // Kubernetes requires a nonempty service port list.
+            if (ports.Count == 0) ports.Add(new { name = "health", port = 9000, targetPort = 9000 });
             resources.Add(new { apiVersion = "v1", kind = "Service", metadata = Meta(), spec = new {
-                type = "ClusterIP", selector = labels, ports = new[] { new { port = 9000, targetPort = 9000 } }
+                type = "ClusterIP", selector = labels, ports
             } });
         }
         return JsonSerializer.Serialize(new { apiVersion = "v1", kind = "List", items = resources });
