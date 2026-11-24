@@ -18,6 +18,7 @@ public interface IHostingBackend
     IDomains Domains { get; }
     IDns Dns { get; }
     IFileAccess FileAccess { get; }
+    ITickets Tickets { get; }
     Task ForwardAsync(HttpContext context);
     IResult PreviewDomain(DomainCreatePreview input);
 }
@@ -72,4 +73,12 @@ public interface IFileAccess {
     Task<FileAccessResult> CreateFtpAsync(FtpAccountRequest input, AuthenticationHeaderValue credentials, CancellationToken ct);
     Task<FileAccessResult> UpdateFtpAsync(string user, FtpAccountRequest input, AuthenticationHeaderValue credentials, CancellationToken ct);
     Task<FileAccessResult> DeleteFtpAsync(string domain, string user, AuthenticationHeaderValue credentials, CancellationToken ct);
+}
+
+public interface ITickets
+{
+    Task<(int Status, TicketInbox? Inbox, string? Error)> GetInboxAsync(AuthenticationHeaderValue auth, CancellationToken ct);
+    Task<TicketActionResult> CreateAsync(TicketCreateRequest input, AuthenticationHeaderValue auth, CancellationToken ct);
+    Task<TicketActionResult> ReplyAsync(string legacyId, TicketReplyRequest input, AuthenticationHeaderValue auth, CancellationToken ct);
+    Task<TicketActionResult> SetStatusAsync(string legacyId, TicketStatusChange input, AuthenticationHeaderValue auth, CancellationToken ct);
 }

@@ -17,6 +17,9 @@ public sealed class HostingPanelDbContext(DbContextOptions<HostingPanelDbContext
     public DbSet<TlsCertificate> Certificates => Set<TlsCertificate>();
     public DbSet<KubernetesResourceBinding> ResourceBindings => Set<KubernetesResourceBinding>();
     public DbSet<PanelConfiguration> Configuration => Set<PanelConfiguration>();
+    public DbSet<HostedTicket> Tickets => Set<HostedTicket>();
+    public DbSet<HostedTicketReply> TicketReplies => Set<HostedTicketReply>();
+    public DbSet<HostedMessage> Messages => Set<HostedMessage>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -77,6 +80,21 @@ public sealed class HostingPanelDbContext(DbContextOptions<HostingPanelDbContext
             e.HasIndex(x => new { x.ResourceType, x.ResourceId });
         });
         model.Entity<PanelConfiguration>().HasKey(x => x.Key);
+        model.Entity<HostedTicket>(e => {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.OwnerId);
+            e.HasOne<HostingAccount>().WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Restrict);
+        });
+        model.Entity<HostedTicketReply>(e => {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.TicketId);
+            e.HasOne<HostedTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
+        });
+        model.Entity<HostedMessage>(e => {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.RecipientId);
+            e.HasOne<HostingAccount>().WithMany().HasForeignKey(x => x.RecipientId).OnDelete(DeleteBehavior.Restrict);
+        });
     }
 }
 
@@ -168,4 +186,31 @@ public sealed class KubernetesResourceBinding {
 public sealed class PanelConfiguration {
     public string Key { get; set; } = "";
     public string ValueJson { get; set; } = "{}";
+}
+
+public sealed class HostedTicket {
+    public long Id { get; set; }
+    public Guid OwnerId { get; set; }
+    public string Subject { get; set; } = "";
+    public string Text { get; set; } = "";
+    public string Recipient { get; set; } = "creator";
+    public int Priority { get; set; } = 20;
+    public bool Open { get; set; } = true;
+    public bool Unread { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+public sealed class HostedTicketReply {
+    public long Id { get; set; }
+    public long TicketId { get; set; }
+    public Guid AuthorId { get; set; }
+    public string Text { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+public sealed class HostedMessage {
+    public long Id { get; set; }
+    public Guid RecipientId { get; set; }
+    public string From { get; set; } = "";
+    public string Subject { get; set; } = "";
+    public bool Unread { get; set; } = true;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

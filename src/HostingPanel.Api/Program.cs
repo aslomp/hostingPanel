@@ -33,6 +33,7 @@ builder.Services.AddScoped<DnsZoneService>();
 builder.Services.AddScoped<DatabaseManagementService>();
 builder.Services.AddScoped<AccessibleDatabasesService>();
 builder.Services.AddScoped<FileAccessService>();
+builder.Services.AddScoped<TicketService>();
 builder.Services.AddHttpClient("legacy-directadmin", client =>
 {
     var configured = builder.Configuration["DirectAdmin:BaseUrl"]

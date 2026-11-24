@@ -30,6 +30,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
     public IDomains Domains => this;
     public IDns Dns => this;
     public IFileAccess FileAccess => this;
+    public ITickets Tickets => this;
 
     private async Task<HostingAccount?> AuthenticateAsync(AuthenticationHeaderValue auth, CancellationToken ct)
     {

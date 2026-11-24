@@ -18,6 +18,7 @@ public sealed class DirectAdminBackend(
     DomainManagementService domains,
     DnsZoneService dns,
     FileAccessService fileAccess,
+    TicketService tickets,
     IHttpClientFactory clients) : IHostingBackend
 {
     public IAccountCatalog AccountCatalog => accountCatalog;
@@ -31,6 +32,7 @@ public sealed class DirectAdminBackend(
     public IDomains Domains => domains;
     public IDns Dns => dns;
     public IFileAccess FileAccess => fileAccess;
+    public ITickets Tickets => tickets;
     public IResult PreviewDomain(DomainCreatePreview input)
     {
         if (!LegacyDomainsAdapter.IsValidDomain(input.Domain))
