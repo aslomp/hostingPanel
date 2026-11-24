@@ -15,17 +15,16 @@ namespace HostingPanel.Api;
 /// no legacy command calls and no implicit fallback to DirectAdmin.
 /// Reconciliation with the cluster is deliberately a separate responsibility.
 /// </summary>
-public sealed partial class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, PowerDnsClient? powerDns = null, IConfiguration? configuration = null) :
-    IAuthenticationProvider, IWebHosting, IDNSProvider, ICertificateProvider, IApiCompatibilityHandler, IDomainPreview,
+public sealed partial class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, PowerDnsClient? powerDns = null, IConfiguration? configuration = null, KubernetesIdentityService? identityService = null) :
+    IWebHosting, IDNSProvider, ICertificateProvider, IApiCompatibilityHandler, IDomainPreview,
     IAccountCatalog, IAccountMutations, IAccessibleDomains,
     IUserDetails, IAccountOverview, IImpersonation, IDatabases,
     IAccessibleDatabases, IDomains, IFileAccess, ITickets, IBackendSettingsAccess, IHostingNetworkAccess, IKubernetesSettingsReader, IDomainDnsStaging
 {
+    private readonly KubernetesIdentityService identity = identityService ?? new(db);
     public IBackendSettingsAccess Settings => this;
     private const string SettingsKey = "BackendSettings:Kubernetes";
 
-    public async Task<int> AuthenticateSessionAsync(AuthenticationHeaderValue auth, CancellationToken ct) =>
-        await AuthenticateAsync(auth, ct) is null ? 401 : 200;
 
     public async Task<KubernetesBackendSettings> GetEffectiveSettingsAsync(CancellationToken ct)
     {
@@ -47,7 +46,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<IResult> ReadAsync(AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return Results.Unauthorized();
         if (principal.Kind != "admin") return Results.StatusCode(403);
         return Results.Ok(BackendSettingsSchema.Describe("Kubernetes", await GetEffectiveSettingsAsync(ct)));
@@ -56,7 +55,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
     public async Task<IResult> WriteAsync(AuthenticationHeaderValue auth, BackendSettingsUpdate update,
         CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return Results.Unauthorized();
         if (principal.Kind != "admin") return Results.StatusCode(403);
         if (!BackendSettingsSchema.TryRead<KubernetesBackendSettings>(update.Values, out var proposed, out var errors))
@@ -199,7 +198,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<IResult> NetworkInventoryAsync(AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return Results.Unauthorized();
         if (principal.Kind != "admin") return Results.StatusCode(403);
         var used = await UsedIpsAsync(ct);
@@ -248,42 +247,6 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
         });
     }
 
-    private async Task<HostingAccount?> AuthenticateAsync(AuthenticationHeaderValue auth, CancellationToken ct)
-    {
-        if (!auth.Scheme.Equals("Basic", StringComparison.OrdinalIgnoreCase) || auth.Parameter is null)
-            return null;
-        try
-        {
-            var raw = Encoding.UTF8.GetString(Convert.FromBase64String(auth.Parameter));
-            var separator = raw.IndexOf(':');
-            if (separator is < 1 or >= 256) return null;
-            var name = raw[..separator];
-            var password = raw[(separator + 1)..];
-            var account = await db.Accounts.AsNoTracking()
-                .FirstOrDefaultAsync(a => a.Username == name && !a.Suspended, ct);
-            if (account is null || string.IsNullOrEmpty(account.PasswordHash)) return null;
-            return PasswordVerifier.Verify(password, account.PasswordHash) ? account : null;
-        }
-        catch (FormatException) { return null; }
-    }
-
-    // Visibility and identity are backend responsibilities, never inferred by the API.
-    private async Task<HashSet<Guid>> VisibleAccountsAsync(HostingAccount principal, CancellationToken ct)
-    {
-        var accounts = await db.Accounts.AsNoTracking()
-            .Select(a => new { a.Id, a.CreatorId }).ToListAsync(ct);
-        var visible = new HashSet<Guid> { principal.Id };
-        var pending = true;
-        while (pending)
-        {
-            pending = false;
-            foreach (var a in accounts)
-                if (a.CreatorId.HasValue && visible.Contains(a.CreatorId.Value)
-                    && visible.Add(a.Id)) pending = true;
-        }
-        return visible;
-    }
-
     private static bool ValidUser(string? name) =>
         !string.IsNullOrWhiteSpace(name) && name.Length <= 64
         && name.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
@@ -296,9 +259,9 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<AccountCatalogResult> ListAsync(AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, null, "UNAUTHORIZED");
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         var items = await db.Accounts.AsNoTracking().Where(a => ids.Contains(a.Id))
             .OrderBy(a => a.Username).ToListAsync(ct);
         var names = items.ToDictionary(a => a.Id, a => a.Username);
@@ -308,7 +271,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<AccountOperationResult> CreateAsync(CreateHostingAccount input, AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
         if (input.Kind is not ("user" or "reseller") || !ValidUser(input.Username)
             || !ValidDomain(input.Domain) || string.IsNullOrWhiteSpace(input.Email)
@@ -347,10 +310,10 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<AccountOperationResult> DeleteAsync(string username, string confirmation, AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
         if (!ValidUser(username) || username != confirmation) return new(400, "CONFIRMATION_REQUIRED");
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         var target = await db.Accounts.FirstOrDefaultAsync(x => x.Username == username, ct);
         if (target is null) return new(404, "ACCOUNT_NOT_FOUND");
         if (target.Id == principal.Id || !ids.Contains(target.Id)) return new(403, "ACCESS_DENIED");
@@ -370,9 +333,9 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<AccountOperationResult> SetPackageAsync(string username, string package, AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         var account = await db.Accounts.FirstOrDefaultAsync(x => x.Username == username, ct);
         if (account is null) return new(404, "ACCOUNT_NOT_FOUND");
         if (!ids.Contains(account.Id) || account.Id == principal.Id) return new(403, "ACCESS_DENIED");
@@ -388,11 +351,11 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
     public async Task<AccountOperationResult> SetLimitAsync(string kind, string username, AccountLimitChange change,
         AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
         if (change.Field is not ("bandwidth" or "quota" or "inode")
             || !long.TryParse(change.Value, out var amount) || amount < 0) return new(400, "INVALID_LIMIT");
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         var account = await db.Accounts.FirstOrDefaultAsync(x => x.Username == username && x.Kind == kind, ct);
         if (account is null) return new(404, "ACCOUNT_NOT_FOUND");
         if (!ids.Contains(account.Id) || account.Id == principal.Id) return new(403, "ACCESS_DENIED");
@@ -407,9 +370,9 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
     public async Task<AccountOperationResult> SetSuspendedAsync(string username, bool suspended,
         AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         var target = await db.Accounts.FirstOrDefaultAsync(a => a.Username == username, ct);
         if (target is null) return new(404, "ACCOUNT_NOT_FOUND");
         if (target.Id == principal.Id || !ids.Contains(target.Id)) return new(403, "ACCESS_DENIED");
@@ -421,9 +384,9 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<VisibleDomainsResult> ListAccessibleDomains(AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, null, "UNAUTHORIZED");
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         var query = from domain in db.Domains.AsNoTracking()
                     join owner in db.Accounts.AsNoTracking() on domain.OwnerId equals owner.Id
                     where ids.Contains(owner.Id)
@@ -436,9 +399,9 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<DomainListResult> ListAsync(string? owner, AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, null, "UNAUTHORIZED");
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         var query = from domain in db.Domains.AsNoTracking()
                     join account in db.Accounts.AsNoTracking() on domain.OwnerId equals account.Id
                     where ids.Contains(account.Id) && (owner == null ? account.Id == principal.Id : account.Username == owner)
@@ -483,7 +446,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<DomainMutationResult> MutateAsync(DomainMutationRequest input, AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
         if (!ValidDomain(input.Domain) || input.Confirmation != input.Domain) return new(400, "CONFIRMATION_REQUIRED");
         var name = input.Domain.ToLowerInvariant();
@@ -506,7 +469,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
         else
         {
             if (existing is null) return new(404, "DOMAIN_NOT_FOUND");
-            var ids = await VisibleAccountsAsync(principal, ct);
+            var ids = await identity.VisibleAccountsAsync(principal, ct);
             if (!ids.Contains(existing.OwnerId)) return new(403, "ACCESS_DENIED");
             if (input.Action == "delete")
             {
@@ -543,9 +506,9 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<DomainDetailResult> GetDetailsAsync(string domain, AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, null, "UNAUTHORIZED");
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         var row = await db.Domains.AsNoTracking().FirstOrDefaultAsync(x => x.Name == domain.ToLowerInvariant(), ct);
         if (row is null) return new(404, null, "DOMAIN_NOT_FOUND");
         if (!ids.Contains(row.OwnerId)) return new(403, null, "ACCESS_DENIED");
@@ -568,9 +531,9 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
     public async Task<DomainMutationResult> UpdateSettingAsync(string domain, string setting, string value,
         AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         var row = await db.Domains.FirstOrDefaultAsync(x => x.Name == domain.ToLowerInvariant(), ct);
         if (row is null) return new(404, "DOMAIN_NOT_FOUND");
         if (!ids.Contains(row.OwnerId)) return new(403, "ACCESS_DENIED");
@@ -587,7 +550,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<DatabaseInventory> ListDatabases(AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, null, "UNAUTHORIZED");
         return new(200, await db.Databases.AsNoTracking().Where(d => d.OwnerId == principal.Id)
             .OrderBy(d => d.Name).Select(d => d.Name).ToListAsync(ct), null);
@@ -596,7 +559,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
         => ListDatabases(auth, ct);
     public async Task<DatabaseMembers> UsersAsync(string database, AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, null, "UNAUTHORIZED");
         var row = await db.Databases.AsNoTracking().FirstOrDefaultAsync(x => x.Name == database, ct);
         if (row is null || row.OwnerId != principal.Id) return new(404, null, "DATABASE_NOT_FOUND");
@@ -608,7 +571,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
     }
     public async Task<DatabaseMutation> CreateAsync(DatabaseCreateRequest input, AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
         if (!ValidDb(input.Database) || !ValidDb(input.DbUser) || input.Password.Length < 12)
             return new(400, "INVALID_DATABASE_REQUEST");
@@ -627,7 +590,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
     }
     async Task<DatabaseMutation> IDatabases.DeleteAsync(string database, string confirmation, AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
         if (database != confirmation) return new(400, "CONFIRMATION_REQUIRED");
         var row = await db.Databases.FirstOrDefaultAsync(x => x.Name == database, ct);
@@ -639,9 +602,9 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<AccessibleDatabaseInventory> ListAccessibleDatabases(AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, null, null, "UNAUTHORIZED");
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         var entries = await (from d in db.Databases.AsNoTracking()
             join o in db.Accounts.AsNoTracking() on d.OwnerId equals o.Id
             where ids.Contains(o.Id)
@@ -655,9 +618,9 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<AccessibleDnsInventory> ListAccessibleZonesAsync(AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, null, "UNAUTHORIZED");
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         var zones = await (from z in db.DnsZones.AsNoTracking()
             join a in db.Accounts.AsNoTracking() on z.OwnerId equals a.Id
             where ids.Contains(z.OwnerId)
@@ -668,10 +631,10 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<AdminDnsZoneListResult> ListAdminZonesAsync(AuthenticationHeaderValue auth, int page, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, null, "UNAUTHORIZED");
         if (page < 1 || page > 10000) return new(400, null, "INVALID_PAGE");
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         var zones = await db.DnsZones.AsNoTracking().Where(z => ids.Contains(z.OwnerId))
             .OrderBy(z => z.Name).Skip((page - 1) * 100).Take(100)
             .Select(z => new AdminDnsZone(z.Name, null, null)).ToListAsync(ct);
@@ -680,9 +643,9 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<DnsZoneResult> ReadAsync(string domain, AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, null, "UNAUTHORIZED");
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         var zone = await db.DnsZones.AsNoTracking().FirstOrDefaultAsync(z => z.Name == domain.ToLowerInvariant(), ct);
         if (zone is null) return new(404, null, "ZONE_NOT_FOUND");
         if (!ids.Contains(zone.OwnerId)) return new(403, null, "ACCESS_DENIED");
@@ -693,13 +656,13 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<DnsChangeResult> ChangeAsync(string domain, DnsChange change, AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
         if (!ValidDomain(domain) || !DnsRecordValidation.Valid(change.Record)
             || change.Action is not ("add" or "edit" or "delete")
             || (change.Action != "add" && (change.Previous is null || !DnsRecordValidation.Valid(change.Previous))))
             return new(400, "INVALID_DNS_CHANGE");
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         var zone = await db.DnsZones.FirstOrDefaultAsync(x => x.Name == domain.ToLowerInvariant(), ct);
         if (zone is null) return new(404, "ZONE_NOT_FOUND");
         if (!ids.Contains(zone.OwnerId)) return new(403, "ACCESS_DENIED");
@@ -719,7 +682,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<DnsChangeResult> CreateZoneAsync(DnsZoneCreate input, AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
         if (!ValidDomain(input.Domain) || !ValidDomain(input.Ns1) || !ValidDomain(input.Ns2)
             || !System.Net.IPAddress.TryParse(input.Ip, out var ip)
@@ -727,7 +690,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
             return new(400, "INVALID_DNS_ZONE");
         var name = input.Domain.ToLowerInvariant();
         var domain = await db.Domains.FirstOrDefaultAsync(d => d.Name == name, ct);
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         if (domain is not null && !ids.Contains(domain.OwnerId)) return new(403, "ACCESS_DENIED");
         if (domain is null && principal.Kind != "admin") return new(403, "ACCESS_DENIED");
         if (await db.DnsZones.AnyAsync(z => z.Name == name, ct)) return new(409, "ZONE_EXISTS");
@@ -743,12 +706,12 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<DnsChangeResult> DeleteZoneAsync(string domain, string confirmation, AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
         if (!ValidDomain(domain) || domain != confirmation) return new(400, "CONFIRMATION_REQUIRED");
         var zone = await db.DnsZones.FirstOrDefaultAsync(z => z.Name == domain.ToLowerInvariant(), ct);
         if (zone is null) return new(404, "ZONE_NOT_FOUND");
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         if (!ids.Contains(zone.OwnerId)) return new(403, "ACCESS_DENIED");
         db.DnsZones.Remove(zone);
         Schedule("dns-zone", zone.Id, "delete", new { zone.Name });
@@ -758,9 +721,9 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
 
     public async Task<AccountOverviewResult> GetAsync(string username, AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, null, null, null, "UNAUTHORIZED");
-        var ids = await VisibleAccountsAsync(principal, ct);
+        var ids = await identity.VisibleAccountsAsync(principal, ct);
         var row = await db.Accounts.AsNoTracking().FirstOrDefaultAsync(a => a.Username == username, ct);
         if (row is null) return new(404, null, null, null, "ACCOUNT_NOT_FOUND");
         if (!ids.Contains(row.Id)) return new(403, null, null, null, "ACCESS_DENIED");
@@ -797,7 +760,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
     public async Task<(int Status, TicketInbox? Inbox, string? Error)> GetInboxAsync(
         AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return (401, null, "UNAUTHORIZED");
         var tickets = await db.Tickets.AsNoTracking()
             .Where(x => x.OwnerId == principal.Id).OrderByDescending(x => x.CreatedAt).ToListAsync(ct);
@@ -822,7 +785,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
     public async Task<TicketActionResult> CreateAsync(TicketCreateRequest input,
         AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
         if (string.IsNullOrWhiteSpace(input.Subject) || input.Subject.Length > 200
             || string.IsNullOrWhiteSpace(input.Message) || input.Message.Length > 65536
@@ -839,7 +802,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
     public async Task<TicketActionResult> ReplyAsync(string legacyId, TicketReplyRequest input,
         AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
         if (!long.TryParse(legacyId, out var id) || id <= 0
             || string.IsNullOrWhiteSpace(input.Message) || input.Message.Length > 65536)
@@ -858,7 +821,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
     public async Task<TicketActionResult> SetStatusAsync(string legacyId, TicketStatusChange input,
         AuthenticationHeaderValue auth, CancellationToken ct)
     {
-        var principal = await AuthenticateAsync(auth, ct);
+        var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
         if (!long.TryParse(legacyId, out var id) || id <= 0)
             return new(400, "INVALID_TICKET");
@@ -885,32 +848,5 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
         context.Response.StatusCode = StatusCodes.Status501NotImplemented;
         context.Response.ContentType = "application/json";
         return context.Response.WriteAsJsonAsync(new { type = "KUBERNETES_OPERATION_NOT_IMPLEMENTED" });
-    }
-}
-
-public static class PasswordVerifier
-{
-    private const int Iterations = 210_000;
-    public static string Hash(string password)
-    {
-        var salt = RandomNumberGenerator.GetBytes(16);
-        var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, Iterations, HashAlgorithmName.SHA256, 32);
-        return $"pbkdf2-sha256${Iterations}${Convert.ToBase64String(salt)}${Convert.ToBase64String(hash)}";
-    }
-    public static bool Verify(string password, string stored)
-    {
-        var parts = stored.Split('$');
-        if (parts.Length != 4 || parts[0] != "pbkdf2-sha256"
-            || !int.TryParse(parts[1], out var iterations)
-            || iterations < 100_000 || iterations > 2_000_000) return false;
-        try
-        {
-            var salt = Convert.FromBase64String(parts[2]);
-            var expected = Convert.FromBase64String(parts[3]);
-            if (salt.Length != 16 || expected.Length != 32) return false;
-            var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, 32);
-            return CryptographicOperations.FixedTimeEquals(actual, expected);
-        }
-        catch (FormatException) { return false; }
     }
 }
