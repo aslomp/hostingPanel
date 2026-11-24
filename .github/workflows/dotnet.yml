@@ -93,6 +93,9 @@ jobs:
           print('SignalR ticket hub negotiation: OK')
           PY
 
+      - name: Test mandatory login, session restore and logout
+        run: python3 tests/required-login-smoke.py
+
       - name: Validate pinned Swagger and static API endpoint
         shell: bash
         run: |
