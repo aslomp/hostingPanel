@@ -279,6 +279,9 @@ spec:
             - {name: vhosts, mountPath: /vhosts, readOnly: true}
             - {name: runtime, mountPath: /runtime}
             - {name: sites, mountPath: /home, readOnly: true}
+            {{- if .Values.kubernetesHosting.apacheConfigClaim }}
+            - {name: apache-config, mountPath: /storage/apache-config, readOnly: true}
+            {{- end }}
         - name: vhost-sync
           image: {{ .Values.kubernetesHosting.vhostSyncImage | quote }}
           command: ["python3", "/etc/hostingpanel/sync.py"]
@@ -295,6 +298,12 @@ spec:
             - {name: vhosts, mountPath: /vhosts}
             - {name: api-access, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
       volumes:
+        {{- if .Values.kubernetesHosting.apacheConfigClaim }}
+        - name: apache-config
+          persistentVolumeClaim:
+            claimName: {{ .Values.kubernetesHosting.apacheConfigClaim | quote }}
+            readOnly: true
+        {{- end }}
         - name: runtime
           emptyDir: {}
         - name: api-access
