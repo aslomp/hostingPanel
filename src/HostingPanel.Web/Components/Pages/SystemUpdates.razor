@@ -4,7 +4,7 @@
 @using System.Text.Json
 @inject DirectAdminSession Session
 <PageTitle>@L["System updates — HostingPanel"]</PageTitle>
-<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>@L["System packages"]</h1><p>@L["Available updates and update history directly from the backend."]</p></div><button disabled="@busy" @onclick="Load">@L["Refresh"]</button></div>
+<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>@L["System packages"]</h1><p>@L["Available updates and update history directly from the backend."]</p></div><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></div>
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {
@@ -14,7 +14,7 @@ else
         <h2>@L["Check updates"]</h2><p>@L["Run the DirectAdmin update check without installing packages."]</p>
         <label>@L["Packages (comma-separated, blank means all updates)"]</label>
         <input @bind="selectedPackages" placeholder="openssl, nginx" />
-        <button disabled="@busy" @onclick="Check">@L["Start update test"]</button>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Check">@L["Start update test"]</MudButton>
         <h2>@L["Run update"]</h2>
         <p>@L["This can change system software. Explicit confirmation is required."]</p>
         <label>@L["Enter UPDATE to confirm"]</label><input @bind="confirmation" />
@@ -24,7 +24,7 @@ else
     <section class="card">
         <h2>@L["Update transaction log"]</h2>
         <label>@L["Transaction ID from update history"]</label><input @bind="transactionId" />
-        <button disabled="@(busy || string.IsNullOrWhiteSpace(transactionId))" @onclick="FetchLog">@L["Retrieve log"]</button>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || string.IsNullOrWhiteSpace(transactionId))" OnClick="FetchLog">@L["Retrieve log"]</MudButton>
         <JsonOverview Json="@transactionLog" />
     </section>
     @if (busy) { <p role="status">@L["Processing…"]</p> }

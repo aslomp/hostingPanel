@@ -11,7 +11,7 @@
         <p>@L["Received tickets and own requests. DirectAdmin determines which tickets you can view."]</p></div>
     <div class="form-actions">
         <a class="btn primary" href="/tickets/new">@L["＋ New ticket"]</a>
-        <button disabled="@loading" @onclick="Load">@L["↻ Refresh"]</button>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="Load">@L["↻ Refresh"]</MudButton>
     </div>
 </div>
 @if (!Session.Connected)
@@ -40,7 +40,7 @@ else
         @if (tickets is not null)
         {
             <div class="overview-scroll">
-                <table class="overview-table">
+                <MudSimpleTable Dense="true" Hover="true" Striped="true" Class="overview-table">
                     <thead><tr><th>Status</th><th>@L["Subject"]</th><th>@L["From"]</th><th>@L["Origin"]</th><th>@L["Priority"]</th><th>@L["Date"]</th></tr></thead>
                     <tbody>
                         @foreach (var ticket in Visible)
@@ -56,7 +56,7 @@ else
                             </tr>
                         }
                     </tbody>
-                </table>
+                </MudSimpleTable>
             </div>
             @if (Visible.Count == 0) { <p>@L["No tickets match this filter."]</p> }
         }

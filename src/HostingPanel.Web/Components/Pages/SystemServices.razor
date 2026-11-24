@@ -4,7 +4,7 @@
 @using System.Text.Json
 @inject DirectAdminSession Session
 <PageTitle>@L["System services — HostingPanel"]</PageTitle>
-<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>System Services</h1><p>@L["Live service list, details and management actions; the backend determines which operations are permitted."]</p></div><button disabled="@busy" @onclick="Load">@L["Refresh"]</button></div>
+<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>System Services</h1><p>@L["Live service list, details and management actions; the backend determines which operations are permitted."]</p></div><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></div>
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {
@@ -18,7 +18,7 @@ else
         <h2>@L["Inspect service"]</h2>
         <label>@L["Service name"]</label>
         <input @bind="service" placeholder="@L["for example nginx"]" />
-        <button disabled="@busy" @onclick="Details">@L["Retrieve details and log"]</button>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Details">@L["Retrieve details and log"]</MudButton>
         <h3>@L["Service details"]</h3><JsonOverview Json="@details" /><h3>@L["Service log"]</h3><JsonOverview Json="@serviceLog" />
     </section>
     <section class="card">
@@ -26,7 +26,7 @@ else
         <p>@L["Select a service and an exact management action. No actions are hidden based on a local user role."]</p>
         <select @bind="action"><option value="restart">Restart</option><option value="reload">Reload</option><option value="start">Start</option><option value="stop">Stop</option></select>
         <label>@L["Enter the service name to confirm the action"]</label><input @bind="confirmation" />
-        <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(service) || confirmation != service)" @onclick="Execute">@L["Execute action"]</button>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || string.IsNullOrWhiteSpace(service) || confirmation != service)" OnClick="Execute">@L["Execute action"]</MudButton>
         @if (outcome is not null) { <p role="status">@outcome</p> }
     </section>
     <section class="card">
@@ -35,7 +35,7 @@ else
         <label>Watchdog</label>
         <select @bind="watchdog"><option value="true">@L["Enable"]</option><option value="false">@L["Disable"]</option></select>
         <label>@L["Enter the service name to confirm"]</label><input @bind="watchdogConfirmation" />
-        <button disabled="@(busy || !ValidService(service) || watchdogConfirmation != service)" @onclick="SetWatchdog">@L["Update watchdog"]</button>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || !ValidService(service) || watchdogConfirmation != service)" OnClick="SetWatchdog">@L["Update watchdog"]</MudButton>
     </section>
 }
 @code {

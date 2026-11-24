@@ -9,7 +9,7 @@
 <div class="page-header"><div><div class="eyebrow"><a href="/tickets">@L["Ticket management"]</a> / Ticket #@Id</div>
     <h1>@(ticket is null ? $"Ticket #{Id}" : Text(ticket.Value, "subject"))</h1>
     <p>@L["Messages and replies from DirectAdmin."]</p></div>
-    <button disabled="@loading" @onclick="Load">@L["↻ Refresh"]</button></div>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="Load">@L["↻ Refresh"]</MudButton></div>
 @if (!Session.Connected)
 {
     <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section>
@@ -53,11 +53,10 @@ else
             <label for="ticketTo">@L["Recipient"]</label>
             <input id="ticketTo" @bind="recipient" />
             <div class="form-actions">
-                <button class="primary" disabled="@(sending || string.IsNullOrWhiteSpace(replyMessage) || string.IsNullOrWhiteSpace(recipient))"
-                    @onclick="SendReply">@L["Send reply"]</button>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(sending || string.IsNullOrWhiteSpace(replyMessage) || string.IsNullOrWhiteSpace(recipient))" OnClick="SendReply">@L["Send reply"]</MudButton>
                 @if (Source == "received")
                 {
-                    <button disabled="@sending" @onclick="ToggleStatus">@(IsOpen ? L["Close ticket"].Value : L["Reopen ticket"].Value)</button>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@sending" OnClick="ToggleStatus">@(IsOpen ? L["Close ticket"].Value : L["Reopen ticket"].Value)</MudButton>
                 }
             </div>
             @if (feedback is not null) { <p role="status">@feedback</p> }
