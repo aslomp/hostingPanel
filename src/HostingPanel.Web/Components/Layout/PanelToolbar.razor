@@ -6,10 +6,10 @@
 @implements IDisposable
 <MudAppBar Elevation="0" Color="Color.Surface" Class="analytics-toolbar">
     <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" aria-label="@L["Toggle navigation"].Value" aria-expanded="@(DrawerOpen ? "true" : "false")" OnClick="ToggleDrawer" />
-    <div class="analytics-brand">
-        <span class="analytics-brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+    <a class="analytics-brand" href="/">
+        <span class="analytics-brand-mark" aria-hidden="true">h</span>
         <MudText Typo="Typo.h6">HostingPanel</MudText>
-    </div>
+    </a>
     <MudSpacer />
     <TicketNotifications @key="Session.TicketChannel" />
     <form method="get" action="/culture/set" class="culture-picker">
