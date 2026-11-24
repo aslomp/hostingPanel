@@ -149,7 +149,7 @@ spec:
             allowPrivilegeEscalation: false
             capabilities: {drop: [ALL]}
           readinessProbe:
-            httpGet: {path: /, port: http}
+            httpGet: {path: /login, port: http}
           resources: {{ toYaml .Values.web.resources | nindent 12 }}
 ---
 apiVersion: v1

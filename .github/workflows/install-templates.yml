@@ -36,10 +36,11 @@ jobs:
           docker compose config --quiet
           docker compose up -d --build
           for attempt in {1..60}; do
-            if curl -fsS http://127.0.0.1:8080/ >/tmp/panel.html; then break; fi
+            if curl -fsS http://127.0.0.1:8080/login >/tmp/panel.html; then break; fi
             sleep 2
           done
-          grep -q HostingPanel /tmp/panel.html
+          grep -q 'action="/login"' /tmp/panel.html
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/)" = 302
           curl -fsS http://127.0.0.1:8080/_framework/blazor.web.js > /tmp/blazor.js
           test -s /tmp/blazor.js
           api_id="$(docker compose ps -q api)"
