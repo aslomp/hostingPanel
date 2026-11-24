@@ -13,7 +13,7 @@
     <Breadcrumb>@L["Account management / Domains"]</Breadcrumb>
     <TitleContent>@L["Domain management"]</TitleContent>
     <Description>@L["Manage domains and website configuration through the selected hosting backend."]</Description>
-    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Refresh" Disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton></Actions>
+    <Actions><MudStack Row="true" Spacing="2"><CrudAddButton Disabled="@(!Session.Connected || mutationBusy)" OnClick="OpenCreate">@L["Add domain"]</CrudAddButton><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Refresh" Disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton></MudStack></Actions>
 </PanelPageHeader>
 
 @if (!Session.Connected)
@@ -39,9 +39,9 @@ else
             <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true">
                 <thead><tr><th>@L["Domain"]</th><th>Account</th><th>@L["Provisioning"]</th><th>@L["Actions"]</th></tr></thead>
                 <tbody>
-                @foreach (var domain in domains.Where(d => d.Contains(filter, StringComparison.OrdinalIgnoreCase)))
+                @foreach (var domain in domains.Where(d => d.Contains(filter, StringComparison.OrdinalIgnoreCase)).OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
                 {
-                    <tr><td><a href="@($"/domains/{Uri.EscapeDataString(domain)}")">@domain</a> — <a href="@($"/domains/{Uri.EscapeDataString(domain)}/dns")">DNS</a></td><td>@(ownership.TryGetValue(domain, out var domainOwner) ? domainOwner : (string.IsNullOrWhiteSpace(owner) ? "—" : owner))</td><td>@L[provisioning.GetValueOrDefault(domain) ?? "Unknown"]</td><td><MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="() => SelectDelete(domain)" Disabled="@mutationBusy">@L["Delete"]</MudButton></td></tr>
+                    <tr><td><a href="@($"/domains/{Uri.EscapeDataString(domain)}")">@domain</a> — <a href="@($"/domains/{Uri.EscapeDataString(domain)}/dns")">DNS</a></td><td>@(ownership.TryGetValue(domain, out var domainOwner) ? domainOwner : (string.IsNullOrWhiteSpace(owner) ? "—" : owner))</td><td>@L[provisioning.GetValueOrDefault(domain) ?? "Unknown"]</td><td><CrudDeleteButton Label="@L["Delete domain"].Value" OnClick="() => SelectDelete(domain)" Disabled="@mutationBusy" /></td></tr>
                 }
                 </tbody>
             </MudSimpleTable>
@@ -49,6 +49,8 @@ else
         }
     </MudPaper>
 
+    @if (createOpen)
+    {
     <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Add domain"]</h2>
         <p>@L["Create a website for the signed-in account."]</p>
@@ -60,12 +62,11 @@ else
             <MudCheckBox T="bool" @bind-Value="cgi" Label="CGI" />
         </MudStack>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(mutationBusy || string.IsNullOrWhiteSpace(testDomain))" OnClick="CreateDomain">@L["Add domain"]</MudButton>
+        <MudButton Disabled="@mutationBusy" OnClick="CloseCreate">@L["Cancel"]</MudButton>
         </MudForm>
-        @if (mutationStatus is not null)
-        {
-            <p role="status">@mutationStatus</p>
-        }
     </MudPaper>
+    }
+    @if (mutationStatus is not null) { <MudAlert Severity="@(mutationFailed ? Severity.Error : Severity.Success)" Class="my-2">@mutationStatus</MudAlert> }
 
 }
 @code {
@@ -87,6 +88,9 @@ else
     private bool cgi;
     private bool mutationBusy;
     private string? mutationStatus;
+    private bool createOpen, mutationFailed;
+    private void OpenCreate() { createOpen = true; mutationStatus = null; }
+    private void CloseCreate() { createOpen = false; mutationStatus = null; }
 
     private bool disposed;
     protected override void OnInitialized() => Operations.Changed += OperationChanged;
@@ -199,6 +203,7 @@ else
         try
         {
             var (status, body) = await Session.ExecuteTestDomainAsync(domain, action, domain, php, ssl, cgi);
+            mutationFailed = status is < 200 or >= 300;
             mutationStatus = status switch
             {
                 200 or 201 or 204 => L["Domain operation completed."].Value,
@@ -220,12 +225,13 @@ else
             }
             if (status is >= 200 and < 300)
             {
-                if (action == "create") { testDomain = ""; owner = ""; }
+                if (action == "create") { testDomain = ""; createOpen = false; }
                 await Refresh();
             }
         }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or ArgumentException)
         {
+            mutationFailed = true;
             mutationStatus = exception.Message;
         }
         finally { mutationBusy = false; }
