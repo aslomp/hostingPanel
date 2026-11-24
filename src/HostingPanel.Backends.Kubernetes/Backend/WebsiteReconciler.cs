@@ -40,7 +40,8 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         if (rows.Count == 0 && !shared) return;
         var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
         var identities = await PhpIdentityModel.AllocateAsync(db, domains.Select(x => x.OwnerId), ct);
-        var accounts = await db.Accounts.AsNoTracking().Where(x => domains.Select(d => d.OwnerId).Contains(x.Id))
+        var ownerIds = domains.Select(d => d.OwnerId).Distinct().ToArray();
+        var accounts = await db.Accounts.AsNoTracking().Where(x => ownerIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id, ct);
         // Resolve existing DirectAdmin owners before generating any Apache or FPM manifests.
         // Never change the ownership of an existing /home account.
