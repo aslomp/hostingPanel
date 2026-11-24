@@ -188,7 +188,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
 
     private string Namespace => configuration["KubernetesHosting:Namespace"] ?? "hosting";
 
-    private string BuildManifest(HostedDomain domain, string username, PhpAccountIdentity identity, bool managedTls)
+    private (string Apache, bool Tls) BuildVirtualHost(HostedDomain domain, string username, PhpAccountIdentity identity)
     {
         var host = domain.Name;
         if (host.Length > 253 || host.Split('.').Any(label => label.Length is < 1 or > 63
@@ -206,7 +206,6 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var php = Flag("php", true);
         var tls = Flag("ssl", true);
         if (Flag("cgi", false)) throw new InvalidOperationException("CGI is not supported");
-        var name = "site-" + domain.Id.ToString("N");
         var siteRoot = "/home/" + username + "/domains/" + host;
         var root = siteRoot + "/public_html";
         var phpVersion = PhpVersion(domain);
@@ -228,6 +227,14 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             "<FilesMatch \"" + deniedPhp + "\">\nRequire all denied\n</FilesMatch>\n" +
             (php ? "<FilesMatch \"[.]php$\">\nSetHandler \"proxy:fcgi://php-fpm-" + phpVersion + ":" + identity.Port + "\"\n</FilesMatch>\n" : "") +
             "</VirtualHost>\n";
+        return (apache, tls);
+    }
+
+    private string BuildManifest(HostedDomain domain, string username, PhpAccountIdentity identity, bool managedTls)
+    {
+        var (apache, tls) = BuildVirtualHost(domain, username, identity);
+        var host = domain.Name;
+        var name = "site-" + domain.Id.ToString("N");
         var configLabels = new Dictionary<string,string> { ["hostingpanel/component"] = "vhost" };
         var resources = new object[] {
             new { apiVersion = "v1", kind = "ConfigMap", metadata = new { name, @namespace = Namespace, labels = configLabels }, data = new Dictionary<string,string> { ["vhost.conf"] = apache } },
