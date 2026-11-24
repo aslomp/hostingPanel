@@ -8,6 +8,9 @@ namespace HostingPanel.Api;
 /// <summary>No provider-specific implementations appear in this contract.</summary>
 public interface IHostingBackend
 {
+    IBackendSettingsAccess? Settings => null;
+    Task<int> AuthenticateSessionAsync(AuthenticationHeaderValue auth, CancellationToken ct) =>
+        Task.FromResult(501);
     IAccountCatalog AccountCatalog { get; }
     IAccountMutations AccountMutations { get; }
     IAccessibleDomains AccessibleDomains { get; }

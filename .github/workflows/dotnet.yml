@@ -6,6 +6,7 @@ on:
       - main
       - feature/blazor-directadmin-api
       - feature/kubernetes-sqlite-foundation
+      - feature/backend-settings
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -66,7 +67,7 @@ jobs:
           curl -fsS http://127.0.0.1:5089/_framework/blazor.web.js -o /tmp/hp-script
           test "$(wc -c </tmp/hp-script)" -gt 1000
           # All prioritized management pages must render without runtime exceptions.
-          for route in system-info system-services server-settings system-updates server-tls security sessions resellers change-password dns-zones tickets tickets/new messages; do
+          for route in backend-settings system-info system-services server-settings system-updates server-tls security sessions resellers change-password dns-zones tickets tickets/new messages; do
             echo "Rendering /$route"
             out="/tmp/hp-$(printf %s "$route" | tr / -).html"
             curl -fsS "http://127.0.0.1:5089/$route" -o "$out"
@@ -178,3 +179,45 @@ jobs:
           test "$code" = "401"
           # Intentionally no authenticated writes to the live demo server in CI.
           # Authorized writes and fallback behavior are verified with fake HTTP handlers.
+
+      - name: Verify Kubernetes backend settings persistence and validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ASPNETCORE_URLS=http://127.0.0.1:5092
+          export HostingPanel__Backend=Kubernetes
+          export BackendSettings__IngressProvider=NginxIngress
+          export ConnectionStrings__HostingPanel="Data Source=$RUNNER_TEMP/settings-test.db"
+          export HostingPanel__Bootstrap__Username=testadmin
+          export HostingPanel__Bootstrap__Password=ci-only-settings-test-password
+          dotnet run --no-build -c Release --project src/HostingPanel.Api >/tmp/settings-api.log 2>&1 &
+          pid=$!
+          trap 'cat /tmp/settings-api.log; kill "$pid" 2>/dev/null || true' EXIT
+          for i in {1..40}; do
+            if curl -fsS "$ASPNETCORE_URLS/healthz" >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          auth="$HostingPanel__Bootstrap__Username:$HostingPanel__Bootstrap__Password"
+          curl -fsS -u "$auth" "$ASPNETCORE_URLS/hosting/session"
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "$ASPNETCORE_URLS/hosting/backend-settings")" = 401
+          test "$(curl -sS -o /dev/null -w '%{http_code}' -u testadmin:wrong "$ASPNETCORE_URLS/hosting/backend-settings")" = 401
+          curl -fsS -u "$auth" "$ASPNETCORE_URLS/hosting/backend-settings" > /tmp/settings-before.json
+          python3 - <<'PY'
+          import json
+          before=json.load(open('/tmp/settings-before.json'))
+          assert before['values']['IngressProvider']=='NginxIngress'
+          assert len(before['fields'][0]['options'])==2
+          for name,value in [('valid','EnvoyProxy'),('invalid','unsupported')]:
+              json.dump({'revision':before['revision'],'values':{'IngressProvider':value}},open('/tmp/settings-'+name+'.json','w'))
+          PY
+          test "$(curl -sS -o /dev/null -w '%{http_code}' -u "$auth" -H 'Content-Type: application/json' -X PUT --data-binary @/tmp/settings-invalid.json "$ASPNETCORE_URLS/hosting/backend-settings")" = 400
+          curl -fsS -u "$auth" -H 'Content-Type: application/json' -X PUT --data-binary @/tmp/settings-valid.json "$ASPNETCORE_URLS/hosting/backend-settings" > /tmp/settings-after.json
+          test "$(curl -sS -o /dev/null -w '%{http_code}' -u "$auth" -H 'Content-Type: application/json' -X PUT --data-binary @/tmp/settings-valid.json "$ASPNETCORE_URLS/hosting/backend-settings")" = 409
+          curl -fsS -u "$auth" "$ASPNETCORE_URLS/hosting/backend-settings" > /tmp/settings-read.json
+          python3 - <<'PY'
+          import json,sqlite3,os
+          assert json.load(open('/tmp/settings-read.json'))['values']['IngressProvider']=='EnvoyProxy'
+          db=sqlite3.connect(os.path.join(os.environ['RUNNER_TEMP'],'settings-test.db'))
+          assert db.execute("select count(*) from ReconciliationOperations where ResourceType='backend-settings'").fetchone()[0]==1
+          assert json.loads(db.execute("select ValueJson from Configuration where Key='BackendSettings:Kubernetes'").fetchone()[0])['IngressProvider']=='EnvoyProxy'
+          PY

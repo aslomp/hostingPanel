@@ -26,8 +26,8 @@
 {
   <div class="dashboard-layout">
     <section class="card">
-      <h2>@L["DirectAdmin-verbinding"]</h2>
-      <p>@L["Maak verbinding met jouw DirectAdmin-server. De opgegeven gegevens blijven binnen de interactieve Blazor-sessie."]</p>
+      <h2>@L["Backendverbinding"]</h2>
+      <p>@L["Maak verbinding met de ingestelde hostingbackend. De opgegeven gegevens blijven binnen de interactieve Blazor-sessie."]</p>
       <form @onsubmit="Connect" @onsubmit:preventDefault>
         <div class="form-grid">
           <div><label for="daUser">@L["Gebruikersnaam"]</label>
@@ -47,7 +47,7 @@
       <section class="card">
         <h2>@L["Over het controlepaneel"]</h2>
         <p>@L["HostingPanel gebruikt dezelfde beheergroepen als de DirectAdmin Evolution-interface. De rechten en beschikbare resources komen volledig van de backend."]</p>
-        <p>@L["Je kiest zelf de beheerders- of gebruikersweergave. DirectAdmin blijft verantwoordelijk voor toegangsrechten."]</p>
+        <p>@L["Je kiest zelf de beheerders- of gebruikersweergave. De backend blijft verantwoordelijk voor toegangsrechten."]</p>
       </section>
     </aside>
   </div>
@@ -77,7 +77,7 @@ else if (NavContext.Mode == "user")
     <aside class="dashboard-aside">
       <section class="card">
         <h2>@L["Account"]</h2>
-        <div class="state-row"><span class="state-dot connected"></span>@L["Verbonden met DirectAdmin"]</div>
+        <div class="state-row"><span class="state-dot connected"></span>@L["Verbonden met backend"]</div>
         <h3>@Session.Username</h3>
         <p>@L["De gebruikersnavigatie is een weergavemodus. De backend bepaalt de toegang."]</p>
         <button @onclick="Disconnect">@L["Verbinding verbreken"]</button>
@@ -129,7 +129,7 @@ else
     <aside class="dashboard-aside">
       <section class="card">
         <div class="dashboard-section-heading"><h2>@L["Verbonden account"]</h2></div>
-        <div class="state-row"><span class="state-dot connected"></span><span>@L["DirectAdmin-verbinding actief"]</span></div>
+        <div class="state-row"><span class="state-dot connected"></span><span>@L["Backendverbinding actief"]</span></div>
         <h3>@Session.Username</h3>
         <p>@L["De backend bepaalt de beschikbare gegevens en acties. Er worden geen accountrollen aangenomen."]</p>
         <div class="form-actions"><button @onclick="Disconnect">@L["Verbinding verbreken"]</button></div>
@@ -165,11 +165,11 @@ else
         {
             Session.SetCredentials(username, key);
             // Authenticate using the session endpoint, not permission to list users.
-            var (status, _) = await Session.GetRawAsync("api/session");
+            var (status, _) = await Session.AuthenticateBackendAsync();
             if (status is 401 or 403)
-                throw new UnauthorizedAccessException(L["DirectAdmin heeft de aanmelding geweigerd."]);
+                throw new UnauthorizedAccessException(L["De backend heeft de aanmelding geweigerd."]);
             if (status is < 200 or >= 300)
-                throw new HttpRequestException($"DirectAdmin sessiecontrole: HTTP {status}.");
+                throw new HttpRequestException(L["Backend sessiecontrole: HTTP {0}.", status].Value);
             key = "";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException

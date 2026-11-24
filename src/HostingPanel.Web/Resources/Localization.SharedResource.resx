@@ -130,4 +130,12 @@
   <data name="Welkom bij HostingPanel" xml:space="preserve"><value>Welkom bij HostingPanel</value></data>
   <data name="Zoek naar pagina&apos;s" xml:space="preserve"><value>Zoek naar pagina&apos;s</value></data>
   <data name="Zoek naar pagina&apos;s..." xml:space="preserve"><value>Zoek naar pagina&apos;s...</value></data>
+  <data name="Backend instellingen" xml:space="preserve"><value>Backend instellingen</value></data>
+  <data name="Backendverbinding" xml:space="preserve"><value>Backendverbinding</value></data>
+  <data name="Maak verbinding met de ingestelde hostingbackend. De opgegeven gegevens blijven binnen de interactieve Blazor-sessie." xml:space="preserve"><value>Maak verbinding met de ingestelde hostingbackend. De opgegeven gegevens blijven binnen de interactieve Blazor-sessie.</value></data>
+  <data name="Je kiest zelf de beheerders- of gebruikersweergave. De backend blijft verantwoordelijk voor toegangsrechten." xml:space="preserve"><value>Je kiest zelf de beheerders- of gebruikersweergave. De backend blijft verantwoordelijk voor toegangsrechten.</value></data>
+  <data name="Verbonden met backend" xml:space="preserve"><value>Verbonden met backend</value></data>
+  <data name="De backend heeft de aanmelding geweigerd." xml:space="preserve"><value>De backend heeft de aanmelding geweigerd.</value></data>
+  <data name="Backend sessiecontrole: HTTP {0}." xml:space="preserve"><value>Backend sessiecontrole: HTTP {0}.</value></data>
+  <data name="Backendverbinding actief" xml:space="preserve"><value>Backendverbinding actief</value></data>
 </root>
