@@ -837,4 +837,19 @@
   <data name="This domain is already in use." xml:space="preserve"><value>Dit domein is al in gebruik.</value></data>
   <data name="Check the account name, email address, domain, package and password." xml:space="preserve"><value>Controleer de accountnaam, het e-mailadres, domein, pakket en wachtwoord.</value></data>
   <data name="You are not authorized to create this account." xml:space="preserve"><value>U bent niet bevoegd om dit account aan te maken.</value></data>
+  <data name="Add package" xml:space="preserve"><value>Pakket toevoegen</value></data>
+  <data name="Edit package" xml:space="preserve"><value>Pakket wijzigen</value></data>
+  <data name="Package name" xml:space="preserve"><value>Pakketnaam</value></data>
+  <data name="Domain pointers" xml:space="preserve"><value>Domeinverwijzingen</value></data>
+  <data name="Email forwarders" xml:space="preserve"><value>E-maildoorsturingen</value></data>
+  <data name="Mailing lists" xml:space="preserve"><value>Mailinglijsten</value></data>
+  <data name="Autoresponders" xml:space="preserve"><value>Automatische antwoorden</value></data>
+  <data name="FTP accounts" xml:space="preserve"><value>FTP-accounts</value></data>
+  <data name="Anonymous FTP" xml:space="preserve"><value>Anonieme FTP</value></data>
+  <data name="Suspend at limit" xml:space="preserve"><value>Opschorten bij limiet</value></data>
+  <data name="User SSH" xml:space="preserve"><value>SSH voor gebruikers</value></data>
+  <data name="Server IP" xml:space="preserve"><value>Server-IP</value></data>
+  <data name="IP addresses" xml:space="preserve"><value>IP-adressen</value></data>
+  <data name="Unlimited" xml:space="preserve"><value>Onbeperkt</value></data>
+  <data name="Kubernetes package settings are stored; enforcement is not yet complete." xml:space="preserve"><value>Kubernetes slaat pakketinstellingen op; afdwinging is nog niet volledig.</value></data>
 </root>
