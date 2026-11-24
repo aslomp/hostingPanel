@@ -1,3 +1,6 @@
+@using System.Globalization
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject DirectAdminSession Session
@@ -5,36 +8,36 @@
 @inject NavigationManager Navigation
 
 <div class="shell">
-  <aside class="sidebar" aria-label="Hoofdnavigatie">
+  <aside class="sidebar" aria-label="@L["Hoofdnavigatie"]">
     <a class="brand" href="/">◈ <span>HostingPanel<small>CONTROL CENTER</small></span></a>
-    <div class="nav-caption">Navigatiecontext</div>
-    <div class="nav-context-switch" role="group" aria-label="Navigatiecontext">
+    <div class="nav-caption">@L["Navigatiecontext"]</div>
+    <div class="nav-context-switch" role="group" aria-label="@L["Navigatiecontext"]">
       <button type="button" class="@(NavContext.Mode == "admin" ? "active" : "")"
               aria-pressed="@(NavContext.Mode == "admin")"
-              @onclick='() => SetContext("admin")'>Beheerder</button>
+              @onclick='() => SetContext("admin")'>@L["Beheerder"]</button>
       <button type="button" class="@(NavContext.Mode == "user" ? "active" : "")"
               aria-pressed="@(NavContext.Mode == "user")"
-              @onclick='() => SetContext("user")'>Gebruiker</button>
+              @onclick='() => SetContext("user")'>@L["Gebruiker"]</button>
     </div>
-    <div class="nav-caption">@(NavContext.Mode == "admin" ? "Beheerdersfuncties" : "Gebruikersfuncties")</div>
+    <div class="nav-caption">@(NavContext.Mode == "admin" ? L["Beheerdersfuncties"].Value : L["Gebruikersfuncties"].Value)</div>
     <label class="sidebar-search-label" for="hosting-nav-search">Zoek naar pagina's</label>
     <input id="hosting-nav-search" class="sidebar-search" type="search"
            placeholder="Zoek naar pagina's..." @bind="navSearch" @bind:event="oninput" />
-    <NavLink href="/" Match="NavLinkMatch.All">▦ Dashboard</NavLink>
-    <nav class="sidebar-scroll" aria-label="Beheeronderdelen">
+    <NavLink href="/" Match="NavLinkMatch.All">▦ @L["Dashboard"]</NavLink>
+    <nav class="sidebar-scroll" aria-label="@L["Beheeronderdelen"]">
       @foreach (var navGroup in FilteredSections)
       {
         <details class="nav-section" open>
-          <summary><span class="nav-icon" aria-hidden="true">@navGroup.Icon</span>@navGroup.Title</summary>
+          <summary><span class="nav-icon" aria-hidden="true">@navGroup.Icon</span>@L[navGroup.Title]</summary>
           <div class="nav-section-items">
             @foreach (var item in navGroup.Items)
             {
               <NavLink href="@item.Path" class="nav-item">
                 <span class="nav-icon" aria-hidden="true">@item.Icon</span>
-                <span>@item.Label</span>
+                <span>@L[item.Label]</span>
                 @if (!item.Implemented)
                 {
-                  <span class="nav-pending" title="Nog niet geïmplementeerd" aria-label="Nog niet geïmplementeerd">○</span>
+                  <span class="nav-pending" title="@L["Nog niet geïmplementeerd"]" aria-label="@L["Nog niet geïmplementeerd"]">○</span>
                 }
               </NavLink>
             }
@@ -42,7 +45,7 @@
         </details>
       }
     </nav>
-    <p class="nav-note">DirectAdmin-compatibele API<br />De backend bepaalt de toegangsrechten.</p>
+    <p class="nav-note">@L["DirectAdmin-compatibele API"]<br />@L["De backend bepaalt de toegangsrechten."]</p>
   </aside>
   <div class="workspace">
     <header class="topbar">
@@ -51,9 +54,17 @@
         <strong>@CurrentPage</strong>
       </div>
       <div class="session-identity">
+        <form method="get" action="/culture/set" class="culture-picker">
+          <label for="ui-culture">@L["Taal"]</label>
+          <select id="ui-culture" name="culture" aria-label="@L["Taal"]" onchange="this.form.submit()">
+            <option value="nl-NL" selected="@(CultureInfo.CurrentUICulture.Name == "nl-NL")">Nederlands</option>
+            <option value="en-US" selected="@(CultureInfo.CurrentUICulture.Name == "en-US")">English</option>
+          </select>
+          <input type="hidden" name="returnUrl" value="@(new Uri(Navigation.Uri).PathAndQuery)" />
+        </form>
         <TicketNotifications @key="Session.TicketChannel" />
-        <span>@(Session.Connected ? "Verbonden account" : "Backend niet verbonden")
-          <strong>@(Session.Connected ? Session.Username : "Niet aangemeld")</strong>
+        <span>@(Session.Connected ? L["Verbonden account"].Value : L["Backend niet verbonden"].Value)
+          <strong>@(Session.Connected ? Session.Username : L["Niet aangemeld"].Value)</strong>
         </span>
         <span class="session-avatar" aria-hidden="true">@(Session.Connected ? Session.Username[..Math.Min(2,Session.Username.Length)].ToUpperInvariant() : "HP")</span>
       </div>
@@ -61,9 +72,9 @@
     @if (Session.IsImpersonating)
     {
       <div class="impersonation-banner" role="status">
-        <span><strong>Impersonation actief:</strong> je werkt als <strong>@Session.Username</strong>
-        namens beheerder <strong>@Session.OriginalUsername</strong>.</span>
-        <button @onclick="ReturnToAdministrator">Terug naar beheerder</button>
+        <span><strong>@L["Impersonation actief:"]</strong> @L["je werkt als"] <strong>@Session.Username</strong>
+        @L["namens beheerder"] <strong>@Session.OriginalUsername</strong>.</span>
+        <button @onclick="ReturnToAdministrator">@L["Terug naar beheerder"]</button>
       </div>
     }
     <main class="content">@Body</main>
@@ -97,7 +108,7 @@
             if (string.IsNullOrWhiteSpace(path)) return "Dashboard";
             var item = AllSections.SelectMany(navSection => navSection.Items)
                 .FirstOrDefault(link => link.Path.Trim('/').Equals(path, StringComparison.OrdinalIgnoreCase));
-            return item?.Label ?? path.Split('/')[0].Replace('-', ' ');
+            return item is null ? path.Split('/')[0].Replace('-', ' ') : L[item.Label].Value;
         }
     }
     private IEnumerable<NavSection> CurrentSections =>
@@ -105,9 +116,9 @@
     private IEnumerable<NavSection> FilteredSections => string.IsNullOrWhiteSpace(navSearch)
         ? CurrentSections
         : CurrentSections.Select(section => section with {
-            Items = section.Title.Contains(navSearch, StringComparison.OrdinalIgnoreCase)
+            Items = L[section.Title].Value.Contains(navSearch, StringComparison.OrdinalIgnoreCase)
                 ? section.Items
-                : section.Items.Where(item => item.Label.Contains(navSearch,
+                : section.Items.Where(item => L[item.Label].Value.Contains(navSearch,
                     StringComparison.OrdinalIgnoreCase)).ToArray()
         }).Where(section => section.Items.Length > 0);
 
