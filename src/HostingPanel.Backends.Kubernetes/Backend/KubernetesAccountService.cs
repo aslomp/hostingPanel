@@ -80,8 +80,6 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
             || await db.DatabaseUsers.AnyAsync(x => x.OwnerId == target.Id, ct)
             || await db.FileAccessAccounts.AnyAsync(x => x.OwnerId == target.Id, ct))
             return new(409, "ACCOUNT_HAS_RESOURCES");
-        var nameservers = await db.Configuration.SingleOrDefaultAsync(x => x.Key == KubernetesAccountNameservers.Key(target.Id), ct);
-        if (nameservers is not null) db.Configuration.Remove(nameservers);
         db.Accounts.Remove(target);
         operations.Schedule("account", target.Id, "delete", new { target.Username });
         await db.SaveChangesAsync(ct);

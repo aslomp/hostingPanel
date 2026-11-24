@@ -1,5 +1,4 @@
 using System.Net.Http.Headers;
-using System.Text.Json;
 using HostingPanel.Api.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,14 +6,6 @@ namespace HostingPanel.Api;
 
 public sealed class KubernetesAccountNameservers(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesSettingsService settings) : IAccountNameservers
 {
-    internal static string Key(Guid id) => "AccountNameservers:" + id.ToString("N");
-
-    internal static async Task<AccountNameserversUpdate?> ReadOverrideAsync(HostingPanelDbContext db, Guid id, CancellationToken ct)
-    {
-        var row = await db.Configuration.AsNoTracking().SingleOrDefaultAsync(x => x.Key == Key(id), ct);
-        return row is null ? null : JsonSerializer.Deserialize<AccountNameserversUpdate>(row.ValueJson);
-    }
-
     internal static async Task<string[]> ResolveDefaultsAsync(HostingPanelDbContext db, HostingAccount owner, KubernetesBackendSettings settings, CancellationToken ct)
     {
         var parent = owner.CreatorId is { } creator
@@ -28,39 +19,17 @@ public sealed class KubernetesAccountNameservers(HostingPanelDbContext db, Kuber
             .Where(KubernetesInputValidation.ValidDomain).Distinct(StringComparer.OrdinalIgnoreCase).Take(2).ToArray();
     }
 
-    internal static async Task<string[]> ResolveAsync(HostingPanelDbContext db, HostingAccount owner, KubernetesBackendSettings settings, CancellationToken ct)
-    {
-        var custom = await ReadOverrideAsync(db, owner.Id, ct);
-        return custom is { Ns1: not null, Ns2: not null } ? [custom.Ns1, custom.Ns2] : await ResolveDefaultsAsync(db, owner, settings, ct);
-    }
+    internal static Task<string[]> ResolveAsync(HostingPanelDbContext db, HostingAccount owner, KubernetesBackendSettings settings, CancellationToken ct)
+        => ResolveDefaultsAsync(db, owner, settings, ct);
 
     public async Task<IResult> ReadAsync(AuthenticationHeaderValue auth, CancellationToken ct)
     {
         var owner = await identity.AuthenticateAsync(auth, ct);
         if (owner is null) return Results.Unauthorized();
-        var custom = await ReadOverrideAsync(db, owner.Id, ct);
-        var defaults = await ResolveDefaultsAsync(db, owner, await settings.GetEffectiveSettingsAsync(ct), ct);
-        return Results.Ok(new AccountNameserversView(custom?.Ns1, custom?.Ns2, custom?.Ns1 ?? defaults.ElementAtOrDefault(0), custom?.Ns2 ?? defaults.ElementAtOrDefault(1), true, custom is null));
+        var effective = await ResolveAsync(db, owner, await settings.GetEffectiveSettingsAsync(ct), ct);
+        return Results.Ok(new AccountNameserversView(null, null, effective.ElementAtOrDefault(0), effective.ElementAtOrDefault(1), false, true));
     }
 
     public async Task<IResult> WriteAsync(AuthenticationHeaderValue auth, AccountNameserversUpdate update, CancellationToken ct)
-    {
-        var owner = await identity.AuthenticateAsync(auth, ct);
-        if (owner is null) return Results.Unauthorized();
-        if (!AccountNameserverValidation.TryNormalize(update, out var normalized))
-            return Results.ValidationProblem(new Dictionary<string, string[]> { ["nameservers"] = ["Specify two distinct valid nameservers, or leave both empty."] });
-        var key = Key(owner.Id);
-        var row = await db.Configuration.SingleOrDefaultAsync(x => x.Key == key, ct);
-        if (normalized.Ns1 is null)
-        {
-            if (row is not null) db.Configuration.Remove(row);
-        }
-        else
-        {
-            if (row is null) { row = new PanelConfiguration { Key = key }; db.Configuration.Add(row); }
-            row.ValueJson = JsonSerializer.Serialize(normalized);
-        }
-        await db.SaveChangesAsync(ct);
-        return await ReadAsync(auth, ct);
-    }
+        => await identity.AuthenticateAsync(auth, ct) is null ? Results.Unauthorized() : Results.StatusCode(403);
 }
