@@ -12,16 +12,7 @@ body { margin: 0; min-width: 320px; background: var(--mud-palette-background, #f
 .form-actions, .domain-options { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:16px; }
 .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr)); gap:16px; }
 .tile { display:flex; flex-direction:column; gap:8px; }
-.dashboard-layout { display:grid; grid-template-columns:minmax(0,1fr) 315px; gap:16px; align-items:start; }
 .dashboard-section-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
-.dashboard-links { display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:8px; }
-.dashboard-links a { display:flex; flex-direction:column; align-items:center; gap:8px; padding:16px 8px; border-radius:8px; text-align:center; color:var(--mud-palette-primary); }
-.dashboard-links a:hover { background:var(--mud-palette-action-default-hover); }
-.dashboard-links .glyph { font-size:1.4rem; }
-.dashboard-link-row { display:flex; align-items:center; gap:10px; padding:10px 0; }
-.state-row { display:flex; align-items:center; gap:8px; }
-.state-dot { width:8px; height:8px; border-radius:50%; background:var(--mud-palette-text-disabled); }
-.state-dot.connected { background:var(--mud-palette-success); }
 .status-pill { display:inline-flex; border-radius:24px; padding:4px 10px; background:var(--mud-palette-background-gray); font-size:.75rem; }
 .status-pill.good { color:var(--mud-palette-success); }
 .status-pill.warning { color:var(--mud-palette-warning); }
@@ -34,12 +25,10 @@ body { margin: 0; min-width: 320px; background: var(--mud-palette-background, #f
 .ticket-notifications { position:relative; }
 .notification-link { display:inline-flex; gap:6px; align-items:center; position:relative; color:inherit; text-decoration:none; }
 .notification-count { background:var(--mud-palette-error); color:white; border-radius:20px; padding:2px 6px; }
-.notification-toast { position:absolute; right:0; top:40px; z-index:50; width:min(345px,90vw); padding:16px; display:grid; gap:8px; color:var(--mud-palette-text-primary); background:var(--mud-palette-surface); border-radius:8px; box-shadow:var(--mud-elevation-8); }
 .ticket-reply { border:1px solid var(--mud-palette-divider); border-radius:8px; padding:16px; margin:12px 0; }
 .ticket-reply > header { display:flex; justify-content:space-between; gap:8px; margin-bottom:12px; }
 .culture-picker select { background:transparent; color:inherit; border:1px solid currentColor; padding:6px; border-radius:4px; }
 .culture-picker option { color:#222; background:#fff; }
-@media(max-width:1000px) { .dashboard-layout { grid-template-columns:1fr; } }
 /* Native login form intentionally stays outside the authenticated Blazor circuit. */
 .login-page { font-family:system-ui,sans-serif; color:#25344d; background:#f3f6fa; }
 .login-page .card { background:white; border:1px solid #dce5ef; }
