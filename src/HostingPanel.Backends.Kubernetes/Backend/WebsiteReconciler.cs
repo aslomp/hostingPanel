@@ -40,6 +40,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         if (rows.Count == 0 && !shared) return;
         var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
         var identities = await PhpIdentityModel.AllocateAsync(db, domains.Select(x => x.OwnerId), ct);
+        var completed = new List<ReconciliationOperation>();
         foreach (var group in rows.GroupBy(x => x.ResourceId))
         {
             var latest = group.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).First();
@@ -54,12 +55,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 else
                     await KubectlAsync(BuildManifest(domain, identities[domain.OwnerId]), ct, "apply", "--server-side",
                         "--field-manager=hostingpanel", "-f", "-");
-                foreach (var row in group)
-                {
-                    row.Status = "completed";
-                    row.CompletedAt = DateTimeOffset.UtcNow;
-                    row.LastError = null;
-                }
+                completed.AddRange(group);
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
@@ -82,6 +78,13 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 appliedRuntimeHash = hash;
             }
         }
+        foreach (var row in completed)
+        {
+            row.Status = "completed";
+            row.CompletedAt = DateTimeOffset.UtcNow;
+            row.LastError = null;
+        }
+        await db.SaveChangesAsync(ct);
     }
 
     private string Required(string key) => configuration["KubernetesHosting:" + key] is { Length: > 0 } value
@@ -139,7 +142,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var containers = new object[] {
             new { name = "apache", image = configuration["KubernetesHosting:ApacheImage"] ?? "httpd:2.4",
                 command = new[] { "/bin/sh", "-ec" },
-                args = new[] { "cat /etc/site/passwd >> /etc/passwd; cat /etc/site/group >> /etc/group; httpd -t -f /etc/site/httpd.conf; exec httpd-foreground -f /etc/site/httpd.conf" },
+                args = new[] { "test \"$(stat -c '%u:%g:%a' " + root + ")\" = '" + identity.Uid + ":" + identity.Gid + ":700'; cat /etc/site/passwd >> /etc/passwd; cat /etc/site/group >> /etc/group; httpd -t -f /etc/site/httpd.conf; exec httpd-foreground -f /etc/site/httpd.conf" },
                 ports = new[] { new { containerPort = 8080 } },
                 readinessProbe = new { tcpSocket = new { port = 8080 } },
                 volumeMounts = new object[] { DataMount(true), new { name = "config", mountPath = "/etc/site", readOnly = true } } }
@@ -193,8 +196,6 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             var pools = new StringBuilder("[global]\nerror_log = /proc/self/fd/2\ndaemonize = no\n");
             var passwd = new StringBuilder();
             var group = new StringBuilder();
-            // Keep a non-tenant health listener so an empty runtime is valid.
-            pools.Append("[health]\nuser = www-data\ngroup = www-data\nlisten = 127.0.0.1:9000\npm = ondemand\npm.max_children = 1\n");
             foreach (var owner in owners)
             {
                 passwd.AppendLine($"{owner.UnixName}:x:{owner.Uid}:{owner.Gid}:Hosting account:/nonexistent:/usr/sbin/nologin");
@@ -214,6 +215,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             var image = version == "7" ? Required("Php7Image") : configuration["KubernetesHosting:Php8Image"] ?? "php:8.4-fpm";
             resources.Add(new { apiVersion = "v1", kind = "ConfigMap", metadata = Meta(), data });
             resources.Add(new { apiVersion = "apps/v1", kind = "Deployment", metadata = Meta(), spec = new {
+                replicas = owners.Length == 0 ? 0 : configuration.GetValue<int?>("KubernetesHosting:Php" + version + "Replicas") ?? 1,
                 selector = new { matchLabels = labels }, template = new {
                     metadata = new { labels, annotations = new Dictionary<string,string> { ["hostingpanel/config-sha256"] = hash } }, spec = new {
                         automountServiceAccountToken = false,
@@ -222,7 +224,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                             args = new[] { "cat /etc/hostingpanel/passwd >> /etc/passwd; cat /etc/hostingpanel/group >> /etc/group; php-fpm -t -y /etc/hostingpanel/php-fpm.conf; exec php-fpm -F -y /etc/hostingpanel/php-fpm.conf" },
                             securityContext = new { runAsUser = 0, allowPrivilegeEscalation = false,
                                 capabilities = new { drop = new[] { "ALL" }, add = new[] { "SETUID", "SETGID", "CHOWN", "KILL", "DAC_OVERRIDE" } } },
-                            readinessProbe = new { exec = new { command = new[] { "php", "-r", "exit(@fsockopen('127.0.0.1',9000)?0:1);" } } },
+                            readinessProbe = new { tcpSocket = new { port = owners.Length == 0 ? 9000 : owners[0].Port } },
                             volumeMounts = new object[] { new { name = "sites", mountPath = "/var/www/sites" },
                                 new { name = "config", mountPath = "/etc/hostingpanel", readOnly = true } } } },
                         volumes = new object[] { new { name = "sites", nfs = new { server = Required("NfsServer"), path = Required("NfsPath") } },
