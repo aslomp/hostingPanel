@@ -48,13 +48,17 @@ public sealed partial class KubernetesBackend
             var domains = await db.Domains.AsNoTracking().Where(x => ids.Contains(x.OwnerId)).ToListAsync(ct);
             var owners = await db.Accounts.AsNoTracking().Where(x => ids.Contains(x.Id)).ToDictionaryAsync(x => x.Id, ct);
             var result = new List<object>();
+            var snapshot = await ReadCertificateSnapshotAsync(ct);
             foreach (var domain in domains)
             {
                 var acme = await DomainAcmeAsync(db, domain.Id, ct);
+                var info = snapshot.Find(domain.Id);
+                var missing = CertificateNames(domain, acme).Count(n => info?.Covers(n) != true);
+                var valid = info?.Valid == true;
                 result.Add(new { domain = domain.Name, username = owners[domain.OwnerId].Username,
                     acmeSettings = new { enabled = acme.Enabled, provider = acme.Provider, skippedCerts = acme.SkipDNSNames.Length },
-                    certs = new { invalidAuto = 0, invalidManual = 0, selfSigned = 0, validAuto = 0, validManual = 0 },
-                    dnsNames = new { missing = CertificateNames(domain, acme).Length, trusted = 0, untrusted = 0 } });
+                    certs = new { invalidAuto = info is not null && !valid ? 1 : 0, invalidManual = 0, selfSigned = 0, validAuto = valid ? 1 : 0, validManual = 0 },
+                    dnsNames = new { missing, trusted = 0, untrusted = valid ? CertificateNames(domain, acme).Length - missing : 0 } });
             }
             await Results.Ok(result).ExecuteAsync(context); return;
         }
@@ -91,6 +95,40 @@ public sealed partial class KubernetesBackend
                     await db.SaveChangesAsync(ct);
                     await Results.NoContent().ExecuteAsync(context); return;
                 }
+            }
+            if (method == "GET" && parts[4] is "certs" or "acme-logs")
+            {
+                var snapshot = await ReadCertificateSnapshotAsync(ct);
+                var info = snapshot.Find(domain.Id);
+                if (parts[4] == "certs" && parts.Length == 5)
+                {
+                    var certs = info is null ? Array.Empty<object>() : new object[] { new { id = info.Id, autorenewEnabled = acme.Enabled,
+                        error = info.Error, certificate = info.PublicCertificate } };
+                    await Results.Ok(new { certIds = info?.Valid == true ? new[] { info.Id } : Array.Empty<string>(), certs,
+                        missingDNSNames = CertificateNames(domain, acme).Where(n => info?.Covers(n) != true).ToArray() }).ExecuteAsync(context);
+                    return;
+                }
+                if (parts[4] == "acme-logs")
+                {
+                    var logs = snapshot.Logs(domain.Id);
+                    if (parts.Length == 5) { await Results.Ok(logs.Select(x => x.Summary)).ExecuteAsync(context); return; }
+                    if (parts.Length == 6 && int.TryParse(parts[5], out var logId))
+                    {
+                        var entry = logs.FirstOrDefault(x => x.Id == logId);
+                        await (entry is null ? Results.NotFound() : Results.Ok(entry.Detail)).ExecuteAsync(context); return;
+                    }
+                }
+            }
+            if (parts.Length == 5 && parts[4] == "provision-certs-dry-run" && method == "POST")
+            {
+                var info = (await ReadCertificateSnapshotAsync(ct)).Find(domain.Id);
+                var names = CertificateNames(domain, acme);
+                var covered = info?.Valid == true && names.All(info.Covers);
+                await Results.Ok(new { acmeEnabled = acme.Enabled, acmeInProgress = info?.Issuing == true,
+                    certsFulfilled = covered ? new object[] { new { certID = info!.Id, dnsNames = names } } : Array.Empty<object>(),
+                    certsObsolete = Array.Empty<object>(), certsPending = acme.Enabled && !covered ? new object[] { new { certID = CertManagerClient.Name(domain.Id), challengeType = acme.PreferWildcard ? "DNS-01" : "HTTP-01", dnsNames = names } } : Array.Empty<object>(),
+                    dnsNamesFailedCAA = Array.Empty<string>(), dnsNamesFailedChallenge = Array.Empty<string>(), dnsNamesSkipped = acme.SkipDNSNames, ratelimitReached = false }).ExecuteAsync(context);
+                return;
             }
             if (parts.Length == 5 && parts[4] == "provision-certs" && method == "POST")
             {

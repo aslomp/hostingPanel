@@ -26,6 +26,12 @@ rules:
   - apiGroups: ["cert-manager.io"]
     resources: ["certificates"]
     verbs: ["get", "list", "create", "patch", "delete"]
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificaterequests"]
+    verbs: ["get", "list"]
+  - apiGroups: ["acme.cert-manager.io"]
+    resources: ["orders", "challenges"]
+    verbs: ["get", "list"]
   {{- if .Values.certManager.listenerSetName }}
   - apiGroups: ["gateway.networking.k8s.io"]
     resources: ["listenersets"]
