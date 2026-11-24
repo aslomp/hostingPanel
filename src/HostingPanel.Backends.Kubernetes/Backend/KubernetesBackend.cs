@@ -383,6 +383,9 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         var properties = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(row.SettingsJson) ?? new();
         var settings = properties.ToDictionary(x => x.Key, x => x.Value.ToString());
         settings["domain"] = row.Name;
+        settings["username"] = await db.Accounts.Where(x => x.Id == row.OwnerId).Select(x => x.Username).SingleAsync(ct);
+        var operations = await db.ReconciliationOperations.AsNoTracking().Where(x => x.ResourceType == "website" && x.ResourceId == row.Id).ToListAsync(ct);
+        settings["provisioning"] = operations.Any(x => x.Status == "pending" && x.Attempts > 0) ? "Retrying" : operations.Any(x => x.Status == "pending") ? "Pending" : operations.Any(x => x.Status == "completed") ? "Configuration applied" : "Unknown";
         return new(200, settings, null);
     }
 
@@ -398,9 +401,8 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         if (setting is not ("php" or "ssl" or "cgi") || value is not ("ON" or "OFF"))
             return new(400, "INVALID_SETTING");
         var values = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(row.SettingsJson) ?? new();
-        var plain = values.ToDictionary(x => x.Key, x => x.Value.ToString());
-        plain[setting] = value;
-        row.SettingsJson = JsonSerializer.Serialize(plain);
+        values[setting] = JsonSerializer.SerializeToElement(value == "ON");
+        row.SettingsJson = JsonSerializer.Serialize(values);
         Schedule("domain", row.Id, "update", new { row.Name, setting });
         await ScheduleWebsiteAsync(row, "update", ct);
         await db.SaveChangesAsync(ct);
