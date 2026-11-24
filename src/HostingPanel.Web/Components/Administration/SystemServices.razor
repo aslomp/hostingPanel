@@ -1,9 +1,9 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/system-services"
-@using System.Text.Json
 @inject PanelSession Session
-@inject CompatibilityApiClient ApiClient
+@inject SystemServiceOperations ServiceOps
+@implements IDisposable
 <PageTitle>@L["System services — HostingPanel"]</PageTitle>
 <PanelPageHeader>
     <Breadcrumb>@L["Server management"]</Breadcrumb>
@@ -49,69 +49,128 @@ else
     private string watchdog = "true", watchdogConfirmation = "";
     private string services = "", details = "", serviceLog = "";
     private string? error, outcome;
-    private bool busy;
-    protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
-    private static bool ValidService(string value) =>
-        !string.IsNullOrWhiteSpace(value) && value.Length <= 128 &&
-        value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.' or '@');
-    private async Task Load()
+    private readonly LatestRead listRead = new();
+    private readonly LatestRead detailRead = new();
+    private readonly DialogMutation mutation = new();
+    private bool disposed;
+    private bool busy => listRead.Loading || detailRead.Loading || mutation.Busy;
+    private static bool ValidService(string value) => SystemServiceOperations.ValidService(value);
+
+    protected override async Task OnInitializedAsync()
     {
-        if (busy || !Session.Connected) return;
-        busy = true; error = null;
-        try
-        {
-            var (status, body) = await ApiClient.GetRawAsync("api/system-services/list");
-            services = $"HTTP {status}\n{body}";
-            if (status is < 200 or >= 300) error = L["Backend did not return the overview (HTTP {0}).", status].Value;
-        }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
-        { error = ex.Message; }
-        finally { busy = false; }
+        Session.Changed += SessionChanged;
+        await Load();
     }
-    private async Task Details()
+
+    private void SessionChanged() => _ = InvokeAsync(async () =>
     {
-        if (busy || !ValidService(service)) { error = L["Invalid service name."].Value; return; }
-        busy = true; error = null;
-        try
-        {
-            var p = Uri.EscapeDataString(service);
-            var (s, b) = await ApiClient.GetRawAsync($"api/system-services/service/{p}");
-            var (ls, lb) = await ApiClient.GetRawAsync($"api/system-services/service/{p}/log");
-            details = $"HTTP {s}\n{b}";
-            serviceLog = $"HTTP {ls}\n{lb}";
-        }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
-        { error = ex.Message; }
-        finally { busy = false; }
+        if (disposed) return;
+        detailRead.Cancel();
+        services = details = serviceLog = service = confirmation = watchdogConfirmation = "";
+        error = outcome = null;
+        var task = Load();
+        StateHasChanged();
+        await task;
+        if (!disposed) StateHasChanged();
+    });
+
+    public void Dispose()
+    {
+        disposed = true;
+        Session.Changed -= SessionChanged;
+        listRead.Dispose();
+        detailRead.Dispose();
+        mutation.Dispose();
     }
+
+    private Task Load()
+    {
+        if (disposed) return Task.CompletedTask;
+        services = "";
+        error = null;
+        if (!Session.Connected)
+        {
+            listRead.Cancel();
+            return Task.CompletedTask;
+        }
+        var channel = Session.TicketChannel;
+        return listRead.RunAsync(ct => ServiceOps.ListAsync(ct),
+            () => Session.Connected && Session.TicketChannel == channel,
+            result =>
+            {
+                services = $"HTTP {result.Status}\n{result.Body}";
+                if (result.Status is < 200 or >= 300)
+                    error = L["Backend did not return the overview (HTTP {0}).", result.Status].Value;
+            }, ex => error = ex.Message);
+    }
+
+    private Task Details()
+    {
+        if (disposed || busy || !Session.Connected) return Task.CompletedTask;
+        if (!ValidService(service))
+        {
+            error = L["Invalid service name."].Value;
+            return Task.CompletedTask;
+        }
+        var target = service;
+        var channel = Session.TicketChannel;
+        details = serviceLog = "";
+        error = null;
+        bool Current() => !disposed && Session.Connected &&
+            Session.TicketChannel == channel && service == target;
+        return detailRead.RunAsync(async ct =>
+        {
+            var detail = await ServiceOps.DetailsAsync(target, ct);
+            ct.ThrowIfCancellationRequested();
+            if (!Current()) throw new OperationCanceledException();
+            var log = await ServiceOps.LogAsync(target, ct);
+            return (Detail: detail, Log: log);
+        }, Current, result =>
+        {
+            details = $"HTTP {result.Detail.Status}\n{result.Detail.Body}";
+            serviceLog = $"HTTP {result.Log.Status}\n{result.Log.Body}";
+        }, ex => error = ex.Message);
+    }
+
     private async Task SetWatchdog()
     {
-        if (busy || !ValidService(service) || watchdogConfirmation != service) return;
-        busy = true; outcome = null;
-        try
+        if (disposed || busy || !ValidService(service) || watchdogConfirmation != service || !Session.Connected) return;
+        var target = service;
+        var channel = Session.TicketChannel;
+        var enabled = watchdog == "true";
+        outcome = null;
+        await mutation.RunAsync(Session, channel, async current =>
         {
-            var payload = watchdog == "true" ? """{"enable":true}""" : """{"enable":false}""";
-            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Put,
-                $"api/system-services-actions/service/{Uri.EscapeDataString(service)}/watchdog", payload);
+            var (status, body) = await ServiceOps.SetWatchdogAsync(target, enabled);
+            if (!current() || service != target) return;
             outcome = status == 204 ? L["DirectAdmin confirmed the watchdog change."].Value
                 : L["Watchdog operation: backend HTTP {0}. {1}", status, body].Value;
+        });
+        if (!disposed && Session.Connected && Session.TicketChannel == channel && service == target)
+        {
+            outcome ??= mutation.Error;
+            watchdogConfirmation = "";
         }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
-        { outcome = ex.Message; }
-        finally { busy = false; watchdogConfirmation = ""; }
     }
+
     private async Task Execute()
     {
-        if (busy || !ValidService(service) || confirmation != service || action is not ("restart" or "reload" or "start" or "stop")) return;
-        busy = true; outcome = null;
-        try
+        if (disposed || busy || !Session.Connected || !ValidService(service) || confirmation != service ||
+            action is not ("restart" or "reload" or "start" or "stop")) return;
+        var target = service;
+        var selectedAction = action;
+        var channel = Session.TicketChannel;
+        outcome = null;
+        await mutation.RunAsync(Session, channel, async current =>
         {
-            var (s, b) = await ApiClient.RequestApiAsync(HttpMethod.Post,
-                $"api/system-services-actions/service/{Uri.EscapeDataString(service)}/{action}");
-            outcome = L["Action {0}: HTTP {1}. {2}", action, s, b].Value;
+            var (status, body) = await ServiceOps.ExecuteAsync(target, selectedAction);
+            if (current() && service == target)
+                outcome = L["Action {0}: HTTP {1}. {2}", selectedAction, status, body].Value;
+        });
+        if (!disposed && Session.Connected && Session.TicketChannel == channel && service == target)
+        {
+            outcome ??= mutation.Error;
+            confirmation = "";
         }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
-        { outcome = ex.Message; }
-        finally { busy = false; confirmation = ""; }
     }
 }
