@@ -202,7 +202,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             var passwd = new StringBuilder();
             var group = new StringBuilder();
             if (owners.Length == 0)
-                pools.Append("[idle]\nuser = www-data\ngroup = www-data\nlisten = 127.0.0.1:9000\npm = ondemand\npm.max_children = 1\nclear_env = yes\nsecurity.limit_extensions = .php\n");
+                pools.Append("[idle]\nuser = www-data\ngroup = www-data\nlisten = 127.0.0.1:9000\nlisten.allowed_clients = 0.0.0.0\npm = ondemand\npm.max_children = 1\nclear_env = yes\nsecurity.limit_extensions = .php\n");
             foreach (var owner in owners)
             {
                 passwd.AppendLine($"{owner.UnixName}:x:{owner.Uid}:{owner.Gid}:Hosting account:/nonexistent:/usr/sbin/nologin");
@@ -231,7 +231,9 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                             args = new[] { "cat /etc/hostingpanel/passwd >> /etc/passwd; cat /etc/hostingpanel/group >> /etc/group; php-fpm -t -y /etc/hostingpanel/php-fpm.conf; exec php-fpm -F -y /etc/hostingpanel/php-fpm.conf" },
                             securityContext = new { runAsUser = 0, allowPrivilegeEscalation = false,
                                 capabilities = new { drop = new[] { "ALL" }, add = new[] { "SETUID", "SETGID", "CHOWN", "KILL", "DAC_OVERRIDE" } } },
-                            readinessProbe = new { exec = new { command = new[] { "php-fpm", "-t", "-y", "/etc/hostingpanel/php-fpm.conf" } } },
+                            readinessProbe = owners.Length == 0
+                                ? (object)new { exec = new { command = new[] { "php", "-r", "exit(@fsockopen('127.0.0.1',9000)?0:1);" } } }
+                                : new { tcpSocket = new { port = owners[0].Port } },
                             volumeMounts = new object[] { new { name = "sites", mountPath = "/var/www/sites" },
                                 new { name = "config", mountPath = "/etc/hostingpanel", readOnly = true } } } },
                         volumes = new object[] { new { name = "sites", nfs = new { server = Required("NfsServer"), path = Required("NfsPath") } },
