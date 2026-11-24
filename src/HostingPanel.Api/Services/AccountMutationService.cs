@@ -24,7 +24,8 @@ public sealed class AccountMutationService(IHttpClientFactory clients)
         value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
 
     public static IReadOnlyDictionary<string, string> CreateForm(CreateHostingAccount input)
-    {
+    : IAccountMutations
+{
         if (input.Kind is not ("user" or "reseller") ||
             !ValidUsername(input.Username) ||
             !LegacyDomainsAdapter.IsValidDomain(input.Domain) ||

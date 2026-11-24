@@ -6,6 +6,7 @@ using HostingPanel.Api.Adapters;
 namespace HostingPanel.Api.Services;
 
 public sealed class DnsZoneService(IHttpClientFactory clients)
+: IDns
 {
     public async Task<AdminDnsZoneListResult> ListAdminZonesAsync(
         AuthenticationHeaderValue auth, int page, CancellationToken ct)

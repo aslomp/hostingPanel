@@ -11,7 +11,8 @@ public sealed class LegacyUserDetailsService(IHttpClientFactory clients, IWebHos
 {
     public async Task<LegacyDetailResult> GetAsync(string username, string kind,
         AuthenticationHeaderValue authentication, CancellationToken cancellationToken)
-    {
+    : IUserDetails
+{
         var legacyCall = kind == "config" ? "CMD_API_SHOW_USER_CONFIG" : "CMD_API_SHOW_USER_USAGE";
         var client = clients.CreateClient("legacy-directadmin");
 

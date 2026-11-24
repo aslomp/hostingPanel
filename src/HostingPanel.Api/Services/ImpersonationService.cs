@@ -16,7 +16,8 @@ public sealed class ImpersonationService(IHttpClientFactory clients)
 {
     public async Task<ImpersonationCheck> CheckAsync(
         AuthenticationHeaderValue authorization, string target, CancellationToken ct)
-    {
+    : IImpersonation
+{
         if (!LegacyAccountOverviewService.ValidUsername(target))
             return new(400, "INVALID_TARGET");
         if (!TryDecode(authorization, out var admin, out var key))

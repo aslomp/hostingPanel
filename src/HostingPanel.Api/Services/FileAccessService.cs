@@ -10,10 +10,11 @@ namespace HostingPanel.Api.Services;
 /// Identity, ownership and permitted paths are decided by DirectAdmin.
 /// </summary>
 public sealed class FileAccessService(IHttpClientFactory clients)
+: IFileAccess
 {
-    public sealed record UpstreamResult(int Status, string Body);
 
-    public async Task<UpstreamResult> ListFtpAsync(string domain,
+
+    public async Task<FileAccessResult> ListFtpAsync(string domain,
         AuthenticationHeaderValue credentials, CancellationToken ct)
     {
         if (!LegacyDomainsAdapter.IsValidDomain(domain))
@@ -22,7 +23,7 @@ public sealed class FileAccessService(IHttpClientFactory clients)
             Uri.EscapeDataString(domain), null, credentials, ct);
     }
 
-    public async Task<UpstreamResult> GetFtpAsync(string domain, string user,
+    public async Task<FileAccessResult> GetFtpAsync(string domain, string user,
         AuthenticationHeaderValue credentials, CancellationToken ct)
     {
         if (!LegacyDomainsAdapter.IsValidDomain(domain) || !ValidUser(user))
@@ -32,17 +33,17 @@ public sealed class FileAccessService(IHttpClientFactory clients)
             null, credentials, ct);
     }
 
-    public Task<UpstreamResult> CreateFtpAsync(FtpAccountRequest input,
+    public Task<FileAccessResult> CreateFtpAsync(FtpAccountRequest input,
         AuthenticationHeaderValue credentials, CancellationToken ct)
         => MutateFtpAsync("create", input, credentials, ct);
 
-    public Task<UpstreamResult> UpdateFtpAsync(string user, FtpAccountRequest input,
+    public Task<FileAccessResult> UpdateFtpAsync(string user, FtpAccountRequest input,
         AuthenticationHeaderValue credentials, CancellationToken ct)
         => !string.Equals(user, input.User, StringComparison.Ordinal)
-            ? Task.FromResult(new UpstreamResult(400, "USER_MISMATCH"))
+            ? Task.FromResult(new FileAccessResult(400, "USER_MISMATCH"))
             : MutateFtpAsync("modify", input, credentials, ct);
 
-    public async Task<UpstreamResult> DeleteFtpAsync(string domain, string user,
+    public async Task<FileAccessResult> DeleteFtpAsync(string domain, string user,
         AuthenticationHeaderValue credentials, CancellationToken ct)
     {
         if (!LegacyDomainsAdapter.IsValidDomain(domain) || !ValidUser(user))
@@ -54,7 +55,7 @@ public sealed class FileAccessService(IHttpClientFactory clients)
         return await SendAsync(HttpMethod.Post, "CMD_API_FTP", body, credentials, ct);
     }
 
-    private async Task<UpstreamResult> MutateFtpAsync(string action, FtpAccountRequest input,
+    private async Task<FileAccessResult> MutateFtpAsync(string action, FtpAccountRequest input,
         AuthenticationHeaderValue credentials, CancellationToken ct)
     {
         if (input is null || !LegacyDomainsAdapter.IsValidDomain(input.Domain)
@@ -84,7 +85,7 @@ public sealed class FileAccessService(IHttpClientFactory clients)
         !string.IsNullOrEmpty(user) && user.Length <= 64
         && user.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.');
 
-    private async Task<UpstreamResult> SendAsync(HttpMethod method, string path,
+    private async Task<FileAccessResult> SendAsync(HttpMethod method, string path,
         HttpContent? content, AuthenticationHeaderValue credentials, CancellationToken ct)
     {
         try
@@ -110,3 +111,5 @@ public sealed class FileAccessService(IHttpClientFactory clients)
 
 public sealed record FtpAccountRequest(
     string Domain, string User, string Type, string Password, string? CustomPath);
+
+public sealed record FileAccessResult(int Status, string Body);
