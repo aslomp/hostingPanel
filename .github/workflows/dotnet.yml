@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - refactor/unified-host
       - feature/web-hosting-contract
       - feature/separate-backend-projects
       - feature/blazor-directadmin-api
@@ -22,8 +23,6 @@ jobs:
           dotnet build src/HostingPanel.Backends.Abstractions -c Release
           dotnet build src/HostingPanel.Backends.DirectAdmin -c Release
           dotnet build src/HostingPanel.Backends.Kubernetes -c Release
-      - name: Build API
-        run: dotnet build src/HostingPanel.Api/HostingPanel.Api.csproj -c Release
       - name: Build Blazor web
         run: dotnet build src/HostingPanel.Web/HostingPanel.Web.csproj -c Release
       - name: Run contract tests
@@ -103,7 +102,7 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import json
-          with open("src/HostingPanel.Api/spec/directadmin.swagger.json") as f:
+          with open("src/HostingPanel.Web/spec/directadmin.swagger.json") as f:
               spec=json.load(f)
           assert spec["swagger"] == "2.0"
           assert len(spec["paths"]) > 200
@@ -111,7 +110,7 @@ jobs:
           PY
           ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://127.0.0.1:5090 \
             DirectAdmin__BaseUrl=https://demo.directadmin.com:2222/ \
-            dotnet run --no-build -c Release --project src/HostingPanel.Api >/tmp/hp-api.log 2>&1 &
+            dotnet run --no-build -c Release --project src/HostingPanel.Web >/tmp/hp-api.log 2>&1 &
           pid=$!
           trap 'cat /tmp/hp-api.log; kill "$pid" 2>/dev/null || true' EXIT
           for i in {1..40}; do
@@ -119,7 +118,7 @@ jobs:
             sleep 1
           done
           curl -fsS http://127.0.0.1:5090/openapi/directadmin.json -o /tmp/hosted-swagger.json
-          cmp src/HostingPanel.Api/spec/directadmin.swagger.json /tmp/hosted-swagger.json
+          cmp src/HostingPanel.Web/spec/directadmin.swagger.json /tmp/hosted-swagger.json
           curl -fsSL http://127.0.0.1:5090/swagger/index.html -o /tmp/swagger-ui.html
           grep -qi 'swagger' /tmp/swagger-ui.html
           curl -fsSL http://127.0.0.1:5090/swagger/swagger-ui-bundle.js -o /tmp/swagger-bundle.js
@@ -147,7 +146,7 @@ jobs:
           set -euo pipefail
           ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://127.0.0.1:5091 \
             DirectAdmin__BaseUrl=https://demo.directadmin.com:2222/ \
-            dotnet run --no-build -c Release --project src/HostingPanel.Api >/tmp/hp-domains.log 2>&1 &
+            dotnet run --no-build -c Release --project src/HostingPanel.Web >/tmp/hp-domains.log 2>&1 &
           pid=$!
           trap 'cat /tmp/hp-domains.log; kill "$pid" 2>/dev/null || true' EXIT
           for i in {1..40}; do
@@ -202,7 +201,7 @@ jobs:
           export ConnectionStrings__HostingPanel="Data Source=$RUNNER_TEMP/settings-test.db"
           export HostingPanel__Bootstrap__Username=testadmin
           export HostingPanel__Bootstrap__Password=ci-only-settings-test-password
-          dotnet run --no-build -c Release --project src/HostingPanel.Api >/tmp/settings-api.log 2>&1 &
+          dotnet run --no-build -c Release --project src/HostingPanel.Web >/tmp/settings-api.log 2>&1 &
           pid=$!
           trap 'cat /tmp/settings-api.log; kill "$pid" 2>/dev/null || true' EXIT
           for i in {1..40}; do

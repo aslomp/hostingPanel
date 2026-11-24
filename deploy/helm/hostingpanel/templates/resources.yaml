@@ -2,7 +2,7 @@
 {{- fail "backend must be DirectAdmin or Kubernetes" }}
 {{- end }}
 {{- $name := include "hostingpanel.name" . }}
-{{- if and (eq .Values.backend "Kubernetes") (not .Values.sqlite.existingClaim) }}
+{{- if not .Values.sqlite.existingClaim }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -22,100 +22,11 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ $name }}-api
+  name: {{ $name }}-web
 spec:
   replicas: 1
   strategy:
     type: Recreate
-  selector:
-    matchLabels:
-      app.kubernetes.io/instance: {{ .Release.Name | quote }}
-      app.kubernetes.io/component: api
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/instance: {{ .Release.Name | quote }}
-        app.kubernetes.io/component: api
-    spec:
-      automountServiceAccountToken: false
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1654
-        runAsGroup: 1654
-        fsGroup: 1654
-        seccompProfile: {type: RuntimeDefault}
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets: {{ toYaml . | nindent 8 }}
-      {{- end }}
-      containers:
-        - name: api
-          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
-          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
-          ports: [{name: http, containerPort: 8080}]
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities: {drop: [ALL]}
-          env:
-            - name: ASPNETCORE_HTTP_PORTS
-              value: "8080"
-            - name: HostingPanel__Backend
-              value: {{ .Values.backend | quote }}
-            {{- if eq .Values.backend "DirectAdmin" }}
-            - name: DirectAdmin__BaseUrl
-              value: {{ .Values.directAdmin.baseUrl | quote }}
-            {{- else }}
-            - name: ConnectionStrings__HostingPanel
-              value: "Data Source=/data/hostingpanel.db;Foreign Keys=True;Default Timeout=5"
-            {{- if .Values.bootstrap.existingSecret }}
-            - name: HostingPanel__Bootstrap__Username
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.bootstrap.existingSecret | quote }}
-                  key: username
-            - name: HostingPanel__Bootstrap__Password
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.bootstrap.existingSecret | quote }}
-                  key: password
-            {{- end }}
-            {{- end }}
-          startupProbe:
-            httpGet: {path: /healthz, port: http}
-            periodSeconds: 2
-            failureThreshold: 60
-          readinessProbe:
-            httpGet: {path: /healthz, port: http}
-          livenessProbe:
-            httpGet: {path: /healthz, port: http}
-          resources: {{ toYaml .Values.api.resources | nindent 12 }}
-          {{- if eq .Values.backend "Kubernetes" }}
-          volumeMounts:
-            - {name: data, mountPath: /data}
-          {{- end }}
-      {{- if eq .Values.backend "Kubernetes" }}
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: {{ default (printf "%s-data" $name) .Values.sqlite.existingClaim | quote }}
-      {{- end }}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ $name }}-api
-spec:
-  type: ClusterIP
-  selector:
-    app.kubernetes.io/instance: {{ .Release.Name | quote }}
-    app.kubernetes.io/component: api
-  ports: [{name: http, port: 8080, targetPort: http}]
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: {{ $name }}-web
-spec:
-  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/instance: {{ .Release.Name | quote }}
@@ -131,6 +42,7 @@ spec:
         runAsNonRoot: true
         runAsUser: 1654
         runAsGroup: 1654
+        fsGroup: 1654
         seccompProfile: {type: RuntimeDefault}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets: {{ toYaml . | nindent 8 }}
@@ -139,18 +51,48 @@ spec:
         - name: web
           image: "{{ .Values.web.image.repository }}:{{ .Values.web.image.tag }}"
           imagePullPolicy: {{ .Values.web.image.pullPolicy }}
-          env:
-            - name: ASPNETCORE_HTTP_PORTS
-              value: "8080"
-            - name: HostingPanel__ApiBaseUrl
-              value: "http://{{ $name }}-api:8080/"
           ports: [{name: http, containerPort: 8080}]
           securityContext:
             allowPrivilegeEscalation: false
             capabilities: {drop: [ALL]}
+          env:
+            - name: ASPNETCORE_HTTP_PORTS
+              value: "8080"
+            - name: HostingPanel__Backend
+              value: {{ .Values.backend | quote }}
+            {{- if eq .Values.backend "DirectAdmin" }}
+            - name: DirectAdmin__BaseUrl
+              value: {{ .Values.directAdmin.baseUrl | quote }}
+            {{- end }}
+            - name: ConnectionStrings__HostingPanel
+              value: "Data Source=/data/hostingpanel.db;Foreign Keys=True;Default Timeout=5"
+            {{- if and (eq .Values.backend "Kubernetes") .Values.bootstrap.existingSecret }}
+            - name: HostingPanel__Bootstrap__Username
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.bootstrap.existingSecret | quote }}
+                  key: username
+            - name: HostingPanel__Bootstrap__Password
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.bootstrap.existingSecret | quote }}
+                  key: password
+            {{- end }}
+          startupProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 2
+            failureThreshold: 60
           readinessProbe:
-            httpGet: {path: /login, port: http}
+            httpGet: {path: /healthz, port: http}
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
           resources: {{ toYaml .Values.web.resources | nindent 12 }}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-data" $name) .Values.sqlite.existingClaim | quote }}
 ---
 apiVersion: v1
 kind: Service
@@ -163,23 +105,6 @@ spec:
     app.kubernetes.io/component: web
   ports: [{name: http, port: 8080, targetPort: http}]
 ---
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: {{ $name }}-api
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/instance: {{ .Release.Name | quote }}
-      app.kubernetes.io/component: api
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/instance: {{ .Release.Name | quote }}
-              app.kubernetes.io/component: web
-      ports: [{protocol: TCP, port: 8080}]
 {{- if .Values.ingress.enabled }}
 ---
 apiVersion: networking.k8s.io/v1

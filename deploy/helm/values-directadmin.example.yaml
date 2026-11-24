@@ -2,10 +2,6 @@
 backend: DirectAdmin
 directAdmin:
   baseUrl: https://da.example.invalid:2222/
-api:
-  image:
-    repository: registry.example.invalid/hostingpanel/api
-    tag: replace-with-commit-tag
 web:
   image:
     repository: registry.example.invalid/hostingpanel/web

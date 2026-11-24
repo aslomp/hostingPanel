@@ -1,14 +1,6 @@
 backend: DirectAdmin
 directAdmin:
   baseUrl: https://directadmin.example.invalid:2222/
-api:
-  image:
-    repository: hostingpanel-api
-    tag: local
-    pullPolicy: IfNotPresent
-  resources:
-    requests: {cpu: 100m, memory: 128Mi}
-    limits: {cpu: "1", memory: 512Mi}
 web:
   image:
     repository: hostingpanel-web

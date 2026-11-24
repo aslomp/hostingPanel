@@ -1,3 +1,4 @@
+using HostingPanel.Api;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
 using HostingPanel.Web.Components;
@@ -7,6 +8,16 @@ using Microsoft.AspNetCore.Localization;
 using System.Globalization;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddControllers();
+builder.Services.AddHostingPanelPersistence(builder.Configuration);
+var provider = builder.Configuration["HostingPanel:Backend"] ?? "DirectAdmin";
+if (provider.Equals("Kubernetes", StringComparison.OrdinalIgnoreCase))
+    builder.Services.AddKubernetesBackend(builder.Configuration);
+else if (provider.Equals("DirectAdmin", StringComparison.OrdinalIgnoreCase))
+    builder.Services.AddDirectAdminBackend(builder.Configuration);
+else
+    throw new InvalidOperationException($"Unknown HostingPanel backend '{provider}'.");
+builder.Services.AddScoped<IAuthenticationProvider>(sp => sp.GetRequiredService<IHostingBackend>());
 builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
 builder.Services.Configure<RequestLocalizationOptions>(options =>
 {
@@ -59,11 +70,21 @@ builder.Services.AddRateLimiter(options =>
         { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
-builder.Services.AddHttpClient("hosting-api", client =>
+// Transitional same-host adapter until all UI operations use typed backend contracts.
+builder.Services.AddHttpClient("hosting-api", (services, client) =>
 {
-    var raw = builder.Configuration["HostingPanel:ApiBaseUrl"]
-        ?? throw new InvalidOperationException("HostingPanel:ApiBaseUrl is required.");
-    client.BaseAddress = new Uri(raw, UriKind.Absolute);
+    var server = services.GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>();
+    var addresses = server.Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>()?.Addresses;
+    var configured = addresses?.FirstOrDefault(x => x.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+        ?? addresses?.FirstOrDefault()
+        ?? throw new InvalidOperationException("HostingPanel has no listening address.");
+    var uri = new Uri(configured.Replace("://+", "://localhost").Replace("://*", "://localhost"));
+    var host = uri.Host is "0.0.0.0" or "[::]" or "::" ? "localhost" : uri.Host;
+    client.BaseAddress = new UriBuilder(uri.Scheme, host, uri.Port).Uri;
+}).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    AllowAutoRedirect = false,
+    UseCookies = false
 });
 builder.Services.AddSingleton<TicketChannelRegistry>();
 builder.Services.AddScoped<DirectAdminSession>();
@@ -75,6 +96,18 @@ builder.Services.AddScoped<TicketLiveMonitor>();
 builder.WebHost.UseStaticWebAssets();
 
 var app = builder.Build();
+await app.Services.InitializeHostingPanelPersistenceAsync();
+if (provider.Equals("Kubernetes", StringComparison.OrdinalIgnoreCase))
+    await app.Services.InitializeKubernetesBackendAsync(app.Configuration);
+
+app.UseSwaggerUI(options =>
+{
+    options.RoutePrefix = "swagger";
+    options.SwaggerEndpoint("/openapi/directadmin.json", "DirectAdmin API — full pinned contract");
+    options.DocumentTitle = "HostingPanel | DirectAdmin API documentation";
+    options.DefaultModelsExpandDepth(-1);
+});
+
 app.UseRequestLocalization();
 app.MapGet("/culture/set", (HttpContext context, string culture, string? returnUrl) =>
 {
@@ -107,4 +140,21 @@ app.MapRazorComponents<App>()
    .AddInteractiveServerRenderMode()
    .WithStaticAssets()
    .RequireAuthorization();
+// Published upstream Swagger 2.0 contract is authoritative, including schemas and security definitions.
+app.MapGet("/openapi/directadmin.json", (IWebHostEnvironment environment) =>
+{
+    var filename = Path.Combine(environment.ContentRootPath, "spec", "directadmin.swagger.json");
+    return File.Exists(filename)
+        ? Results.File(filename, "application/json")
+        : Results.Problem("Pinned OpenAPI specification unavailable.", statusCode: 503);
+});
+app.MapGet("/swagger/v1/swagger.json", (IWebHostEnvironment environment) =>
+{
+    var filename = Path.Combine(environment.ContentRootPath, "spec", "directadmin.swagger.json");
+    return File.Exists(filename)
+        ? Results.File(filename, "application/json")
+        : Results.Problem("Pinned OpenAPI specification unavailable.", statusCode: 503);
+});
+app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
+app.MapControllers();
 app.Run();

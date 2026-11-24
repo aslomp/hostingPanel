@@ -43,7 +43,10 @@ def main():
     env = dict(os.environ)
     env.pop("ASPNETCORE_HTTPS_PORT", None)
     env.update(ASPNETCORE_ENVIRONMENT="Development", ASPNETCORE_URLS=f"http://127.0.0.1:{port}",
-               HostingPanel__ApiBaseUrl=f"http://127.0.0.1:{backend.server_port}/")
+               HostingPanel__Backend="Kubernetes",
+               HostingPanel__Bootstrap__Username="testuser",
+               HostingPanel__Bootstrap__Password="test-password",
+               ConnectionStrings__HostingPanel=f"Data Source={os.path.join(tempfile.gettempdir(), f'hostingpanel-login-{os.getpid()}.db')}")
     cookies = {}
     def request(method, path, form=None, update=True):
         headers = {"Cookie": "; ".join(f"{key}={value}" for key, value in cookies.items())}

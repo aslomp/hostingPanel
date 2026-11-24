@@ -20,13 +20,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p src/HostingPanel.Api/spec
+          mkdir -p src/HostingPanel.Web/spec
           curl -fsSL --max-time 60 --retry 3 \
             'https://demo.directadmin.com:2222/static/swagger.json' \
-            -o src/HostingPanel.Api/spec/directadmin.swagger.json
+            -o src/HostingPanel.Web/spec/directadmin.swagger.json
           python3 - <<'PY'
           import json
-          path="src/HostingPanel.Api/spec/directadmin.swagger.json"
+          path="src/HostingPanel.Web/spec/directadmin.swagger.json"
           with open(path, encoding="utf-8") as f: spec=json.load(f)
           assert spec.get("swagger")=="2.0"
           assert isinstance(spec.get("paths"), dict) and len(spec["paths"]) > 30
@@ -36,7 +36,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git add src/HostingPanel.Api/spec/directadmin.swagger.json
+          git add src/HostingPanel.Web/spec/directadmin.swagger.json
           if ! git diff --cached --quiet; then
             git -c user.name='github-actions[bot]' \
                 -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
