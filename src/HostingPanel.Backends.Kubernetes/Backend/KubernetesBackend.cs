@@ -15,7 +15,7 @@ namespace HostingPanel.Api;
 /// no legacy command calls and no implicit fallback to DirectAdmin.
 /// Reconciliation with the cluster is deliberately a separate responsibility.
 /// </summary>
-public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, PowerDnsClient? powerDns = null) :
+public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, PowerDnsClient? powerDns = null, IConfiguration? configuration = null) :
     IHostingBackend, IAccountCatalog, IAccountMutations, IAccessibleDomains,
     IUserDetails, IAccountOverview, IImpersonation, IDatabases,
     IAccessibleDatabases, IDomains, IFileAccess, ITickets, IBackendSettingsAccess
@@ -94,6 +94,36 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
             configuration = config.RootElement.Clone(),
             ingressProvider = settings.IngressProvider.ToString()
         });
+    }
+
+    // Stage DNS and website desired state in the same SaveChanges transaction.
+    private async Task<string?> StageDomainDnsAsync(HostedDomain domain, CancellationToken ct)
+    {
+        if (powerDns is null || configuration?.GetValue<bool>("PowerDns:AutoCreateZones") == false)
+            return null;
+        var existing = await db.DnsZones.SingleOrDefaultAsync(z => z.Name == domain.Name, ct);
+        if (existing is not null)
+        {
+            if (existing.OwnerId != domain.OwnerId || existing.DomainId is not null)
+                return "DNS_ZONE_EXISTS";
+            existing.DomainId = domain.Id;
+            return null;
+        }
+        var ipText = configuration?["PowerDns:WebIp"];
+        var ns1 = configuration?["PowerDns:Ns1"]?.TrimEnd('.');
+        var ns2 = configuration?["PowerDns:Ns2"]?.TrimEnd('.');
+        if (!System.Net.IPAddress.TryParse(ipText, out var ip) ||
+            ip.AddressFamily is not (System.Net.Sockets.AddressFamily.InterNetwork or System.Net.Sockets.AddressFamily.InterNetworkV6) ||
+            !ValidDomain(ns1) || !ValidDomain(ns2) || string.Equals(ns1, ns2, StringComparison.OrdinalIgnoreCase))
+            return "DNS_DEFAULTS_NOT_CONFIGURED";
+        var zone = new DnsZone { Name = domain.Name, DomainId = domain.Id, OwnerId = domain.OwnerId };
+        db.DnsZones.Add(zone);
+        db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "@", Type = ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? "A" : "AAAA", Value = ip.ToString() });
+        db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "www", Type = "CNAME", Value = domain.Name + "." });
+        foreach (var ns in new[] { ns1!, ns2! })
+            db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "@", Type = "NS", Value = ns.ToLowerInvariant() + "." });
+        Schedule("dns-zone", zone.Id, "create", new { zone.Name });
+        return null;
     }
 
     private void Schedule(string type, Guid id, string operation, object? payload = null)
@@ -187,6 +217,8 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         db.Accounts.Add(account);
         var domain = new HostedDomain { Name = input.Domain.ToLowerInvariant(), OwnerId = account.Id };
         db.Domains.Add(domain);
+        if (await StageDomainDnsAsync(domain, ct) is { } dnsError)
+            return new(dnsError == "DNS_ZONE_EXISTS" ? 409 : 503, dnsError);
         Schedule("account", account.Id, "create", new { account.Username });
         Schedule("domain", domain.Id, "create", new { domain.Name });
         await ScheduleWebsiteAsync(domain, "create", ct);
@@ -344,6 +376,8 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
             var created = new HostedDomain { OwnerId = principal.Id, Name = name,
                 SettingsJson = JsonSerializer.Serialize(new { php = input.Php, ssl = input.Ssl, cgi = input.Cgi }) };
             db.Domains.Add(created);
+            if (await StageDomainDnsAsync(created, ct) is { } dnsError)
+                return new(dnsError == "DNS_ZONE_EXISTS" ? 409 : 503, dnsError);
             Schedule("domain", created.Id, "create", new { name });
             await ScheduleWebsiteAsync(created, "create", ct);
         }

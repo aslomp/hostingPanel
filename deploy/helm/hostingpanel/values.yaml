@@ -56,3 +56,8 @@ powerDns:
   existingClaim: ""
   existingSecret: ""
   serviceType: LoadBalancer
+  autoCreateZones: true
+  # Public web ingress address, not the PowerDNS service address.
+  webIp: ""
+  ns1: ""
+  ns2: ""

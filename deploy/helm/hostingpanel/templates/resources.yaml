@@ -128,6 +128,14 @@ spec:
             {{- if and (eq .Values.backend "Kubernetes") .Values.powerDns.enabled }}
             - name: PowerDns__Enabled
               value: "true"
+            - name: PowerDns__AutoCreateZones
+              value: {{ .Values.powerDns.autoCreateZones | quote }}
+            - name: PowerDns__WebIp
+              value: {{ .Values.powerDns.webIp | quote }}
+            - name: PowerDns__Ns1
+              value: {{ .Values.powerDns.ns1 | quote }}
+            - name: PowerDns__Ns2
+              value: {{ .Values.powerDns.ns2 | quote }}
             - name: PowerDns__BaseUrl
               value: {{ printf "http://%s-powerdns-api:8081" $name | quote }}
             - name: PowerDns__ApiKey
