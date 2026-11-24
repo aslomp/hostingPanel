@@ -32,15 +32,19 @@ public sealed class NfsDirectoryProvisioner(IConfiguration configuration)
         var home = Path.Combine(root, username);
         await CreateIfMissingAsync(home, identity.Uid, identity.Gid, "0711", ct);
         var (uid, gid) = await OwnershipAsync(home, ct);
-        if (uid == 0 || gid == 0)
-            throw new InvalidOperationException("Hosted account home must not be owned by root.");
+        if (uid <= 0 || gid <= 0)
+            throw new InvalidOperationException("Hosted account home must have a non-root identity.");
+        await ValidateDirectoryAsync(home, uid, gid, ct);
 
         var domains = Path.Combine(home, "domains");
         var site = Path.Combine(domains, domain);
         var publicHtml = Path.Combine(site, "public_html");
         await CreateIfMissingAsync(domains, uid, gid, "0711", ct);
+        await ValidateDirectoryAsync(domains, uid, gid, ct);
         await CreateIfMissingAsync(site, uid, gid, "0711", ct);
+        await ValidateDirectoryAsync(site, uid, gid, ct);
         await CreateIfMissingAsync(publicHtml, uid, gid, "0755", ct);
+        await ValidateDirectoryAsync(publicHtml, uid, gid, ct);
 
         // DirectAdmin may use private_html as a symlink to public_html.
         // It is deliberately not modified or recreated.
@@ -103,6 +107,20 @@ public sealed class NfsDirectoryProvisioner(IConfiguration configuration)
             uid.ToString(CultureInfo.InvariantCulture) + ":" + gid.ToString(CultureInfo.InvariantCulture),
             "--", path);
         await RunAsync("/usr/bin/chmod", ct, mode, "--", path);
+    }
+
+    // A conservative policy for account-owned directory components. Never
+    // silently repair existing customer permissions or claim ACL isolation.
+    private static async Task ValidateDirectoryAsync(string path, int uid, int gid, CancellationToken ct)
+    {
+        var actual = await OwnershipAsync(path, ct);
+        if (actual.Uid != uid || actual.Gid != gid)
+            throw new InvalidOperationException("Hosted directory ownership differs from the account identity.");
+        var mode = File.GetUnixFileMode(path);
+        if ((mode & (UnixFileMode.GroupWrite | UnixFileMode.OtherWrite)) != 0)
+            throw new InvalidOperationException("Hosted directory has group or world write permissions; administrator review required.");
+        if ((mode & UnixFileMode.UserExecute) == 0)
+            throw new InvalidOperationException("Hosted directory is not traversable by its owner.");
     }
 
     private static async Task<(int Uid, int Gid)> OwnershipAsync(string path, CancellationToken ct)
