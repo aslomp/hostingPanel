@@ -1,0 +1,18 @@
+# Experimental desired-state API. No hosting workload reconciliation.
+backend: Kubernetes
+api:
+  image:
+    repository: registry.example.invalid/hostingpanel/api
+    tag: replace-with-commit-tag
+web:
+  image:
+    repository: registry.example.invalid/hostingpanel/web
+    tag: replace-with-commit-tag
+sqlite:
+  size: 1Gi
+  storageClassName: ""
+  existingClaim: ""
+bootstrap:
+  existingSecret: hostingpanel-bootstrap
+ingress:
+  enabled: false

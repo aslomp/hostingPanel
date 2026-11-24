@@ -1,0 +1,58 @@
+name: Installation templates
+on:
+  pull_request:
+  push:
+    branches: [main, feature/installation-templates]
+permissions:
+  contents: read
+jobs:
+  deployment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.18.6
+      - name: Validate Helm chart in both provider modes
+        run: |
+          set -euo pipefail
+          chart=deploy/helm/hostingpanel
+          helm lint "$chart"
+          helm lint "$chart" -f deploy/helm/values-kubernetes.example.yaml
+          helm template panel "$chart" -f deploy/helm/values-directadmin.example.yaml > /tmp/da.yaml
+          helm template panel "$chart" -f deploy/helm/values-kubernetes.example.yaml > /tmp/k8s.yaml
+          grep -q 'kind: PersistentVolumeClaim' /tmp/k8s.yaml
+          ! grep -q 'kind: PersistentVolumeClaim' /tmp/da.yaml
+          grep -q 'automountServiceAccountToken: false' /tmp/k8s.yaml
+      - name: Build and run installation in SQLite mode
+        working-directory: deploy/compose
+        env:
+          HOSTING_BACKEND: Kubernetes
+          BOOTSTRAP_USERNAME: testadmin
+          BOOTSTRAP_PASSWORD: installation-smoke-test-not-a-real-secret
+        run: |
+          set -euo pipefail
+          docker compose config --quiet
+          docker compose up -d --build
+          for attempt in {1..60}; do
+            if curl -fsS http://127.0.0.1:8080/ >/tmp/panel.html; then break; fi
+            sleep 2
+          done
+          grep -q HostingPanel /tmp/panel.html
+          curl -fsS http://127.0.0.1:8080/_framework/blazor.web.js > /tmp/blazor.js
+          test -s /tmp/blazor.js
+          api_id="$(docker compose ps -q api)"
+          api_ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$api_id")"
+          curl --retry 10 --retry-connrefused --retry-delay 2 -fsS "http://$api_ip:8080/healthz"
+          curl -fsS --user "$BOOTSTRAP_USERNAME:$BOOTSTRAP_PASSWORD" "http://$api_ip:8080/hosting/accounts" | grep -q testadmin
+          test "$(curl -sS -o /dev/null -w '%{http_code}' --user testadmin:wrong "http://$api_ip:8080/hosting/accounts")" = 401
+          docker compose restart api
+          curl --retry 10 --retry-connrefused --retry-delay 2 -fsS "http://$api_ip:8080/healthz"
+          curl -fsS --user "$BOOTSTRAP_USERNAME:$BOOTSTRAP_PASSWORD" "http://$api_ip:8080/hosting/accounts" | grep -q testadmin
+      - name: Cleanup
+        if: always()
+        working-directory: deploy/compose
+        run: |
+          docker compose logs --tail=100
+          docker compose down -v

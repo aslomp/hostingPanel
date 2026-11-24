@@ -1,0 +1,8 @@
+HostingPanel backend: {{ .Values.backend }}
+Local access:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "hostingpanel.name" . }}-web 8080:8080
+  Open http://localhost:8080
+{{- if eq .Values.backend "Kubernetes" }}
+Experimental provider: SQLite desired state only. No workload reconciliation yet.
+{{- end }}
+Do not expose the API publicly. Use HTTPS for any non-local UI access.

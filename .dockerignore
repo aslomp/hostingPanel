@@ -1,0 +1,12 @@
+.git
+**/bin
+**/obj
+**/data
+**/*.db
+**/*.db-*
+**/.env
+**/.env.*
+**/*.pfx
+**/*.pem
+**/*.key
+**/secrets

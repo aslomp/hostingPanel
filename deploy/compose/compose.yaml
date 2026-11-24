@@ -1,0 +1,36 @@
+services:
+  api:
+    build:
+      context: ../..
+      target: api
+    image: hostingpanel-api:local
+    restart: unless-stopped
+    environment:
+      HostingPanel__Backend: ${HOSTING_BACKEND:-DirectAdmin}
+      DirectAdmin__BaseUrl: ${DIRECTADMIN_BASE_URL:-https://directadmin.example.invalid:2222/}
+      ConnectionStrings__HostingPanel: Data Source=/data/hostingpanel.db;Foreign Keys=True;Default Timeout=5
+      HostingPanel__Bootstrap__Username: ${BOOTSTRAP_USERNAME:-}
+      HostingPanel__Bootstrap__Password: ${BOOTSTRAP_PASSWORD:-}
+    volumes:
+      - panel-data:/data
+    networks: [backend]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  web:
+    build:
+      context: ../..
+      target: web
+    image: hostingpanel-web:local
+    restart: unless-stopped
+    environment:
+      HostingPanel__ApiBaseUrl: http://api:8080/
+    depends_on: [api]
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
+    networks: [backend]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+volumes:
+  panel-data:
+networks:
+  backend:
