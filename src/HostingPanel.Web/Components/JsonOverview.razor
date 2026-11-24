@@ -9,31 +9,42 @@
 else if (Root.Value.ValueKind == JsonValueKind.Array)
 {
     var rows = Root.Value.EnumerateArray().ToArray();
+    var visibleRows = rows.Where(Matches).ToArray();
+    @if (Depth == 0 && rows.Length > 1)
+    {
+        <MudTextField T="string" @bind-Value="search" Immediate="true" Label="@L["Search"].Value" Variant="Variant.Outlined" Margin="Margin.Dense" />
+    }
     if (rows.Length == 0) { <p class="muted">@L["No results."]</p> }
     else if (rows.All(x => x.ValueKind == JsonValueKind.Object))
     {
         var columns = rows.SelectMany(x => x.EnumerateObject().Select(p => p.Name))
             .Distinct(StringComparer.Ordinal).ToArray();
-        <div class="overview-scroll"><MudSimpleTable Dense="true" Hover="true" Class="overview-table">
-            <thead><tr>@foreach (var column in columns) { <th>@Label(column)</th> }</tr></thead>
-            <tbody>
-                @foreach (var row in rows)
+        <MudTable T="JsonElement" Items="@visibleRows" Dense="true" Hover="true" Striped="true" RowsPerPage="@(Depth == 0 && rows.Length > 25 ? 25 : Math.Max(1, rows.Length))">
+            <HeaderContent>
+                @foreach (var column in columns)
                 {
-                    <tr>
-                        @foreach (var column in columns)
-                        {
-                            <td><JsonOverview Value="@Field(row, column)" Depth="@(Depth + 1)" /></td>
-                        }
-                    </tr>
+                    <MudTh><MudTableSortLabel T="JsonElement" SortBy="@(row => SortValue(row, column))">@Label(column)</MudTableSortLabel></MudTh>
                 }
-            </tbody>
-        </MudSimpleTable></div>
+            </HeaderContent>
+            <RowTemplate Context="row">
+                @foreach (var column in columns)
+                {
+                    <MudTd DataLabel="@Label(column)"><JsonOverview Value="@Field(row, column)" Depth="@(Depth + 1)" /></MudTd>
+                }
+            </RowTemplate>
+            <NoRecordsContent><MudText>@L["No results."]</MudText></NoRecordsContent>
+            @if (Depth == 0 && rows.Length > 25)
+            {
+                <PagerContent><MudTablePager PageSizeOptions="@(new[] { 10, 25, 50, 100 })" /></PagerContent>
+            }
+        </MudTable>
     }
     else
     {
+        @if (visibleRows.Length == 0) { <PanelEmptyState>@L["No results."]</PanelEmptyState> }
         <div class="overview-scroll"><MudSimpleTable Dense="true" Hover="true" Class="overview-table">
             <thead><tr><th>@L["Value"]</th></tr></thead>
-            <tbody>@foreach (var row in rows) { <tr><td><JsonOverview Value="@row" Depth="@(Depth + 1)" /></td></tr> }</tbody>
+            <tbody>@foreach (var row in visibleRows) { <tr><td><JsonOverview Value="@row" Depth="@(Depth + 1)" /></td></tr> }</tbody>
         </MudSimpleTable></div>
     }
 }
@@ -69,6 +80,9 @@ else
     [Parameter] public JsonElement? Value { get; set; }
     [Parameter] public int Depth { get; set; }
 
+    private string search = "";
+    private bool Matches(JsonElement row) => Depth != 0 || string.IsNullOrWhiteSpace(search) || row.ToString().Contains(search, StringComparison.OrdinalIgnoreCase);
+    private static object SortValue(JsonElement row, string column) => Field(row, column)?.ToString() ?? "";
     private JsonElement? Root;
     private string? Prefix;
 
@@ -102,11 +116,11 @@ else
     private static JsonElement? Field(JsonElement row, string name) =>
         row.TryGetProperty(name, out var value) ? value : null;
 
-    private static string Scalar(JsonElement value) => value.ValueKind switch
+    private string Scalar(JsonElement value) => value.ValueKind switch
     {
         JsonValueKind.String => value.GetString() ?? "—",
-        JsonValueKind.True => "Ja",
-        JsonValueKind.False => "Nee",
+        JsonValueKind.True => L["Yes"].Value,
+        JsonValueKind.False => L["No"].Value,
         JsonValueKind.Null or JsonValueKind.Undefined => "—",
         _ => value.ToString()
     };
