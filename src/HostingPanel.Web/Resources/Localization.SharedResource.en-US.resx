@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <data name="Aangepaste HTTPD configuraties" xml:space="preserve"><value>Custom HTTPD configurations</value></data>
+  <data name="Aanvullende HostingPanel-functies" xml:space="preserve"><value>Additional HostingPanel features</value></data>
+  <data name="Account" xml:space="preserve"><value>Account</value></data>
+  <data name="Accountbeheer" xml:space="preserve"><value>Account management</value></data>
+  <data name="Accounts beheren" xml:space="preserve"><value>Manage accounts</value></data>
+  <data name="Admin Aanmaken" xml:space="preserve"><value>Create administrator</value></data>
+  <data name="Admin Gereedschap" xml:space="preserve"><value>Admin tools</value></data>
+  <data name="Administrator instellingen" xml:space="preserve"><value>Administrator settings</value></data>
+  <data name="Administrators" xml:space="preserve"><value>Administrators</value></data>
+  <data name="Alle gebruikers" xml:space="preserve"><value>All users</value></data>
+  <data name="Alle getoonde resources zijn verbonden met de bestaande HostingPanel API. Niet-geïmplementeerde onderdelen in de navigatie zijn expliciet gemarkeerd." xml:space="preserve"><value>All displayed resources use the existing HostingPanel API. Unimplemented navigation items are explicitly marked.</value></data>
+  <data name="API-documentatie en responses bekijken" xml:space="preserve"><value>View API documentation and responses</value></data>
+  <data name="Back-up en herstel" xml:space="preserve"><value>Backup and restore</value></data>
+  <data name="Back-ups" xml:space="preserve"><value>Backups</value></data>
+  <data name="Backend niet verbonden" xml:space="preserve"><value>Backend disconnected</value></data>
+  <data name="Beheer domeinen, gebruikers, DNS, databases en serverdiensten vanuit één overzicht." xml:space="preserve"><value>Manage domains, users, DNS, databases and server services from one dashboard.</value></data>
+  <data name="Beheer gebruikers pakketten" xml:space="preserve"><value>Manage user packages</value></data>
+  <data name="Beheer Reseller Pakketten" xml:space="preserve"><value>Manage reseller packages</value></data>
+  <data name="Beheer Tickets" xml:space="preserve"><value>Manage tickets</value></data>
+  <data name="Beheer van e-mail wachtrij" xml:space="preserve"><value>Manage mail queue</value></data>
+  <data name="Beheerder" xml:space="preserve"><value>Administrator</value></data>
+  <data name="Beheerdersfuncties" xml:space="preserve"><value>Administrator features</value></data>
+  <data name="Beheeronderdelen" xml:space="preserve"><value>Management sections</value></data>
+  <data name="Bekijk Logboek" xml:space="preserve"><value>View logs</value></data>
+  <data name="Bericht aan Alle Gebruikers" xml:space="preserve"><value>Message all users</value></data>
+  <data name="Berichten" xml:space="preserve"><value>Messages</value></data>
+  <data name="Berichtsjablonen" xml:space="preserve"><value>Message templates</value></data>
+  <data name="Bestandsbeheer" xml:space="preserve"><value>File management</value></data>
+  <data name="Beveiliging en API" xml:space="preserve"><value>Security and API</value></data>
+  <data name="Brute Force Monitor" xml:space="preserve"><value>Brute force monitor</value></data>
+  <data name="ConfigServer Security &amp; Firewall" xml:space="preserve"><value>ConfigServer Security &amp; Firewall</value></data>
+  <data name="Controle Paneel" xml:space="preserve"><value>Control panel</value></data>
+  <data name="cPanel Importeren" xml:space="preserve"><value>Import cPanel</value></data>
+  <data name="Cron Taken" xml:space="preserve"><value>Cron jobs</value></data>
+  <data name="Cron Taken van alle Gebruikers" xml:space="preserve"><value>All users&apos; cron jobs</value></data>
+  <data name="CustomBuild" xml:space="preserve"><value>CustomBuild</value></data>
+  <data name="Dashboard" xml:space="preserve"><value>Dashboard</value></data>
+  <data name="Databasebeheer" xml:space="preserve"><value>Database management</value></data>
+  <data name="Databases" xml:space="preserve"><value>Databases</value></data>
+  <data name="De backend bepaalt de beschikbare gegevens en acties. Er worden geen accountrollen aangenomen." xml:space="preserve"><value>The backend determines available data and actions. No account roles are assumed.</value></data>
+  <data name="De backend bepaalt de toegangsrechten." xml:space="preserve"><value>The backend controls access rights.</value></data>
+  <data name="De gebruikersnavigatie is een weergavemodus. De backend bepaalt de toegang." xml:space="preserve"><value>The user navigation is a display mode. The backend determines access.</value></data>
+  <data name="DirectAdmin API" xml:space="preserve"><value>DirectAdmin API</value></data>
+  <data name="DirectAdmin Evolution-geïnspireerd beheer, met live gegevens uit de aangesloten backend." xml:space="preserve"><value>DirectAdmin Evolution-inspired management, with live data from the connected backend.</value></data>
+  <data name="DirectAdmin heeft de aanmelding geweigerd." xml:space="preserve"><value>DirectAdmin rejected the sign-in.</value></data>
+  <data name="DirectAdmin-compatibele API" xml:space="preserve"><value>DirectAdmin-compatible API</value></data>
+  <data name="DirectAdmin-verbinding" xml:space="preserve"><value>DirectAdmin connection</value></data>
+  <data name="DirectAdmin-verbinding actief" xml:space="preserve"><value>DirectAdmin connection active</value></data>
+  <data name="DNS Beheer" xml:space="preserve"><value>DNS management</value></data>
+  <data name="DNS beheren" xml:space="preserve"><value>Manage DNS</value></data>
+  <data name="Domeinbeheer" xml:space="preserve"><value>Domain management</value></data>
+  <data name="E-mailaccounts" xml:space="preserve"><value>Email accounts</value></data>
+  <data name="Evolution Thema Aanpassen" xml:space="preserve"><value>Customize Evolution theme</value></data>
+  <data name="Extra Programma&apos;s" xml:space="preserve"><value>Extra programs</value></data>
+  <data name="Gebruiker" xml:space="preserve"><value>User</value></data>
+  <data name="Gebruikers en pakketten" xml:space="preserve"><value>Users and packages</value></data>
+  <data name="Gebruikersfuncties" xml:space="preserve"><value>User features</value></data>
+  <data name="Gebruikersnaam" xml:space="preserve"><value>Username</value></data>
+  <data name="Globale Statistieken" xml:space="preserve"><value>Global statistics</value></data>
+  <data name="Hoofdnavigatie" xml:space="preserve"><value>Main navigation</value></data>
+  <data name="Hosting administratiesysteem / Dashboard" xml:space="preserve"><value>Hosting administration / Dashboard</value></data>
+  <data name="HostingPanel gebruikt dezelfde beheergroepen als de DirectAdmin Evolution-interface. De rechten en beschikbare resources komen volledig van de backend." xml:space="preserve"><value>HostingPanel uses the same management groups as DirectAdmin Evolution. Permissions and available resources are provided by the backend.</value></data>
+  <data name="Impersonation actief:" xml:space="preserve"><value>Impersonation active:</value></data>
+  <data name="Instellingen" xml:space="preserve"><value>Settings</value></data>
+  <data name="Instellingen en services" xml:space="preserve"><value>Settings and services</value></data>
+  <data name="Integratie" xml:space="preserve"><value>Integration</value></data>
+  <data name="IP Beheer" xml:space="preserve"><value>IP management</value></data>
+  <data name="Je kiest zelf de beheerders- of gebruikersweergave. DirectAdmin blijft verantwoordelijk voor toegangsrechten." xml:space="preserve"><value>You choose the administrator or user view. DirectAdmin remains responsible for access rights.</value></data>
+  <data name="je werkt als" xml:space="preserve"><value>you are acting as</value></data>
+  <data name="Licensering" xml:space="preserve"><value>Licensing</value></data>
+  <data name="Live meldingen via SignalR" xml:space="preserve"><value>Live notifications via SignalR</value></data>
+  <data name="Live resources" xml:space="preserve"><value>Live resources</value></data>
+  <data name="Maak verbinding met jouw DirectAdmin-server. De opgegeven gegevens blijven binnen de interactieve Blazor-sessie." xml:space="preserve"><value>Connect to your DirectAdmin server. Credentials remain in the interactive Blazor session.</value></data>
+  <data name="Mijn Gebruikers" xml:space="preserve"><value>My users</value></data>
+  <data name="Mijn hosting" xml:space="preserve"><value>My hosting</value></data>
+  <data name="Mijn tickets" xml:space="preserve"><value>My tickets</value></data>
+  <data name="ModSecurity en ClamAV" xml:space="preserve"><value>ModSecurity and ClamAV</value></data>
+  <data name="Multi Server Instellen" xml:space="preserve"><value>Multi-server setup</value></data>
+  <data name="Naam Servers" xml:space="preserve"><value>Name servers</value></data>
+  <data name="namens beheerder" xml:space="preserve"><value>on behalf of administrator</value></data>
+  <data name="Navigatiecontext" xml:space="preserve"><value>Navigation context</value></data>
+  <data name="Niet aangemeld" xml:space="preserve"><value>Not signed in</value></data>
+  <data name="Nieuw ticket" xml:space="preserve"><value>New ticket</value></data>
+  <data name="Nieuwe Gebruiker Toevoegen" xml:space="preserve"><value>Add new user</value></data>
+  <data name="Nog niet geïmplementeerd" xml:space="preserve"><value>Not implemented</value></data>
+  <data name="Onderhoud" xml:space="preserve"><value>Maintenance</value></data>
+  <data name="Ondersteuning" xml:space="preserve"><value>Support</value></data>
+  <data name="Ondersteuning en berichten" xml:space="preserve"><value>Support and messages</value></data>
+  <data name="Over het controlepaneel" xml:space="preserve"><value>About the control panel</value></data>
+  <data name="PHP Instellingen" xml:space="preserve"><value>PHP settings</value></data>
+  <data name="Plugin Beheer" xml:space="preserve"><value>Plugin management</value></data>
+  <data name="Proces Monitor" xml:space="preserve"><value>Process monitor</value></data>
+  <data name="Reseller Aanmaken" xml:space="preserve"><value>Create reseller</value></data>
+  <data name="Resellerbeheer" xml:space="preserve"><value>Reseller management</value></data>
+  <data name="Resellers" xml:space="preserve"><value>Resellers</value></data>
+  <data name="Server Beheer" xml:space="preserve"><value>Server management</value></data>
+  <data name="Server TLS Certificaat" xml:space="preserve"><value>Server TLS certificate</value></data>
+  <data name="Services bekijken" xml:space="preserve"><value>View services</value></data>
+  <data name="Sessies" xml:space="preserve"><value>Sessions</value></data>
+  <data name="Snelle toegang" xml:space="preserve"><value>Quick access</value></data>
+  <data name="SSL certificaten" xml:space="preserve"><value>SSL certificates</value></data>
+  <data name="Support" xml:space="preserve"><value>Support</value></data>
+  <data name="Systeem Backup" xml:space="preserve"><value>System backup</value></data>
+  <data name="Systeem bestand editor" xml:space="preserve"><value>System file editor</value></data>
+  <data name="Systeem Info &amp; Bestanden" xml:space="preserve"><value>System information &amp; files</value></data>
+  <data name="Systeem Services" xml:space="preserve"><value>System services</value></data>
+  <data name="Systeeminformatie" xml:space="preserve"><value>System information</value></data>
+  <data name="Taal" xml:space="preserve"><value>Language</value></data>
+  <data name="Terug naar beheerder" xml:space="preserve"><value>Return to administrator</value></data>
+  <data name="Thema’s" xml:space="preserve"><value>Themes</value></data>
+  <data name="Ticket aanmaken" xml:space="preserve"><value>Create ticket</value></data>
+  <data name="Ticket Aanmaken" xml:space="preserve"><value>Create ticket</value></data>
+  <data name="Tickets" xml:space="preserve"><value>Tickets</value></data>
+  <data name="Toon Alle Gebruikers" xml:space="preserve"><value>Show all users</value></data>
+  <data name="Updates" xml:space="preserve"><value>Updates</value></data>
+  <data name="Verbinden" xml:space="preserve"><value>Connect</value></data>
+  <data name="Verbinding controleren…" xml:space="preserve"><value>Checking connection…</value></data>
+  <data name="Verbinding verbreken" xml:space="preserve"><value>Disconnect</value></data>
+  <data name="Verbonden" xml:space="preserve"><value>Connected</value></data>
+  <data name="Verbonden account" xml:space="preserve"><value>Connected account</value></data>
+  <data name="Verbonden met DirectAdmin" xml:space="preserve"><value>Connected to DirectAdmin</value></data>
+  <data name="Verplaats Gebruikers tussen Resellers" xml:space="preserve"><value>Move users between resellers</value></data>
+  <data name="Wachtwoord of login key" xml:space="preserve"><value>Password or login key</value></data>
+  <data name="Wachtwoord wijzigen" xml:space="preserve"><value>Change password</value></data>
+  <data name="Wachtwoorden" xml:space="preserve"><value>Passwords</value></data>
+  <data name="Wachtwoorden wijzigen" xml:space="preserve"><value>Change passwords</value></data>
+  <data name="Website- en resourcebeheer" xml:space="preserve"><value>Website and resource management</value></data>
+  <data name="Welkom bij HostingPanel" xml:space="preserve"><value>Welcome to HostingPanel</value></data>
+  <data name="Zoek naar pagina&apos;s" xml:space="preserve"><value>Search pages</value></data>
+  <data name="Zoek naar pagina&apos;s..." xml:space="preserve"><value>Search pages...</value></data>
+  <data name="Backend instellingen" xml:space="preserve"><value>Backend settings</value></data>
+  <data name="Backendverbinding" xml:space="preserve"><value>Backend connection</value></data>
+  <data name="Maak verbinding met de ingestelde hostingbackend. De opgegeven gegevens blijven binnen de interactieve Blazor-sessie." xml:space="preserve"><value>Connect to the configured hosting backend. Credentials remain in the interactive Blazor session.</value></data>
+  <data name="Je kiest zelf de beheerders- of gebruikersweergave. De backend blijft verantwoordelijk voor toegangsrechten." xml:space="preserve"><value>You choose the administrator or user view. The backend remains responsible for access rights.</value></data>
+  <data name="Verbonden met backend" xml:space="preserve"><value>Connected to backend</value></data>
+  <data name="De backend heeft de aanmelding geweigerd." xml:space="preserve"><value>The backend rejected the sign-in.</value></data>
+  <data name="Backend sessiecontrole: HTTP {0}." xml:space="preserve"><value>Backend session check: HTTP {0}.</value></data>
+  <data name="Backendverbinding actief" xml:space="preserve"><value>Backend connection active</value></data>
+</root>

@@ -1,13 +1,15 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/"
 @inject DirectAdminSession Session
 @inject NavigationContextState NavContext
 
-<PageTitle>Controle Paneel — HostingPanel</PageTitle>
+<PageTitle>@L["Controle Paneel"] — HostingPanel</PageTitle>
 <div class="page-header">
   <div>
-    <div class="eyebrow">Hosting administratiesysteem / Dashboard</div>
-    <h1>Controle Paneel</h1>
-    <p>Beheer domeinen, gebruikers, DNS, databases en serverdiensten vanuit één overzicht.</p>
+    <div class="eyebrow">@L["Hosting administratiesysteem / Dashboard"]</div>
+    <h1>@L["Controle Paneel"]</h1>
+    <p>@L["Beheer domeinen, gebruikers, DNS, databases en serverdiensten vanuit één overzicht."]</p>
   </div>
   @if (Session.Connected)
   {
@@ -16,26 +18,26 @@
 </div>
 
 <div class="banner">
-  <h2>Welkom bij HostingPanel</h2>
-  <p>DirectAdmin Evolution-geïnspireerd beheer, met live gegevens uit de aangesloten backend.</p>
+  <h2>@L["Welkom bij HostingPanel"]</h2>
+  <p>@L["DirectAdmin Evolution-geïnspireerd beheer, met live gegevens uit de aangesloten backend."]</p>
 </div>
 
 @if (!Session.Connected)
 {
   <div class="dashboard-layout">
     <section class="card">
-      <h2>Backendverbinding</h2>
-      <p>Maak verbinding met de ingestelde hostingbackend. De opgegeven gegevens blijven binnen de interactieve Blazor-sessie.</p>
+      <h2>@L["Backendverbinding"]</h2>
+      <p>@L["Maak verbinding met de ingestelde hostingbackend. De opgegeven gegevens blijven binnen de interactieve Blazor-sessie."]</p>
       <form @onsubmit="Connect" @onsubmit:preventDefault>
         <div class="form-grid">
-          <div><label for="daUser">Gebruikersnaam</label>
+          <div><label for="daUser">@L["Gebruikersnaam"]</label>
             <input id="daUser" @bind="username" autocomplete="username" required /></div>
-          <div><label for="daKey">Wachtwoord of login key</label>
+          <div><label for="daKey">@L["Wachtwoord of login key"]</label>
             <input id="daKey" type="password" @bind="key" autocomplete="off" required /></div>
         </div>
         <div class="form-actions">
           <button type="submit" class="primary" disabled="@connecting">
-            @(connecting ? "Verbinding controleren…" : "Verbinden")
+            @(connecting ? L["Verbinding controleren…"].Value : L["Verbinden"].Value)
           </button>
         </div>
       </form>
@@ -43,9 +45,9 @@
     </section>
     <aside class="dashboard-aside">
       <section class="card">
-        <h2>Over het controlepaneel</h2>
-        <p>HostingPanel gebruikt dezelfde beheergroepen als de DirectAdmin Evolution-interface. De rechten en beschikbare resources komen volledig van de backend.</p>
-        <p>Je kiest zelf de beheerders- of gebruikersweergave. De backend blijft verantwoordelijk voor toegangsrechten.</p>
+        <h2>@L["Over het controlepaneel"]</h2>
+        <p>@L["HostingPanel gebruikt dezelfde beheergroepen als de DirectAdmin Evolution-interface. De rechten en beschikbare resources komen volledig van de backend."]</p>
+        <p>@L["Je kiest zelf de beheerders- of gebruikersweergave. De backend blijft verantwoordelijk voor toegangsrechten."]</p>
       </section>
     </aside>
   </div>
@@ -55,30 +57,30 @@ else if (NavContext.Mode == "user")
   <div class="dashboard-layout">
     <div>
       <section class="card">
-        <div class="dashboard-section-heading"><h2>Mijn hosting</h2><small>Gebruikersfuncties</small></div>
+        <div class="dashboard-section-heading"><h2>@L["Mijn hosting"]</h2><small>@L["Gebruikersfuncties"]</small></div>
         <div class="dashboard-links">
-          <a href="/domains"><span class="glyph">◎</span>Domeinbeheer</a>
-          <a href="/dns-zones"><span class="glyph">◇</span>DNS Beheer</a>
-          <a href="/databases"><span class="glyph">▦</span>Databases</a>
-          <a href="/change-password"><span class="glyph">⚿</span>Wachtwoord wijzigen</a>
+          <a href="/domains"><span class="glyph">◎</span>@L["Domeinbeheer"]</a>
+          <a href="/dns-zones"><span class="glyph">◇</span>@L["DNS Beheer"]</a>
+          <a href="/databases"><span class="glyph">▦</span>@L["Databases"]</a>
+          <a href="/change-password"><span class="glyph">⚿</span>@L["Wachtwoord wijzigen"]</a>
         </div>
       </section>
       <section class="card">
-        <div class="dashboard-section-heading"><h2>Ondersteuning en berichten</h2><small>Live meldingen via SignalR</small></div>
+        <div class="dashboard-section-heading"><h2>@L["Ondersteuning en berichten"]</h2><small>@L["Live meldingen via SignalR"]</small></div>
         <div class="dashboard-links">
-          <a href="/tickets"><span class="glyph">☏</span>Mijn tickets</a>
-          <a href="/tickets/new"><span class="glyph">✉</span>Ticket aanmaken</a>
-          <a href="/messages"><span class="glyph">✉</span>Berichten</a>
+          <a href="/tickets"><span class="glyph">☏</span>@L["Mijn tickets"]</a>
+          <a href="/tickets/new"><span class="glyph">✉</span>@L["Ticket aanmaken"]</a>
+          <a href="/messages"><span class="glyph">✉</span>@L["Berichten"]</a>
         </div>
       </section>
     </div>
     <aside class="dashboard-aside">
       <section class="card">
-        <h2>Account</h2>
-        <div class="state-row"><span class="state-dot connected"></span>Verbonden met backend</div>
+        <h2>@L["Account"]</h2>
+        <div class="state-row"><span class="state-dot connected"></span>@L["Verbonden met backend"]</div>
         <h3>@Session.Username</h3>
-        <p>De gebruikersnavigatie is een weergavemodus. De backend bepaalt de toegang.</p>
-        <button @onclick="Disconnect">Verbinding verbreken</button>
+        <p>@L["De gebruikersnavigatie is een weergavemodus. De backend bepaalt de toegang."]</p>
+        <button @onclick="Disconnect">@L["Verbinding verbreken"]</button>
       </section>
     </aside>
   </div>
@@ -88,61 +90,61 @@ else
   <div class="dashboard-layout">
     <div>
       <section class="card">
-        <div class="dashboard-section-heading"><h2>Accountbeheer</h2><small>Gebruikers en pakketten</small></div>
+        <div class="dashboard-section-heading"><h2>@L["Accountbeheer"]</h2><small>@L["Gebruikers en pakketten"]</small></div>
         <div class="dashboard-links">
-          <a href="/users"><span class="glyph">♙</span>Alle gebruikers</a>
-          <a href="/resellers"><span class="glyph">♙</span>Resellers</a>
-          <a href="/change-password"><span class="glyph">⚿</span>Wachtwoorden</a>
+          <a href="/users"><span class="glyph">♙</span>@L["Alle gebruikers"]</a>
+          <a href="/resellers"><span class="glyph">♙</span>@L["Resellers"]</a>
+          <a href="/change-password"><span class="glyph">⚿</span>@L["Wachtwoorden"]</a>
           <a href="/domains"><span class="glyph">◎</span>Domeinen</a>
         </div>
       </section>
       <section class="card">
-        <div class="dashboard-section-heading"><h2>Website- en resourcebeheer</h2><small>Live resources</small></div>
+        <div class="dashboard-section-heading"><h2>@L["Website- en resourcebeheer"]</h2><small>@L["Live resources"]</small></div>
         <div class="dashboard-links">
-          <a href="/domains"><span class="glyph">◎</span>Domeinbeheer</a>
-          <a href="/dns-zones"><span class="glyph">◇</span>DNS Beheer</a>
-          <a href="/databases"><span class="glyph">▦</span>Databases</a>
+          <a href="/domains"><span class="glyph">◎</span>@L["Domeinbeheer"]</a>
+          <a href="/dns-zones"><span class="glyph">◇</span>@L["DNS Beheer"]</a>
+          <a href="/databases"><span class="glyph">▦</span>@L["Databases"]</a>
           <a href="/server-tls"><span class="glyph">♢</span>Server TLS</a>
         </div>
       </section>
       <section class="card">
-        <div class="dashboard-section-heading"><h2>Server Beheer</h2><small>Instellingen en services</small></div>
+        <div class="dashboard-section-heading"><h2>@L["Server Beheer"]</h2><small>@L["Instellingen en services"]</small></div>
         <div class="dashboard-links">
-          <a href="/server-settings"><span class="glyph">⚙</span>Instellingen</a>
-          <a href="/system-services"><span class="glyph">▣</span>Systeem Services</a>
-          <a href="/system-info"><span class="glyph">◴</span>Systeeminformatie</a>
-          <a href="/system-updates"><span class="glyph">↻</span>Updates</a>
+          <a href="/server-settings"><span class="glyph">⚙</span>@L["Instellingen"]</a>
+          <a href="/system-services"><span class="glyph">▣</span>@L["Systeem Services"]</a>
+          <a href="/system-info"><span class="glyph">◴</span>@L["Systeeminformatie"]</a>
+          <a href="/system-updates"><span class="glyph">↻</span>@L["Updates"]</a>
         </div>
       </section>
       <section class="card">
-        <div class="dashboard-section-heading"><h2>Admin Gereedschap</h2><small>Beveiliging en API</small></div>
+        <div class="dashboard-section-heading"><h2>@L["Admin Gereedschap"]</h2><small>@L["Beveiliging en API"]</small></div>
         <div class="dashboard-links">
-          <a href="/security"><span class="glyph">♢</span>ModSecurity en ClamAV</a>
-          <a href="/sessions"><span class="glyph">◷</span>Sessies</a>
-          <a href="/api-browser"><span class="glyph">⌘</span>DirectAdmin API</a>
-          <a href="/navigation/backup-restore"><span class="glyph">▣</span>Back-up en herstel</a>
+          <a href="/security"><span class="glyph">♢</span>@L["ModSecurity en ClamAV"]</a>
+          <a href="/sessions"><span class="glyph">◷</span>@L["Sessies"]</a>
+          <a href="/api-browser"><span class="glyph">⌘</span>@L["DirectAdmin API"]</a>
+          <a href="/navigation/backup-restore"><span class="glyph">▣</span>@L["Back-up en herstel"]</a>
         </div>
       </section>
     </div>
     <aside class="dashboard-aside">
       <section class="card">
-        <div class="dashboard-section-heading"><h2>Verbonden account</h2></div>
-        <div class="state-row"><span class="state-dot connected"></span><span>DirectAdmin-verbinding actief</span></div>
+        <div class="dashboard-section-heading"><h2>@L["Verbonden account"]</h2></div>
+        <div class="state-row"><span class="state-dot connected"></span><span>@L["Backendverbinding actief"]</span></div>
         <h3>@Session.Username</h3>
-        <p>De backend bepaalt de beschikbare gegevens en acties. Er worden geen accountrollen aangenomen.</p>
-        <div class="form-actions"><button @onclick="Disconnect">Verbinding verbreken</button></div>
+        <p>@L["De backend bepaalt de beschikbare gegevens en acties. Er worden geen accountrollen aangenomen."]</p>
+        <div class="form-actions"><button @onclick="Disconnect">@L["Verbinding verbreken"]</button></div>
       </section>
       <section class="card">
-        <div class="dashboard-section-heading"><h2>Snelle toegang</h2></div>
-        <a class="dashboard-link-row" href="/databases"><span class="glyph">▦</span>Databasebeheer</a>
-        <a class="dashboard-link-row" href="/dns-zones"><span class="glyph">◎</span>DNS beheren</a>
-        <a class="dashboard-link-row" href="/system-services"><span class="glyph">⚙</span>Services bekijken</a>
-        <a class="dashboard-link-row" href="/resellers"><span class="glyph">♙</span>Accounts beheren</a>
+        <div class="dashboard-section-heading"><h2>@L["Snelle toegang"]</h2></div>
+        <a class="dashboard-link-row" href="/databases"><span class="glyph">▦</span>@L["Databasebeheer"]</a>
+        <a class="dashboard-link-row" href="/dns-zones"><span class="glyph">◎</span>@L["DNS beheren"]</a>
+        <a class="dashboard-link-row" href="/system-services"><span class="glyph">⚙</span>@L["Services bekijken"]</a>
+        <a class="dashboard-link-row" href="/resellers"><span class="glyph">♙</span>@L["Accounts beheren"]</a>
       </section>
       <section class="card">
-        <div class="dashboard-section-heading"><h2>Integratie</h2></div>
-        <p>Alle getoonde resources zijn verbonden met de bestaande HostingPanel API. Niet-geïmplementeerde onderdelen in de navigatie zijn expliciet gemarkeerd.</p>
-        <a href="/api-browser">API-documentatie en responses bekijken</a>
+        <div class="dashboard-section-heading"><h2>@L["Integratie"]</h2></div>
+        <p>@L["Alle getoonde resources zijn verbonden met de bestaande HostingPanel API. Niet-geïmplementeerde onderdelen in de navigatie zijn expliciet gemarkeerd."]</p>
+        <a href="/api-browser">@L["API-documentatie en responses bekijken"]</a>
       </section>
     </aside>
   </div>
@@ -165,9 +167,9 @@ else
             // Authenticate using the session endpoint, not permission to list users.
             var (status, _) = await Session.AuthenticateBackendAsync();
             if (status is 401 or 403)
-                throw new UnauthorizedAccessException("De backend heeft de aanmelding geweigerd.");
+                throw new UnauthorizedAccessException(L["De backend heeft de aanmelding geweigerd."]);
             if (status is < 200 or >= 300)
-                throw new HttpRequestException($"Backend sessiecontrole: HTTP {status}.");
+                throw new HttpRequestException(L["Backend sessiecontrole: HTTP {0}.", status].Value);
             key = "";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
