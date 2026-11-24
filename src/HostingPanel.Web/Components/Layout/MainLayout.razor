@@ -63,6 +63,7 @@
           <input type="hidden" name="returnUrl" value="@(new Uri(Navigation.Uri).PathAndQuery)" />
         </form>
         <TicketNotifications @key="Session.TicketChannel" />
+        <form method="post" action="/logout" data-enhance="false"><AntiforgeryToken /><button type="submit">@L["Disconnect"]</button></form>
         <span>@(Session.Connected ? L["Connected account"].Value : L["Backend disconnected"].Value)
           <strong>@(Session.Connected ? Session.Username : L["Not signed in"].Value)</strong>
         </span>
