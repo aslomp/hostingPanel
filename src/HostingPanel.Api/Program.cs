@@ -13,6 +13,12 @@ builder.Services.AddControllers();
 var provider = builder.Configuration["HostingPanel:Backend"] ?? "DirectAdmin";
 if (provider.Equals("Kubernetes", StringComparison.OrdinalIgnoreCase))
 {
+    var settings = new KubernetesBackendSettings();
+    builder.Configuration.GetSection("BackendSettings").Bind(settings, options => options.ErrorOnUnknownConfiguration = true);
+    var errors = settings.Validator.Validate(settings);
+    if (errors.Count != 0)
+        throw new InvalidOperationException("Invalid BackendSettings: " + string.Join("; ", errors.Select(x => x.Key + ": " + string.Join(", ", x.Value))));
+    builder.Services.AddSingleton(settings);
     builder.Services.AddDbContext<HostingPanelDbContext>(options =>
         options.UseSqlite(builder.Configuration.GetConnectionString("HostingPanel")
             ?? "Data Source=hostingpanel.db"));
