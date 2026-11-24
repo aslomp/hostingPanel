@@ -8,15 +8,12 @@
 @inject ISnackbar Snackbar
 @implements IAsyncDisposable
 
-<div class="ticket-notifications" aria-live="polite">
+<div aria-live="polite">
     @if (Session.Connected)
     {
-        <a href="/tickets" class="notification-link" @onclick="Clear" title="@L["Tickets and messages"]">
-            <span class="notification-icon" aria-hidden="true">✉</span>
-            @if (newCount > 0) { <span class="notification-count">@newCount</span> }
-            <span>Tickets</span>
-        </a>
-
+        <MudBadge Content="@newCount" Visible="@(newCount > 0)" Color="Color.Error" Overlap="true">
+            <MudButton Href="/tickets" OnClick="Clear" StartIcon="@Icons.Material.Filled.Mail" Color="Color.Inherit" Variant="Variant.Text" title="@L["Tickets and messages"]">@L["Tickets"]</MudButton>
+        </MudBadge>
     }
 </div>
 
@@ -46,9 +43,9 @@
             .Build();
         hub.On<TicketSignal>("InboxChanged", notice => _ = InvokeAsync(() =>
         {
-            if (joinedChannel != channel) return;
+            if (joinedChannel != channel || Session.TicketChannel != channel) return;
             newCount++;
-            Snackbar.Add(notice.Subject, Severity.Info);
+            Snackbar.Add(L["New ticket activity"].Value, Severity.Info);
             Session.NotifyTicketInboxChanged();
             StateHasChanged();
         }));

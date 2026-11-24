@@ -720,4 +720,11 @@
   <data name="Pending" xml:space="preserve"><value>In behandeling</value></data>
   <data name="Configuration applied" xml:space="preserve"><value>Configuratie toegepast</value></data>
   <data name="Unknown" xml:space="preserve"><value>Onbekend</value></data>
+  <data name="New ticket activity" xml:space="preserve"><value>Nieuwe ticketactiviteit</value></data>
+  <data name="Permanently delete this DNS record?" xml:space="preserve"><value>Dit DNS-record definitief verwijderen?</value></data>
+  <data name="Password must contain at least 3 characters." xml:space="preserve"><value>Het wachtwoord moet minimaal 3 tekens bevatten.</value></data>
+  <data name="Password must contain at least 5 characters." xml:space="preserve"><value>Het wachtwoord moet minimaal 5 tekens bevatten.</value></data>
+  <data name="Passwords do not match." xml:space="preserve"><value>De wachtwoorden komen niet overeen.</value></data>
+  <data name="No DNS zones match this filter." xml:space="preserve"><value>Geen DNS-zones komen overeen met dit filter.</value></data>
+  <data name="No DNS records found." xml:space="preserve"><value>Geen DNS-records gevonden.</value></data>
 </root>
