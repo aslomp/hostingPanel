@@ -33,3 +33,5 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 - Contract tests, fake upstream integration and browser smoke coverage are in tests/ and CI. Live production verification is separate.
 
 - The account inventory and migrated detail pages use cancellable component-owned reads; this is a UI lifecycle improvement, not an expansion of backend capabilities.
+
+- Database overview reads have component-owned cancellation and session guards; this does not extend backend database mutation support.
