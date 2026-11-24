@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace HostingPanel.Web.Services;
 
 // Transport for API compatibility endpoints without a typed provider contract.
-public sealed class CompatibilityApiClient(IHttpClientFactory clients, PanelSession session)
+public sealed class CompatibilityApiClient(PanelHttpTransport transport, PanelSession session)
 {
     public async Task<(int Status, string Body)> GetRawAsync(string endpoint, CancellationToken cancellationToken = default)
     {
@@ -12,7 +12,7 @@ public sealed class CompatibilityApiClient(IHttpClientFactory clients, PanelSess
         if (!IsAllowedEndpoint(endpoint))
             throw new ArgumentException("Only relative DirectAdmin API paths are allowed.", nameof(endpoint));
 
-        return await SendAsync(HttpMethod.Get, endpoint, null, cancellationToken);
+        return await transport.SendAsync(HttpMethod.Get, endpoint, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -33,20 +33,9 @@ public sealed class CompatibilityApiClient(IHttpClientFactory clients, PanelSess
         {
             using var parsed = JsonDocument.Parse(json);
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
-            return await SendAsync(method, endpoint, content, cancellationToken);
+            return await transport.SendAsync(method, endpoint, content, cancellationToken);
         }
-        return await SendAsync(method, endpoint, null, cancellationToken);
-    }
-
-    private async Task<(int Status, string Body)> SendAsync(HttpMethod method, string endpoint,
-        HttpContent? content, CancellationToken cancellationToken)
-    {
-        if (!session.Connected) throw new InvalidOperationException("Sign in first.");
-        var http = clients.CreateClient("hosting-api");
-        using var request = new HttpRequestMessage(method, endpoint) { Content = content };
-        request.Headers.Authorization = session.EffectiveCredentials();
-        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        return ((int)response.StatusCode, await response.Content.ReadAsStringAsync(cancellationToken));
+        return await transport.SendAsync(method, endpoint, cancellationToken: cancellationToken);
     }
 
     public static bool IsAllowedEndpoint(string endpoint)
