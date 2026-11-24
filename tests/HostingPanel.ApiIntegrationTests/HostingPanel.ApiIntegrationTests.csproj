@@ -7,6 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <ProjectReference Include="../../src/HostingPanel.Api/HostingPanel.Api.csproj" />
+    <ProjectReference Include="../../src/HostingPanel.Backends.DirectAdmin/HostingPanel.Backends.DirectAdmin.csproj" />
   </ItemGroup>
 </Project>

@@ -85,4 +85,4 @@ public sealed class ImpersonationService(IHttpClientFactory clients)
     private static AuthenticationHeaderValue Authorization(string username, string key) =>
         new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(username + ":" + key)));
 }
-public sealed record ImpersonationCheck(int Status, string? Error);
+

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - feature/separate-backend-projects
       - feature/blazor-directadmin-api
       - feature/kubernetes-sqlite-foundation
       - feature/backend-settings
@@ -15,6 +16,11 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Build providers independently
+        run: |
+          dotnet build src/HostingPanel.Backends.Abstractions -c Release
+          dotnet build src/HostingPanel.Backends.DirectAdmin -c Release
+          dotnet build src/HostingPanel.Backends.Kubernetes -c Release
       - name: Build API
         run: dotnet build src/HostingPanel.Api/HostingPanel.Api.csproj -c Release
       - name: Build Blazor web

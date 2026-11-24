@@ -43,7 +43,7 @@ static async Task Check(HttpMethod method, string path, string query,
         context.Request.ContentType = requestContentType;
     }
     context.Response.Body = new MemoryStream();
-    await ForwardProbe.Invoke(context, factory);
+    await DirectAdminTransport.ForwardAsync(context, factory);
     var actual = Encoding.UTF8.GetString(((MemoryStream)context.Response.Body).ToArray());
     Ensure(context.Response.StatusCode == (int)expectedStatus, "HTTP response status");
     Ensure(actual == responseBody, "Raw response bytes/body");
@@ -61,11 +61,6 @@ static async Task Check(HttpMethod method, string path, string query,
 static void Ensure(bool value, string description)
 { if (!value) throw new InvalidOperationException(description); }
 
-public sealed class ForwardProbe : BackendController
-{
-    public static Task Invoke(HttpContext context, IHttpClientFactory factory) =>
-        ForwardToBackendAsync(context, factory);
-}
 public sealed class ClientFactory(HttpClient client) : IHttpClientFactory
 {
     public HttpClient CreateClient(string name)

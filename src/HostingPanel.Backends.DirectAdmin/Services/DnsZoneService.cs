@@ -170,9 +170,9 @@ public sealed class DnsZoneService(IHttpClientFactory clients)
     }
 }
 
-public sealed record DnsZoneResult(int Status, IReadOnlyList<DnsRecord>? Records, string? Error);
-public sealed record DnsChangeResult(int Status, string? Error);
 
-public sealed record AdminDnsZoneListResult(int Status, IReadOnlyList<AdminDnsZone>? Zones, string? Error);
 
-public sealed record DnsZoneCreate(string Domain, string Ip, string Ns1, string Ns2);
+
+
+
+
