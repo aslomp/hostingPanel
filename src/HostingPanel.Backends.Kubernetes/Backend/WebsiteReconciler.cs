@@ -14,7 +14,7 @@ namespace HostingPanel.Api;
 // A single active reconciler per SQLite database. kubectl uses the configured
 // kubeconfig or the in-cluster service account; no shell interpolation.
 public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguration configuration,
-    ILogger<WebsiteReconciler> logger, NfsDirectoryProvisioner storage, HostingOperationNotifications notifications) : BackgroundService
+    ILogger<WebsiteReconciler> logger, NfsDirectoryProvisioner storage, HostingOperationNotifications notifications, WebsiteReadiness readiness) : BackgroundService
 {
     private string? appliedRuntimeHash;
 
@@ -27,6 +27,9 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             try { await ReconcileAsync(ct); }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
             catch (Exception ex) { logger.LogError(ex, "Website reconciliation failed"); }
+            try { await ObserveAsync(ct); }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+            catch (Exception ex) { logger.LogWarning(ex, "Website readiness observation failed"); if (readiness.Replace(new())) notifications.Publish(); }
         } while (await timer.WaitForNextTickAsync(ct));
     }
 
@@ -119,6 +122,42 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         }
         await db.SaveChangesAsync(ct);
         if (completed.Count > 0) notifications.Publish();
+    }
+
+    private async Task ObserveAsync(CancellationToken ct)
+    {
+        using var scope = scopes.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
+        var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
+        if (domains.Count == 0)
+        {
+            if (readiness.Replace(new())) notifications.Publish();
+            return;
+        }
+
+        using var deployments = JsonDocument.Parse(await KubectlAsync(null, ct, "get", "deployments", "-o", "json"));
+        using var routes = JsonDocument.Parse(await KubectlAsync(null, ct, "get", "httproutes", "-o", "json"));
+        var deploymentStates = deployments.RootElement.GetProperty("items").EnumerateArray()
+            .ToDictionary(x => x.GetProperty("metadata").GetProperty("name").GetString()!, WebsiteReadiness.Deployment);
+        var routeResources = routes.RootElement.GetProperty("items").EnumerateArray()
+            .ToDictionary(x => x.GetProperty("metadata").GetProperty("name").GetString()!);
+        var next = new Dictionary<Guid, WebsiteObservation>();
+        foreach (var domain in domains)
+        {
+            var name = "site-" + domain.Id.ToString("N");
+            using var settings = JsonDocument.Parse(domain.SettingsJson);
+            var tls = !settings.RootElement.TryGetProperty("ssl", out var flag) ||
+                (flag.ValueKind != JsonValueKind.False && !(flag.ValueKind == JsonValueKind.String && flag.GetString() is "OFF" or "False" or "false"));
+            var listener = Required(tls ? "HttpsListener" : "HttpListener");
+            var route = routeResources.TryGetValue(name, out var resource)
+                ? WebsiteReadiness.Route(resource, Required("GatewayName"), Required("GatewayNamespace"), listener)
+                : "Missing";
+            next[domain.Id] = new WebsiteObservation(
+                deploymentStates.GetValueOrDefault(name, "Missing"),
+                HasPhp(domain) ? deploymentStates.GetValueOrDefault("php-fpm-" + PhpVersion(domain), "Missing") : "Not required",
+                route);
+        }
+        if (readiness.Replace(next)) notifications.Publish();
     }
 
     private string Required(string key) => configuration["KubernetesHosting:" + key] is { Length: > 0 } value
