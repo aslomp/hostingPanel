@@ -9,6 +9,7 @@ using System.Globalization;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
+builder.Services.AddSingleton<HostingOperationNotifications>();
 builder.Services.AddHostingPanelPersistence(builder.Configuration);
 var provider = builder.Configuration["HostingPanel:Backend"] ?? "DirectAdmin";
 if (provider.Equals("Kubernetes", StringComparison.OrdinalIgnoreCase))
