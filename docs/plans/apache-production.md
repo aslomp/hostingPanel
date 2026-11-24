@@ -3,12 +3,11 @@
 # Production-grade shared Apache hosting — implementation plan
 
 Status: P0 implementation started; runtime acceptance pending.
-Status: proposed; implementation and runtime acceptance pending.
 Scope: Kubernetes backend only. Preserve DirectAdmin API compatibility and existing /home/<account>/domains/<domain>/public_html layout.
 
 ## Architecture decisions
 - One shared Apache Deployment and ClusterIP Service, horizontally scalable; every replica serves every virtualhost. Never create Apache deployments per customer or domain.
-- Keep one desired-state ConfigMap per domain, Envoy Gateway for routing/TLS and cert-manager for certificates.
+- Store generated Apache virtualhosts on dedicated platform-managed shared NFS storage, separate from customer content. Retain Envoy Gateway for routing/TLS and cert-manager for certificates.
 - Use event MPM and PHP-FPM, not mod_php or CGI. Keep Apache non-root, capability-free, and its NFS mount read-only.
 - PHP execution is a separate trust boundary; do not claim shared PHP pools constitute hard tenant isolation. Shared PHP remains explicitly trusted-only until isolation is verified. Evaluate isolated PHP workloads without creating per-tenant Apache.
 - Use Kubernetes .NET SDK; no kubectl subprocesses in application runtime. Preserve backend-neutral API contracts; deployment capacity belongs in Helm, provider-specific runtime settings in BackendSettings where appropriate.
@@ -32,8 +31,10 @@ See [P0 acceptance evidence](../apache-p0-acceptance.md).
 Acceptance: configuration checks and load tests demonstrate bounded resource use, predictable saturation and recovery, and no unexpected restarts under representative traffic.
 
 ## Phase 2 — reliable virtualhost distribution (P1)
-- [ ] Replace inline Python/shell orchestration with maintainable HostingPanel.Apache.Agent (.NET Kubernetes SDK), subject to image/process lifecycle design review.
-- [ ] Use list/watch with resource-version recovery, local cache, debounce and bounded retry. Maintain immutable snapshots and last-known-good configuration.
+- [ ] Move configuration publication and reconciliation into the existing Kubernetes backend; no separate Apache agent, sidecar, or periodic ConfigMap polling.
+- [ ] Publish immutable versioned virtualhost snapshots on dedicated shared NFS storage, writable only by the authorized platform publisher and mounted read-only by Apache. Customer workloads must not be able to modify platform configuration. Keep the last-known-good revision and verify storage semantics in integration tests.
+- [ ] Use domain lifecycle events and Kubernetes watches for reconciliation, with initial recovery, debounce and bounded retry. Review reload authorization and replica convergence before selecting the final reload transport; do not grant broad workload execution permissions.
+- [ ] Remove per-domain virtualhost ConfigMaps and legacy polling only after migration and rollback tests pass. New Apache replicas must start from the accepted configuration revision.
 - [ ] Validate candidate snapshots with real httpd before activation; preserve rollback and serialize graceful reloads. Avoid excessive overlapping generations; ensure staging cleanup and handle deletion.
 - [ ] Report active revision and errors per replica. Distinguish desired state, accepted resources, loaded configuration and serving readiness; do not falsely report success.
 - [ ] Ensure invalid individual domain changes cannot disrupt previously working sites; reconcile missing resources and configuration drift.
