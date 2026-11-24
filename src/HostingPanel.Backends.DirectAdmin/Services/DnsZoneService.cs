@@ -163,23 +163,29 @@ public sealed class DnsZoneService(IHttpClientFactory clients, IAccessibleDomain
                 using var response = await clients.CreateClient("legacy-directadmin").SendAsync(request, ct);
                 if (response.StatusCode == HttpStatusCode.Unauthorized)
                     return new(401, null, "UNAUTHORIZED");
-                if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
-                {
-                    if (endpoint == "CMD_DNS_ADMIN") continue;
-                    return new((int)response.StatusCode, null, "ACCESS_DENIED");
-                }
                 if (!response.IsSuccessStatusCode)
-                    return new((int)response.StatusCode, null, "UPSTREAM_ERROR");
+                {
+                    // CMD_DNS_ADMIN is not a reliable per-domain reader on every
+                    // DirectAdmin installation. In particular, it can return HTTP 500
+                    // for a zone owned by a regular hosting user. A read-only retry
+                    // through CMD_DNS_CONTROL does not duplicate any mutation.
+                    if (endpoint == "CMD_DNS_ADMIN") continue;
+                    return new((int)response.StatusCode, null,
+                        response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound
+                            ? "ACCESS_DENIED" : "UPSTREAM_ERROR");
+                }
                 try
                 {
                     var records = LegacyDnsAdapter.ParseRecords(
                         await response.Content.ReadAsStringAsync(ct));
                     return new(200, records, null);
                 }
-                catch (InvalidOperationException) when (endpoint == "CMD_DNS_ADMIN")
+                catch (Exception ex) when (endpoint == "CMD_DNS_ADMIN" &&
+                    ex is InvalidOperationException or JsonException or FormatException)
                 {
-                    // Legacy backends sometimes report denial inside HTTP 200.
-                    // A second READ is safe; this is not an authorization decision.
+                    // DirectAdmin also reports legacy errors inside HTTP 200 and
+                    // occasionally returns a different admin-response shape.
+                    // The user-facing DNS endpoint gets a separate read attempt.
                 }
             }
             return new(403, null, "ACCESS_DENIED");
