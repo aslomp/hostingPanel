@@ -10,7 +10,7 @@
     <Description>@L["Live service list, details and management actions; the backend determines which operations are permitted."]</Description>
     <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></Actions>
 </PanelPageHeader>
-@if (!Session.Connected) { <MudPaper Class="pa-4 my-3" Elevation="1">Verbind eerst via het <a href="/">dashboard</a>.</MudPaper> }
+@if (!Session.Connected) { <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper> }
 else
 {
     <MudPaper Class="pa-4 my-3" Elevation="1">

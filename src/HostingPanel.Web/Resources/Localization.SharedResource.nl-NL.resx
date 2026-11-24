@@ -745,4 +745,7 @@
   <data name="IP address" xml:space="preserve"><value>IP-adres</value></data>
   <data name="Suspended" xml:space="preserve"><value>Geschorst</value></data>
   <data name="Skin" xml:space="preserve"><value>Skin</value></data>
+  <data name="The overview may be incomplete: {0}" xml:space="preserve"><value>Het overzicht kan onvolledig zijn: {0}</value></data>
+  <data name="Sent" xml:space="preserve"><value>Verzonden</value></data>
+  <data name="Messages: {0}" xml:space="preserve"><value>Berichten: {0}</value></data>
 </root>

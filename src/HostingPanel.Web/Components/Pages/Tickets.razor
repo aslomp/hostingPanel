@@ -17,7 +17,7 @@
 </PanelPageHeader>
 @if (!Session.Connected)
 {
-    <MudPaper Class="pa-4 my-3" Elevation="1">Maak verbinding via het <a href="/">dashboard</a>.</MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
 }
 else
 {
@@ -37,7 +37,7 @@ else
         </MudGrid>
         @if (loading) { <PanelLoading>@L["Retrieving tickets…"]</PanelLoading> }
         @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
-        @if (warning is not null) { <p class="error" role="status">Het overzicht kan onvolledig zijn: @warning</p> }
+        @if (warning is not null) { <p class="error" role="status">@L["The overview may be incomplete: {0}", warning]</p> }
         @if (tickets is not null)
         {
             <div class="overview-scroll">
@@ -51,7 +51,7 @@ else
                                 <td><a href="@($"/tickets/{ticket.Id}?source={ticket.Source}")">@ticket.Subject</a>
                                     @if (ticket.Unread) { <MudChip T="string" Size="Size.Small" Color="Color.Warning">@L["New"]</MudChip> }</td>
                                 <td>@(string.IsNullOrWhiteSpace(ticket.FromName) ? ticket.From : ticket.FromName)</td>
-                                <td>@(ticket.Source == "received" ? L["Received"].Value : "Verzonden")</td>
+                                <td>@(ticket.Source == "received" ? L["Received"].Value : L["Sent"].Value)</td>
                                 <td>@ticket.Priority</td>
                                 <td>@ticket.Timestamp</td>
                             </tr>
@@ -66,7 +66,7 @@ else
         <div class="dashboard-section-heading"><h2>@L["Messages"]</h2><a href="/messages">@L["View all messages"]</a></div>
         @if (messageCount > 0)
         {
-            <p><MudChip T="string" Size="Size.Small" Color="Color.Warning">@messageCount berichten</MudChip> Nieuwe berichten verschijnen ook via SignalR bovenin de interface.</p>
+            <p><MudChip T="string" Size="Size.Small" Color="Color.Warning">@L["Messages: {0}", messageCount]</MudChip> @L["New messages also appear through SignalR at the top of the interface."]</p>
         }
         else { <p>@L["No messages in the current backend result."]</p> }
     </MudPaper>
