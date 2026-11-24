@@ -17,6 +17,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
     ILogger<WebsiteReconciler> logger, NfsDirectoryProvisioner storage, HostingOperationNotifications notifications) : BackgroundService
 {
     private string? appliedRuntimeHash;
+    private bool migrated;
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -37,7 +38,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var rows = await db.ReconciliationOperations.Where(x => x.ResourceType == "website"
             && x.Status == "pending").ToListAsync(ct);
         var shared = configuration.GetValue<bool>("KubernetesHosting:AllowSharedPhpRuntime");
-        if (rows.Count == 0 && !shared) return;
+        if (rows.Count == 0 && !shared && migrated) return;
         var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
         var identities = await PhpIdentityModel.AllocateAsync(db, domains.Select(x => x.OwnerId), ct);
         var ownerIds = domains.Select(d => d.OwnerId).Distinct().ToArray();
@@ -67,36 +68,40 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             }
         }
         var completed = new List<ReconciliationOperation>();
-        foreach (var group in rows.GroupBy(x => x.ResourceId))
+        var byId = rows.GroupBy(x => x.ResourceId).ToDictionary(x => x.Key, x => x.ToArray());
+        var targets = byId.Keys.Concat(migrated ? Array.Empty<Guid>() : domains.Select(x => x.Id)).Distinct();
+        var migrationFailed = false;
+        foreach (var id in targets)
         {
-            var latest = group.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).First();
+            var group = byId.GetValueOrDefault(id) ?? [];
+            var latest = group.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).FirstOrDefault();
             try
             {
-                // Read current desired state, not a potentially stale queue payload.
-                var domain = await db.Domains.AsNoTracking().SingleOrDefaultAsync(x => x.Id == group.Key, ct);
-                var name = "site-" + group.Key.ToString("N");
+                var domain = await db.Domains.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+                var name = "site-" + id.ToString("N");
                 if (domain is null)
-                    await KubectlAsync(null, ct, "delete", "httproute,deployment,service,configmap", name,
-                        "--ignore-not-found=true");
+                    await KubectlAsync(null, ct, "delete", "httproute,configmap", name, "--ignore-not-found=true");
                 else
                 {
                     if (storageErrors.TryGetValue(domain.Id, out var storageError))
                         throw new InvalidOperationException("Website storage unavailable.", storageError);
-                    var identity = identities[domain.OwnerId];
-                    var manifest = BuildManifest(domain, accounts[domain.OwnerId].Username, identity);
-                    await KubectlAsync(manifest, ct, "apply", "--server-side",
-                        "--field-manager=hostingpanel", "-f", "-");
+                    var manifest = BuildManifest(domain, accounts[domain.OwnerId].Username, identities[domain.OwnerId]);
+                    await KubectlAsync(manifest, ct, "apply", "--server-side", "--field-manager=hostingpanel", "-f", "-");
                 }
                 completed.AddRange(group);
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
-                latest.Attempts++;
-                latest.LastError = "Website reconciliation failed; see application log.";
-                logger.LogWarning(ex, "Could not reconcile website {Id}", group.Key);
+                migrationFailed = true;
+                if (latest is not null)
+                {
+                    latest.Attempts++;
+                    latest.LastError = "Website reconciliation failed; see application log.";
+                }
+                logger.LogWarning(ex, "Could not reconcile website {Id}", id);
             }
             await db.SaveChangesAsync(ct);
-            if (latest.LastError is not null && latest.Attempts == 1) notifications.Publish();
+            if (latest?.LastError is not null && latest.Attempts == 1) notifications.Publish();
         }
         if (shared)
         {
@@ -111,6 +116,8 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 appliedRuntimeHash = hash;
             }
         }
+        // Legacy deployments are retired explicitly by the administrator after testing.
+        migrated = !migrationFailed;
         foreach (var row in completed)
         {
             row.Status = "completed";
@@ -145,7 +152,6 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var tls = Flag("ssl", true);
         if (Flag("cgi", false)) throw new InvalidOperationException("CGI is not supported");
         var name = "site-" + domain.Id.ToString("N");
-        var labels = new Dictionary<string,string> { ["app.kubernetes.io/name"] = name, ["hostingpanel/component"] = "apache", ["hostingpanel/account"] = domain.OwnerId.ToString("N") };
         var siteRoot = "/home/" + username + "/domains/" + host;
         var root = siteRoot + "/public_html";
         var phpVersion = PhpVersion(domain);
@@ -154,57 +160,17 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         if (phpVersion is not ("7" or "8")) throw new InvalidOperationException("Unsupported PHP version");
         if (php && phpVersion == "7" && !configuration.GetValue<bool>("KubernetesHosting:EnablePhp7"))
             throw new InvalidOperationException("PHP 7 is disabled");
-        var apache = """
-            ServerRoot "/usr/local/apache2"
-            Listen 8080
-            ServerName localhost
-            LoadModule mpm_event_module modules/mod_mpm_event.so
-            LoadModule authz_core_module modules/mod_authz_core.so
-            LoadModule unixd_module modules/mod_unixd.so
-            LoadModule log_config_module modules/mod_log_config.so
-            LoadModule dir_module modules/mod_dir.so
-            LoadModule mime_module modules/mod_mime.so
-            LoadModule proxy_module modules/mod_proxy.so
-            LoadModule proxy_fcgi_module modules/mod_proxy_fcgi.so
-            LoadModule rewrite_module modules/mod_rewrite.so
-            ErrorLog /proc/self/fd/2
-            CustomLog /proc/self/fd/1 common
-            TypesConfig conf/mime.types
-            """ + "\nUser " + identity.UnixName + "\nGroup " + identity.UnixName + "\n<VirtualHost *:8080>\nServerName " + host + "\nDocumentRoot " + root +
-            "\n<Directory " + root + ">\nOptions -Indexes -ExecCGI -Includes\nAllowOverride None\nRequire all granted\nDirectoryIndex index.php index.html\n</Directory>\n" +
+        var apache = "<VirtualHost *:8080>\nServerName " + host + "\nDocumentRoot \"" + root + "\"" +
+            "\n<Directory \"" + root + "\">\nOptions -Indexes -ExecCGI -Includes -FollowSymLinks -SymLinksIfOwnerMatch\nAllowOverride None\nRequire all granted\nDirectoryIndex index.php index.html\n</Directory>\n" +
             (php ? "<FilesMatch \"[.]php$\">\nSetHandler \"proxy:fcgi://php-fpm-" + phpVersion + ":" + identity.Port + "\"\n</FilesMatch>\n"
             : "<FilesMatch \"[.]php$\">\nRequire all denied\n</FilesMatch>\n") + "</VirtualHost>\n";
-        var passwd = $"{identity.UnixName}:x:{identity.Uid}:{identity.Gid}:Hosting account:/nonexistent:/usr/sbin/nologin\n";
-        var group = $"{identity.UnixName}:x:{identity.Gid}:\n";
-        var checksum = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(apache + passwd + group)));
-        object Meta() => new { name, @namespace = Namespace, labels };
-        object DataMount(bool readOnly) => new { name = "data", mountPath = siteRoot, readOnly };
-        var containers = new object[] {
-            new { name = "apache", image = configuration["KubernetesHosting:ApacheImage"] ?? "httpd:2.4",
-                command = new[] { "/bin/sh", "-ec" },
-                args = new[] { "test -d " + root + "; cat /etc/site/passwd >> /etc/passwd; cat /etc/site/group >> /etc/group; httpd -t -f /etc/site/httpd.conf; exec httpd-foreground -f /etc/site/httpd.conf" },
-                ports = new[] { new { containerPort = 8080 } },
-                readinessProbe = new { tcpSocket = new { port = 8080 } },
-                volumeMounts = new object[] { DataMount(true), new { name = "config", mountPath = "/etc/site", readOnly = true } } }
-        };
-        var export = Required("NfsPath").TrimEnd('/');
-        if (!export.StartsWith('/')) throw new InvalidOperationException("NFS path must be absolute");
+        var configLabels = new Dictionary<string,string> { ["hostingpanel/component"] = "vhost" };
         var resources = new object[] {
-            new { apiVersion = "v1", kind = "ConfigMap", metadata = Meta(), data = new Dictionary<string,string> { ["httpd.conf"] = apache, ["passwd"] = passwd, ["group"] = group } },
-            new { apiVersion = "apps/v1", kind = "Deployment", metadata = Meta(), spec = new {
-                replicas = 1, selector = new { matchLabels = new Dictionary<string,string> { ["app.kubernetes.io/name"] = name } }, template = new {
-                    metadata = new { labels, annotations = new Dictionary<string,string> { ["hostingpanel/config-sha256"] = checksum } },
-                    spec = new { automountServiceAccountToken = false, containers, volumes = new object[] {
-                        new { name = "config", configMap = new { name } },
-                        new { name = "data", nfs = new { server = Required("NfsServer"), path = export + "/" + username + "/domains/" + host } }
-                    } }
-                }
-            } },
-            new { apiVersion = "v1", kind = "Service", metadata = Meta(), spec = new { selector = labels, ports = new[] { new { port = 80, targetPort = 8080 } } } },
-            new { apiVersion = "gateway.networking.k8s.io/v1", kind = "HTTPRoute", metadata = Meta(), spec = new {
+            new { apiVersion = "v1", kind = "ConfigMap", metadata = new { name, @namespace = Namespace, labels = configLabels }, data = new Dictionary<string,string> { ["vhost.conf"] = apache } },
+            new { apiVersion = "gateway.networking.k8s.io/v1", kind = "HTTPRoute", metadata = new { name, @namespace = Namespace }, spec = new {
                 parentRefs = new[] { new { name = Required("GatewayName"), @namespace = Required("GatewayNamespace"),
                     sectionName = Required(tls ? "HttpsListener" : "HttpListener") } },
-                hostnames = new[] { host }, rules = new[] { new { backendRefs = new[] { new { name, port = 80 } } } }
+                hostnames = new[] { host }, rules = new[] { new { backendRefs = new[] { name = "apache-baseline", port = 80 } } } }
             } }
         };
         return JsonSerializer.Serialize(new { apiVersion = "v1", kind = "List", items = resources });
@@ -280,7 +246,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 podSelector = new { matchLabels = labels }, policyTypes = new[] { "Ingress" },
                 ingress = owners.Select(owner => new {
                     from = new[] { new { podSelector = new { matchLabels = new Dictionary<string,string> {
-                        ["hostingpanel/component"] = "apache", ["hostingpanel/account"] = owner.AccountId.ToString("N") } } } },
+                        ["app.kubernetes.io/name"] = "apache-baseline" } } } },
                     ports = new[] { new { protocol = "TCP", port = owner.Port } }
                 }).ToArray()
             } });
@@ -298,29 +264,20 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
     private async Task<Dictionary<Guid, string[]>> GetApacheSourcesAsync(
         IReadOnlyList<HostedDomain> domains, CancellationToken ct)
     {
-        var sites = domains.ToDictionary(x => "site-" + x.Id.ToString("N"));
-        var json = await KubectlAsync(null, ct, "get", "pods", "-l", "hostingpanel/component=apache", "-o", "json");
+        var json = await KubectlAsync(null, ct, "get", "pods", "-l", "app.kubernetes.io/name=apache-baseline", "-o", "json");
         using var doc = JsonDocument.Parse(json);
-        var sources = new Dictionary<Guid, SortedSet<string>>();
+        var sources = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var pod in doc.RootElement.GetProperty("items").EnumerateArray())
         {
-            var metadata = pod.GetProperty("metadata");
-            var labels = metadata.GetProperty("labels");
-            if (metadata.TryGetProperty("deletionTimestamp", out _)
-                || !labels.TryGetProperty("app.kubernetes.io/name", out var site)
-                || !sites.TryGetValue(site.GetString() ?? "", out var domain)
-                || !labels.TryGetProperty("hostingpanel/account", out var account)
-                || account.GetString() != domain.OwnerId.ToString("N")
-                || !pod.TryGetProperty("status", out var status)
-                || !status.TryGetProperty("podIP", out var address)
-                || !IPAddress.TryParse(address.GetString(), out var ip)
-                || ip.AddressFamily != AddressFamily.InterNetwork
-                || IPAddress.IsLoopback(ip) || ip.Equals(IPAddress.Any)) continue;
-            if (!sources.TryGetValue(domain.OwnerId, out var set))
-                sources.Add(domain.OwnerId, set = new(StringComparer.Ordinal));
-            set.Add(ip.ToString());
+            if (pod.GetProperty("metadata").TryGetProperty("deletionTimestamp", out _) ||
+                !pod.TryGetProperty("status", out var status) ||
+                !status.TryGetProperty("podIP", out var address) ||
+                !IPAddress.TryParse(address.GetString(), out var ip) ||
+                ip.AddressFamily != AddressFamily.InterNetwork ||
+                IPAddress.IsLoopback(ip) || ip.Equals(IPAddress.Any)) continue;
+            sources.Add(ip.ToString());
         }
-        return sources.ToDictionary(x => x.Key, x => x.Value.ToArray());
+        return domains.Select(x => x.OwnerId).Distinct().ToDictionary(x => x, _ => sources.ToArray());
     }
 
     private async Task<string> KubectlAsync(string? manifest, CancellationToken ct, params string[] args)
