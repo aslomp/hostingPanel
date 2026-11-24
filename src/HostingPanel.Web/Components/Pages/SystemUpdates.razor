@@ -4,7 +4,12 @@
 @using System.Text.Json
 @inject DirectAdminSession Session
 <PageTitle>@L["System updates — HostingPanel"]</PageTitle>
-<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>@L["System packages"]</h1><p>@L["Available updates and update history directly from the backend."]</p></div><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></div>
+<PanelPageHeader>
+    <Breadcrumb>@L["Server management"]</Breadcrumb>
+    <TitleContent>@L["System packages"]</TitleContent>
+    <Description>@L["Available updates and update history directly from the backend."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {
@@ -27,7 +32,7 @@ else
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || string.IsNullOrWhiteSpace(transactionId))" OnClick="FetchLog">@L["Retrieve log"]</MudButton>
         <JsonOverview Json="@transactionLog" />
     </section>
-    @if (busy) { <p role="status">@L["Processing…"]</p> }
+    @if (busy) { <PanelLoading>@L["Processing…"]</PanelLoading> }
 }
 @code {
     private string updates = "", history = "", confirmation = "";

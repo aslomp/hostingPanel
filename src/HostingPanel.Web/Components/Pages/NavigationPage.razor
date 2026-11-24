@@ -15,14 +15,12 @@ else if (Key == "name-servers")
 else
 {
 <PageTitle>@Title — HostingPanel</PageTitle>
-<div class="page-header">
-    <div>
-        <div class="eyebrow">@Category</div>
-        <h1>@Title</h1>
-        <p>@Description</p>
-    </div>
-    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton>
-</div>
+<PanelPageHeader>
+    <Breadcrumb>@Category</Breadcrumb>
+    <TitleContent>@Title</TitleContent>
+    <Description>@Description</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
 
 @if (!Session.Connected)
 {

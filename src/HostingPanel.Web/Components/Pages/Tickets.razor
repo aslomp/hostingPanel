@@ -34,8 +34,8 @@ else
                     <MudSelectItem T="string" Value='@("open")'>Open</MudSelectItem><MudSelectItem T="string" Value='@("closed")'>@L["Closed"]</MudSelectItem>
                 </MudSelect></div>
         </div>
-        @if (loading) { <p role="status">@L["Retrieving tickets…"]</p> }
-        @if (error is not null) { <p class="error" role="alert">@error</p> }
+        @if (loading) { <PanelLoading>@L["Retrieving tickets…"]</PanelLoading> }
+        @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
         @if (warning is not null) { <p class="error" role="status">Het overzicht kan onvolledig zijn: @warning</p> }
         @if (tickets is not null)
         {

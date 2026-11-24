@@ -6,18 +6,20 @@
 @implements IDisposable
 @inject NavigationManager Navigation
 <PageTitle>Ticket #@Id — HostingPanel</PageTitle>
-<div class="page-header"><div><div class="eyebrow"><a href="/tickets">@L["Ticket management"]</a> / Ticket #@Id</div>
-    <h1>@(ticket is null ? $"Ticket #{Id}" : Text(ticket.Value, "subject"))</h1>
-    <p>@L["Messages and replies from DirectAdmin."]</p></div>
-    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="Load">@L["↻ Refresh"]</MudButton></div>
+<PanelPageHeader>
+    <Breadcrumb><a href="/tickets">@L["Ticket management"]</a> / Ticket #@Id</Breadcrumb>
+    <TitleContent>@(ticket is null ? $"Ticket #{Id}" : Text(ticket.Value, "subject"))</TitleContent>
+    <Description>@L["Messages and replies from DirectAdmin."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="Load">@L["↻ Refresh"]</MudButton></Actions>
+</PanelPageHeader>
 @if (!Session.Connected)
 {
     <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section>
 }
 else
 {
-    @if (error is not null) { <section class="card"><p class="error" role="alert">@error</p></section> }
-    @if (loading) { <p role="status">@L["Retrieving ticket…"]</p> }
+    @if (error is not null) { <section class="card"><MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert></section> }
+    @if (loading) { <PanelLoading>@L["Retrieving ticket…"]</PanelLoading> }
     @if (ticket is not null)
     {
         <section class="card">

@@ -4,7 +4,12 @@
 @using System.Text.Json
 @inject DirectAdminSession Session
 <PageTitle>Server TLS — HostingPanel</PageTitle>
-<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>Server TLS</h1><p>@L["Certificate status and ACME configuration for the DirectAdmin server."]</p></div><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></div>
+<PanelPageHeader>
+    <Breadcrumb>@L["Server management"]</Breadcrumb>
+    <TitleContent>Server TLS</TitleContent>
+    <Description>@L["Certificate status and ACME configuration for the DirectAdmin server."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {

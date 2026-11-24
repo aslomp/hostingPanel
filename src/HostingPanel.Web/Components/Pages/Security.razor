@@ -3,7 +3,12 @@
 @page "/security"
 @inject DirectAdminSession Session
 <PageTitle>@L["Security — HostingPanel"]</PageTitle>
-<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>@L["Security"]</h1><p>@L["ModSecurity and ClamAV through the official DirectAdmin API."]</p></div><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></div>
+<PanelPageHeader>
+    <Breadcrumb>@L["Server management"]</Breadcrumb>
+    <TitleContent>@L["Security"]</TitleContent>
+    <Description>@L["ModSecurity and ClamAV through the official DirectAdmin API."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {

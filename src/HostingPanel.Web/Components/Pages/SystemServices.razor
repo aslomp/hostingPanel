@@ -4,14 +4,19 @@
 @using System.Text.Json
 @inject DirectAdminSession Session
 <PageTitle>@L["System services — HostingPanel"]</PageTitle>
-<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>System Services</h1><p>@L["Live service list, details and management actions; the backend determines which operations are permitted."]</p></div><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></div>
+<PanelPageHeader>
+    <Breadcrumb>@L["Server management"]</Breadcrumb>
+    <TitleContent>System Services</TitleContent>
+    <Description>@L["Live service list, details and management actions; the backend determines which operations are permitted."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {
     <section class="card">
         <h2>Services</h2>
-        @if (busy) { <p role="status">@L["Retrieving…"]</p> }
-        @if (error is not null) { <p class="error" role="alert">@error</p> }
+        @if (busy) { <PanelLoading>@L["Retrieving…"]</PanelLoading> }
+        @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
         <JsonOverview Json="@services" />
     </section>
     <section class="card">
