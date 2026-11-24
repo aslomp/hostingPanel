@@ -93,7 +93,21 @@ else
             var (status, body) = await Session.GetDnsZoneAsync(Domain);
             if (status != 200)
             {
-                error = L["DNS zone unavailable: HTTP {0}. Check domain permissions.", status].Value;
+                error = L["DNS zone unavailable: HTTP {0}.", status].Value;
+                try
+                {
+                    using var failure = JsonDocument.Parse(body);
+                    if (failure.RootElement.ValueKind == JsonValueKind.Object &&
+                        failure.RootElement.TryGetProperty("type", out var code) &&
+                        code.ValueKind == JsonValueKind.String)
+                    {
+                        var reason = code.GetString();
+                        if (!string.IsNullOrWhiteSpace(reason) &&
+                            reason.Length <= 80 && reason.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'))
+                            error += $" ({reason})";
+                    }
+                }
+                catch (JsonException) { }
                 records = null;
                 return;
             }
