@@ -54,14 +54,15 @@ else
     <section class="card">
         <h2>@L["Add domain"]</h2>
         <p>@L["Create a website for the signed-in account."]</p>
-        <label for="newDomain">@L["Domain name"]</label>
-        <MudTextField T="string" @bind-Value="testDomain" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="newDomain" Placeholder="example.com" />
+        <MudForm @ref="createForm">
+        <MudTextField T="string" @bind-Value="testDomain" Label="@L["Domain name"].Value" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="newDomain" Placeholder="example.com" />
         <div class="domain-options">
             <MudCheckBox T="bool" @bind-Value="php" Label="PHP" />
             <MudCheckBox T="bool" @bind-Value="ssl" Label="SSL" />
             <MudCheckBox T="bool" @bind-Value="cgi" Label="CGI" />
         </div>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(mutationBusy || string.IsNullOrWhiteSpace(testDomain))" OnClick="CreateDomain">@L["Add domain"]</MudButton>
+        </MudForm>
         @if (mutationStatus is not null)
         {
             <p role="status">@mutationStatus</p>
@@ -70,6 +71,7 @@ else
 
 }
 @code {
+    private MudForm createForm = default!;
     [SupplyParameterFromQuery(Name = "user")]
     [Parameter] public string? User { get; set; }
     private string owner = "";
@@ -183,7 +185,13 @@ else
         }
         finally { deleteDialogOpen = false; }
     }
-    private Task CreateDomain() => ExecuteMutation(testDomain.Trim().ToLowerInvariant(), "create");
+    private async Task CreateDomain()
+    {
+        if (mutationBusy || !Session.Connected) return;
+        await createForm.ValidateAsync();
+        if (!createForm.IsValid || mutationBusy || !Session.Connected || string.IsNullOrWhiteSpace(testDomain)) return;
+        await ExecuteMutation(testDomain.Trim().ToLowerInvariant(), "create");
+    }
 
     private async Task ExecuteMutation(string domain, string action)
     {

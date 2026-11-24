@@ -5,18 +5,20 @@
 @inject IDialogService Dialogs
 
 <MudPaper Class="pa-4 my-3" Elevation="1">
+    <MudForm @ref="createForm">
     <h2>@(Kind == "reseller" ? L["Create reseller"].Value : L["Create user"].Value)</h2>
     <p>@L["DirectAdmin validates the package, IP address and permissions of the signed-in identity."]</p>
-    <MudTextField T="string" Label="@L["Account name"].Value" @bind-Value="username" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="off" />
+    <MudTextField T="string" Label="@L["Account name"].Value" @bind-Value="username" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="off" />
     <MudTextField T="string" Label="@L["Email address"].Value" @bind-Value="email" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="off" InputType="InputType.Email" />
     <MudTextField T="string" Label="@L["Primary domain"].Value" @bind-Value="domain" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="example.com" />
-    <MudTextField T="string" Label="@L["Package"].Value" @bind-Value="package" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="off" />
+    <MudTextField T="string" Label="@L["Package"].Value" @bind-Value="package" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="off" />
     <MudTextField T="string" Label="@L["IP / assignment"].Value" @bind-Value="ip" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="shared" />
-    <MudTextField T="string" Label="@L["New password"].Value" @bind-Value="password" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="new-password" InputType="InputType.Password" />
-    <MudTextField T="string" Label="@L["Confirm password"].Value" @bind-Value="passwordConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="new-password" InputType="InputType.Password" />
+    <MudTextField T="string" Label="@L["New password"].Value" @bind-Value="password" Validation="@(new Func<string, string?>(ValidatePassword))" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="new-password" InputType="InputType.Password" />
+    <MudTextField T="string" Label="@L["Confirm password"].Value" @bind-Value="passwordConfirmation" Validation="@(new Func<string, string?>(ValidatePasswordConfirmation))" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="new-password" InputType="InputType.Password" />
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(package) || password != passwordConfirmation || password.Length < 5)" OnClick="Create">
         @(busy ? L["Processing…"].Value : L["Create account"].Value)
     </MudButton>
+    </MudForm>
 </MudPaper>
 <MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@(Kind == "reseller" ? L["Delete reseller"].Value : L["Delete user"].Value)</h2>
@@ -55,6 +57,7 @@
 @if (result is not null) { <p role="status">@result</p> }
 
 @code {
+    private MudForm createForm = default!;
     [Parameter] public string Kind { get; set; } = "user";
     private string username = "", email = "", domain = "", package = "", ip = "shared";
     private string password = "", passwordConfirmation = "";
@@ -118,9 +121,13 @@
         finally { busy = false; suspensionConfirmation = ""; }
     }
 
+    private string? ValidatePassword(string value) => string.IsNullOrEmpty(value) || value.Length < 5 ? L["Password must contain at least 5 characters."].Value : null;
+    private string? ValidatePasswordConfirmation(string value) => value != password ? L["Passwords do not match."].Value : null;
     private async Task Create()
     {
-        if (busy || !Session.Connected || password != passwordConfirmation || password.Length < 5) return;
+        if (busy || !Session.Connected) return;
+        await createForm.ValidateAsync();
+        if (!createForm.IsValid || busy || !Session.Connected || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(package) || password != passwordConfirmation || password.Length < 5) return;
         busy = true; result = null;
         try
         {

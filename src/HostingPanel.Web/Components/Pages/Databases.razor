@@ -73,24 +73,27 @@ else
     }
   </section>
   <section class="card" id="database-create">
+    <MudForm @ref="createForm">
     <h2>@L["Create database with user"]</h2>
     <p>@L["DirectAdmin adds the account prefix where necessary. The exact name is retrieved from the backend after creation."]</p>
     <div class="form-grid">
       <div><label for="databaseName">@L["Database name"]</label>
-        <MudTextField T="string" @bind-Value="newDatabase" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="databaseName" autocomplete="off" Placeholder="app" /></div>
+        <MudTextField T="string" @bind-Value="newDatabase" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="databaseName" autocomplete="off" Placeholder="app" /></div>
       <div><label for="dbUsername">@L["Database user"]</label>
-        <MudTextField T="string" @bind-Value="newUser" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbUsername" autocomplete="off" Placeholder="app" /></div>
+        <MudTextField T="string" @bind-Value="newUser" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbUsername" autocomplete="off" Placeholder="app" /></div>
       <div><label for="dbPassword">@L["Password"]</label>
-        <MudTextField T="string" @bind-Value="newPassword" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbPassword" autocomplete="new-password" InputType="InputType.Password" /></div>
+        <MudTextField T="string" @bind-Value="newPassword" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbPassword" autocomplete="new-password" InputType="InputType.Password" /></div>
     </div>
     <div class="form-actions"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@creating" OnClick="Create">
       @(creating ? "Aanmaken…" : L["Create database"].Value)
     </MudButton>
     </div>
+    </MudForm>
     @if (createMessage is not null) { <p role="status">@createMessage</p> }
   </section>
 }
 @code {
+  private MudForm createForm = default!;
   private sealed record OwnedDb(string Owner, string Name, long TableCount, long UserCount, long SizeBytes, long DefinerIssues);
   private List<OwnedDb>? overall;
   private List<string> overallWarnings = [];
@@ -173,6 +176,8 @@ else
   private async Task Create()
   {
     if (creating || !Session.Connected) return;
+    await createForm.ValidateAsync();
+    if (!createForm.IsValid || creating || !Session.Connected) return;
     creating=true; createMessage=null;
     try
     {
