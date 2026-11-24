@@ -9,7 +9,7 @@
     <div>
         <div class="eyebrow"><a href="/domains">@L["Domain management"]</a> / Details</div>
         <h1>@Domain</h1>
-        <p>@L["Domain configuration and settings from DirectAdmin."] <a href="@($"/domains/{Uri.EscapeDataString(Domain)}/dns")">@L["Manage DNS records"]</a></p>
+        <p>@L["Domain configuration and settings."] <a href="@($"/domains/{Uri.EscapeDataString(Domain)}/dns")">@L["Manage DNS records"]</a></p>
     </div>
     <button @onclick="Refresh" disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</button>
 </div>
@@ -29,7 +29,7 @@ else
         <div class="card">
             <h2>@L["Data unavailable"]</h2>
             <p class="error" role="alert">@error</p>
-            <p>@L["DirectAdmin evaluates read and write operations separately."]</p>
+            <p>@L["The backend evaluates read and write operations separately."]</p>
         </div>
     }
     <div class="tiles">
@@ -51,7 +51,7 @@ else
         </section>
         <section class="card">
             <h2>@L["Change domain settings"]</h2>
-            <p>@L["Settings are saved separately without changing other DirectAdmin checkboxes."]</p>
+            <p>@L["Each setting is saved separately."]</p>
             <label for="domainPhp">PHP</label>
             <select id="domainPhp" @bind="php"><option value="ON">@L["Enabled"]</option><option value="OFF">@L["Disabled"]</option></select>
             <button disabled="@saving" @onclick="SavePhp">@L["Save PHP"]</button>
@@ -72,8 +72,8 @@ else
         </section>
     </div>
     <section class="card">
-        <h2>@L["Other DirectAdmin settings"]</h2>
-        <p>@L["All available fields from legacy domain configuration, without fabricated values."]</p>
+        <h2>@L["Additional domain settings"]</h2>
+        <p>@L["Additional settings reported by the backend."]</p>
         <table><thead><tr><th>@L["Setting"]</th><th>@L["Value"]</th></tr></thead><tbody>
             @foreach (var item in (fields ?? new Dictionary<string,string>()).OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
             {
@@ -111,8 +111,8 @@ else
                 error = status switch
                 {
                     403 => L["You do not have access to these domain settings."].Value,
-                    404 => L["DirectAdmin could not find the domain."].Value,
-                    _ => L["DirectAdmin could not retrieve domain information (HTTP {0}).", status].Value
+                    404 => L["Domain not found."].Value,
+                    _ => L["Domain information unavailable (HTTP {0}).", status].Value
                 };
                 return;
             }
@@ -137,7 +137,7 @@ else
 
     private string Get(string key) => fields is not null && fields.TryGetValue(key, out var value)
         ? (key is "php" or "ssl" or "cgi"
-            ? (value.Equals("ON", StringComparison.OrdinalIgnoreCase) || value == "1" ? "ON" : "OFF")
+            ? (value.Equals("ON", StringComparison.OrdinalIgnoreCase) || value == "1" || value.Equals("true", StringComparison.OrdinalIgnoreCase) ? "ON" : "OFF")
             : value) : "";
 
     private Task SavePhp() => SaveSetting("php", php);
@@ -154,14 +154,14 @@ else
         try
         {
             var (status, _) = await Session.SaveDomainSettingAsync(Domain, setting, value);
-            if (status == 200)
+            if (status is >= 200 and < 300)
             {
-                saveMessage = L["{0} saved in DirectAdmin.", setting].Value;
+                saveMessage = status == 202 ? L["Domain operation accepted. Provisioning is pending."].Value : L["{0} saved.", setting].Value;
                 await Refresh();
             }
             else
                 saveMessage = status == 409
-                    ? L["Mutations are disabled or the setting is unavailable."].Value
+                    ? L["The backend reported a conflict for this domain operation."].Value
                     : L["Save failed: HTTP {0}.", status].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
