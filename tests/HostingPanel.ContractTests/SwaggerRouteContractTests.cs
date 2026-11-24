@@ -16,7 +16,7 @@ internal static class SwaggerRouteContractTests
                     expected.Add(operation.Name.ToUpperInvariant() + " " + path.Name);
 
         var actual = new Dictionary<string, string>(StringComparer.Ordinal);
-        var directory = Path.Combine(root, "src", "HostingPanel.Api", "Controllers");
+        var directory = Path.Combine(root, "src", "HostingPanel.Web", "Controllers");
         var pattern = new Regex(@"\[Http(Get|Post|Put|Patch|Delete|Head|Options)\(""(/api/[^""]+)""\)\]",
             RegexOptions.CultureInvariant);
         foreach (var file in Directory.GetFiles(directory, "*Controller.cs"))
@@ -42,7 +42,7 @@ internal static class SwaggerRouteContractTests
         while (current is not null)
         {
             if (File.Exists(Path.Combine(current.FullName, "spec", "swagger.json"))
-                && Directory.Exists(Path.Combine(current.FullName, "src", "HostingPanel.Api", "Controllers")))
+                && Directory.Exists(Path.Combine(current.FullName, "src", "HostingPanel.Web", "Controllers")))
                 return current.FullName;
             current = current.Parent;
         }

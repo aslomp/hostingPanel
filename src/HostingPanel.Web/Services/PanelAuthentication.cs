@@ -1,3 +1,4 @@
+using HostingPanel.Api;
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Security.Claims;
@@ -25,7 +26,7 @@ public static class PanelAuthentication
         }).AllowAnonymous();
 
         app.MapPost("/login", async (HttpContext context, IAntiforgery csrf,
-            IHttpClientFactory clients, PanelSessionStore sessions, IStringLocalizer<SharedResource> l) =>
+            IAuthenticationProvider authentication, PanelSessionStore sessions, IStringLocalizer<SharedResource> l) =>
         {
             if (!context.Request.HasFormContentType) return Results.BadRequest();
             try { await csrf.ValidateRequestAsync(context); }
@@ -42,12 +43,9 @@ public static class PanelAuthentication
             int status;
             try
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, "hosting/session");
-                request.Headers.Authorization = new AuthenticationHeaderValue("Basic",
+                var credentials = new AuthenticationHeaderValue("Basic",
                     Convert.ToBase64String(Encoding.UTF8.GetBytes(username + ":" + password)));
-                using var response = await clients.CreateClient("hosting-api")
-                    .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, context.RequestAborted);
-                status = (int)response.StatusCode;
+                status = await authentication.AuthenticateSessionAsync(credentials, context.RequestAborted);
             }
             catch (HttpRequestException) { status = 503; }
             catch (OperationCanceledException) when (!context.RequestAborted.IsCancellationRequested) { status = 503; }

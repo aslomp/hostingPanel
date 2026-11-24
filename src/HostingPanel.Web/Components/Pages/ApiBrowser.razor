@@ -2,7 +2,6 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/api-browser"
 @inject DirectAdminSession Session
-@inject IConfiguration Configuration
 
 <PageTitle>API — HostingPanel</PageTitle>
 <div class="page-header"><div><div class="eyebrow">@L["Integration"]</div><h1>DirectAdmin API</h1><p>@L["View modern DirectAdmin-compatible HostingPanel API responses."]</p></div></div>
@@ -18,9 +17,7 @@ else
     </div>
 }
 @code {
-    private string SwaggerUrl => new Uri(
-        new Uri(Configuration["HostingPanel:ApiBaseUrl"] ?? "https://localhost:7101/"),
-        "swagger/index.html").AbsoluteUri;
+    private string SwaggerUrl => "/swagger/index.html";
     private string endpoint = "api/search/users?limit=1000";
     private string status = "";
     private string body = "";

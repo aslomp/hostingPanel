@@ -17,6 +17,7 @@ else if (provider.Equals("DirectAdmin", StringComparison.OrdinalIgnoreCase))
     builder.Services.AddDirectAdminBackend(builder.Configuration);
 else
     throw new InvalidOperationException($"Unknown HostingPanel backend '{provider}'.");
+builder.Services.AddScoped<IAuthenticationProvider>(sp => sp.GetRequiredService<IHostingBackend>());
 builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
 builder.Services.Configure<RequestLocalizationOptions>(options =>
 {
@@ -69,11 +70,21 @@ builder.Services.AddRateLimiter(options =>
         { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
-builder.Services.AddHttpClient("hosting-api", client =>
+// Transitional same-host adapter until all UI operations use typed backend contracts.
+builder.Services.AddHttpClient("hosting-api", (services, client) =>
 {
-    var raw = builder.Configuration["HostingPanel:ApiBaseUrl"]
-        ?? throw new InvalidOperationException("HostingPanel:ApiBaseUrl is required.");
-    client.BaseAddress = new Uri(raw, UriKind.Absolute);
+    var server = services.GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>();
+    var addresses = server.Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>()?.Addresses;
+    var configured = addresses?.FirstOrDefault(x => x.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+        ?? addresses?.FirstOrDefault()
+        ?? throw new InvalidOperationException("HostingPanel has no listening address.");
+    var uri = new Uri(configured.Replace("://+", "://localhost").Replace("://*", "://localhost"));
+    var host = uri.Host is "0.0.0.0" or "[::]" or "::" ? "localhost" : uri.Host;
+    client.BaseAddress = new UriBuilder(uri.Scheme, host, uri.Port).Uri;
+}).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    AllowAutoRedirect = false,
+    UseCookies = false
 });
 builder.Services.AddSingleton<TicketChannelRegistry>();
 builder.Services.AddScoped<DirectAdminSession>();
