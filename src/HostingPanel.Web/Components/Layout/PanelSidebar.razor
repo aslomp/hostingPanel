@@ -3,26 +3,28 @@
 @using static HostingPanel.Web.Components.Layout.NavigationCatalog
 @inject NavigationContextState NavContext
 @implements IDisposable
-        <MudStack Spacing="2" Class="pa-3">
-            <MudText Typo="Typo.overline">@L["Navigation context"]</MudText>
-            <MudStack Row="true" Spacing="1">
-                <MudButton Variant="@(NavContext.Mode == "admin" ? Variant.Filled : Variant.Text)" Color="Color.Primary" aria-pressed='@(NavContext.Mode == "admin" ? "true" : "false")' OnClick='() => SetContext("admin")'>@L["Administrator"]</MudButton>
-                <MudButton Variant="@(NavContext.Mode == "user" ? Variant.Filled : Variant.Text)" Color="Color.Primary" aria-pressed='@(NavContext.Mode == "user" ? "true" : "false")' OnClick='() => SetContext("user")'>@L["User"]</MudButton>
-            </MudStack>
-            <MudTextField T="string" @bind-Value="navSearch" Immediate="true" Label="@L["Search pages"].Value" Variant="Variant.Outlined" Margin="Margin.Dense" />
-        </MudStack>
-        <MudNavMenu Dense="true" aria-label="@L["Navigation context"].Value" data-testid="panel-navigation">
-            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">@L["Dashboard"]</MudNavLink>
-            @foreach (var navGroup in FilteredSections)
-            {
-                <MudNavGroup @key="navGroup.Title" Title="@L[navGroup.Title].Value" Expanded="true">
-                    @foreach (var item in navGroup.Items)
-                    {
-                        <MudNavLink @key="item.Label" Href="@item.Path" Match="NavLinkMatch.All">@L[item.Label]</MudNavLink>
-                    }
-                </MudNavGroup>
-            }
-        </MudNavMenu>
+<div class="analytics-sidebar">
+    <div class="analytics-context">
+        <MudText Typo="Typo.overline" Class="analytics-nav-caption">@L["Navigation context"]</MudText>
+        <div class="analytics-context-switch" role="group" aria-label="@L["Navigation context"]">
+            <MudButton Size="Size.Small" Variant="@(NavContext.Mode == "admin" ? Variant.Filled : Variant.Text)" Color="Color.Primary" aria-pressed='@(NavContext.Mode == "admin" ? "true" : "false")' OnClick='() => SetContext("admin")'>@L["Administrator"]</MudButton>
+            <MudButton Size="Size.Small" Variant="@(NavContext.Mode == "user" ? Variant.Filled : Variant.Text)" Color="Color.Primary" aria-pressed='@(NavContext.Mode == "user" ? "true" : "false")' OnClick='() => SetContext("user")'>@L["User"]</MudButton>
+        </div>
+        <MudTextField T="string" @bind-Value="navSearch" Immediate="true" Placeholder="@L["Search pages"].Value" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Class="analytics-nav-search" aria-label="@L["Search pages"].Value" />
+    </div>
+    <MudNavMenu Dense="true" Class="analytics-nav" aria-label="@L["Navigation context"].Value" data-testid="panel-navigation">
+        <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">@L["Dashboard"]</MudNavLink>
+        @foreach (var navGroup in FilteredSections)
+        {
+            <MudNavGroup @key="navGroup.Title" Title="@L[navGroup.Title].Value" Expanded="true">
+                @foreach (var item in navGroup.Items)
+                {
+                    <MudNavLink @key="item.Label" Href="@item.Path" Match="NavLinkMatch.All">@L[item.Label]</MudNavLink>
+                }
+            </MudNavGroup>
+        }
+    </MudNavMenu>
+</div>
 
 @code {
     private string navSearch = "";
@@ -44,5 +46,4 @@
                 : section.Items.Where(item => L[item.Label].Value.Contains(navSearch,
                     StringComparison.OrdinalIgnoreCase)).ToArray()
         }).Where(section => section.Items.Length > 0);
-
 }
