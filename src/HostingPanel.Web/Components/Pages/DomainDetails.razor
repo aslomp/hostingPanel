@@ -1,3 +1,5 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/domains/{Domain}"
 @using System.Text.Json
 @inject DirectAdminSession Session
@@ -5,11 +7,11 @@
 <PageTitle>@Domain — Domeinbeheer</PageTitle>
 <div class="page-header">
     <div>
-        <div class="eyebrow"><a href="/domains">Domeinbeheer</a> / Details</div>
+        <div class="eyebrow"><a href="/domains">@L["Domain management"]</a> / Details</div>
         <h1>@Domain</h1>
-        <p>Domeinconfiguratie en instellingen uit DirectAdmin. <a href="@($"/domains/{Uri.EscapeDataString(Domain)}/dns")">DNS-records beheren</a></p>
+        <p>@L["Domain configuration and settings from DirectAdmin."] <a href="@($"/domains/{Uri.EscapeDataString(Domain)}/dns")">@L["Manage DNS records"]</a></p>
     </div>
-    <button @onclick="Refresh" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
+    <button @onclick="Refresh" disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</button>
 </div>
 
 @if (!Session.Connected)
@@ -18,21 +20,21 @@
 }
 else if (loading)
 {
-    <div class="card" role="status">Domeininformatie wordt opgehaald…</div>
+    <div class="card" role="status">@L["Retrieving domain information…"]</div>
 }
 else
 {
     @if (error is not null)
     {
         <div class="card">
-            <h2>Gegevens niet beschikbaar</h2>
+            <h2>@L["Data unavailable"]</h2>
             <p class="error" role="alert">@error</p>
-            <p>DirectAdmin beoordeelt lees- en schrijfacties afzonderlijk.</p>
+            <p>@L["DirectAdmin evaluates read and write operations separately."]</p>
         </div>
     }
     <div class="tiles">
         <section class="card">
-            <h2>Algemeen</h2>
+            <h2>@L["General"]</h2>
             <table><tbody>
                 @foreach (var item in new (string Label, string Key)[] {
                     ("Domein", "domain"), ("Gebruiker", "username"), ("IP-adres", "ip"),
@@ -48,31 +50,31 @@ else
             </tbody></table>
         </section>
         <section class="card">
-            <h2>Domeininstellingen wijzigen</h2>
-            <p>Instellingen worden afzonderlijk opgeslagen, zonder andere DirectAdmin-checkboxes te wijzigen.</p>
+            <h2>@L["Change domain settings"]</h2>
+            <p>@L["Settings are saved separately without changing other DirectAdmin checkboxes."]</p>
             <label for="domainPhp">PHP</label>
-            <select id="domainPhp" @bind="php"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
-            <button disabled="@saving" @onclick="SavePhp">PHP opslaan</button>
+            <select id="domainPhp" @bind="php"><option value="ON">@L["Enabled"]</option><option value="OFF">@L["Disabled"]</option></select>
+            <button disabled="@saving" @onclick="SavePhp">@L["Save PHP"]</button>
             <label for="domainSsl">SSL / HTTPS</label>
-            <select id="domainSsl" @bind="ssl"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
-            <button disabled="@saving" @onclick="SaveSsl">SSL opslaan</button>
+            <select id="domainSsl" @bind="ssl"><option value="ON">@L["Enabled"]</option><option value="OFF">@L["Disabled"]</option></select>
+            <button disabled="@saving" @onclick="SaveSsl">@L["Save SSL"]</button>
             <label for="domainCgi">CGI</label>
-            <select id="domainCgi" @bind="cgi"><option value="ON">Ingeschakeld</option><option value="OFF">Uitgeschakeld</option></select>
-            <button disabled="@saving" @onclick="SaveCgi">CGI opslaan</button>
-            <label for="domainBandwidth">Bandbreedte (MiB of unlimited)</label>
+            <select id="domainCgi" @bind="cgi"><option value="ON">@L["Enabled"]</option><option value="OFF">@L["Disabled"]</option></select>
+            <button disabled="@saving" @onclick="SaveCgi">@L["Save CGI"]</button>
+            <label for="domainBandwidth">@L["Bandwidth (MiB or unlimited)"]</label>
             <input id="domainBandwidth" @bind="bandwidth" />
-            <button disabled="@saving" @onclick="SaveBandwidth">Bandbreedte opslaan</button>
-            <label for="domainQuota">Schijfruimte (MiB of unlimited)</label>
+            <button disabled="@saving" @onclick="SaveBandwidth">@L["Save bandwidth"]</button>
+            <label for="domainQuota">@L["Disk space (MiB or unlimited)"]</label>
             <input id="domainQuota" @bind="quota" />
-            <button disabled="@saving" @onclick="SaveQuota">Quota opslaan</button>
-            @if (saving) { <p role="status">Wijziging wordt opgeslagen…</p> }
+            <button disabled="@saving" @onclick="SaveQuota">@L["Save quota"]</button>
+            @if (saving) { <p role="status">@L["Saving change…"]</p> }
             @if (saveMessage is not null) { <p role="status">@saveMessage</p> }
         </section>
     </div>
     <section class="card">
-        <h2>Overige DirectAdmin-instellingen</h2>
-        <p>Alle beschikbare velden uit de legacy-domeinconfiguratie, zonder fictieve waarden.</p>
-        <table><thead><tr><th>Instelling</th><th>Waarde</th></tr></thead><tbody>
+        <h2>@L["Other DirectAdmin settings"]</h2>
+        <p>@L["All available fields from legacy domain configuration, without fabricated values."]</p>
+        <table><thead><tr><th>@L["Setting"]</th><th>@L["Value"]</th></tr></thead><tbody>
             @foreach (var item in (fields ?? new Dictionary<string,string>()).OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
             {
                 <tr><th>@item.Key</th><td>@item.Value</td></tr>
@@ -108,9 +110,9 @@ else
             {
                 error = status switch
                 {
-                    403 => "Je hebt geen toegang tot deze domeininstellingen.",
-                    404 => "DirectAdmin heeft het domein niet gevonden.",
-                    _ => $"DirectAdmin kon deze domeininformatie niet ophalen (HTTP {status})."
+                    403 => L["You do not have access to these domain settings."].Value,
+                    404 => L["DirectAdmin could not find the domain."].Value,
+                    _ => L["DirectAdmin could not retrieve domain information (HTTP {0}).", status].Value
                 };
                 return;
             }
@@ -154,13 +156,13 @@ else
             var (status, _) = await Session.SaveDomainSettingAsync(Domain, setting, value);
             if (status == 200)
             {
-                saveMessage = $"{setting} opgeslagen in DirectAdmin.";
+                saveMessage = L["{0} saved in DirectAdmin.", setting].Value;
                 await Refresh();
             }
             else
                 saveMessage = status == 409
-                    ? "Mutaties zijn uitgeschakeld of de instelling is niet beschikbaar."
-                    : $"Opslaan mislukt: HTTP {status}.";
+                    ? L["Mutations are disabled or the setting is unavailable."].Value
+                    : L["Save failed: HTTP {0}.", status].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
             or ArgumentException)

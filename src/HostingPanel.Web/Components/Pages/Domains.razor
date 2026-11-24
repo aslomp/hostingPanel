@@ -1,16 +1,18 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/domains"
 @using System.Text.Json
 @inject DirectAdminSession Session
 @inject NavigationManager Navigation
 
-<PageTitle>Domeinbeheer — HostingPanel</PageTitle>
+<PageTitle>@L["Domain management — HostingPanel"]</PageTitle>
 <div class="page-header">
     <div>
-        <div class="eyebrow">Accountbeheer / Domeinen</div>
-        <h1>Domeinbeheer</h1>
-        <p>Live domeinlijst via de HostingPanel-adapter naar DirectAdmin. Geautomatiseerde tests gebruiken fictieve .xyz1-domeinen; echte domeinen zijn eveneens toegestaan als mutaties ingeschakeld zijn.</p>
+        <div class="eyebrow">@L["Account management / Domains"]</div>
+        <h1>@L["Domain management"]</h1>
+        <p>@L["Live domain list through the HostingPanel adapter to DirectAdmin. Automated tests use fictitious .xyz1 domains; real domains are also permitted when mutations are enabled."]</p>
     </div>
-    <button @onclick="Refresh" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
+    <button @onclick="Refresh" disabled="@loading">@(loading ? "Laden…" : L["Refresh"].Value)</button>
 </div>
 
 @if (!Session.Connected)
@@ -20,21 +22,21 @@
 else
 {
     <div class="card">
-        <h2>Domeinen van een account</h2>
-        <p>Leeg laten voor alle door DirectAdmin toegankelijke domeinen (admin: serverbreed; reseller: eigen accounts; gebruiker: eigen domeinen). Vul een account in om gericht te filteren.</p>
-        <label for="owner">Gebruikersnaam (optioneel)</label>
-        <input id="owner" @bind="owner" placeholder="Bijvoorbeeld een bestaande gebruiker" />
-        <button class="primary" @onclick="Refresh" disabled="@loading">Ophalen</button>
+        <h2>@L["Domains of an account"]</h2>
+        <p>@L["Leave blank for all domains accessible through DirectAdmin (admin: server-wide; reseller: own accounts; user: own domains). Enter an account to filter."]</p>
+        <label for="owner">@L["Username (optional)"]</label>
+        <input id="owner" @bind="owner" placeholder="@L["For example, an existing user"]" />
+        <button class="primary" @onclick="Refresh" disabled="@loading">@L["Retrieve"]</button>
         @if (error is not null) { <p class="error" role="alert">@error</p> }
         @if (warning is not null) { <p role="status">Niet alle accountgegevens zijn beschikbaar: @warning</p> }
-        else if (loading) { <p role="status">Domeinen worden opgehaald…</p> }
+        else if (loading) { <p role="status">@L["Retrieving domains…"]</p> }
         else if (domains is not null)
         {
             <p>@domains.Count domein(en) gevonden.</p>
-            <label for="domainFilter">Domeinen filteren</label>
-            <input id="domainFilter" @bind="filter" @bind:event="oninput" placeholder="Zoeken op domeinnaam" />
+            <label for="domainFilter">@L["Filter domains"]</label>
+            <input id="domainFilter" @bind="filter" @bind:event="oninput" placeholder="@L["Search domain name"]" />
             <table>
-                <thead><tr><th>Domein</th><th>Account</th><th>Bron</th></tr></thead>
+                <thead><tr><th>@L["Domain"]</th><th>Account</th><th>@L["Source"]</th></tr></thead>
                 <tbody>
                 @foreach (var domain in domains.Where(d => d.Contains(filter, StringComparison.OrdinalIgnoreCase)))
                 {
@@ -42,15 +44,15 @@ else
                 }
                 </tbody>
             </table>
-            @if (domains.Count == 0) { <p>Geen domeinen gevonden voor dit account.</p> }
+            @if (domains.Count == 0) { <p>@L["No domains found for this account."]</p> }
         }
     </div>
 
     <div class="card">
-        <h2>Domeinbewerking voorbereiden</h2>
+        <h2>@L["Prepare domain operation"]</h2>
         <p>Deze actie genereert uitsluitend een voorbeeld van de legacy-aanroep.
-            Er wordt <strong>geen domein aangemaakt of gewijzigd</strong> op de DirectAdmin-server.</p>
-        <label for="testDomain">Domeinnaam</label>
+            Er wordt <strong>@L["no domain created or modified"]</strong> op de DirectAdmin-server.</p>
+        <label for="testDomain">@L["Domain name"]</label>
         <input id="testDomain" @bind="testDomain" placeholder="hosting-test.xyz1" />
         <div class="domain-options">
             <label><input type="checkbox" @bind="php" /> PHP</label>
@@ -58,7 +60,7 @@ else
             <label><input type="checkbox" @bind="cgi" /> CGI</label>
         </div>
         <button class="primary" disabled="@previewBusy" @onclick="Preview">
-            @(previewBusy ? "Controleren…" : "Testaanroep bekijken")
+            @(previewBusy ? "Controleren…" : L["View test request"].Value)
         </button>
         @if (previewError is not null) { <p class="error" role="alert">@previewError</p> }
         @if (previewBody is not null)
@@ -67,21 +69,21 @@ else
             <pre>@previewBody</pre>
         }
         <div class="card" style="margin-top:24px">
-            <h2>Domeinbewerking uitvoeren</h2>
+            <h2>@L["Execute domain operation"]</h2>
             <p>Gebruik eerst de preview hierboven. Deze actie wijzigt de echte DirectAdmin-server
                uitsluitend wanneer de beheerder expliciet de algemene server-side mutatieschakelaar aanzet.
                Verwijderen kan ook bestanden en mailgegevens verwijderen.</p>
-            <label for="domainAction">Actie</label>
+            <label for="domainAction">@L["Action"]</label>
             <select id="domainAction" @bind="mutationAction">
-                <option value="create">Aanmaken</option>
-                <option value="modify">Wijzigen (PHP / SSL / CGI)</option>
-                <option value="delete">Verwijderen</option>
+                <option value="create">@L["Create"]</option>
+                <option value="modify">@L["Modify (PHP / SSL / CGI)"]</option>
+                <option value="delete">@L["Delete"]</option>
             </select>
             <label for="confirmDomain">Typ de exacte domeinnaam ter bevestiging: @testDomain</label>
             <input id="confirmDomain" @bind="confirmation" autocomplete="off" />
             <button disabled="@(mutationBusy || confirmation != testDomain || string.IsNullOrWhiteSpace(testDomain))"
                     @onclick="ExecuteMutation">
-                @(mutationBusy ? "Uitvoeren…" : "Bevestig domeinbewerking")
+                @(mutationBusy ? "Uitvoeren…" : L["Confirm domain operation"].Value)
             </button>
             @if (mutationStatus is not null)
             {
@@ -132,13 +134,13 @@ else
                 : await Session.GetDomainsAsync(owner.Trim());
             if (status != 200)
             {
-                error = $"Domeinlijst niet beschikbaar: HTTP {status}. Controleer de rechten van het DirectAdmin-account.";
+                error = L["Domain list unavailable: HTTP {0}. Check DirectAdmin account permissions.", status].Value;
                 return;
             }
             using var json = JsonDocument.Parse(body);
             if (!json.RootElement.TryGetProperty("domains", out var array) ||
                 array.ValueKind != JsonValueKind.Array)
-                throw new FormatException("Onverwachte domeinlijst.");
+                throw new FormatException(L["Unexpected domain list."].Value);
             domains = array.EnumerateArray().Select(e => e.GetString() ?? "").ToArray();
             ownership.Clear();
             warning = null;
@@ -174,7 +176,7 @@ else
             var (status, body) = await Session.PreviewDomainAsync(testDomain.Trim(), php, ssl, cgi);
             if (status != 200)
             {
-                previewError = $"Testdomein geweigerd (HTTP {status}). Gebruik een geldige domeinnaam.";
+                previewError = L["Test domain rejected (HTTP {0}). Use a valid domain name.", status].Value;
                 return;
             }
             using var doc = JsonDocument.Parse(body);
@@ -198,11 +200,11 @@ else
                 testDomain, mutationAction, confirmation, php, ssl, cgi);
             mutationStatus = status switch
             {
-                200 => "DirectAdmin heeft de domeinbewerking bevestigd. Vernieuw het domeinoverzicht.",
-                409 => "DirectAdmin meldt een conflict bij deze domeinbewerking.",
-                404 => "DirectAdmin heeft het betreffende domein niet gevonden.",
-                400 => "Ongeldige domeinnaam of bevestiging.",
-                _ => $"De domeinbewerking is niet bevestigd: HTTP {status}."
+                200 => L["DirectAdmin confirmed the domain operation. Refresh the domain overview."].Value,
+                409 => L["DirectAdmin reported a conflict for this domain operation."].Value,
+                404 => L["DirectAdmin could not find the specified domain."].Value,
+                400 => L["Invalid domain name or confirmation."].Value,
+                _ => L["Domain operation not confirmed: HTTP {0}.", status].Value
             };
             if (status == 200) { confirmation = ""; await Refresh(); }
         }

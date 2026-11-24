@@ -1,13 +1,15 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/users"
 @using System.Text.Json
 @inject DirectAdminSession Session
 
-<PageTitle>Accountboom — HostingPanel</PageTitle>
+<PageTitle>@L["Account tree — HostingPanel"]</PageTitle>
 <div class="page-header">
-    <div><div class="eyebrow">Accountbeheer</div><h1>Gebruikersbeheer</h1>
-        <p>Alle accounts die DirectAdmin aan de huidige sessie beschikbaar stelt, inclusief resellers en hun gebruikers.</p></div>
-    <div class="form-actions"><a class="btn" href="#account-create">＋ Gebruiker toevoegen</a>
-    <button @onclick="Load" disabled="@loading">@(loading ? "Laden…" : "↻ Vernieuwen")</button></div>
+    <div><div class="eyebrow">@L["Account management"]</div><h1>@L["User management"]</h1>
+        <p>@L["All accounts exposed by DirectAdmin to the current session, including resellers and their users."]</p></div>
+    <div class="form-actions"><a class="btn" href="#account-create">@L["＋ Add user"]</a>
+    <button @onclick="Load" disabled="@loading">@(loading ? "Laden…" : L["↻ Refresh"].Value)</button></div>
 </div>
 @if (!Session.Connected)
 {
@@ -15,19 +17,19 @@
 }
 else if (error is not null)
 {
-    <div class="card error" role="alert">@error <button @onclick="Load">Opnieuw proberen</button></div>
+    <div class="card error" role="alert">@error <button @onclick="Load">@L["Try again"]</button></div>
 }
 else if (loading)
 {
-    <div class="card" role="status">Accountboom laden…</div>
+    <div class="card" role="status">@L["Loading account tree…"]</div>
 }
 else if (accounts is not null)
 {
     <div class="card">
-        <div class="dashboard-section-heading"><h2>Alle toegankelijke accounts</h2><span class="status-pill good">@accounts.Count accounts</span></div>
-        <label for="userFilter">Zoeken in gebruikers</label>
-        <input id="userFilter" type="search" @bind="search" @bind:event="oninput" placeholder="Gebruikersnaam of eigenaar zoeken…" />
-        <table><thead><tr><th>Account</th><th>Rol</th><th>Aangemaakt door</th><th>Domeinen</th></tr></thead>
+        <div class="dashboard-section-heading"><h2>@L["All accessible accounts"]</h2><span class="status-pill good">@accounts.Count accounts</span></div>
+        <label for="userFilter">@L["Search users"]</label>
+        <input id="userFilter" type="search" @bind="search" @bind:event="oninput" placeholder="@L["Search username or owner…"]" />
+        <table><thead><tr><th>Account</th><th>@L["Role"]</th><th>@L["Created by"]</th><th>@L["Domains"]</th></tr></thead>
         <tbody>
         @foreach (var item in Visible)
         {
@@ -35,11 +37,11 @@ else if (accounts is not null)
                 <td><span style="@($"padding-left:{item.Depth * 18}px")">@(item.Depth > 0 ? "↳ " : "")<a href="@($"/users/{Uri.EscapeDataString(item.Account.Username)}")">@item.Account.Username</a></span></td>
                 <td><span class="status-pill">@item.Account.Role</span></td>
                 <td>@(item.Account.Creator ?? "—")</td>
-                <td><a href="@($"/domains?user={Uri.EscapeDataString(item.Account.Username)}")">Bekijk domeinen</a></td>
+                <td><a href="@($"/domains?user={Uri.EscapeDataString(item.Account.Username)}")">@L["View domains"]</a></td>
             </tr>
         }
         </tbody></table>
-        @if (accounts.Count == 0) { <p>Geen accounts teruggegeven door DirectAdmin.</p> }
+        @if (accounts.Count == 0) { <p>@L["No accounts returned by DirectAdmin."]</p> }
     </div>
     <div id="account-create"><AccountActions Kind="user" /></div>
 }
@@ -95,7 +97,7 @@ else if (accounts is not null)
         {
             var (status, body) = await Session.GetAccessibleAccountsAsync();
             if (status != 200)
-                throw new HttpRequestException($"DirectAdmin reageert met HTTP {status}.");
+                throw new HttpRequestException(L["DirectAdmin responded with HTTP {0}.", status].Value);
             using var json = JsonDocument.Parse(body);
             accounts = json.RootElement.GetProperty("accounts").EnumerateArray()
                 .Select(x => new Account(

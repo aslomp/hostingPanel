@@ -1,26 +1,28 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/sessions"
 @inject DirectAdminSession Session
-<PageTitle>Sessies — HostingPanel</PageTitle>
-<div class="page-header"><div><div class="eyebrow">Accountbeheer</div><h1>Sessies</h1><p>Huidige sessie, actieve sessies en sessiebeheer uit DirectAdmin.</p></div><button disabled="@busy" @onclick="Load">Vernieuwen</button></div>
+<PageTitle>@L["Sessions — HostingPanel"]</PageTitle>
+<div class="page-header"><div><div class="eyebrow">@L["Account management"]</div><h1>@L["Sessions"]</h1><p>@L["Current session, active sessions and session management from DirectAdmin."]</p></div><button disabled="@busy" @onclick="Load">@L["Refresh"]</button></div>
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {
-    <section class="card"><h2>Huidige sessie</h2><JsonOverview Json="@current" /></section>
-    <section class="card"><h2>Actieve sessies</h2><JsonOverview Json="@all" /></section>
+    <section class="card"><h2>@L["Current session"]</h2><JsonOverview Json="@current" /></section>
+    <section class="card"><h2>@L["Active sessions"]</h2><JsonOverview Json="@all" /></section>
     <section class="card">
-        <h2>Andere sessies beëindigen</h2>
-        <p>De backend bepaalt welke sessies mogen worden beëindigd. De huidige sessie blijft bij deze operatie bestaan.</p>
-        <label>Typ DESTROY om te bevestigen</label><input @bind="confirmation" />
-        <button class="primary" disabled="@(busy || confirmation != "DESTROY")" @onclick="DestroyOthers">Alle andere sessies beëindigen</button>
+        <h2>@L["Terminate other sessions"]</h2>
+        <p>@L["The backend determines which sessions may be terminated. This operation preserves the current session."]</p>
+        <label>@L["Enter DESTROY to confirm"]</label><input @bind="confirmation" />
+        <button class="primary" disabled="@(busy || confirmation != "DESTROY")" @onclick="DestroyOthers">@L["Terminate all other sessions"]</button>
         @if (feedback is not null) { <p role="status">@feedback</p> }
     </section>
     <section class="card">
-        <h2>Eén sessie beëindigen</h2>
+        <h2>@L["Terminate one session"]</h2>
         <label>Public session ID</label><input @bind="publicId" />
-        <label>Typ dezelfde ID ter bevestiging</label><input @bind="sessionConfirmation" />
-        <button disabled="@(busy || string.IsNullOrWhiteSpace(publicId) || sessionConfirmation != publicId)" @onclick="DestroySession">Sessie beëindigen</button>
+        <label>@L["Enter the same ID to confirm"]</label><input @bind="sessionConfirmation" />
+        <button disabled="@(busy || string.IsNullOrWhiteSpace(publicId) || sessionConfirmation != publicId)" @onclick="DestroySession">@L["Terminate session"]</button>
     </section>
-    @if (busy) { <p role="status">Verwerken…</p> }
+    @if (busy) { <p role="status">@L["Processing…"]</p> }
 }
 @code {
     private string current = "", all = "", confirmation = "", publicId = "", sessionConfirmation = "";

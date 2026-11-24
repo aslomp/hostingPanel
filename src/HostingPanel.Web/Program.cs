@@ -9,7 +9,7 @@ builder.Services.AddLocalization(options => options.ResourcesPath = "Resources")
 builder.Services.Configure<RequestLocalizationOptions>(options =>
 {
     var cultures = new[] { new CultureInfo("nl-NL"), new CultureInfo("en-US") };
-    options.DefaultRequestCulture = new RequestCulture("nl-NL");
+    options.DefaultRequestCulture = new RequestCulture("en-US");
     options.SupportedCultures = cultures;
     options.SupportedUICultures = cultures;
     options.RequestCultureProviders =

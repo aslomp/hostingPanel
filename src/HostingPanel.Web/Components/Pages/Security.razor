@@ -1,39 +1,41 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/security"
 @inject DirectAdminSession Session
-<PageTitle>Beveiliging — HostingPanel</PageTitle>
-<div class="page-header"><div><div class="eyebrow">Serverbeheer</div><h1>Beveiliging</h1><p>ModSecurity en ClamAV via de officiële DirectAdmin API.</p></div><button disabled="@busy" @onclick="Load">Vernieuwen</button></div>
+<PageTitle>@L["Security — HostingPanel"]</PageTitle>
+<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>@L["Security"]</h1><p>@L["ModSecurity and ClamAV through the official DirectAdmin API."]</p></div><button disabled="@busy" @onclick="Load">@L["Refresh"]</button></div>
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {
     <section class="card">
         <h2>ModSecurity</h2>
-        <label>Configuratieoverzicht</label><JsonOverview Json="@modsecurity" />
-        <label>Auditlogs — samenvatting</label><JsonOverview Json="@audit" />
+        <label>@L["Configuration overview"]</label><JsonOverview Json="@modsecurity" />
+        <label>@L["Audit logs — summary"]</label><JsonOverview Json="@audit" />
     </section>
     <section class="card">
         <h2>ClamAV</h2>
-        <p>Actieve scanprocessen</p><JsonOverview Json="@clamav" />
-        <h2>Scan starten</h2>
-        <p>Gebruik een pad dat de DirectAdmin-backend mag scannen. De backend valideert het pad en beslist over toegang.</p>
-        <label>Pad op de server</label><input @bind="scanPath" placeholder="/home/..." />
-        <label>Typ SCAN om te bevestigen</label><input @bind="scanConfirmation" />
-        <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(scanPath) || scanConfirmation != "SCAN")" @onclick="Scan">ClamAV-scan starten</button>
-        <h2>Scan annuleren</h2>
-        <label>ClamAV-proces-ID (PID)</label><input @bind="scanPid" />
-        <label>Typ dezelfde PID om te bevestigen</label><input @bind="pidConfirmation" />
-        <button disabled="@(busy || string.IsNullOrWhiteSpace(scanPid) || scanPid != pidConfirmation)" @onclick="CancelScan">Scan annuleren</button>
+        <p>@L["Active scan processes"]</p><JsonOverview Json="@clamav" />
+        <h2>@L["Start scan"]</h2>
+        <p>@L["Use a path that the DirectAdmin backend is permitted to scan. The backend validates the path and determines access."]</p>
+        <label>@L["Server path"]</label><input @bind="scanPath" placeholder="/home/..." />
+        <label>@L["Enter SCAN to confirm"]</label><input @bind="scanConfirmation" />
+        <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(scanPath) || scanConfirmation != "SCAN")" @onclick="Scan">@L["Start ClamAV scan"]</button>
+        <h2>@L["Cancel scan"]</h2>
+        <label>@L["ClamAV process ID (PID)"]</label><input @bind="scanPid" />
+        <label>@L["Enter the same PID to confirm"]</label><input @bind="pidConfirmation" />
+        <button disabled="@(busy || string.IsNullOrWhiteSpace(scanPid) || scanPid != pidConfirmation)" @onclick="CancelScan">@L["Cancel scan"]</button>
     </section>
     <section class="card">
-        <h2>ModSecurity voor domein</h2>
-        <label>Hostnaam</label><input @bind="hostname" placeholder="example.com" />
-        <button disabled="@busy" @onclick="LoadHostConfig">Configuratie ophalen</button>
+        <h2>@L["ModSecurity for domain"]</h2>
+        <label>@L["Hostname"]</label><input @bind="hostname" placeholder="example.com" />
+        <button disabled="@busy" @onclick="LoadHostConfig">@L["Retrieve configuration"]</button>
         <JsonOverview Json="@hostConfig" />
-        <label>Nieuwe domeinconfiguratie (JSON)</label>
+        <label>@L["New domain configuration (JSON)"]</label>
         <textarea rows="6" @bind="configJson" spellcheck="false"></textarea>
         <p>Vereist velden <code>engineEnabled</code> en <code>disabledRules</code>.</p>
-        <label>Typ de hostnaam ter bevestiging</label><input @bind="hostConfirmation" />
-        <button disabled="@(busy || hostname != hostConfirmation)" @onclick="SaveHostConfig">Configuratie vervangen</button>
-        <button disabled="@(busy || hostname != hostConfirmation)" @onclick="ResetHostConfig">Terug naar standaardconfiguratie</button>
+        <label>@L["Enter the hostname to confirm"]</label><input @bind="hostConfirmation" />
+        <button disabled="@(busy || hostname != hostConfirmation)" @onclick="SaveHostConfig">@L["Replace configuration"]</button>
+        <button disabled="@(busy || hostname != hostConfirmation)" @onclick="ResetHostConfig">@L["Restore default configuration"]</button>
     </section>
     @if (feedback is not null) { <p role="status">@feedback</p> }
 }
@@ -47,7 +49,7 @@ else
         hostname.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-');
     private async Task LoadHostConfig()
     {
-        if (busy || !ValidHostname()) { feedback = "Ongeldige hostnaam."; return; }
+        if (busy || !ValidHostname()) { feedback = L["Invalid hostname."].Value; return; }
         busy = true; feedback = null;
         try
         {
@@ -82,7 +84,7 @@ else
                 enabled.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False) ||
                 !json.RootElement.TryGetProperty("disabledRules", out var rules) ||
                 rules.ValueKind != System.Text.Json.JsonValueKind.Array)
-            { feedback = "JSON moet engineEnabled (bool) en disabledRules (array) bevatten."; return; }
+            { feedback = L["JSON must contain engineEnabled (bool) and disabledRules (array)."].Value; return; }
             var (status, body) = await Session.RequestApiAsync(HttpMethod.Put,
                 "api/modsecurity/configs/" + Uri.EscapeDataString(hostname), configJson);
             feedback = $"Backend HTTP {status}: {body}";

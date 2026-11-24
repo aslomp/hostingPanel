@@ -1,16 +1,18 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/databases"
 @using System.Text.Json
 @inject DirectAdminSession Session
 
-<PageTitle>Databasebeheer — HostingPanel</PageTitle>
+<PageTitle>@L["Database management — HostingPanel"]</PageTitle>
 <div class="page-header">
-  <div><div class="eyebrow">Accountbeheer / Databases</div>
-    <h1>Databasebeheer</h1>
-    <p>Databases van jouw account en alle backend-toegankelijke onderliggende accounts.</p>
+  <div><div class="eyebrow">@L["Account management / Databases"]</div>
+    <h1>@L["Database management"]</h1>
+    <p>@L["Databases belonging to your account and all subordinate accounts accessible through the backend."]</p>
   </div>
   <div class="form-actions">
-    <a class="btn" href="#database-create">＋ Database aanmaken</a>
-    <button disabled="@(loading || overallLoading)" @onclick="RefreshAll">↻ Vernieuwen</button>
+    <a class="btn" href="#database-create">@L["＋ Create database"]</a>
+    <button disabled="@(loading || overallLoading)" @onclick="RefreshAll">@L["↻ Refresh"]</button>
   </div>
 </div>
 @if (!Session.Connected)
@@ -20,19 +22,19 @@
 else
 {
   <section class="card">
-    <div class="dashboard-section-heading"><h2>Alle toegankelijke databases</h2>
+    <div class="dashboard-section-heading"><h2>@L["All accessible databases"]</h2>
       @if (overall is not null) { <span class="status-pill @(overallWarnings.Count == 0 ? "good" : "warning")">@overall.Count gevonden</span> }
     </div>
-    <p>Inclusief databases van onderliggende accounts, voor zover DirectAdmin die toegankelijk maakt.</p>
-    <button disabled="@overallLoading" @onclick="LoadOverall">Overzicht vernieuwen</button>
-    @if (overallLoading) { <p role="status">Databases uit toegankelijke accounts ophalen…</p> }
+    <p>@L["Includes databases of subordinate accounts where DirectAdmin permits access."]</p>
+    <button disabled="@overallLoading" @onclick="LoadOverall">@L["Refresh overview"]</button>
+    @if (overallLoading) { <p role="status">@L["Retrieving databases from accessible accounts…"]</p> }
     @if (overallError is not null) { <p class="error" role="alert">@overallError</p> }
     @if (overall is not null)
     {
-      <p>@overall.Count databases gevonden. @(overallWarnings.Count == 0 ? "Volledige inventarisatie." : $"Onvolledig: {overallWarnings.Count} accounts konden niet worden uitgelezen.")</p>
-      <label for="overallDbFilter">Zoeken in databases</label>
-      <input id="overallDbFilter" type="search" @bind="overallSearch" @bind:event="oninput" placeholder="Database of eigenaar zoeken…" />
-      <table><thead><tr><th>Eigenaar</th><th>Database</th><th>Tabellen</th><th>Gebruikers</th><th>Grootte (bytes)</th><th>Definer issues</th></tr></thead><tbody>
+      <p>@overall.Count databases gevonden. @(overallWarnings.Count == 0 ? L["Complete inventory."].Value : $L["Incomplete: {overallWarnings.Count} accounts could not be read."].Value)</p>
+      <label for="overallDbFilter">@L["Search databases"]</label>
+      <input id="overallDbFilter" type="search" @bind="overallSearch" @bind:event="oninput" placeholder="@L["Search database or owner…"]" />
+      <table><thead><tr><th>@L["Owner"]</th><th>Database</th><th>@L["Tables"]</th><th>@L["Users"]</th><th>@L["Size (bytes)"]</th><th>Definer issues</th></tr></thead><tbody>
         @foreach (var item in overall.Where(x => x.Owner.Contains(overallSearch, StringComparison.OrdinalIgnoreCase) || x.Name.Contains(overallSearch, StringComparison.OrdinalIgnoreCase)))
         {
           <tr>
@@ -43,7 +45,7 @@ else
           </tr>
         }
       </tbody></table>
-      @if (overall.Count == 0) { <p>De backend heeft geen databases teruggegeven voor de raadpleegbare accounts.</p> }
+      @if (overall.Count == 0) { <p>@L["The backend returned no databases for accessible accounts."]</p> }
       @foreach (var warning in overallWarnings)
       {
         <p class="error">@warning</p>
@@ -51,38 +53,38 @@ else
     }
   </section>
   <section class="card">
-    <h2>Databases van de huidige sessie</h2>
-    <p>Beheer databases in de huidige sessie. Voor databases van een ander account gebruik je de backend-ondersteunde sessiewissel.</p>
+    <h2>@L["Databases in the current session"]</h2>
+    <p>@L["Manage databases in the current session. For other accounts, use backend-supported session switching."]</p>
 
     @if (error is not null) { <p role="alert" class="error">@error</p> }
-    @if (loading) { <p role="status">Databases laden…</p> }
+    @if (loading) { <p role="status">@L["Loading databases…"]</p> }
     @if (databases is not null)
     {
       <label for="dbFilter">Zoek database (@databases.Count)</label>
-      <input id="dbFilter" @bind="search" @bind:event="oninput" placeholder="Databasenaam" />
-      <table><thead><tr><th>Database</th><th>Acties</th></tr></thead><tbody>
+      <input id="dbFilter" @bind="search" @bind:event="oninput" placeholder="@L["Database name"]" />
+      <table><thead><tr><th>Database</th><th>@L["Actions"]</th></tr></thead><tbody>
         @foreach(var database in databases.Where(x => x.Contains(search,StringComparison.OrdinalIgnoreCase)))
         {
           <tr><td><a href="@($"/databases/{Uri.EscapeDataString(database)}")">@database</a></td>
-            <td><a href="@($"/databases/{Uri.EscapeDataString(database)}")">Gebruikers bekijken / verwijderen</a></td></tr>
+            <td><a href="@($"/databases/{Uri.EscapeDataString(database)}")">@L["View users / delete"]</a></td></tr>
         }
       </tbody></table>
-      @if(databases.Count==0) { <p>Geen databases gevonden.</p> }
+      @if(databases.Count==0) { <p>@L["No databases found."]</p> }
     }
   </section>
   <section class="card" id="database-create">
-    <h2>Database met gebruiker aanmaken</h2>
-    <p>DirectAdmin voegt waar nodig de accountprefix toe. De exacte naam wordt na aanmaken opnieuw uit de backend opgehaald.</p>
+    <h2>@L["Create database with user"]</h2>
+    <p>@L["DirectAdmin adds the account prefix where necessary. The exact name is retrieved from the backend after creation."]</p>
     <div class="form-grid">
-      <div><label for="databaseName">Databasenaam</label>
+      <div><label for="databaseName">@L["Database name"]</label>
         <input id="databaseName" @bind="newDatabase" autocomplete="off" placeholder="app" /></div>
-      <div><label for="dbUsername">Databasegebruiker</label>
+      <div><label for="dbUsername">@L["Database user"]</label>
         <input id="dbUsername" @bind="newUser" autocomplete="off" placeholder="app" /></div>
-      <div><label for="dbPassword">Wachtwoord</label>
+      <div><label for="dbPassword">@L["Password"]</label>
         <input id="dbPassword" type="password" @bind="newPassword" autocomplete="new-password" /></div>
     </div>
     <div class="form-actions"><button class="primary" disabled="@creating" @onclick="Create">
-      @(creating ? "Aanmaken…" : "Database aanmaken")
+      @(creating ? "Aanmaken…" : L["Create database"].Value)
     </button>
     </div>
     @if (createMessage is not null) { <p role="status">@createMessage</p> }
@@ -118,7 +120,7 @@ else
       var (status, body) = await Session.GetDatabasesAsync();
       if(status!=200)
       {
-        error=$"Databaseoverzicht niet beschikbaar (HTTP {status}).";
+        error=L["Database overview unavailable (HTTP {0}).", status].Value;
         databases=null; return;
       }
       using var json=JsonDocument.Parse(body);
@@ -148,7 +150,7 @@ else
     try
     {
       var (status, body) = await Session.GetAccessibleDatabasesAsync();
-      if (status != 200) { overallError = $"Overall databaseoverzicht: HTTP {status}."; return; }
+      if (status != 200) { overallError = L["Overall database overview: HTTP {0}.", status].Value; return; }
       using var doc = JsonDocument.Parse(body);
       overall = doc.RootElement.GetProperty("items").EnumerateArray()
         .Select(x => {
@@ -177,11 +179,11 @@ else
       var (status, body)=await Session.CreateDatabaseAsync(newDatabase.Trim(),newUser.Trim(),newPassword);
       createMessage=status switch
       {
-        200 => "Database aangemaakt. Het overzicht is bijgewerkt.",
-        409 => "Mutaties zijn uitgeschakeld of de wijziging kon niet worden bevestigd.",
-        400 => "Controleer de database- en gebruikersnaam en het wachtwoord.",
-        403 => "DirectAdmin weigert deze databasebewerking.",
-        _ => $"DirectAdmin heeft het aanmaken niet bevestigd (HTTP {status})."
+        200 => L["Database created. The overview has been refreshed."].Value,
+        409 => L["Mutations are disabled or the change could not be confirmed."].Value,
+        400 => L["Check the database name, username and password."].Value,
+        403 => L["DirectAdmin denied this database operation."].Value,
+        _ => L["DirectAdmin did not confirm creation (HTTP {0}).", status].Value
       };
       if(status==200)
       {

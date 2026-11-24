@@ -1,24 +1,26 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/resellers"
 @using System.Text.Json
 @inject DirectAdminSession Session
 <PageTitle>Resellers — HostingPanel</PageTitle>
-<div class="page-header"><div><div class="eyebrow">Accountbeheer</div><h1>Resellerbeheer</h1><p>Backend-toegankelijke accounts en resellerconfiguratie, zonder rolfilter in de UI.</p></div><button disabled="@busy" @onclick="Load">Vernieuwen</button></div>
+<div class="page-header"><div><div class="eyebrow">@L["Account management"]</div><h1>@L["Reseller management"]</h1><p>@L["Backend-accessible accounts and reseller configuration, without UI role filtering."]</p></div><button disabled="@busy" @onclick="Load">@L["Refresh"]</button></div>
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {
     <section class="card">
-        <h2>Accountoverzicht</h2>
-        <p>Het overzicht omvat de accounts die DirectAdmin voor de huidige identiteit beschikbaar stelt.</p>
+        <h2>@L["Account overview"]</h2>
+        <p>@L["The overview includes accounts exposed by DirectAdmin to the current identity."]</p>
         <JsonOverview Json="@accounts" />
     </section>
     <section class="card">
-        <h2>Reseller-details</h2>
-        <label>Gebruikersnaam</label><input @bind="username" placeholder="reseller" />
-        <button disabled="@busy" @onclick="LoadDetails">Configuratie en gebruik ophalen</button>
-        <h3>Configuratie</h3><JsonOverview Json="@details" /><h3>Gebruik</h3><JsonOverview Json="@usage" />
+        <h2>@L["Reseller details"]</h2>
+        <label>@L["Username"]</label><input @bind="username" placeholder="reseller" />
+        <button disabled="@busy" @onclick="LoadDetails">@L["Retrieve configuration and usage"]</button>
+        <h3>@L["Configuration"]</h3><JsonOverview Json="@details" /><h3>@L["Usage"]</h3><JsonOverview Json="@usage" />
     </section>
     <section class="card">
-        <h2>Reseller-pakketten</h2>
+        <h2>@L["Reseller packages"]</h2>
         <JsonOverview Json="@packages" />
     </section>
     @if (error is not null) { <p class="error" role="alert">@error</p> }
@@ -48,7 +50,7 @@ else
     {
         if (busy || username.Length is < 1 or > 64 ||
             !username.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-'))
-        { error = "Ongeldige gebruikersnaam."; return; }
+        { error = L["Invalid username."].Value; return; }
         busy = true; error = null;
         try
         {
