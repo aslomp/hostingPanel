@@ -321,7 +321,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         // Until that provider exists, refuse the mutation instead of claiming success.
         return new(501, "KUBERNETES_CREDENTIAL_PROVISIONING_NOT_IMPLEMENTED");
     }
-    public async Task<DatabaseMutation> DeleteAsync(string database, string confirmation, AuthenticationHeaderValue auth, CancellationToken ct)
+    async Task<DatabaseMutation> IDatabases.DeleteAsync(string database, string confirmation, AuthenticationHeaderValue auth, CancellationToken ct)
     {
         var principal = await AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
