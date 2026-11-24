@@ -3,6 +3,7 @@
 @using HostingPanel.Api.Services
 @using HostingPanel.Api.Adapters
 @inject PanelSession Session
+@implements IDisposable
 @inject DnsOperations Dns
 
 <MudDialog>
@@ -36,38 +37,45 @@
     [Parameter] public string? OriginalValue { get; set; }
     [Parameter] public string? OriginalTtl { get; set; }
     private string type = "A", name = "", value = "", ttl = "";
-    private string? identity, error;
-    private bool busy;
+    private readonly DialogMutation mutation = new();
+    private string? openedChannel;
+    private string? error => mutation.Error;
+    private bool busy => mutation.Busy;
     protected override void OnInitialized()
     {
-        identity = Session.Username;
+        openedChannel = Session.TicketChannel;
+        Session.Changed += SessionChanged;
         type = OriginalType ?? "A";
         name = OriginalName ?? "";
         value = OriginalValue ?? "";
         ttl = OriginalTtl ?? "";
     }
     private void Cancel() { if (!busy) Dialog.Cancel(); }
-    private async Task Save()
+    private bool disposed;
+    private void SessionChanged() => _ = InvokeAsync(() =>
     {
-        if (busy || !Session.Connected || !string.Equals(identity, Session.Username, StringComparison.Ordinal)) return;
-        busy = true; error = null;
-        try
-        {
-            var record = new DnsRecord(type, name, value, string.IsNullOrWhiteSpace(ttl) ? null : ttl);
-            var previous = OriginalType is null ? null : new DnsRecord(OriginalType, OriginalName ?? "", OriginalValue ?? "", OriginalTtl);
-            var result = await Dns.ChangeAsync(Domain, new DnsChange(previous is null ? "add" : "edit", record, previous));
-            var status = result.Status;
-            if (result.Executed || result.ProvisioningPending) { Dialog.Close(DialogResult.Ok(status)); return; }
-            error = status switch
-            {
-                409 => L["The backend reported a conflict for this DNS change."].Value,
-                400 => L["Invalid DNS record data."].Value,
-                403 => L["Permission to modify the DNS zone denied."].Value,
-                _ => L["DNS change not confirmed (HTTP {0}).", status].Value
-            };
-        }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
-        { error = ex.Message; }
-        finally { busy = false; }
+        if (!disposed && (!Session.Connected || Session.TicketChannel != openedChannel)) Dialog.Cancel();
+    });
+    public void Dispose()
+    {
+        disposed = true;
+        Session.Changed -= SessionChanged;
+        mutation.Dispose();
     }
+    private Task Save() => mutation.RunAsync(Session, openedChannel, async current =>
+    {
+        var record = new DnsRecord(type, name, value, string.IsNullOrWhiteSpace(ttl) ? null : ttl);
+        var previous = OriginalType is null ? null : new DnsRecord(OriginalType, OriginalName ?? "", OriginalValue ?? "", OriginalTtl);
+        var result = await Dns.ChangeAsync(Domain, new DnsChange(previous is null ? "add" : "edit", record, previous));
+        if (!current()) return;
+        var status = result.Status;
+        if (result.Executed || result.ProvisioningPending) { Dialog.Close(DialogResult.Ok(status)); return; }
+        mutation.SetError(status switch
+        {
+            409 => L["The backend reported a conflict for this DNS change."].Value,
+            400 => L["Invalid DNS record data."].Value,
+            403 => L["Permission to modify the DNS zone denied."].Value,
+            _ => L["DNS change not confirmed (HTTP {0}).", status].Value
+        });
+    });
 }

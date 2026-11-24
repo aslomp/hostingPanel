@@ -6,6 +6,7 @@ using System.Text;
 
 var checks = new List<(string Description, Action Test)>
 {
+    ("Dialog mutations reject duplicates and obsolete sessions", DialogMutationTests.Run),
     ("Latest UI reads discard superseded results and cancel on disposal", LatestReadTests.Run),
     ("DNS capability is implemented by both providers", () =>
     {

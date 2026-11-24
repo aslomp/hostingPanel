@@ -38,4 +38,4 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 
 - Ticket overview refreshes coalesce inbox invalidations and cancel obsolete session reads; backend ticket scope and support-routing limitations remain unchanged.
 
-- Account, database and DNS-zone creation dialogs share mutation lifecycle state; no additional backend mutation capabilities are implied.
+- Account, database, domain and DNS-zone creation dialogs and DNS record editing share mutation lifecycle state; no additional backend mutation capabilities are implied.
