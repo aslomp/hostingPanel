@@ -32,6 +32,14 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
     public IFileAccess FileAccess => this;
     public ITickets Tickets => this;
 
+    private void Schedule(string type, Guid id, string operation, object? payload = null)
+    {
+        db.ReconciliationOperations.Add(new ReconciliationOperation {
+            ResourceType = type, ResourceId = id, Action = operation,
+            PayloadJson = JsonSerializer.Serialize(payload ?? new { })
+        });
+    }
+
     private async Task<HostingAccount?> AuthenticateAsync(AuthenticationHeaderValue auth, CancellationToken ct)
     {
         if (!auth.Scheme.Equals("Basic", StringComparison.OrdinalIgnoreCase) || auth.Parameter is null)
@@ -113,7 +121,10 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         };
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         db.Accounts.Add(account);
-        db.Domains.Add(new HostedDomain { Name = input.Domain.ToLowerInvariant(), OwnerId = account.Id });
+        var domain = new HostedDomain { Name = input.Domain.ToLowerInvariant(), OwnerId = account.Id };
+        db.Domains.Add(domain);
+        Schedule("account", account.Id, "create", new { account.Username });
+        Schedule("domain", domain.Id, "create", new { domain.Name });
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return new(200, null);
@@ -136,6 +147,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
             || await db.FileAccessAccounts.AnyAsync(x => x.OwnerId == target.Id, ct))
             return new(409, "ACCOUNT_HAS_RESOURCES");
         db.Accounts.Remove(target);
+        Schedule("account", target.Id, "delete", new { target.Username });
         await db.SaveChangesAsync(ct);
         return new(200, null);
     }
@@ -152,6 +164,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
             && (x.OwnerId == principal.Id || x.OwnerId == null), ct);
         if (assigned is null) return new(404, "PACKAGE_NOT_FOUND");
         account.PackageId = assigned.Id;
+        Schedule("account", account.Id, "update", new { account.Username, package });
         await db.SaveChangesAsync(ct);
         return new(200, null);
     }
@@ -170,6 +183,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         var limits = JsonSerializer.Deserialize<Dictionary<string, string>>(account.LimitsJson ?? "{}") ?? new();
         limits[change.Field] = change.Value;
         account.LimitsJson = JsonSerializer.Serialize(limits);
+        Schedule("account", account.Id, "update", new { account.Username, change.Field });
         await db.SaveChangesAsync(ct);
         return new(200, null);
     }
@@ -184,6 +198,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         if (target is null) return new(404, "ACCOUNT_NOT_FOUND");
         if (target.Id == principal.Id || !ids.Contains(target.Id)) return new(403, "ACCESS_DENIED");
         target.Suspended = suspended;
+        Schedule("account", target.Id, "update", new { target.Username, suspended });
         await db.SaveChangesAsync(ct);
         return new(200, null);
     }
@@ -224,8 +239,10 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         if (input.Action == "create")
         {
             if (existing is not null) return new(409, "DOMAIN_EXISTS");
-            db.Domains.Add(new HostedDomain { OwnerId = principal.Id, Name = name,
-                SettingsJson = JsonSerializer.Serialize(new { php = input.Php, ssl = input.Ssl, cgi = input.Cgi }) });
+            var created = new HostedDomain { OwnerId = principal.Id, Name = name,
+                SettingsJson = JsonSerializer.Serialize(new { php = input.Php, ssl = input.Ssl, cgi = input.Cgi }) };
+            db.Domains.Add(created);
+            Schedule("domain", created.Id, "create", new { name });
         }
         else
         {
@@ -239,9 +256,13 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
                     || await db.Certificates.AnyAsync(c => c.DomainId == existing.Id, ct))
                     return new(409, "DOMAIN_HAS_RESOURCES");
                 db.Domains.Remove(existing);
+                Schedule("domain", existing.Id, "delete", new { name });
             }
             else if (input.Action == "modify")
+            {
                 existing.SettingsJson = JsonSerializer.Serialize(new { php = input.Php, ssl = input.Ssl, cgi = input.Cgi });
+                Schedule("domain", existing.Id, "update", new { name });
+            }
             else return new(400, "INVALID_OPERATION");
         }
         await db.SaveChangesAsync(ct);
@@ -277,6 +298,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         var plain = values.ToDictionary(x => x.Key, x => x.Value.ToString());
         plain[setting] = value;
         row.SettingsJson = JsonSerializer.Serialize(plain);
+        Schedule("domain", row.Id, "update", new { row.Name, setting });
         await db.SaveChangesAsync(ct);
         return new(200, null);
     }
@@ -355,9 +377,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         if (principal is null) return new(401, null, "UNAUTHORIZED");
         if (page < 1 || page > 10000) return new(400, null, "INVALID_PAGE");
         var ids = await VisibleAccountsAsync(principal, ct);
-        var domainIds = await db.Domains.AsNoTracking().Where(d => ids.Contains(d.OwnerId))
-            .Select(d => d.Id).ToListAsync(ct);
-        var zones = await db.DnsZones.AsNoTracking().Where(z => z.DomainId == null || domainIds.Contains(z.DomainId.Value))
+        var zones = await db.DnsZones.AsNoTracking().Where(z => ids.Contains(z.OwnerId))
             .OrderBy(z => z.Name).Skip((page - 1) * 100).Take(100)
             .Select(z => new AdminDnsZone(z.Name, null, null)).ToListAsync(ct);
         return new(200, zones, null);
@@ -370,9 +390,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         var ids = await VisibleAccountsAsync(principal, ct);
         var zone = await db.DnsZones.AsNoTracking().FirstOrDefaultAsync(z => z.Name == domain.ToLowerInvariant(), ct);
         if (zone is null) return new(404, null, "ZONE_NOT_FOUND");
-        var host = zone.DomainId is null ? null :
-            await db.Domains.AsNoTracking().FirstOrDefaultAsync(d => d.Id == zone.DomainId, ct);
-        if (host is null || !ids.Contains(host.OwnerId)) return new(403, null, "ACCESS_DENIED");
+        if (!ids.Contains(zone.OwnerId)) return new(403, null, "ACCESS_DENIED");
         var records = await db.DnsRecords.AsNoTracking().Where(x => x.ZoneId == zone.Id)
             .OrderBy(x => x.Name).ThenBy(x => x.Type).ToListAsync(ct);
         return new(200, records.Select(r => new DnsRecord(r.Type, r.Name, r.Value, r.Ttl.ToString())).ToArray(), null);
@@ -389,8 +407,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         var ids = await VisibleAccountsAsync(principal, ct);
         var zone = await db.DnsZones.FirstOrDefaultAsync(x => x.Name == domain.ToLowerInvariant(), ct);
         if (zone is null) return new(404, "ZONE_NOT_FOUND");
-        var host = await db.Domains.FirstOrDefaultAsync(d => d.Id == zone.DomainId, ct);
-        if (host is null || !ids.Contains(host.OwnerId)) return new(403, "ACCESS_DENIED");
+        if (!ids.Contains(zone.OwnerId)) return new(403, "ACCESS_DENIED");
         var prev = change.Previous;
         var previous = prev is null ? null : await db.DnsRecords.FirstOrDefaultAsync(x =>
             x.ZoneId == zone.Id && x.Name == prev.Name && x.Type == prev.Type && x.Value == prev.Value, ct);
@@ -400,6 +417,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
             ZoneId = zone.Id, Name = change.Record.Name, Type = change.Record.Type,
             Value = change.Record.Value, Ttl = int.TryParse(change.Record.Ttl, out var ttl) ? ttl : zone.DefaultTtl
         });
+        Schedule("dns-zone", zone.Id, "update", new { zone.Name });
         await db.SaveChangesAsync(ct);
         return new(200, null);
     }
@@ -414,7 +432,9 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         var ids = await VisibleAccountsAsync(principal, ct);
         if (!ids.Contains(domain.OwnerId)) return new(403, "ACCESS_DENIED");
         if (await db.DnsZones.AnyAsync(z => z.Name == domain.Name, ct)) return new(409, "ZONE_EXISTS");
-        db.DnsZones.Add(new DnsZone { Name = domain.Name, DomainId = domain.Id });
+        var zone = new DnsZone { Name = domain.Name, DomainId = domain.Id, OwnerId = domain.OwnerId };
+        db.DnsZones.Add(zone);
+        Schedule("dns-zone", zone.Id, "create", new { zone.Name });
         await db.SaveChangesAsync(ct);
         return new(200, null);
     }
@@ -430,6 +450,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         var ids = await VisibleAccountsAsync(principal, ct);
         if (host is null || !ids.Contains(host.OwnerId)) return new(403, "ACCESS_DENIED");
         db.DnsZones.Remove(zone);
+        Schedule("dns-zone", zone.Id, "delete", new { zone.Name });
         await db.SaveChangesAsync(ct);
         return new(200, null);
     }
