@@ -9,15 +9,15 @@
     <Description>@L["ModSecurity and ClamAV through the official DirectAdmin API."]</Description>
     <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></Actions>
 </PanelPageHeader>
-@if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
+@if (!Session.Connected) { <MudPaper Class="pa-4 my-3" Elevation="1">Verbind eerst via het <a href="/">dashboard</a>.</MudPaper> }
 else
 {
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>ModSecurity</h2>
         <label>@L["Configuration overview"]</label><JsonOverview Json="@modsecurity" />
         <label>@L["Audit logs — summary"]</label><JsonOverview Json="@audit" />
-    </section>
-    <section class="card">
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>ClamAV</h2>
         <p>@L["Active scan processes"]</p><JsonOverview Json="@clamav" />
         <h2>@L["Start scan"]</h2>
@@ -29,8 +29,8 @@ else
         <label>@L["ClamAV process ID (PID)"]</label><MudTextField T="string" @bind-Value="scanPid" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <label>@L["Enter the same PID to confirm"]</label><MudTextField T="string" @bind-Value="pidConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || string.IsNullOrWhiteSpace(scanPid) || scanPid != pidConfirmation)" OnClick="CancelScan">@L["Cancel scan"]</MudButton>
-    </section>
-    <section class="card">
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["ModSecurity for domain"]</h2>
         <label>@L["Hostname"]</label><MudTextField T="string" @bind-Value="hostname" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="example.com" />
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="LoadHostConfig">@L["Retrieve configuration"]</MudButton>
@@ -41,7 +41,7 @@ else
         <label>@L["Enter the hostname to confirm"]</label><MudTextField T="string" @bind-Value="hostConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || hostname != hostConfirmation)" OnClick="SaveHostConfig">@L["Replace configuration"]</MudButton>
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || hostname != hostConfirmation)" OnClick="ResetHostConfig">@L["Restore default configuration"]</MudButton>
-    </section>
+    </MudPaper>
     @if (feedback is not null) { <p role="status">@feedback</p> }
 }
 @code {

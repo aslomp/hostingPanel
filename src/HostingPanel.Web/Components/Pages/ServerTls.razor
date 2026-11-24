@@ -10,26 +10,26 @@
     <Description>@L["Certificate status and ACME configuration for the DirectAdmin server."]</Description>
     <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></Actions>
 </PanelPageHeader>
-@if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
+@if (!Session.Connected) { <MudPaper Class="pa-4 my-3" Elevation="1">Verbind eerst via het <a href="/">dashboard</a>.</MudPaper> }
 else
 {
-    <section class="card"><h2>@L["Certificate status"]</h2><JsonOverview Json="@status" /></section>
-    <section class="card"><h2>@L["ACME settings"]</h2><JsonOverview Json="@acme" /></section>
-    <section class="card"><h2>@L["Certificate information"]</h2><JsonOverview Json="@certificate" /></section>
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1"><h2>@L["Certificate status"]</h2><JsonOverview Json="@status" /></MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1"><h2>@L["ACME settings"]</h2><JsonOverview Json="@acme" /></MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1"><h2>@L["Certificate information"]</h2><JsonOverview Json="@certificate" /></MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Change ACME configuration"]</h2>
         <p>@L["The configuration may contain sensitive DNS provider settings. Only the backend determines whether saving is permitted."]</p>
         <MudTextField T="string" @bind-Value="acmeJson" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Lines="10" spellcheck="false" />
         <label>@L["Enter ACME to confirm changes"]</label><MudTextField T="string" @bind-Value="acmeConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <button disabled="@(busy || acmeConfirmation != "ACME")" @onclick="SaveAcme">@L["Save ACME configuration"]</button>
-    </section>
-    <section class="card">
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Obtain certificate"]</h2>
         <p>@L["Requesting a new server certificate is a backend operation and may change server configuration."]</p>
         <label>@L["Enter OBTAIN to confirm"]</label><MudTextField T="string" @bind-Value="confirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <button class="primary" disabled="@(busy || confirmation != "OBTAIN")" @onclick="Obtain">@L["Request certificate"]</button>
         @if (feedback is not null) { <p role="status">@feedback</p> }
-    </section>
+    </MudPaper>
 }
 @code {
     private string status = "", acme = "", certificate = "", confirmation = "", acmeJson = "", acmeConfirmation = "";
