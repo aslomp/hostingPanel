@@ -17,7 +17,7 @@ flowchart TD
  SDK --> G[Gateway API and cert-manager]
 ```
 
-Typed UI operations resolve capabilities in independent per-call BackendOperationScope instances to avoid retaining EF Core contexts across Blazor circuits. Some settings/compatibility operations still use a same-host HTTP client (hosting-api); this is transitional, not a separately deployed API application. See [web UI](web-ui.md). CompatibilityApiClient is for explicit compatibility routes, not a generic backend interface.
+Typed UI operations resolve capabilities in independent per-call BackendOperationScope instances to avoid retaining EF Core contexts across Blazor circuits. Some settings/compatibility operations still use a same-host HTTP client (hosting-api); this is transitional, not a separately deployed API application. See [web UI](web-ui.md). Both compatibility and settings operations share PanelHttpTransport for same-host HTTP, caller identity and response disposal. CompatibilityApiClient remains restricted to explicit compatibility routes, while SettingsOperations owns fixed /hosting settings routes. Backend authorization remains authoritative.
 
 | Assembly | Ownership |
 | --- | --- |
