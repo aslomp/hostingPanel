@@ -9,8 +9,8 @@
     <Breadcrumb>@L["Account management"]</Breadcrumb>
     <TitleContent>@L["User management"]</TitleContent>
     <Description>@L["All accounts exposed by DirectAdmin to the current session, including resellers and their users."]</Description>
-    <Actions><div class="form-actions"><MudButton Href="#account-create" Variant="Variant.Filled" Color="Color.Primary">@L["＋ Add user"]</MudButton>
-    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@loading">@(loading ? "Laden…" : L["↻ Refresh"].Value)</MudButton></div></Actions>
+    <Actions><MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2"><MudButton Href="#account-create" Variant="Variant.Filled" Color="Color.Primary">@L["＋ Add user"]</MudButton>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@loading">@(loading ? "Laden…" : L["↻ Refresh"].Value)</MudButton></MudStack></Actions>
 </PanelPageHeader>
 @if (!Session.Connected)
 {
@@ -42,7 +42,7 @@ else if (accounts is not null)
             </tr>
         }
         </tbody></MudSimpleTable>
-        @if (accounts.Count == 0) { <p>@L["No accounts returned by DirectAdmin."]</p> }
+        @if (accounts.Count == 0) { <PanelEmptyState>@L["No accounts returned by DirectAdmin."]</PanelEmptyState> }
     </MudPaper>
     <div id="account-create"><AccountActions Kind="user" /></div>
 }

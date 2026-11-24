@@ -56,12 +56,12 @@ else
         <MudTextField T="string" @bind-Value="value" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dnsValue" Disabled="@(action == "delete")" Lines="3" />
         <label for="dnsTtl">@L["TTL (optional, 60–604800 seconds)"]</label>
         <MudTextField T="string" @bind-Value="ttl" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dnsTtl" Disabled="@(action == "delete")" />
-        <div class="domain-options">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || deleteDialogOpen || action == "delete")" OnClick="Save">
                 @(busy ? "Bezig…" : action == "add" ? "Toevoegen" : L["Save change"].Value)
             </MudButton>
             <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Reset">@L["New record"]</MudButton>
-        </div>
+        </MudStack>
         @if (message is not null) { <p role="status">@message</p> }
     </MudPaper>
 }

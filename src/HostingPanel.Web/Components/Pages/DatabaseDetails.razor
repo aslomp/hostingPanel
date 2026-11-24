@@ -27,7 +27,7 @@ else
     {
       <MudSimpleTable Dense="true" Hover="true" Striped="true"><thead><tr><th>@L["Username"]</th></tr></thead>
       <tbody>@foreach(var username in users){<tr><td>@username</td></tr>}</tbody></MudSimpleTable>
-      @if(users.Count==0) { <p>@L["No users returned by DirectAdmin."]</p> }
+      @if(users.Count==0) { <PanelEmptyState>@L["No users returned by DirectAdmin."]</PanelEmptyState> }
     }
   </MudPaper>
   <MudPaper Class="pa-4 my-3" Elevation="1">

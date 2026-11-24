@@ -10,10 +10,10 @@
     <Breadcrumb>@L["Support / Tickets"]</Breadcrumb>
     <TitleContent>@L["Ticket management"]</TitleContent>
     <Description>@L["Received tickets and own requests. DirectAdmin determines which tickets you can view."]</Description>
-    <Actions><div class="form-actions">
+    <Actions><MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
         <MudButton Href="/tickets/new" Variant="Variant.Filled" Color="Color.Primary">@L["＋ New ticket"]</MudButton>
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="Load">@L["↻ Refresh"]</MudButton>
-    </div></Actions>
+    </MudStack></Actions>
 </PanelPageHeader>
 @if (!Session.Connected)
 {
@@ -59,7 +59,7 @@ else
                     </tbody>
                 </MudSimpleTable>
             </div>
-            @if (Visible.Count == 0) { <p>@L["No tickets match this filter."]</p> }
+            @if (Visible.Count == 0) { <PanelEmptyState>@L["No tickets match this filter."]</PanelEmptyState> }
         }
     </MudPaper>
     <MudPaper Class="pa-4 my-3" Elevation="1">

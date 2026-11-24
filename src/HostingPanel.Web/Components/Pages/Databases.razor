@@ -9,10 +9,10 @@
     <Breadcrumb>@L["Account management / Databases"]</Breadcrumb>
     <TitleContent>@L["Database management"]</TitleContent>
     <Description>@L["Databases belonging to your account and all subordinate accounts accessible through the backend."]</Description>
-    <Actions><div class="form-actions">
+    <Actions><MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
     <MudButton Href="#database-create" Variant="Variant.Filled" Color="Color.Primary">@L["＋ Create database"]</MudButton>
     <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(loading || overallLoading)" OnClick="RefreshAll">@L["↻ Refresh"]</MudButton>
-  </div></Actions>
+  </MudStack></Actions>
 </PanelPageHeader>
 @if (!Session.Connected)
 {
@@ -44,7 +44,7 @@ else
           </tr>
         }
       </tbody></MudSimpleTable>
-      @if (overall.Count == 0) { <p>@L["The backend returned no databases for accessible accounts."]</p> }
+      @if (overall.Count == 0) { <PanelEmptyState>@L["The backend returned no databases for accessible accounts."]</PanelEmptyState> }
       @foreach (var warning in overallWarnings)
       {
         <p class="error">@warning</p>
@@ -68,7 +68,7 @@ else
             <td><a href="@($"/databases/{Uri.EscapeDataString(database)}")">@L["View users / delete"]</a></td></tr>
         }
       </tbody></MudSimpleTable>
-      @if(databases.Count==0) { <p>@L["No databases found."]</p> }
+      @if(databases.Count==0) { <PanelEmptyState>@L["No databases found."]</PanelEmptyState> }
     }
   </MudPaper>
   <MudPaper Class="pa-4 my-3" Elevation="1" id="database-create">
@@ -83,10 +83,10 @@ else
       <MudItem xs="12" sm="6"><label for="dbPassword">@L["Password"]</label>
         <MudTextField T="string" @bind-Value="newPassword" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbPassword" autocomplete="new-password" InputType="InputType.Password" /></MudItem>
     </MudGrid>
-    <div class="form-actions"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@creating" OnClick="Create">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@creating" OnClick="Create">
       @(creating ? "Aanmaken…" : L["Create database"].Value)
     </MudButton>
-    </div>
+    </MudStack>
     </MudForm>
     @if (createMessage is not null) { <p role="status">@createMessage</p> }
   </MudPaper>

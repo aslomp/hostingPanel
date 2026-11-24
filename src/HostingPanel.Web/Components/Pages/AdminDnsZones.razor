@@ -10,10 +10,10 @@
     <Breadcrumb>@L["Server management / DNS"]</Breadcrumb>
     <TitleContent>@L["DNS management"]</TitleContent>
     <Description>@L["All DNS zones exposed by the backend through DirectAdmin, including independently managed zones."]</Description>
-    <Actions><div class="form-actions">
+    <Actions><MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
       <MudButton Href="#dns-create" Variant="Variant.Filled" Color="Color.Primary">@L["＋ Add DNS zone"]</MudButton>
       <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Reload" Disabled="@loading">@(loading ? "Laden…" : L["↻ Refresh"].Value)</MudButton>
-    </div></Actions>
+    </MudStack></Actions>
 </PanelPageHeader>
 @if (!Session.Connected)
 {
@@ -28,7 +28,7 @@ else
         </div>
         <label for="dnsSearch">@L["Search DNS zones"]</label>
         <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dnsSearch" Placeholder="@L["Search domain name…"].Value" />
-        <div class="domain-options">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
             <label for="localData">@L["Local data"]</label>
             <MudSelect T="string" @bind-Value="localDataFilter" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="localData">
                 <MudSelectItem T="string" Value='@("all")'>@L["Both"]</MudSelectItem><MudSelectItem T="string" Value='@("yes")'>@L["Enabled"]</MudSelectItem>
@@ -39,7 +39,7 @@ else
                 <MudSelectItem T="string" Value='@("all")'>@L["Both"]</MudSelectItem><MudSelectItem T="string" Value='@("yes")'>@L["Enabled"]</MudSelectItem>
                 <MudSelectItem T="string" Value='@("no")'>@L["Disabled"]</MudSelectItem>
             </MudSelect>
-        </div>
+        </MudStack>
         @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
         @if (loading) { <PanelLoading>@L["Retrieving DNS zones…"]</PanelLoading> }
         @if (zones is not null)
@@ -59,11 +59,11 @@ else
                 }
                 </tbody>
             </MudSimpleTable>
-            <div class="domain-options">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
                 <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(loading || currentPage == 1)" OnClick="Previous">@L["Previous page"]</MudButton>
                 <span>Pagina @currentPage</span>
                 <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(loading || currentPage * PageSize >= Visible.Count)" OnClick="Next">@L["Next page"]</MudButton>
-            </div>
+            </MudStack>
         }
     </MudPaper>
     <MudPaper Class="pa-4 my-3" Elevation="1" id="dns-create">
@@ -75,7 +75,7 @@ else
           <MudItem xs="12" sm="6"><label>Nameserver 1</label><MudTextField T="string" @bind-Value="zoneNs1" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="ns1.example.com" /></MudItem>
           <MudItem xs="12" sm="6"><label>Nameserver 2</label><MudTextField T="string" @bind-Value="zoneNs2" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="ns2.example.com" /></MudItem>
         </MudGrid>
-        <div class="form-actions"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(changing || string.IsNullOrWhiteSpace(zoneDomain))" OnClick="CreateZone">@L["Create DNS zone"]</MudButton></div>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(changing || string.IsNullOrWhiteSpace(zoneDomain))" OnClick="CreateZone">@L["Create DNS zone"]</MudButton></MudStack>
     </MudPaper>
     <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Delete standalone DNS zone"]</h2>

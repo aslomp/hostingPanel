@@ -45,7 +45,7 @@ else
                 }
                 </tbody>
             </MudSimpleTable>
-            @if (domains.Count == 0) { <p>@L["No domains found for this account."]</p> }
+            @if (domains.Count == 0) { <PanelEmptyState>@L["No domains found for this account."]</PanelEmptyState> }
         }
     </MudPaper>
 
@@ -54,11 +54,11 @@ else
         <p>@L["Create a website for the signed-in account."]</p>
         <MudForm @ref="createForm">
         <MudTextField T="string" @bind-Value="testDomain" Label="@L["Domain name"].Value" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="newDomain" Placeholder="example.com" />
-        <div class="domain-options">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
             <MudCheckBox T="bool" @bind-Value="php" Label="PHP" />
             <MudCheckBox T="bool" @bind-Value="ssl" Label="SSL" />
             <MudCheckBox T="bool" @bind-Value="cgi" Label="CGI" />
-        </div>
+        </MudStack>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(mutationBusy || string.IsNullOrWhiteSpace(testDomain))" OnClick="CreateDomain">@L["Add domain"]</MudButton>
         </MudForm>
         @if (mutationStatus is not null)
