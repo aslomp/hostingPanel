@@ -7,82 +7,70 @@
 @inject NavigationContextState NavContext
 @inject NavigationManager Navigation
 
-<div class="shell">
-  <aside class="sidebar" aria-label="@L["Main navigation"]">
-    <a class="brand" href="/">◈ <span>HostingPanel<small>CONTROL CENTER</small></span></a>
-    <div class="nav-caption">@L["Navigation context"]</div>
-    <div class="nav-context-switch" role="group" aria-label="@L["Navigation context"]">
-      <button type="button" class="@(NavContext.Mode == "admin" ? "active" : "")"
-              aria-pressed="@(NavContext.Mode == "admin")"
-              @onclick='() => SetContext("admin")'>@L["Administrator"]</button>
-      <button type="button" class="@(NavContext.Mode == "user" ? "active" : "")"
-              aria-pressed="@(NavContext.Mode == "user")"
-              @onclick='() => SetContext("user")'>@L["User"]</button>
-    </div>
-    <div class="nav-caption">@(NavContext.Mode == "admin" ? L["Administrator features"].Value : L["User features"].Value)</div>
-    <label class="sidebar-search-label" for="hosting-nav-search">@L["Search pages"]</label>
-    <input id="hosting-nav-search" class="sidebar-search" type="search"
-           placeholder="Search pages..." @bind="navSearch" @bind:event="oninput" />
-    <NavLink href="/" Match="NavLinkMatch.All">▦ @L["Dashboard"]</NavLink>
-    <nav class="sidebar-scroll" aria-label="@L["Management sections"]">
-      @foreach (var navGroup in FilteredSections)
-      {
-        <details class="nav-section" open>
-          <summary><span class="nav-icon" aria-hidden="true">@navGroup.Icon</span>@L[navGroup.Title]</summary>
-          <div class="nav-section-items">
-            @foreach (var item in navGroup.Items)
-            {
-              <NavLink href="@item.Path" class="nav-item">
-                <span class="nav-icon" aria-hidden="true">@item.Icon</span>
-                <span>@L[item.Label]</span>
-                @if (!item.Implemented)
-                {
-                  <span class="nav-pending" title="@L["Not implemented"]" aria-label="@L["Not implemented"]">○</span>
-                }
-              </NavLink>
-            }
-          </div>
-        </details>
-      }
-    </nav>
-    <p class="nav-note">@L["DirectAdmin-compatible API"]<br />@L["The backend controls access rights."]</p>
-  </aside>
-  <div class="workspace">
-    <header class="topbar">
-      <div class="crumb">
-        <a href="/">HostingPanel</a><span aria-hidden="true">/</span>
-        <strong>@CurrentPage</strong>
-      </div>
-      <div class="session-identity">
-        <form method="get" action="/culture/set" class="culture-picker">
-          <label for="ui-culture">@L["Language"]</label>
-          <select id="ui-culture" name="culture" aria-label="@L["Language"]" onchange="this.form.submit()">
-            <option value="nl-NL" selected="@(CultureInfo.CurrentUICulture.Name == "nl-NL")">Nederlands</option>
-            <option value="en-US" selected="@(CultureInfo.CurrentUICulture.Name == "en-US")">English</option>
-          </select>
-          <input type="hidden" name="returnUrl" value="@(new Uri(Navigation.Uri).PathAndQuery)" />
-        </form>
+<MudThemeProvider />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudLayout>
+    <MudAppBar Elevation="1" Color="Color.Primary">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
+        <MudText Typo="Typo.h6">HostingPanel</MudText>
+        <MudSpacer />
         <TicketNotifications @key="Session.TicketChannel" />
-        <form method="post" action="/logout" data-enhance="false"><AntiforgeryToken /><button type="submit">@L["Disconnect"]</button></form>
-        <span>@(Session.Connected ? L["Connected account"].Value : L["Backend disconnected"].Value)
-          <strong>@(Session.Connected ? Session.Username : L["Not signed in"].Value)</strong>
-        </span>
-        <span class="session-avatar" aria-hidden="true">@(Session.Connected ? Session.Username[..Math.Min(2,Session.Username.Length)].ToUpperInvariant() : "HP")</span>
-      </div>
-    </header>
-    @if (Session.IsImpersonating)
-    {
-      <div class="impersonation-banner" role="status">
-        <span><strong>@L["Impersonation active:"]</strong> @L["you are acting as"] <strong>@Session.Username</strong>
-        @L["on behalf of administrator"] <strong>@Session.OriginalUsername</strong>.</span>
-        <button @onclick="ReturnToAdministrator">@L["Return to administrator"]</button>
-      </div>
-    }
-    <main class="content">@Body</main>
-  </div>
-</div>
+        <form method="get" action="/culture/set" class="culture-picker">
+            <select name="culture" aria-label="@L["Language"]" onchange="this.form.submit()">
+                <option value="nl-NL" selected="@(CultureInfo.CurrentUICulture.Name == "nl-NL")">Nederlands</option>
+                <option value="en-US" selected="@(CultureInfo.CurrentUICulture.Name == "en-US")">English</option>
+            </select>
+            <input type="hidden" name="returnUrl" value="@(new Uri(Navigation.Uri).PathAndQuery)" />
+        </form>
+        <MudText Typo="Typo.body2">@Session.Username</MudText>
+        <form method="post" action="/logout" data-enhance="false">
+            <AntiforgeryToken />
+            <MudButton ButtonType="ButtonType.Submit" Color="Color.Inherit">@L["Disconnect"]</MudButton>
+        </form>
+    </MudAppBar>
+    <MudDrawer @bind-Open="drawerOpen" Variant="DrawerVariant.Responsive" Elevation="1" Width="280px">
+        <MudStack Spacing="2" Class="pa-3">
+            <MudText Typo="Typo.overline">@L["Navigation context"]</MudText>
+            <MudStack Row="true" Spacing="1">
+                <MudButton Variant="@(NavContext.Mode == "admin" ? Variant.Filled : Variant.Text)" Color="Color.Primary" OnClick='() => SetContext("admin")'>@L["Administrator"]</MudButton>
+                <MudButton Variant="@(NavContext.Mode == "user" ? Variant.Filled : Variant.Text)" Color="Color.Primary" OnClick='() => SetContext("user")'>@L["User"]</MudButton>
+            </MudStack>
+            <MudTextField T="string" @bind-Value="navSearch" Immediate="true" Label="@L["Search pages"].Value" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        </MudStack>
+        <MudNavMenu Dense="true">
+            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">@L["Dashboard"]</MudNavLink>
+            @foreach (var navGroup in FilteredSections)
+            {
+                <MudNavGroup Title="@L[navGroup.Title].Value" Expanded="true">
+                    @foreach (var item in navGroup.Items)
+                    {
+                        <MudNavLink Href="@item.Path" Match="NavLinkMatch.All">@L[item.Label]</MudNavLink>
+                    }
+                </MudNavGroup>
+            }
+        </MudNavMenu>
+    </MudDrawer>
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="py-4">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">HostingPanel / @CurrentPage</MudText>
+            @if (Session.IsImpersonating)
+            {
+                <MudAlert Severity="Severity.Warning" Class="my-3">
+                    <strong>@L["Impersonation active:"]</strong> @L["you are acting as"] <strong>@Session.Username</strong>
+                    @L["on behalf of administrator"] <strong>@Session.OriginalUsername</strong>.
+                    <MudButton OnClick="ReturnToAdministrator">@L["Return to administrator"]</MudButton>
+                </MudAlert>
+            }
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
 
 @code {
+    private bool drawerOpen = true;
+    private void ToggleDrawer() => drawerOpen = !drawerOpen;
     protected override void OnInitialized()
     {
         Session.Changed += OnSessionChanged;
