@@ -40,12 +40,12 @@ else
         else
         {
             <label for="data-source">@L["Information"]</label>
-            <select id="data-source" @bind="selected">
+            <MudSelect T="string" @bind-Value="selected" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="data-source">
                 @foreach (var source in Sources)
                 {
-                    <option value="@source.Path">@L[source.Label]</option>
+                    <MudSelectItem T="string" Value='@source.Path'>@L[source.Label]</MudSelectItem>
                 }
-            </select>
+            </MudSelect>
             @if (selected.Contains("{domain}", StringComparison.Ordinal) ||
                  selected.Contains("{username}", StringComparison.Ordinal) ||
                  selected.Contains("{skin}", StringComparison.Ordinal) ||
@@ -54,12 +54,12 @@ else
                 <label for="resource-name">@(selected.Contains("{domain}") ? L["Domain name"].Value :
                     selected.Contains("{username}") ? L["Username"].Value :
                     selected.Contains("{skin}") ? L["Skin name"].Value : L["Identifier"].Value)</label>
-                <input id="resource-name" @bind="resource" placeholder="@L["Enter the required value"]" />
+                <MudTextField T="string" @bind-Value="resource" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="resource-name" Placeholder="@L["Enter the required value"].Value" />
             }
             @if (Key == "file-manager")
             {
                 <label for="file-path">Directory</label>
-                <input id="file-path" @bind="directory" placeholder="." />
+                <MudTextField T="string" @bind-Value="directory" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="file-path" Placeholder="." />
             }
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@busy" OnClick="Load">@L["Retrieve"]</MudButton>
             @if (!string.IsNullOrEmpty(statusText))

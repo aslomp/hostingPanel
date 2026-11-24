@@ -13,17 +13,17 @@ else
     <section class="card">
         <h2>@L["Check updates"]</h2><p>@L["Run the DirectAdmin update check without installing packages."]</p>
         <label>@L["Packages (comma-separated, blank means all updates)"]</label>
-        <input @bind="selectedPackages" placeholder="openssl, nginx" />
+        <MudTextField T="string" @bind-Value="selectedPackages" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="openssl, nginx" />
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Check">@L["Start update test"]</MudButton>
         <h2>@L["Run update"]</h2>
         <p>@L["This can change system software. Explicit confirmation is required."]</p>
-        <label>@L["Enter UPDATE to confirm"]</label><input @bind="confirmation" />
+        <label>@L["Enter UPDATE to confirm"]</label><MudTextField T="string" @bind-Value="confirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <button class="primary" disabled="@(busy || confirmation != "UPDATE")" @onclick="Run">@L["Start updates"]</button>
         @if (feedback is not null) { <p role="status">@feedback</p> }
     </section>
     <section class="card">
         <h2>@L["Update transaction log"]</h2>
-        <label>@L["Transaction ID from update history"]</label><input @bind="transactionId" />
+        <label>@L["Transaction ID from update history"]</label><MudTextField T="string" @bind-Value="transactionId" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || string.IsNullOrWhiteSpace(transactionId))" OnClick="FetchLog">@L["Retrieve log"]</MudButton>
         <JsonOverview Json="@transactionLog" />
     </section>

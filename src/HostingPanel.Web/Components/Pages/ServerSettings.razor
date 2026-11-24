@@ -10,15 +10,15 @@ else
 {
     <section class="card">
         <h2>@L["Configuration source"]</h2>
-        <select @bind="endpoint">
-            <option value="api/server-settings/directadmin-conf/active">@L["Active DirectAdmin configuration"]</option>
-            <option value="api/server-settings/directadmin-conf/default">@L["Default configuration"]</option>
-            <option value="api/server-settings/directadmin-conf/local">@L["Local overrides"]</option>
-            <option value="api/server-settings/db-config">@L["Database connection"]</option>
-            <option value="api/server-settings/email/config">@L["Email server configuration"]</option>
-            <option value="api/server-settings/email/outbound-filter">@L["Outbound mail filter"]</option>
-            <option value="api/server-settings/timezone/current">@L["Time zone"]</option>
-        </select>
+        <MudSelect T="string" @bind-Value="endpoint" Variant="Variant.Outlined" Margin="Margin.Dense">
+            <MudSelectItem T="string" Value='@("api/server-settings/directadmin-conf/active")'>@L["Active DirectAdmin configuration"]</MudSelectItem>
+            <MudSelectItem T="string" Value='@("api/server-settings/directadmin-conf/default")'>@L["Default configuration"]</MudSelectItem>
+            <MudSelectItem T="string" Value='@("api/server-settings/directadmin-conf/local")'>@L["Local overrides"]</MudSelectItem>
+            <MudSelectItem T="string" Value='@("api/server-settings/db-config")'>@L["Database connection"]</MudSelectItem>
+            <MudSelectItem T="string" Value='@("api/server-settings/email/config")'>@L["Email server configuration"]</MudSelectItem>
+            <MudSelectItem T="string" Value='@("api/server-settings/email/outbound-filter")'>@L["Outbound mail filter"]</MudSelectItem>
+            <MudSelectItem T="string" Value='@("api/server-settings/timezone/current")'>@L["Time zone"]</MudSelectItem>
+        </MudSelect>
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Retrieve configuration"]</MudButton>
         <p>@message</p>
         <JsonOverview Json="@result" />
@@ -26,32 +26,32 @@ else
     <section class="card">
         <h2>@L["Modify local DirectAdmin overrides"]</h2>
         <p>@L["This PATCH uses only"] <code>/api/server-settings/directadmin-conf/local</code>@L[". Specify only fields you want to change."]</p>
-        <textarea rows="10" @bind="patch" spellcheck="false" placeholder="{}"></textarea>
-        <label>@L["Enter PATCH to confirm"]</label><input @bind="confirmation" />
+        <MudTextField T="string" @bind-Value="patch" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="{}" Lines="10" spellcheck="false" />
+        <label>@L["Enter PATCH to confirm"]</label><MudTextField T="string" @bind-Value="confirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <button class="primary" disabled="@(busy || confirmation != "PATCH")" @onclick="Apply">@L["Apply patch"]</button>
         @if (mutation is not null) { <p role="status">@mutation</p> }
     </section>
     <section class="card">
         <h2>@L["Test or change database connection"]</h2>
         <p>@L["Complete the official DirectAdmin database configuration contract. A test does not save settings."]</p>
-        <textarea rows="10" @bind="dbConfigJson" spellcheck="false"></textarea>
+        <MudTextField T="string" @bind-Value="dbConfigJson" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Lines="10" spellcheck="false" />
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="TestDatabaseConfig">@L["Test connection"]</MudButton>
         <label>@L["Enter SAVE DB to replace database configuration"]</label>
-        <input @bind="dbConfirmation" />
+        <MudTextField T="string" @bind-Value="dbConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <button disabled="@(busy || dbConfirmation != "SAVE DB")" @onclick="SaveDatabaseConfig">@L["Save database configuration"]</button>
     </section>
     <section class="card">
         <h2>@L["Change server hostname"]</h2>
-        <label>@L["New hostname"]</label><input @bind="hostname" placeholder="server.example.com" />
-        <label>@L["Enter HOSTNAME to confirm"]</label><input @bind="hostnameConfirmation" />
+        <label>@L["New hostname"]</label><MudTextField T="string" @bind-Value="hostname" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="server.example.com" />
+        <label>@L["Enter HOSTNAME to confirm"]</label><MudTextField T="string" @bind-Value="hostnameConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <button disabled="@(busy || string.IsNullOrWhiteSpace(hostname) || hostnameConfirmation != "HOSTNAME")" @onclick="ChangeHostname">@L["Change hostname"]</button>
     </section>
     <section class="card">
         <h2>@L["Change time zone"]</h2>
-        <label>@L["Time zone (IANA)"]</label><input @bind="timezone" placeholder="Europe/Amsterdam" />
+        <label>@L["Time zone (IANA)"]</label><MudTextField T="string" @bind-Value="timezone" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="Europe/Amsterdam" />
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="ListTimezones">@L["Retrieve available time zones"]</MudButton>
         <JsonOverview Json="@timezones" />
-        <label>@L["Enter TIMEZONE to confirm"]</label><input @bind="timezoneConfirmation" />
+        <label>@L["Enter TIMEZONE to confirm"]</label><MudTextField T="string" @bind-Value="timezoneConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <button disabled="@(busy || string.IsNullOrWhiteSpace(timezone) || timezoneConfirmation != "TIMEZONE")" @onclick="ChangeTimezone">@L["Change time zone"]</button>
     </section>
 }

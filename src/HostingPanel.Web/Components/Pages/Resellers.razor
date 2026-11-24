@@ -15,7 +15,7 @@ else
     </section>
     <section class="card">
         <h2>@L["Reseller details"]</h2>
-        <label>@L["Username"]</label><input @bind="username" placeholder="reseller" />
+        <label>@L["Username"]</label><MudTextField T="string" @bind-Value="username" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="reseller" />
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="LoadDetails">@L["Retrieve configuration and usage"]</MudButton>
         <h3>@L["Configuration"]</h3><JsonOverview Json="@details" /><h3>@L["Usage"]</h3><JsonOverview Json="@usage" />
     </section>

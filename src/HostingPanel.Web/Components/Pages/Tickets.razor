@@ -26,13 +26,13 @@ else
         </div>
         <div class="form-grid">
             <div><label for="ticketSearch">@L["Search"]</label>
-                <input id="ticketSearch" type="search" @bind="search" @bind:event="oninput" placeholder="@L["Subject, sender…"]" /></div>
+                <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketSearch" Placeholder="@L["Subject, sender…"].Value" /></div>
             <div><label for="ticketFilter">@L["View"]</label>
-                <select id="ticketFilter" @bind="filter">
-                    <option value="all">@L["All tickets"]</option><option value="received">@L["Received"]</option>
-                    <option value="request">@L["My requests"]</option><option value="unread">@L["Unread"]</option>
-                    <option value="open">Open</option><option value="closed">@L["Closed"]</option>
-                </select></div>
+                <MudSelect T="string" @bind-Value="filter" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="ticketFilter">
+                    <MudSelectItem T="string" Value='@("all")'>@L["All tickets"]</MudSelectItem><MudSelectItem T="string" Value='@("received")'>@L["Received"]</MudSelectItem>
+                    <MudSelectItem T="string" Value='@("request")'>@L["My requests"]</MudSelectItem><MudSelectItem T="string" Value='@("unread")'>@L["Unread"]</MudSelectItem>
+                    <MudSelectItem T="string" Value='@("open")'>Open</MudSelectItem><MudSelectItem T="string" Value='@("closed")'>@L["Closed"]</MudSelectItem>
+                </MudSelect></div>
         </div>
         @if (loading) { <p role="status">@L["Retrieving tickets…"]</p> }
         @if (error is not null) { <p class="error" role="alert">@error</p> }

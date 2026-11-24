@@ -14,14 +14,14 @@ else
     <section class="card">
         <h2>@L["Change ACME configuration"]</h2>
         <p>@L["The configuration may contain sensitive DNS provider settings. Only the backend determines whether saving is permitted."]</p>
-        <textarea rows="10" @bind="acmeJson" spellcheck="false"></textarea>
-        <label>@L["Enter ACME to confirm changes"]</label><input @bind="acmeConfirmation" />
+        <MudTextField T="string" @bind-Value="acmeJson" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Lines="10" spellcheck="false" />
+        <label>@L["Enter ACME to confirm changes"]</label><MudTextField T="string" @bind-Value="acmeConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <button disabled="@(busy || acmeConfirmation != "ACME")" @onclick="SaveAcme">@L["Save ACME configuration"]</button>
     </section>
     <section class="card">
         <h2>@L["Obtain certificate"]</h2>
         <p>@L["Requesting a new server certificate is a backend operation and may change server configuration."]</p>
-        <label>@L["Enter OBTAIN to confirm"]</label><input @bind="confirmation" />
+        <label>@L["Enter OBTAIN to confirm"]</label><MudTextField T="string" @bind-Value="confirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <button class="primary" disabled="@(busy || confirmation != "OBTAIN")" @onclick="Obtain">@L["Request certificate"]</button>
         @if (feedback is not null) { <p role="status">@feedback</p> }
     </section>

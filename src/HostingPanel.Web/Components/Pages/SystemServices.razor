@@ -17,15 +17,15 @@ else
     <section class="card">
         <h2>@L["Inspect service"]</h2>
         <label>@L["Service name"]</label>
-        <input @bind="service" placeholder="@L["for example nginx"]" />
+        <MudTextField T="string" @bind-Value="service" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="@L["for example nginx"].Value" />
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Details">@L["Retrieve details and log"]</MudButton>
         <h3>@L["Service details"]</h3><JsonOverview Json="@details" /><h3>@L["Service log"]</h3><JsonOverview Json="@serviceLog" />
     </section>
     <section class="card">
         <h2>@L["Manage service"]</h2>
         <p>@L["Select a service and an exact management action. No actions are hidden based on a local user role."]</p>
-        <select @bind="action"><option value="restart">Restart</option><option value="reload">Reload</option><option value="start">Start</option><option value="stop">Stop</option></select>
-        <label>@L["Enter the service name to confirm the action"]</label><input @bind="confirmation" />
+        <MudSelect T="string" @bind-Value="action" Variant="Variant.Outlined" Margin="Margin.Dense"><MudSelectItem T="string" Value='@("restart")'>Restart</MudSelectItem><MudSelectItem T="string" Value='@("reload")'>Reload</MudSelectItem><MudSelectItem T="string" Value='@("start")'>Start</MudSelectItem><MudSelectItem T="string" Value='@("stop")'>Stop</MudSelectItem></MudSelect>
+        <label>@L["Enter the service name to confirm the action"]</label><MudTextField T="string" @bind-Value="confirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || string.IsNullOrWhiteSpace(service) || confirmation != service)" OnClick="Execute">@L["Execute action"]</MudButton>
         @if (outcome is not null) { <p role="status">@outcome</p> }
     </section>
@@ -33,8 +33,8 @@ else
         <h2>@L["Service watchdog"]</h2>
         <p>@L["Configure whether DirectAdmin monitors the selected service."]</p>
         <label>Watchdog</label>
-        <select @bind="watchdog"><option value="true">@L["Enable"]</option><option value="false">@L["Disable"]</option></select>
-        <label>@L["Enter the service name to confirm"]</label><input @bind="watchdogConfirmation" />
+        <MudSelect T="string" @bind-Value="watchdog" Variant="Variant.Outlined" Margin="Margin.Dense"><MudSelectItem T="string" Value='@("true")'>@L["Enable"]</MudSelectItem><MudSelectItem T="string" Value='@("false")'>@L["Disable"]</MudSelectItem></MudSelect>
+        <label>@L["Enter the service name to confirm"]</label><MudTextField T="string" @bind-Value="watchdogConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || !ValidService(service) || watchdogConfirmation != service)" OnClick="SetWatchdog">@L["Update watchdog"]</MudButton>
     </section>
 }

@@ -17,23 +17,23 @@ else
         <p>@L["Active scan processes"]</p><JsonOverview Json="@clamav" />
         <h2>@L["Start scan"]</h2>
         <p>@L["Use a path that the DirectAdmin backend is permitted to scan. The backend validates the path and determines access."]</p>
-        <label>@L["Server path"]</label><input @bind="scanPath" placeholder="/home/..." />
-        <label>@L["Enter SCAN to confirm"]</label><input @bind="scanConfirmation" />
+        <label>@L["Server path"]</label><MudTextField T="string" @bind-Value="scanPath" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="/home/..." />
+        <label>@L["Enter SCAN to confirm"]</label><MudTextField T="string" @bind-Value="scanConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(scanPath) || scanConfirmation != "SCAN")" @onclick="Scan">@L["Start ClamAV scan"]</button>
         <h2>@L["Cancel scan"]</h2>
-        <label>@L["ClamAV process ID (PID)"]</label><input @bind="scanPid" />
-        <label>@L["Enter the same PID to confirm"]</label><input @bind="pidConfirmation" />
+        <label>@L["ClamAV process ID (PID)"]</label><MudTextField T="string" @bind-Value="scanPid" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+        <label>@L["Enter the same PID to confirm"]</label><MudTextField T="string" @bind-Value="pidConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || string.IsNullOrWhiteSpace(scanPid) || scanPid != pidConfirmation)" OnClick="CancelScan">@L["Cancel scan"]</MudButton>
     </section>
     <section class="card">
         <h2>@L["ModSecurity for domain"]</h2>
-        <label>@L["Hostname"]</label><input @bind="hostname" placeholder="example.com" />
+        <label>@L["Hostname"]</label><MudTextField T="string" @bind-Value="hostname" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="example.com" />
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="LoadHostConfig">@L["Retrieve configuration"]</MudButton>
         <JsonOverview Json="@hostConfig" />
         <label>@L["New domain configuration (JSON)"]</label>
-        <textarea rows="6" @bind="configJson" spellcheck="false"></textarea>
+        <MudTextField T="string" @bind-Value="configJson" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Lines="6" spellcheck="false" />
         <p>Vereist velden <code>engineEnabled</code> en <code>disabledRules</code>.</p>
-        <label>@L["Enter the hostname to confirm"]</label><input @bind="hostConfirmation" />
+        <label>@L["Enter the hostname to confirm"]</label><MudTextField T="string" @bind-Value="hostConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || hostname != hostConfirmation)" OnClick="SaveHostConfig">@L["Replace configuration"]</MudButton>
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || hostname != hostConfirmation)" OnClick="ResetHostConfig">@L["Restore default configuration"]</MudButton>
     </section>
