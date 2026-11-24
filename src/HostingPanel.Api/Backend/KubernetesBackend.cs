@@ -127,7 +127,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         Schedule("domain", domain.Id, "create", new { domain.Name });
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return new(200, null);
+        return new(202, null);
     }
 
     public async Task<AccountOperationResult> DeleteAsync(string username, string confirmation, AuthenticationHeaderValue auth, CancellationToken ct)
@@ -149,7 +149,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         db.Accounts.Remove(target);
         Schedule("account", target.Id, "delete", new { target.Username });
         await db.SaveChangesAsync(ct);
-        return new(200, null);
+        return new(202, null);
     }
 
     public async Task<AccountOperationResult> SetPackageAsync(string username, string package, AuthenticationHeaderValue auth, CancellationToken ct)
@@ -166,7 +166,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         account.PackageId = assigned.Id;
         Schedule("account", account.Id, "update", new { account.Username, package });
         await db.SaveChangesAsync(ct);
-        return new(200, null);
+        return new(202, null);
     }
 
     public async Task<AccountOperationResult> SetLimitAsync(string kind, string username, AccountLimitChange change,
@@ -185,7 +185,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         account.LimitsJson = JsonSerializer.Serialize(limits);
         Schedule("account", account.Id, "update", new { account.Username, change.Field });
         await db.SaveChangesAsync(ct);
-        return new(200, null);
+        return new(202, null);
     }
 
     public async Task<AccountOperationResult> SetSuspendedAsync(string username, bool suspended,
@@ -200,7 +200,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         target.Suspended = suspended;
         Schedule("account", target.Id, "update", new { target.Username, suspended });
         await db.SaveChangesAsync(ct);
-        return new(200, null);
+        return new(202, null);
     }
 
     public async Task<VisibleDomainsResult> ListAccessibleDomains(AuthenticationHeaderValue auth, CancellationToken ct)
@@ -266,7 +266,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
             else return new(400, "INVALID_OPERATION");
         }
         await db.SaveChangesAsync(ct);
-        return new(200, null);
+        return new(202, null);
     }
 
     public async Task<DomainDetailResult> GetDetailsAsync(string domain, AuthenticationHeaderValue auth, CancellationToken ct)
@@ -300,7 +300,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         row.SettingsJson = JsonSerializer.Serialize(plain);
         Schedule("domain", row.Id, "update", new { row.Name, setting });
         await db.SaveChangesAsync(ct);
-        return new(200, null);
+        return new(202, null);
     }
 
     public async Task<DatabaseInventory> ListDatabases(AuthenticationHeaderValue auth, CancellationToken ct)
@@ -419,7 +419,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         });
         Schedule("dns-zone", zone.Id, "update", new { zone.Name });
         await db.SaveChangesAsync(ct);
-        return new(200, null);
+        return new(202, null);
     }
 
     public async Task<DnsChangeResult> CreateZoneAsync(DnsZoneCreate input, AuthenticationHeaderValue auth, CancellationToken ct)
@@ -436,7 +436,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         db.DnsZones.Add(zone);
         Schedule("dns-zone", zone.Id, "create", new { zone.Name });
         await db.SaveChangesAsync(ct);
-        return new(200, null);
+        return new(202, null);
     }
 
     public async Task<DnsChangeResult> DeleteZoneAsync(string domain, string confirmation, AuthenticationHeaderValue auth, CancellationToken ct)
@@ -452,7 +452,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db) :
         db.DnsZones.Remove(zone);
         Schedule("dns-zone", zone.Id, "delete", new { zone.Name });
         await db.SaveChangesAsync(ct);
-        return new(200, null);
+        return new(202, null);
     }
 
     public async Task<AccountOverviewResult> GetAsync(string username, AuthenticationHeaderValue auth, CancellationToken ct)
