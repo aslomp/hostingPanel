@@ -6,7 +6,7 @@ using HostingPanel.Api.Services;
 namespace HostingPanel.Api;
 
 /// <summary>No provider-specific implementations appear in this contract.</summary>
-public interface IHostingBackend : IAuthenticationProvider, IWebHosting, IDNSProvider, ICertificateProvider
+public interface IHostingBackend : IApiCompatibilityHandler, IAuthenticationProvider, IWebHosting, IDNSProvider, ICertificateProvider
 {
     IBackendSettingsAccess? Settings => null;
     IAccountCatalog AccountCatalog { get; }
@@ -22,7 +22,6 @@ public interface IHostingBackend : IAuthenticationProvider, IWebHosting, IDNSPro
     IDNSProvider Dns { get; }
     IFileAccess FileAccess { get; }
     ITickets Tickets { get; }
-    Task ForwardAsync(HttpContext context);
     IResult PreviewDomain(DomainCreatePreview input);
 }
 

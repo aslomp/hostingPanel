@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HostingPanel.Api.Controllers;
 
 [ApiController]
-public sealed class DirectAdminController(IHostingBackend backend) : BackendController
+public sealed class DirectAdminController(IApiCompatibilityHandler compatibility) : BackendController
 {
     [HttpGet("/api/admin-usage")]
     [HttpPost("/api/change-user-creator")]
@@ -188,5 +188,5 @@ public sealed class DirectAdminController(IHostingBackend backend) : BackendCont
     [HttpPost("/api/wordpress/locations/{location_id}/users/{user_id}/change-password")]
     [HttpPost("/api/wordpress/locations/{location_id}/users/{user_id}/sso-login")]
     [HttpGet("/api/wordpress/locations/{location_id}/wordpress")]
-    public Task ForwardDirectAdminAsync() => backend.ForwardAsync(HttpContext);
+    public Task ForwardDirectAdminAsync() => compatibility.ForwardAsync(HttpContext);
 }

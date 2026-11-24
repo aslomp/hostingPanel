@@ -4,7 +4,7 @@ namespace HostingPanel.Api.Controllers;
 
 /// <summary>Exact DirectAdmin Swagger routes. Backend determines authorization and support.</summary>
 [ApiController]
-public sealed class ServerSettingsController(IHostingBackend backend) : BackendController
+public sealed class ServerSettingsController(IApiCompatibilityHandler compatibility) : BackendController
 {
     [HttpPost("/api/server-settings/change-hostname")]
     [HttpGet("/api/server-settings/db-config")]
@@ -22,5 +22,5 @@ public sealed class ServerSettingsController(IHostingBackend backend) : BackendC
     [HttpGet("/api/server-settings/timezone/current")]
     [HttpGet("/api/server-settings/timezone/list")]
     [HttpPost("/api/server-settings/timezone/set")]
-    public Task ForwardAsync() => backend.ForwardAsync(HttpContext);
+    public Task ForwardAsync() => compatibility.ForwardAsync(HttpContext);
 }
