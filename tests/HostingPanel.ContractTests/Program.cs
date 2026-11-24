@@ -9,6 +9,10 @@ var checks = new List<(string Description, Action Test)>
     ("DNS capability is implemented by both providers", () =>
     {
         Require(typeof(HostingPanel.Api.IDNSProvider).IsAssignableFrom(typeof(DnsZoneService)));
+        Require(typeof(HostingPanel.Api.IDNSProvider).IsAssignableFrom(typeof(HostingPanel.Api.IHostingBackend)));
+        Require(typeof(HostingPanel.Api.IWebHosting).IsAssignableFrom(typeof(HostingPanel.Api.IHostingBackend)));
+        Require(typeof(HostingPanel.Api.IDNSProvider).IsAssignableFrom(typeof(HostingPanel.Api.DirectAdminBackend)));
+        Require(typeof(HostingPanel.Api.IWebHosting).IsAssignableFrom(typeof(HostingPanel.Api.DirectAdminBackend)));
         Require(typeof(HostingPanel.Api.IDNSProvider).IsAssignableFrom(typeof(HostingPanel.Api.KubernetesBackend)));
         Require(typeof(HostingPanel.Api.IHostingBackend).GetProperty("Dns")?.PropertyType == typeof(HostingPanel.Api.IDNSProvider));
         Require(new DnsChangeResult(202, null).ProvisioningPending);

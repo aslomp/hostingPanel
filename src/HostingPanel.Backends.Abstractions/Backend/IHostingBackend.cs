@@ -6,7 +6,7 @@ using HostingPanel.Api.Services;
 namespace HostingPanel.Api;
 
 /// <summary>No provider-specific implementations appear in this contract.</summary>
-public interface IHostingBackend : IAuthenticationProvider
+public interface IHostingBackend : IAuthenticationProvider, IWebHosting, IDNSProvider
 {
     IBackendSettingsAccess? Settings => null;
     IAccountCatalog AccountCatalog { get; }

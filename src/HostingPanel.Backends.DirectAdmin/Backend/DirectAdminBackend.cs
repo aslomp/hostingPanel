@@ -32,6 +32,28 @@ public sealed class DirectAdminBackend(
     public IDomains Domains => domains;
     public IWebHosting WebHosting => domains;
     public IDNSProvider Dns => dns;
+    public Task<WebsiteListResult> ListWebsitesAsync(string? owner, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        WebHosting.ListWebsitesAsync(owner, auth, ct);
+    public Task<WebsiteResult> GetWebsiteAsync(string domain, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        WebHosting.GetWebsiteAsync(domain, auth, ct);
+    public Task<WebsiteMutationResult> CreateWebsiteAsync(WebsiteConfiguration website, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        WebHosting.CreateWebsiteAsync(website, auth, ct);
+    public Task<WebsiteMutationResult> UpdateWebsiteAsync(WebsiteConfiguration website, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        WebHosting.UpdateWebsiteAsync(website, auth, ct);
+    public Task<WebsiteMutationResult> DeleteWebsiteAsync(string domain, string confirmation, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        WebHosting.DeleteWebsiteAsync(domain, confirmation, auth, ct);
+    public Task<AccessibleDnsInventory> ListAccessibleZonesAsync(AuthenticationHeaderValue auth, CancellationToken ct) =>
+        Dns.ListAccessibleZonesAsync(auth, ct);
+    public Task<AdminDnsZoneListResult> ListAdminZonesAsync(AuthenticationHeaderValue auth, int page, CancellationToken ct) =>
+        Dns.ListAdminZonesAsync(auth, page, ct);
+    public Task<DnsZoneResult> ReadAsync(string domain, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        Dns.ReadAsync(domain, auth, ct);
+    public Task<DnsChangeResult> ChangeAsync(string domain, DnsChange change, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        Dns.ChangeAsync(domain, change, auth, ct);
+    public Task<DnsChangeResult> CreateZoneAsync(DnsZoneCreate input, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        Dns.CreateZoneAsync(input, auth, ct);
+    public Task<DnsChangeResult> DeleteZoneAsync(string domain, string confirmation, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        Dns.DeleteZoneAsync(domain, confirmation, auth, ct);
     public IFileAccess FileAccess => fileAccess;
     public ITickets Tickets => tickets;
     public IResult PreviewDomain(DomainCreatePreview input)

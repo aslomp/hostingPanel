@@ -20,7 +20,7 @@ public sealed class DnsController(IHostingBackend backend) : BackendController
         if (!TryGetBasic(HttpContext, out var auth))
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
 
-        var result = await backend.Dns.ListAccessibleZonesAsync(auth, ct);
+        var result = await backend.ListAccessibleZonesAsync(auth, ct);
         return result.Zones is null
             ? Results.Json(new { type = result.Warning ?? "DNS_INVENTORY_UNAVAILABLE" }, statusCode: result.Status)
             : Results.Json(new { zones = result.Zones, warning = result.Warning, complete = result.Warning is null },
@@ -32,7 +32,7 @@ public sealed class DnsController(IHostingBackend backend) : BackendController
     {
         if (!TryGetBasic(HttpContext, out var auth))
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-        var result = await backend.Dns.CreateZoneAsync(input, auth, ct);
+        var result = await backend.CreateZoneAsync(input, auth, ct);
         return result.Error is null
             ? Results.Json(new { domain = input.Domain, created = result.Executed, provisioningPending = result.ProvisioningPending }, statusCode: result.Status)
             : Results.Json(new { type = result.Error }, statusCode: result.Status);
@@ -44,7 +44,7 @@ public sealed class DnsController(IHostingBackend backend) : BackendController
     {
         if (!TryGetBasic(HttpContext, out var auth))
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-        var result = await backend.Dns.DeleteZoneAsync(domain, input.Confirmation, auth, ct);
+        var result = await backend.DeleteZoneAsync(domain, input.Confirmation, auth, ct);
         return result.Error is null
             ? Results.Json(new { domain, deleted = result.Executed, provisioningPending = result.ProvisioningPending }, statusCode: result.Status)
             : Results.Json(new { type = result.Error }, statusCode: result.Status);
@@ -54,7 +54,7 @@ public sealed class DnsController(IHostingBackend backend) : BackendController
     public async Task<IResult> hosting_dns_zones_Get_19()
     {
         var context = HttpContext;
-        var service = backend.Dns;
+        var service = backend;
         if (!TryGetBasic(context, out var auth))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var rawPage = context.Request.Query["page"].ToString();
@@ -71,7 +71,7 @@ public sealed class DnsController(IHostingBackend backend) : BackendController
     public async Task<IResult> hosting_domains_domain_dns_Get_20([FromRoute] string domain)
     {
         var context = HttpContext;
-        var service = backend.Dns;
+        var service = backend;
         if (!TryGetBasic(context, out var auth))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var result = await service.ReadAsync(domain, auth, context.RequestAborted);
@@ -84,7 +84,7 @@ public sealed class DnsController(IHostingBackend backend) : BackendController
     public async Task<IResult> hosting_domains_domain_dns_Post_21([FromRoute] string domain, [FromBody] DnsChange input)
     {
         var context = HttpContext;
-        var service = backend.Dns;
+        var service = backend;
         if (!TryGetBasic(context, out var auth))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var result = await service.ChangeAsync(domain, input, auth, context.RequestAborted);
