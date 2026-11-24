@@ -276,8 +276,9 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         var query = from domain in db.Domains.AsNoTracking()
                     join owner in db.Accounts.AsNoTracking() on domain.OwnerId equals owner.Id
                     where ids.Contains(owner.Id)
+                    orderby domain.Name
                     select new VisibleDomain(domain.Name, owner.Username, owner.Kind);
-        return new(200, await query.OrderBy(x => x.Domain).ToListAsync(ct), null);
+        return new(200, await query.ToListAsync(ct), null);
     }
     async Task<VisibleDomainsResult> IAccessibleDomains.ListAsync(AuthenticationHeaderValue auth, CancellationToken ct)
         => await ListAccessibleDomains(auth, ct);
