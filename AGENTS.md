@@ -45,3 +45,7 @@ These instructions apply to the entire repository. Read [current architecture](d
 - For Helm changes render and validate both backend profiles. Test with fake upstreams and isolated fixtures; never use production accounts or domains for automated tests.
 - Review diff for duplicate state, broken contracts, missing translations and stale docs. Report exact test outcomes and untested runtime assumptions. Do not claim successful merge, build or deployment without evidence.
 - Update docs/capabilities.md and relevant subsystem docs in the same PR when behavior changes. Put proposals under docs/plans and durable architectural decisions under docs/decisions. Historical snapshots are not implementation guidance.
+
+## Pull request ownership
+- Own the full pull request lifecycle: create the PR, monitor CI, fix failures and merge conflicts, and merge it into main yourself once required checks and reviews pass. Do not leave a merge-ready PR for the user to merge manually unless explicitly requested.
+- Respect branch protection and required approvals; never bypass failing checks or force-push main. Verify the merge through GitHub and report the merge commit. If blocked, report the exact reason and any required user action.
