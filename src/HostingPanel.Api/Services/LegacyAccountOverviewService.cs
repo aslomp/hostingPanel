@@ -6,6 +6,7 @@ using HostingPanel.Api.Adapters;
 namespace HostingPanel.Api.Services;
 
 public sealed class LegacyAccountOverviewService(IHttpClientFactory clients)
+: IAccountOverview
 {
     private static readonly string[] Sensitive =
         ["password", "passwd", "secret", "token", "key", "private", "credential", "hash", "salt", "session", "auth"];
