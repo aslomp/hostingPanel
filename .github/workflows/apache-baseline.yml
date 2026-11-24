@@ -1,0 +1,58 @@
+name: Apache baseline smoke test
+on:
+  pull_request:
+    paths:
+      - 'deploy/helm/**'
+      - 'src/HostingPanel.Backends.Kubernetes/**'
+      - '.github/workflows/apache-baseline.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Render chart
+        run: |
+          helm template smoke deploy/helm/hostingpanel --namespace hosting --set backend=Kubernetes --set kubernetesHosting.enabled=true --set kubernetesHosting.nfsServer=192.0.2.1 --set kubernetesHosting.nfsPath=/home --set kubernetesHosting.gatewayName=smoke --set powerDns.enabled=false --set certManager.enabled=false > /tmp/hosting-rendered.yaml
+          python3 - <<'PY'
+          import pathlib, yaml
+          docs = list(yaml.safe_load_all(pathlib.Path('/tmp/hosting-rendered.yaml').read_text()))
+          config = next(d for d in docs if d and d.get('kind') == 'ConfigMap' and d['metadata']['name'] == 'apache-baseline')
+          deployment = next(d for d in docs if d and d.get('kind') == 'Deployment' and d['metadata']['name'] == 'apache-baseline')
+          pod = deployment['spec']['template']['spec']
+          apache = next(c for c in pod['containers'] if c['name'] == 'apache')
+          assert pod['automountServiceAccountToken'] is False
+          assert pod['securityContext']['runAsNonRoot'] is True
+          assert apache['securityContext']['allowPrivilegeEscalation'] is False
+          assert 'ALL' in apache['securityContext']['capabilities']['drop']
+          assert next(m for m in apache['volumeMounts'] if m['mountPath'] == '/home')['readOnly'] is True
+          pathlib.Path('/tmp/hosting-httpd.conf').write_text(config['data']['httpd.conf'])
+          pathlib.Path('/tmp/hosting-apache-image').write_text(apache['image'])
+          PY
+      - name: Validate Apache configuration and MPM
+        run: |
+          set -eu
+          image="$(cat /tmp/hosting-apache-image)"
+          docker pull "$image"
+          docker image inspect "$image" --format '{{json .RepoDigests}}' || docker image inspect "$image"
+          docker run --rm --user 1001:1001 --cap-drop ALL --security-opt no-new-privileges -v /tmp/hosting-httpd.conf:/etc/hostingpanel/httpd.conf:ro "$image" httpd -t -f /etc/hostingpanel/httpd.conf
+          docker run --rm --user 1001:1001 --cap-drop ALL --security-opt no-new-privileges -v /tmp/hosting-httpd.conf:/etc/hostingpanel/httpd.conf:ro "$image" httpd -M -f /etc/hostingpanel/httpd.conf | tee /tmp/apache-modules
+          grep -q mpm_event_module /tmp/apache-modules
+      - name: Smoke test baseline listeners
+        run: |
+          set -eu
+          image="$(cat /tmp/hosting-apache-image)"
+          trap 'docker rm -f hosting-apache-smoke >/dev/null 2>&1 || true' EXIT
+          docker run -d --name hosting-apache-smoke --user 1001:1001 --cap-drop ALL --security-opt no-new-privileges -p 127.0.0.1:18080:8080 -p 127.0.0.1:18081:8081 -v /tmp/hosting-httpd.conf:/etc/hostingpanel/httpd.conf:ro "$image" httpd -DFOREGROUND -f /etc/hostingpanel/httpd.conf
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18081/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:18081/ >/dev/null
+          test "$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: unknown.invalid' http://127.0.0.1:18080/)" = 403
+      - name: Show Apache logs
+        if: failure()
+        run: docker logs hosting-apache-smoke || true

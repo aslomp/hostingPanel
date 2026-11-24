@@ -852,4 +852,5 @@
   <data name="IP addresses" xml:space="preserve"><value>IP-adressen</value></data>
   <data name="Unlimited" xml:space="preserve"><value>Onbeperkt</value></data>
   <data name="Kubernetes package settings are stored; enforcement is not yet complete." xml:space="preserve"><value>Kubernetes slaat pakketinstellingen op; afdwinging is nog niet volledig.</value></data>
+  <data name="dashboard" xml:space="preserve"><value>dashboard</value></data>
 </root>
