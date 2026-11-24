@@ -40,6 +40,21 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         if (rows.Count == 0 && !shared) return;
         var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
         var identities = await PhpIdentityModel.AllocateAsync(db, domains.Select(x => x.OwnerId), ct);
+        var ownerIds = domains.Select(d => d.OwnerId).Distinct().ToArray();
+        var accounts = await db.Accounts.AsNoTracking().Where(x => ownerIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, ct);
+        // Resolve existing DirectAdmin owners before generating any Apache or FPM manifests.
+        // Never change the ownership of an existing /home account.
+        foreach (var domain in domains)
+        {
+            var owner = accounts[domain.OwnerId];
+            var identity = identities[domain.OwnerId];
+            var (uid, gid) = await storage.EnsureAsync(owner.Username, domain.Name, identity, ct);
+            if (identity.ExistingUid is { } previousUid && (previousUid != uid || identity.ExistingGid != gid))
+                throw new InvalidOperationException("Inconsistent ownership of DirectAdmin account directories.");
+            identity.ExistingUid = uid;
+            identity.ExistingGid = gid;
+        }
         var completed = new List<ReconciliationOperation>();
         foreach (var group in rows.GroupBy(x => x.ResourceId))
         {
@@ -55,8 +70,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 else
                 {
                     var identity = identities[domain.OwnerId];
-                    var manifest = BuildManifest(domain, identity);
-                    await storage.EnsureAsync(domain.Id, identity, ct);
+                    var manifest = BuildManifest(domain, accounts[domain.OwnerId].Username, identity);
                     await KubectlAsync(manifest, ct, "apply", "--server-side",
                         "--field-manager=hostingpanel", "-f", "-");
                 }
@@ -97,7 +111,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
 
     private string Namespace => configuration["KubernetesHosting:Namespace"] ?? "hosting";
 
-    private string BuildManifest(HostedDomain domain, PhpAccountIdentity identity)
+    private string BuildManifest(HostedDomain domain, string username, PhpAccountIdentity identity)
     {
         var host = domain.Name;
         if (host.Length > 253 || host.Split('.').Any(label => label.Length is < 1 or > 63
@@ -112,7 +126,8 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         if (Flag("cgi", false)) throw new InvalidOperationException("CGI is not supported");
         var name = "site-" + domain.Id.ToString("N");
         var labels = new Dictionary<string,string> { ["app.kubernetes.io/name"] = name, ["hostingpanel/component"] = "apache", ["hostingpanel/account"] = domain.OwnerId.ToString("N") };
-        var root = "/var/www/sites/" + domain.Id.ToString("N");
+        var siteRoot = "/home/" + username + "/domains/" + host;
+        var root = siteRoot + "/public_html";
         var phpVersion = PhpVersion(domain);
         if (php && !configuration.GetValue<bool>("KubernetesHosting:AllowSharedPhpRuntime"))
             throw new InvalidOperationException("Shared PHP requires explicit trust in all hosted PHP applications.");
@@ -143,11 +158,11 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var group = $"{identity.UnixName}:x:{identity.Gid}:\n";
         var checksum = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(apache + passwd + group)));
         object Meta() => new { name, @namespace = Namespace, labels };
-        object DataMount(bool readOnly) => new { name = "data", mountPath = root, readOnly };
+        object DataMount(bool readOnly) => new { name = "data", mountPath = siteRoot, readOnly };
         var containers = new object[] {
             new { name = "apache", image = configuration["KubernetesHosting:ApacheImage"] ?? "httpd:2.4",
                 command = new[] { "/bin/sh", "-ec" },
-                args = new[] { "test \"$(stat -c '%u:%g:%a' " + root + ")\" = '" + identity.Uid + ":" + identity.Gid + ":700'; cat /etc/site/passwd >> /etc/passwd; cat /etc/site/group >> /etc/group; httpd -t -f /etc/site/httpd.conf; exec httpd-foreground -f /etc/site/httpd.conf" },
+                args = new[] { "test -d " + root + "; cat /etc/site/passwd >> /etc/passwd; cat /etc/site/group >> /etc/group; httpd -t -f /etc/site/httpd.conf; exec httpd-foreground -f /etc/site/httpd.conf" },
                 ports = new[] { new { containerPort = 8080 } },
                 readinessProbe = new { tcpSocket = new { port = 8080 } },
                 volumeMounts = new object[] { DataMount(true), new { name = "config", mountPath = "/etc/site", readOnly = true } } }
@@ -161,7 +176,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                     metadata = new { labels, annotations = new Dictionary<string,string> { ["hostingpanel/config-sha256"] = checksum } },
                     spec = new { automountServiceAccountToken = false, containers, volumes = new object[] {
                         new { name = "config", configMap = new { name } },
-                        new { name = "data", nfs = new { server = Required("NfsServer"), path = export + "/" + domain.Id.ToString("N") } }
+                        new { name = "data", nfs = new { server = Required("NfsServer"), path = export + "/" + username + "/domains/" + host } }
                     } }
                 }
             } },
@@ -234,7 +249,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                             readinessProbe = owners.Length == 0
                                 ? (object)new { exec = new { command = new[] { "php", "-r", "exit(@fsockopen('127.0.0.1',9000)?0:1);" } } }
                                 : new { tcpSocket = new { port = owners[0].Port } },
-                            volumeMounts = new object[] { new { name = "sites", mountPath = "/var/www/sites" },
+                            volumeMounts = new object[] { new { name = "sites", mountPath = "/home" },
                                 new { name = "config", mountPath = "/etc/hostingpanel", readOnly = true } } } },
                         volumes = new object[] { new { name = "sites", nfs = new { server = Required("NfsServer"), path = Required("NfsPath") } },
                             new { name = "config", configMap = new { name } } }

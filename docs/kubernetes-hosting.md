@@ -8,9 +8,24 @@ Create the hosting namespace. Grant the panel service account namespace-scoped p
 
 The provider-owned PhpAccountIdentities SQLite table allocates a stable UID, GID and TCP listener port per account from 10000–30000. Allocations are retained after account deletion to prevent reuse against retained NFS data. The same account uses the same identity on both PHP versions. Reserve this numeric range in the container images and on the NFS server.
 
-Set NfsServer and NfsPath to a dedicated website export. Each domain directory is provisioned automatically at NfsPath/<domain GUID without hyphens>, owned by the account's allocated UID:GID with mode 0700. The export root must permit traversal, but must not contain unrelated data or publicly accessible tenant directories. The Apache startup checks its directory's ownership and mode. Set NfsProvisioningPath to the trusted storage-side filesystem path corresponding exactly to NfsPath. The provisioner needs permission to create directories and assign the allocated ownership there. A normal root-squashed client mount cannot perform arbitrary chown; use an authorized storage-side provisioning environment, not a privileged web-serving pod or a weakened NFS export. The parent and its ancestors must be administrator-controlled, with no tenant write access. Existing directories with unexpected ownership or permissions are rejected, never repaired recursively. Website deletion intentionally preserves data.
+Set NfsServer and NfsPath to the **existing DirectAdmin /home NFS export**. Do not point them to an empty GUID-based website directory. If the NFS export is /home, set NfsPath to /home. The Kubernetes backend uses the established DirectAdmin layout, for example:
 
-Apache mounts only its domain directory read-only; PHP-FPM mounts the complete export read-write. Both see identical absolute script paths under /var/www/sites/<domain GUID>. Apache and PHP workers run under the allocated account identity.
+```text
+/home/alice/
+  domains/example.com/
+    public_html/
+    private_html/
+    logs/
+    stats/
+  public_html/
+  backups/
+```
+
+The actual document root is `/home/<username>/domains/<domain>/public_html`. Existing directories, including `private_html` links and log directories, are preserved; the controller does **not** move files or apply recursive chown/chmod. Newly provisioned sites create only the missing `/home/<username>/domains/<domain>/public_html` directories, under an authorized provisioning mount. Non-web directories are left to their respective services. If an existing account home is present, its filesystem UID/GID determine the Unix identity used by Apache and PHP-FPM; allocations in SQLite remain responsible for stable FastCGI ports and new accounts.
+
+NfsProvisioningPath must be the trusted storage-side mount corresponding to the root of the configured NFS export, normally `/storage/sites` inside the panel. The NFS export itself must contain the DirectAdmin user directories **directly**, without an extra `home` level. The provisioner must have permission to create new directories and set their ownership. A root-squashed read-only NFS mount is sufficient for existing directories but cannot provision new ones. Symlinked directory components are rejected; an existing DirectAdmin `private_html` symlink is not touched.
+
+Apache mounts only the selected domain directory read-only at its original absolute path. PHP-FPM mounts the existing /home export read-write at /home, so FastCGI script paths agree. Access to other accounts must be blocked by existing Unix ownership and permissions, and production installations must validate cross-account isolation. Website deletion never deletes files.
 
 ## Apache and PHP
 
