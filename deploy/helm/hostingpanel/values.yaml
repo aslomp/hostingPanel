@@ -61,3 +61,7 @@ powerDns:
   webIp: ""
   ns1: ""
   ns2: ""
+
+# External cert-manager installation required when enabled. No dependency or CRDs are installed.
+certManager:
+  enabled: true

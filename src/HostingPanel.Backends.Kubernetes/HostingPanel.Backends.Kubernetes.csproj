@@ -3,6 +3,7 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="../HostingPanel.Backends.Abstractions/HostingPanel.Backends.Abstractions.csproj" />
+    <ProjectReference Include="../HostingPanel.Providers.CertManager/HostingPanel.Providers.CertManager.csproj" />
     <ProjectReference Include="../HostingPanel.Providers.PowerDNS/HostingPanel.Providers.PowerDNS.csproj" />
     <ProjectReference Include="../HostingPanel.Persistence/HostingPanel.Persistence.csproj" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />

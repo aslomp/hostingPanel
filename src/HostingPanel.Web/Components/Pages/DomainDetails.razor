@@ -73,6 +73,7 @@ else
             @if (saveMessage is not null) { <p role="status">@saveMessage</p> }
         </section>
     </div>
+    <DomainAcmeSettings @key="Domain" Domain="@Domain" />
     <section class="card">
         <h2>@L["Additional domain settings"]</h2>
         <p>@L["Additional settings reported by the backend."]</p>

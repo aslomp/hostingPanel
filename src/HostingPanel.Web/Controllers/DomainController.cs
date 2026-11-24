@@ -106,7 +106,7 @@ public sealed class DomainController(IHostingBackend backend) : BackendControlle
     [HttpPost("/api/domain-tls/domains/{domain}/certs/{id}/install-self-signed")]
     [HttpPost("/api/domain-tls/domains/{domain}/provision-certs")]
     [HttpPost("/api/domain-tls/domains/{domain}/provision-certs-dry-run")]
-    public Task ForwardDomainAsync() => backend.ForwardAsync(HttpContext);
+    public Task ForwardDomainAsync() => backend.HandleCertificateRequestAsync(HttpContext);
 
 
 }

@@ -13,6 +13,7 @@ public enum KubernetesIngressProvider
 
 public sealed record HostingIpAddress(string Address, int PrefixLength, string Status, string Device, string NameServer, bool Global = false, string[]? Resellers = null, string[]? AssignedUsers = null);
 
+public sealed record AcmeIssuerMapping(string Id, string Name, string IssuerName, string IssuerKind = "ClusterIssuer", bool Staging = false, bool SupportsWildcard = false);
 public sealed class KubernetesBackendSettings : IBackendSettings
 {
     [Display(Name = "Ingress provider", Description = "Desired routing implementation for hosted domains. Reconciliation is not implemented yet.")]
@@ -32,6 +33,18 @@ public sealed class KubernetesBackendSettings : IBackendSettings
 
     [Display(Name = "IP addresses", Description = "Managed hosting addresses.")]
     public HostingIpAddress[] IpAddresses { get; set; } = [];
+
+    [Display(Name = "ACME providers", Description = "Map provider IDs to existing cert-manager Issuer or ClusterIssuer resources.")]
+    public AcmeIssuerMapping[] AcmeProviders { get; set; } = [];
+
+    [Display(Name = "Default ACME provider", Description = "Provider ID inherited by accounts and domains.")]
+    public string AcmeDefaultProvider { get; set; } = "";
+
+    [Display(Name = "User ACME defaults", Description = "Map account usernames to provider IDs.")]
+    public Dictionary<string,string> AcmeUserProviders { get; set; } = new();
+
+    [Display(Name = "Package ACME defaults", Description = "Map package GUIDs to provider IDs.")]
+    public Dictionary<string,string> AcmePackageProviders { get; set; } = new();
 
     [JsonIgnore]
     public IBackendSettingsValidator Validator { get; } = new KubernetesBackendSettingsValidator();
@@ -73,6 +86,21 @@ public sealed class KubernetesBackendSettingsValidator : IBackendSettingsValidat
         if (typed.IpAddresses.Length > 0 && typed.DnsWebIp.Length > 0 &&
             !typed.IpAddresses.Any(x => x is not null && x.Address == typed.DnsWebIp && x.Status is "server" or "shared"))
             errors[nameof(typed.DnsWebIp)] = ["Select a server or shared address from IP management."];
+        var providerIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var provider in typed.AcmeProviders)
+        {
+            if (provider is null || !DnsLabel(provider.Id) || !DnsLabel(provider.IssuerName) ||
+                string.IsNullOrWhiteSpace(provider.Name) || provider.Name.Length > 128 ||
+                provider.IssuerKind is not ("Issuer" or "ClusterIssuer") || !providerIds.Add(provider.Id))
+                errors[nameof(typed.AcmeProviders)] = ["Invalid or duplicate provider ID, issuer name or kind."];
+        }
+        if (typed.AcmeDefaultProvider.Length > 0 && !providerIds.Contains(typed.AcmeDefaultProvider))
+            errors[nameof(typed.AcmeDefaultProvider)] = ["Unknown default provider."];
+        if (typed.AcmeUserProviders.Any(x => !providerIds.Contains(x.Value)))
+            errors[nameof(typed.AcmeUserProviders)] = ["Unknown user provider."];
+        if (typed.AcmePackageProviders.Any(x => !Guid.TryParse(x.Key, out _) || !providerIds.Contains(x.Value)))
+            errors[nameof(typed.AcmePackageProviders)] = ["Invalid package GUID or unknown provider."];
         return errors;
     }
+    private static bool DnsLabel(string? s) => s is { Length: > 0 and <= 63 } && char.IsAsciiLetterOrDigit(s[0]) && char.IsAsciiLetterOrDigit(s[^1]) && s.All(c => char.IsAsciiDigit(c) || c is >= 'a' and <= 'z' or '-');
 }

@@ -23,6 +23,7 @@ public static class KubernetesRegistration
     services.AddSingleton<IHostingPanelSchemaExtension>(sp => sp.GetRequiredService<PhpIdentityModel>());
     services.AddSingleton<NfsDirectoryProvisioner>();
     services.AddHostedService<WebsiteReconciler>();
+    services.AddHostedService<CertificateReconciler>();
     if (configuration.GetValue<bool>("PowerDns:Enabled"))
     {
         services.AddHttpClient<PowerDnsClient>(http =>

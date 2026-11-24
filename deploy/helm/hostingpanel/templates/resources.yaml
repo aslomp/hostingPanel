@@ -90,6 +90,8 @@ spec:
               value: {{ .Values.directAdmin.baseUrl | quote }}
             {{- end }}
             {{- if $hosting }}
+            - name: CertManager__Enabled
+              value: {{ .Values.certManager.enabled | quote }}
             - name: KubernetesHosting__Enabled
               value: "true"
             - name: KubernetesHosting__Namespace
