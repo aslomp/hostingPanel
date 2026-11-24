@@ -58,5 +58,5 @@ public sealed class ResellerController(IHostingBackend backend) : BackendControl
 
     [HttpGet("/api/resellers/{username}/config")]
     [HttpGet("/api/resellers/{username}/usage")]
-    public Task ForwardAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+    public Task ForwardAsync() => backend.ForwardAsync(HttpContext);
 }

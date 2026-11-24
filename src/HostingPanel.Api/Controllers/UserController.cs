@@ -105,7 +105,7 @@ public sealed class UserController(IHostingBackend backend) : BackendController
     public async Task<IResult> hosting_users_username_overview_Get_9([FromRoute] string username)
     {
         var context = HttpContext;
-        var service = backend.LegacyAccountOverview;
+        var service = backend.AccountOverview;
         if (!TryGetBasic(context, out var auth))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             if (!LegacyAccountOverviewService.ValidUsername(username))
@@ -126,7 +126,7 @@ public sealed class UserController(IHostingBackend backend) : BackendController
     [HttpGet("/api/search/users-extended")]
     [HttpGet("/api/users/list")]
     [HttpGet("/api/users/{username}/login-history")]
-    public Task ForwardUserAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+    public Task ForwardUserAsync() => backend.ForwardAsync(HttpContext);
 
 
 }

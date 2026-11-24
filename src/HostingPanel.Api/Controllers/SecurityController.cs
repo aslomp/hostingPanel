@@ -18,5 +18,5 @@ public sealed class SecurityController(IHostingBackend backend) : BackendControl
     [HttpGet("/api/modsecurity/global-config")]
     [HttpPut("/api/modsecurity/global-config")]
     [HttpGet("/api/modsecurity/user-configs")]
-    public Task ForwardAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+    public Task ForwardAsync() => backend.ForwardAsync(HttpContext);
 }

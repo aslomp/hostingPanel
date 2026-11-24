@@ -19,5 +19,5 @@ public sealed class SessionController(IHostingBackend backend) : BackendControll
     [HttpGet("/api/sessions")]
     [HttpPost("/api/sessions/destroy-all-other")]
     [HttpPost("/api/sessions/destroy/{public_id}")]
-    public Task ForwardAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+    public Task ForwardAsync() => backend.ForwardAsync(HttpContext);
 }

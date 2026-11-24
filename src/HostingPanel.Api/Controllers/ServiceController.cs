@@ -14,5 +14,5 @@ public sealed class ServiceController(IHostingBackend backend) : BackendControll
     [HttpGet("/api/system-services/list")]
     [HttpGet("/api/system-services/service/{service}")]
     [HttpGet("/api/system-services/service/{service}/log")]
-    public Task ForwardAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+    public Task ForwardAsync() => backend.ForwardAsync(HttpContext);
 }

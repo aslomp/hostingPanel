@@ -22,5 +22,5 @@ public sealed class ServerSettingsController(IHostingBackend backend) : BackendC
     [HttpGet("/api/server-settings/timezone/current")]
     [HttpGet("/api/server-settings/timezone/list")]
     [HttpPost("/api/server-settings/timezone/set")]
-    public Task ForwardAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+    public Task ForwardAsync() => backend.ForwardAsync(HttpContext);
 }
