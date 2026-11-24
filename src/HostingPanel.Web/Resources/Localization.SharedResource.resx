@@ -690,4 +690,8 @@
   <data name="Backend HTTP {0}." xml:space="preserve"><value>Backend HTTP {0}.</value></data>
   <data name="Yes" xml:space="preserve"><value>Yes</value></data>
   <data name="No" xml:space="preserve"><value>No</value></data>
+  <data name="Sign in" xml:space="preserve"><value>Sign in</value></data>
+  <data name="Remember me" xml:space="preserve"><value>Remember me</value></data>
+  <data name="Sign in to your hosting account." xml:space="preserve"><value>Sign in to your hosting account.</value></data>
+  <data name="Sign-in service unavailable. Try again later." xml:space="preserve"><value>Sign-in service unavailable. Try again later.</value></data>
 </root>

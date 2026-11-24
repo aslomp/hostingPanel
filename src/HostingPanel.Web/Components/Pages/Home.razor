@@ -22,37 +22,7 @@
   <p>@L["DirectAdmin Evolution-inspired management, with live data from the connected backend."]</p>
 </div>
 
-@if (!Session.Connected)
-{
-  <div class="dashboard-layout">
-    <section class="card">
-      <h2>@L["Backend connection"]</h2>
-      <p>@L["Connect to the configured hosting backend. Credentials remain in the interactive Blazor session."]</p>
-      <form @onsubmit="Connect" @onsubmit:preventDefault>
-        <div class="form-grid">
-          <div><label for="daUser">@L["Username"]</label>
-            <input id="daUser" @bind="username" autocomplete="username" required /></div>
-          <div><label for="daKey">@L["Password or login key"]</label>
-            <input id="daKey" type="password" @bind="key" autocomplete="off" required /></div>
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="primary" disabled="@connecting">
-            @(connecting ? L["Checking connection…"].Value : L["Connect"].Value)
-          </button>
-        </div>
-      </form>
-      @if (error is not null) { <p class="error" role="alert">@error</p> }
-    </section>
-    <aside class="dashboard-aside">
-      <section class="card">
-        <h2>@L["About the control panel"]</h2>
-        <p>@L["HostingPanel uses the same management groups as DirectAdmin Evolution. Permissions and available resources are provided by the backend."]</p>
-        <p>@L["You choose the administrator or user view. The backend remains responsible for access rights."]</p>
-      </section>
-    </aside>
-  </div>
-}
-else if (NavContext.Mode == "user")
+@if (NavContext.Mode == "user")
 {
   <div class="dashboard-layout">
     <div>
@@ -80,7 +50,7 @@ else if (NavContext.Mode == "user")
         <div class="state-row"><span class="state-dot connected"></span>@L["Connected to backend"]</div>
         <h3>@Session.Username</h3>
         <p>@L["The user navigation is a display mode. The backend determines access."]</p>
-        <button @onclick="Disconnect">@L["Disconnect"]</button>
+        <form method="post" action="/logout" data-enhance="false"><AntiforgeryToken /><button type="submit">@L["Disconnect"]</button></form>
       </section>
     </aside>
   </div>
@@ -132,7 +102,7 @@ else
         <div class="state-row"><span class="state-dot connected"></span><span>@L["Backend connection active"]</span></div>
         <h3>@Session.Username</h3>
         <p>@L["The backend determines available data and actions. No account roles are assumed."]</p>
-        <div class="form-actions"><button @onclick="Disconnect">@L["Disconnect"]</button></div>
+        <div class="form-actions"><form method="post" action="/logout" data-enhance="false"><AntiforgeryToken /><button type="submit">@L["Disconnect"]</button></form></div>
       </section>
       <section class="card">
         <div class="dashboard-section-heading"><h2>@L["Quick access"]</h2></div>
@@ -150,35 +120,3 @@ else
   </div>
 }
 
-@code {
-    private string username = "";
-    private string key = "";
-    private string? error;
-    private bool connecting;
-
-    private async Task Connect()
-    {
-        if (connecting) return;
-        connecting = true;
-        error = null;
-        try
-        {
-            Session.SetCredentials(username, key);
-            // Authenticate using the session endpoint, not permission to list users.
-            var (status, _) = await Session.AuthenticateBackendAsync();
-            if (status is 401 or 403)
-                throw new UnauthorizedAccessException(L["The backend rejected the sign-in."]);
-            if (status is < 200 or >= 300)
-                throw new HttpRequestException(L["Backend session check: HTTP {0}.", status].Value);
-            key = "";
-        }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
-            or UnauthorizedAccessException or FormatException or ArgumentException)
-        {
-            Session.Disconnect();
-            error = ex.Message;
-        }
-        finally { connecting = false; }
-    }
-    private void Disconnect() { Session.Disconnect(); key = ""; }
-}

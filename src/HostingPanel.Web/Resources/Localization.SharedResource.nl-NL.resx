@@ -690,4 +690,8 @@
   <data name="Backend HTTP {0}." xml:space="preserve"><value>Backend HTTP {0}.</value></data>
   <data name="Yes" xml:space="preserve"><value>Ja</value></data>
   <data name="No" xml:space="preserve"><value>Nee</value></data>
+  <data name="Sign in" xml:space="preserve"><value>Aanmelden</value></data>
+  <data name="Remember me" xml:space="preserve"><value>Aangemeld blijven</value></data>
+  <data name="Sign in to your hosting account." xml:space="preserve"><value>Meld je aan bij je hostingaccount.</value></data>
+  <data name="Sign-in service unavailable. Try again later." xml:space="preserve"><value>Aanmelden is tijdelijk niet beschikbaar. Probeer het later opnieuw.</value></data>
 </root>

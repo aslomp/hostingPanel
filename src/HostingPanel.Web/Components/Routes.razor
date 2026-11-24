@@ -1,7 +1,35 @@
-<Router AppAssembly="typeof(Program).Assembly">
-    <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
-        <FocusOnNavigate RouteData="routeData" Selector="h1" />
-    </Found>
-    <NotFound><LayoutView Layout="typeof(Layout.MainLayout)"><h1>Pagina niet gevonden</h1></LayoutView></NotFound>
-</Router>
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider Authentication
+@inject DirectAdminSession Session
+@inject NavigationManager Navigation
+@implements IDisposable
+@if (Session.Connected)
+{
+    <Router AppAssembly="typeof(Program).Assembly" OnNavigateAsync="CheckSession">
+        <Found Context="routeData">
+            <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+            <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        </Found>
+        <NotFound><LayoutView Layout="typeof(Layout.MainLayout)"><h1>Page not found</h1></LayoutView></NotFound>
+    </Router>
+}
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await Authentication.GetAuthenticationStateAsync();
+        if (!Session.Restore(state.User.FindFirst(PanelSessionStore.SessionClaim)?.Value)) RedirectToLogin();
+        Session.Changed += SessionChanged;
+    }
+    private Task CheckSession(NavigationContext context)
+    {
+        if (!Session.Connected) RedirectToLogin();
+        return Task.CompletedTask;
+    }
+    private void SessionChanged()
+    {
+        if (!Session.Connected) _ = InvokeAsync(RedirectToLogin);
+    }
+    private void RedirectToLogin() =>
+        Navigation.NavigateTo("/login?ReturnUrl=" + Uri.EscapeDataString(new Uri(Navigation.Uri).PathAndQuery), forceLoad: true);
+    public void Dispose() => Session.Changed -= SessionChanged;
+}

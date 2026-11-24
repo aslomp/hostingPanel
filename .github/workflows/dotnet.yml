@@ -37,10 +37,10 @@ jobs:
           webpid=$!
           trap 'cat /tmp/hosting-panel-web.log; kill "$webpid" 2>/dev/null || true' EXIT
           for i in {1..40}; do
-            if curl -fsS http://127.0.0.1:5088/ -o /tmp/hostingpanel.html; then break; fi
+            if curl -fsS http://127.0.0.1:5088/login -o /tmp/hostingpanel.html; then break; fi
             sleep 1
           done
-          grep -q '/_framework/blazor.web.js' /tmp/hostingpanel.html
+          grep -q 'action="/login"' /tmp/hostingpanel.html
           curl --fail --silent --show-error -D /tmp/asset-headers.txt -o /tmp/blazor.web.js http://127.0.0.1:5088/_framework/blazor.web.js
           test -s /tmp/blazor.web.js
           curl --fail --silent --show-error -D /tmp/css-headers.txt -o /tmp/site.css http://127.0.0.1:5088/site.css
@@ -57,7 +57,7 @@ jobs:
           pid=$!
           trap 'cat /tmp/hp-prod.log; kill "$pid" 2>/dev/null || true' EXIT
           for i in {1..40}; do
-            if curl -sS http://127.0.0.1:5089/ -o /tmp/hp-home; then break; fi
+            if curl -fsS http://127.0.0.1:5089/login -o /tmp/hp-home; then break; fi
             sleep 1
           done
           for path in site.css _framework/blazor.web.js; do
@@ -73,11 +73,13 @@ jobs:
           curl -fsS http://127.0.0.1:5089/_framework/blazor.web.js -o /tmp/hp-script
           test "$(wc -c </tmp/hp-script)" -gt 1000
           # All prioritized management pages must render without runtime exceptions.
-          for route in backend-settings system-info system-services server-settings system-updates server-tls security sessions resellers change-password dns-zones tickets tickets/new messages; do
+          for route in '' users domains databases backend-settings system-info system-services server-settings system-updates server-tls security sessions resellers change-password dns-zones tickets tickets/new messages; do
             echo "Rendering /$route"
             out="/tmp/hp-$(printf %s "$route" | tr / -).html"
-            curl -fsS "http://127.0.0.1:5089/$route" -o "$out"
-            grep -qi 'HostingPanel' "$out"
+            status=$(curl -sS -D /tmp/hp-auth-headers -o "$out" -w '%{http_code}' "http://127.0.0.1:5089/$route")
+            test "$status" = "302"
+            grep -qi '^location: .*/login' /tmp/hp-auth-headers
+            ! grep -q 'class="shell"' "$out"
           done
           # Verify that the SignalR endpoint actually negotiates a connection.
           curl -fsS -X POST 'http://127.0.0.1:5089/hubs/tickets/negotiate?negotiateVersion=1' \

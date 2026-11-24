@@ -8,8 +8,9 @@ namespace HostingPanel.Web.Services;
 
 // Credentials are held only for an interactive Blazor Server circuit.
 // Never persist or log login keys. Always deploy behind HTTPS.
-public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannelRegistry ticketChannels) : IDisposable
+public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannelRegistry ticketChannels, PanelSessionStore? sessions = null) : IDisposable
 {
+    private string? _sessionId;
     private string? _username;
     private string? _loginKey;
     private string? _impersonatedUsername;
@@ -20,7 +21,17 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
     public void NotifyTicketInboxChanged() => TicketInboxChanged?.Invoke();
     private void NotifyChanged() => Changed?.Invoke();
 
-    public bool Connected => _loginKey is not null;
+    public bool Connected => _loginKey is not null &&
+        (_sessionId is null || sessions?.Get(_sessionId) is not null);
+
+    public bool Restore(string? sessionId)
+    {
+        var session = sessions?.Get(sessionId);
+        if (session is null) return false;
+        SetCredentials(session.Username, session.Password);
+        _sessionId = sessionId;
+        return true;
+    }
     public string Username => _impersonatedUsername ?? _username ?? "";
     public string OriginalUsername => _username ?? "";
     public bool IsImpersonating => _impersonatedUsername is not null;
@@ -39,6 +50,8 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
 
     public void Disconnect()
     {
+        sessions?.Remove(_sessionId);
+        _sessionId = null;
         ticketChannels.Revoke(_ticketChannel);
         _ticketChannel = null;
         _username = null;
