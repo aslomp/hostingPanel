@@ -18,7 +18,8 @@ public static class KubernetesRegistration
         throw new InvalidOperationException("Invalid BackendSettings: " + string.Join("; ", errors.Select(x => x.Key + ": " + string.Join(", ", x.Value))));
     services.AddSingleton(settings);
     services.AddScoped<KubernetesBackend>();
-    services.AddScoped<IKubernetesSettingsReader>(sp => sp.GetRequiredService<KubernetesBackend>());
+    services.AddScoped<KubernetesSettingsService>();
+    services.AddScoped<IKubernetesSettingsReader>(sp => sp.GetRequiredService<KubernetesSettingsService>());
     services.AddScoped<IDomainDnsStaging>(sp => sp.GetRequiredService<KubernetesBackend>());
     services.AddScoped<KubernetesIdentityService>();
     services.AddScoped<IAuthenticationProvider>(sp => sp.GetRequiredService<KubernetesIdentityService>());
@@ -38,8 +39,8 @@ public static class KubernetesRegistration
     services.AddScoped<ICertificateProvider>(sp => sp.GetRequiredService<KubernetesBackend>());
     services.AddScoped<IDomainPreview>(sp => sp.GetRequiredService<KubernetesBackend>());
     services.AddScoped<IDNSProvider>(sp => sp.GetRequiredService<KubernetesBackend>());
-    services.AddScoped<IBackendSettingsAccess>(sp => sp.GetRequiredService<KubernetesBackend>());
-    services.AddScoped<IHostingNetworkAccess>(sp => sp.GetRequiredService<KubernetesBackend>());
+    services.AddScoped<IBackendSettingsAccess>(sp => sp.GetRequiredService<KubernetesSettingsService>());
+    services.AddScoped<IHostingNetworkAccess>(sp => sp.GetRequiredService<KubernetesSettingsService>());
     services.AddSingleton<PhpIdentityModel>();
     services.AddSingleton<IHostingPanelModelExtension>(sp => sp.GetRequiredService<PhpIdentityModel>());
     services.AddSingleton<IHostingPanelSchemaExtension>(sp => sp.GetRequiredService<PhpIdentityModel>());
