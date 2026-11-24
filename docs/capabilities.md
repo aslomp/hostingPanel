@@ -49,3 +49,5 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 - System information has a dedicated UI operation service; upstream compatibility routes and support limits remain unchanged.
 
 - System service management uses a dedicated UI operation service without expanding upstream or Kubernetes support.
+
+- Server settings use a dedicated UI operation service without adding backend capabilities.

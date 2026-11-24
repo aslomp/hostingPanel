@@ -3,7 +3,8 @@
 @page "/server-settings"
 @using System.Text.Json
 @inject PanelSession Session
-@inject CompatibilityApiClient ApiClient
+@inject ServerSettingsOperations SettingsOps
+@implements IDisposable
 <PageTitle>@L["Server settings — HostingPanel"]</PageTitle>
 <PanelPageHeader>
     <Breadcrumb>@L["Server management"]</Breadcrumb>
@@ -16,14 +17,14 @@ else
 {
     <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Configuration source"]</h2>
-        <MudSelect T="string" @bind-Value="endpoint" Variant="Variant.Outlined" Margin="Margin.Dense">
-            <MudSelectItem T="string" Value='@("api/server-settings/directadmin-conf/active")'>@L["Active DirectAdmin configuration"]</MudSelectItem>
-            <MudSelectItem T="string" Value='@("api/server-settings/directadmin-conf/default")'>@L["Default configuration"]</MudSelectItem>
-            <MudSelectItem T="string" Value='@("api/server-settings/directadmin-conf/local")'>@L["Local overrides"]</MudSelectItem>
-            <MudSelectItem T="string" Value='@("api/server-settings/db-config")'>@L["Database connection"]</MudSelectItem>
-            <MudSelectItem T="string" Value='@("api/server-settings/email/config")'>@L["Email server configuration"]</MudSelectItem>
-            <MudSelectItem T="string" Value='@("api/server-settings/email/outbound-filter")'>@L["Outbound mail filter"]</MudSelectItem>
-            <MudSelectItem T="string" Value='@("api/server-settings/timezone/current")'>@L["Time zone"]</MudSelectItem>
+        <MudSelect T="ServerSettingsSection" @bind-Value="section" Variant="Variant.Outlined" Margin="Margin.Dense">
+            <MudSelectItem T="ServerSettingsSection" Value="@ServerSettingsSection.Active">@L["Active DirectAdmin configuration"]</MudSelectItem>
+            <MudSelectItem T="ServerSettingsSection" Value="@ServerSettingsSection.Defaults">@L["Default configuration"]</MudSelectItem>
+            <MudSelectItem T="ServerSettingsSection" Value="@ServerSettingsSection.Local">@L["Local overrides"]</MudSelectItem>
+            <MudSelectItem T="ServerSettingsSection" Value="@ServerSettingsSection.Database">@L["Database connection"]</MudSelectItem>
+            <MudSelectItem T="ServerSettingsSection" Value="@ServerSettingsSection.Email">@L["Email server configuration"]</MudSelectItem>
+            <MudSelectItem T="ServerSettingsSection" Value="@ServerSettingsSection.OutboundFilter">@L["Outbound mail filter"]</MudSelectItem>
+            <MudSelectItem T="ServerSettingsSection" Value="@ServerSettingsSection.Timezone">@L["Time zone"]</MudSelectItem>
         </MudSelect>
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Retrieve configuration"]</MudButton>
         <p>@message</p>
@@ -62,126 +63,138 @@ else
     </MudPaper>
 }
 @code {
-    private string endpoint = "api/server-settings/directadmin-conf/active";
+    private ServerSettingsSection section = ServerSettingsSection.Active;
     private string patch = "{}", confirmation = "", result = "";
     private string hostname = "", hostnameConfirmation = "", timezone = "", timezoneConfirmation = "", timezones = "";
     private string dbConfigJson = "", dbConfirmation = "";
     private string? message, mutation;
-    private bool busy;
-    protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
-    private async Task Load()
+    private readonly LatestRead read = new();
+    private readonly DialogMutation write = new();
+    private bool disposed;
+    private bool busy => read.Loading || write.Busy;
+
+    protected override async Task OnInitializedAsync()
     {
-        if (busy || !Session.Connected) return;
-        busy = true; message = null;
-        try
-        {
-            var (status, body) = await ApiClient.GetRawAsync(endpoint);
-            message = $"HTTP {status}";
-            result = body;
-            if (endpoint == "api/server-settings/db-config" && status == 200) dbConfigJson = body;
-        }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
-        { message = ex.Message; result = ""; }
-        finally { busy = false; }
-    }
-    private bool ValidDatabaseConfig()
-    {
-        using var json = JsonDocument.Parse(dbConfigJson);
-        var root = json.RootElement;
-        return root.ValueKind == JsonValueKind.Object &&
-            new[] { "address", "password", "tls", "tlsVerify", "unixSocket", "user" }
-                .All(key => root.TryGetProperty(key, out _));
+        Session.Changed += SessionChanged;
+        await Load();
     }
 
-    private async Task TestDatabaseConfig()
+    private void SessionChanged() => _ = InvokeAsync(async () =>
     {
-        if (busy || !Session.Connected) return;
-        busy = true; mutation = null;
-        try
-        {
-            if (!ValidDatabaseConfig())
-            { mutation = L["The database configuration contract is incomplete."].Value; return; }
-            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Post,
-                "api/server-settings/db-config-test", dbConfigJson);
-            mutation = $"Test: backend HTTP {status}. {body}";
-        }
-        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
-        { mutation = ex.Message; }
-        finally { busy = false; }
+        if (disposed) return;
+        read.Cancel();
+        result = dbConfigJson = timezones = hostname = timezone = "";
+        confirmation = dbConfirmation = hostnameConfirmation = timezoneConfirmation = "";
+        patch = "{}";
+        message = mutation = null;
+        var task = Load();
+        StateHasChanged();
+        await task;
+        if (!disposed) StateHasChanged();
+    });
+
+    public void Dispose()
+    {
+        disposed = true;
+        Session.Changed -= SessionChanged;
+        read.Dispose();
+        write.Dispose();
     }
 
-    private async Task SaveDatabaseConfig()
+    private Task Load()
     {
-        if (busy || !Session.Connected || dbConfirmation != "SAVE DB") return;
-        busy = true; mutation = null;
-        try
+        if (disposed) return Task.CompletedTask;
+        result = "";
+        message = null;
+        if (!Session.Connected)
         {
-            if (!ValidDatabaseConfig())
-            { mutation = L["The database configuration contract is incomplete."].Value; return; }
-            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Put,
-                "api/server-settings/db-config", dbConfigJson);
-            mutation = L["Save: backend HTTP {0}. {1}", status, body].Value;
+            read.Cancel();
+            return Task.CompletedTask;
         }
-        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
-        { mutation = ex.Message; }
-        finally { busy = false; dbConfirmation = ""; }
+        var channel = Session.TicketChannel;
+        var target = section;
+        return read.RunAsync(ct => SettingsOps.ReadAsync(target, ct),
+            () => Session.Connected && Session.TicketChannel == channel && section == target,
+            response =>
+            {
+                message = $"HTTP {response.Status}";
+                result = response.Body;
+                if (target == ServerSettingsSection.Database && response.Status == 200)
+                    dbConfigJson = response.Body;
+            }, ex => message = ex.Message);
     }
 
-    private async Task ListTimezones()
+    private Task ListTimezones()
     {
-        if (busy || !Session.Connected) return;
-        busy = true; mutation = null;
-        try
-        {
-            var (status, body) = await ApiClient.GetRawAsync("api/server-settings/timezone/list");
-            timezones = $"HTTP {status}\n{body}";
-        }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { mutation = ex.Message; }
-        finally { busy = false; }
+        if (disposed || busy || !Session.Connected) return Task.CompletedTask;
+        var channel = Session.TicketChannel;
+        timezones = "";
+        mutation = null;
+        return read.RunAsync(ct => SettingsOps.ListTimezonesAsync(ct),
+            () => Session.Connected && Session.TicketChannel == channel,
+            response => timezones = $"HTTP {response.Status}\n{response.Body}",
+            ex => mutation = ex.Message);
     }
-    private async Task ChangeHostname()
+
+    private async Task RunMutation(Func<Task<string>> operation, Action? clearConfirmation = null)
     {
-        if (busy || hostnameConfirmation != "HOSTNAME" || string.IsNullOrWhiteSpace(hostname)) return;
-        busy = true; mutation = null;
-        try
+        if (disposed || busy || !Session.Connected) return;
+        var channel = Session.TicketChannel;
+        mutation = null;
+        await write.RunAsync(Session, channel, async current =>
         {
-            var json = JsonSerializer.Serialize(new { hostname });
-            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Post,
-                "api/server-settings/change-hostname", json);
-            mutation = $"Backend HTTP {status}: {body}";
+            try
+            {
+                var feedback = await operation();
+                if (current()) mutation = feedback;
+            }
+            catch (JsonException ex)
+            {
+                if (current()) mutation = ex.Message;
+            }
+        });
+        if (!disposed && Session.Connected && Session.TicketChannel == channel)
+        {
+            mutation ??= write.Error;
+            clearConfirmation?.Invoke();
         }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { mutation = ex.Message; }
-        finally { busy = false; hostnameConfirmation = ""; }
     }
-    private async Task ChangeTimezone()
+
+    private Task TestDatabaseConfig() => RunMutation(async () =>
     {
-        if (busy || timezoneConfirmation != "TIMEZONE" || string.IsNullOrWhiteSpace(timezone)) return;
-        busy = true; mutation = null;
-        try
-        {
-            var json = JsonSerializer.Serialize(new { tz = timezone });
-            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Post,
-                "api/server-settings/timezone/set", json);
-            mutation = $"Backend HTTP {status}: {body}";
-        }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { mutation = ex.Message; }
-        finally { busy = false; timezoneConfirmation = ""; }
-    }
-    private async Task Apply()
+        if (!ServerSettingsOperations.ValidDatabaseConfig(dbConfigJson))
+            return L["The database configuration contract is incomplete."].Value;
+        var (status, body) = await SettingsOps.TestDatabaseAsync(dbConfigJson);
+        return $"Test: backend HTTP {status}. {body}";
+    });
+
+    private Task SaveDatabaseConfig() => dbConfirmation != "SAVE DB" ? Task.CompletedTask : RunMutation(async () =>
     {
-        if (busy || confirmation != "PATCH") return;
-        busy = true; mutation = null;
-        try
+        if (!ServerSettingsOperations.ValidDatabaseConfig(dbConfigJson))
+            return L["The database configuration contract is incomplete."].Value;
+        var (status, body) = await SettingsOps.SaveDatabaseAsync(dbConfigJson);
+        return L["Save: backend HTTP {0}. {1}", status, body].Value;
+    }, () => dbConfirmation = "");
+
+    private Task ChangeHostname() => hostnameConfirmation != "HOSTNAME" || string.IsNullOrWhiteSpace(hostname)
+        ? Task.CompletedTask : RunMutation(async () =>
         {
-            using var json = JsonDocument.Parse(patch);
-            if (json.RootElement.ValueKind != JsonValueKind.Object)
-            { mutation = L["The patch must be a JSON object."].Value; return; }
-            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Patch,
-                "api/server-settings/directadmin-conf/local", patch);
-            mutation = $"Backend HTTP {status}: {body}";
-        }
-        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
-        { mutation = ex.Message; }
-        finally { busy = false; confirmation = ""; }
-    }
+            var (status, body) = await SettingsOps.ChangeHostnameAsync(hostname);
+            return $"Backend HTTP {status}: {body}";
+        }, () => hostnameConfirmation = "");
+
+    private Task ChangeTimezone() => timezoneConfirmation != "TIMEZONE" || string.IsNullOrWhiteSpace(timezone)
+        ? Task.CompletedTask : RunMutation(async () =>
+        {
+            var (status, body) = await SettingsOps.ChangeTimezoneAsync(timezone);
+            return $"Backend HTTP {status}: {body}";
+        }, () => timezoneConfirmation = "");
+
+    private Task Apply() => confirmation != "PATCH" ? Task.CompletedTask : RunMutation(async () =>
+    {
+        if (!ServerSettingsOperations.ValidPatch(patch))
+            return L["The patch must be a JSON object."].Value;
+        var (status, body) = await SettingsOps.PatchAsync(patch);
+        return $"Backend HTTP {status}: {body}";
+    }, () => confirmation = "");
 }
