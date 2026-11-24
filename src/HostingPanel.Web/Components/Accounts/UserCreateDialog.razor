@@ -11,16 +11,22 @@
       <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Account name"].Value" @bind-Value="username" Required="true" />
       <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Email address"].Value" @bind-Value="email" Required="true" InputType="InputType.Email" />
       <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Primary domain"].Value" @bind-Value="domain" Required="true" />
-      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Package"].Value" @bind-Value="package" Required="true" />
+      <MudSelect T="string" Disabled="@(busy || loadingPackages || availablePackages.Count == 0)" Label="@L["Package"].Value" @bind-Value="package" Required="true">
+        @foreach (var name in availablePackages)
+        {
+          <MudSelectItem T="string" Value="@name">@name</MudSelectItem>
+        }
+      </MudSelect>
       <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["IP / assignment"].Value" @bind-Value="ip" />
       <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["New password"].Value" @bind-Value="password" autocomplete="new-password" InputType="InputType.Password" Required="true" />
       <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Confirm password"].Value" @bind-Value="confirmation" autocomplete="new-password" InputType="InputType.Password" Required="true" />
     </MudForm>
+    @if (packageError is not null) { <MudAlert Severity="Severity.Error">@packageError</MudAlert> }
     @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
   </DialogContent>
   <DialogActions>
     <MudButton OnClick="Cancel" Disabled="@busy">@L["Cancel"]</MudButton>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Create" Disabled="@busy">@L["Create account"]</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Create" Disabled="@(busy || loadingPackages || availablePackages.Count == 0)">@L["Create account"]</MudButton>
   </DialogActions>
 </MudDialog>
 
@@ -29,24 +35,41 @@
   [Parameter] public string Kind { get; set; } = "user";
   private MudForm form = default!;
   private string username = "", email = "", domain = "", package = "", ip = "shared", password = "", confirmation = "";
-  protected override void OnInitialized()
+  private readonly List<string> availablePackages = [];
+  private bool loadingPackages;
+  private string? packageError;
+  protected override async Task OnInitializedAsync()
   {
-    if (IsKubernetes) package = "default";
+    if (!Session.Connected) return;
+    loadingPackages = true;
+    try
+    {
+      var result = await Accounts.ListPackagesAsync(Kind);
+      if (result.Status == 200 && result.Packages is not null)
+      {
+        availablePackages.AddRange(result.Packages);
+        if (availablePackages.Count == 1) package = availablePackages[0];
+        if (availablePackages.Count == 0) packageError = L["No packages found."].Value;
+      }
+      else packageError = L["Backend HTTP {0}.", result.Status].Value + (result.Error is null ? "" : $" ({result.Error})");
+    }
+    catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+    { packageError = ex.Message; }
+    finally { loadingPackages = false; }
   }
-  private bool IsKubernetes => string.Equals(Configuration["HostingPanel:Backend"], "Kubernetes", StringComparison.OrdinalIgnoreCase);
   private string? error;
   private bool busy;
   private void Cancel() { if (!busy) MudDialog.Cancel(); }
   private async Task Create()
   {
-    if (busy || !Session.Connected) return;
+    if (busy || loadingPackages || !Session.Connected || !availablePackages.Contains(package, StringComparer.Ordinal)) return;
     busy = true;
     error = null;
     try
     {
       await form.ValidateAsync();
       if (!form.IsValid || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(package)) return;
-      if (IsKubernetes && password.Length < 12) { error = L["Password must contain at least 12 characters."].Value; return; }
+      if (string.Equals(Configuration["HostingPanel:Backend"], "Kubernetes", StringComparison.OrdinalIgnoreCase) && password.Length < 12) { error = L["Password must contain at least 12 characters."].Value; return; }
       if (password.Length < 5) { error = L["Password must contain at least 5 characters."].Value; return; }
       if (password != confirmation) { error = L["Passwords do not match."].Value; return; }
       var (status, errorCode) = await Accounts.CreateAsync(new CreateHostingAccount(Kind, username, email, password, domain, package, ip));

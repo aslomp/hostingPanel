@@ -58,10 +58,7 @@ else if (accounts is not null)
         </tbody></MudSimpleTable>
         @if (!Visible.Any()) { <PanelEmptyState>@L["No accessible accounts."]</PanelEmptyState> }
     </MudPaper>
-    @if (ResellersOnly)
-    {
-        <ResellerPackageOverview />
-    }
+
 }
 @code {
     [Parameter] public bool ResellersOnly { get; set; }

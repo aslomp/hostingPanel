@@ -11,6 +11,9 @@ public sealed class AccountOperations(BackendOperationScope scope)
     public Task<AccountCatalogResult> ListAsync(CancellationToken ct = default) =>
         scope.RunAsync<IAccountCatalog, AccountCatalogResult>((p, auth, token) => p.ListAsync(auth, token), ct);
 
+    public Task<AccountPackagesResult> ListPackagesAsync(string kind, CancellationToken ct = default) =>
+        scope.RunAsync<IAccountPackages, AccountPackagesResult>((p, auth, token) => p.ListAsync(kind, auth, token), ct);
+
     public Task<AccountOperationResult> CreateAsync(CreateHostingAccount input, CancellationToken ct = default) =>
         scope.RunAsync<IAccountMutations, AccountOperationResult>((p, auth, token) => p.CreateAsync(input, auth, token), ct);
 
