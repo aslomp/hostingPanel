@@ -6,6 +6,15 @@ using System.Text;
 
 var checks = new List<(string Description, Action Test)>
 {
+    ("DNS capability is implemented by both providers", () =>
+    {
+        Require(typeof(HostingPanel.Api.IDNSProvider).IsAssignableFrom(typeof(DnsZoneService)));
+        Require(typeof(HostingPanel.Api.IDNSProvider).IsAssignableFrom(typeof(HostingPanel.Api.KubernetesBackend)));
+        Require(typeof(HostingPanel.Api.IHostingBackend).GetProperty("Dns")?.PropertyType == typeof(HostingPanel.Api.IDNSProvider));
+        Require(new DnsChangeResult(202, null).ProvisioningPending);
+        Require(!new DnsChangeResult(202, null).Executed);
+        Require(new DnsChangeResult(200, null).Executed);
+    }),
     ("Web hosting capability is implemented by both providers", () =>
     {
         Require(typeof(HostingPanel.Api.IWebHosting).IsAssignableFrom(typeof(DomainManagementService)));

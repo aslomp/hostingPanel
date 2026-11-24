@@ -206,6 +206,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         // Deletion is blocked when dependent resources still exist: never silently orphan workloads.
         if (await db.Accounts.AnyAsync(x => x.CreatorId == target.Id, ct)
             || await db.Domains.AnyAsync(x => x.OwnerId == target.Id, ct)
+            || await db.DnsZones.AnyAsync(x => x.OwnerId == target.Id, ct)
             || await db.Databases.AnyAsync(x => x.OwnerId == target.Id, ct)
             || await db.DatabaseUsers.AnyAsync(x => x.OwnerId == target.Id, ct)
             || await db.FileAccessAccounts.AnyAsync(x => x.OwnerId == target.Id, ct))
@@ -524,7 +525,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         var zone = await db.DnsZones.FirstOrDefaultAsync(x => x.Name == domain.ToLowerInvariant(), ct);
         if (zone is null) return new(404, "ZONE_NOT_FOUND");
         if (!ids.Contains(zone.OwnerId)) return new(403, "ACCESS_DENIED");
-        var prev = change.Previous;
+        var prev = change.Action == "add" ? null : change.Previous;
         var previous = prev is null ? null : await db.DnsRecords.FirstOrDefaultAsync(x =>
             x.ZoneId == zone.Id && x.Name == prev.Name && x.Type == prev.Type && x.Value == prev.Value, ct);
         if (change.Action != "add" && previous is null) return new(404, "DNS_RECORD_NOT_FOUND");
@@ -542,14 +543,21 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
     {
         var principal = await AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
-        if (!ValidDomain(input.Domain)) return new(400, "INVALID_DOMAIN");
-        var domain = await db.Domains.FirstOrDefaultAsync(d => d.Name == input.Domain.ToLowerInvariant(), ct);
-        if (domain is null) return new(404, "DOMAIN_NOT_FOUND");
+        if (!ValidDomain(input.Domain) || !ValidDomain(input.Ns1) || !ValidDomain(input.Ns2)
+            || !System.Net.IPAddress.TryParse(input.Ip, out var ip)
+            || ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
+            return new(400, "INVALID_DNS_ZONE");
+        var name = input.Domain.ToLowerInvariant();
+        var domain = await db.Domains.FirstOrDefaultAsync(d => d.Name == name, ct);
         var ids = await VisibleAccountsAsync(principal, ct);
-        if (!ids.Contains(domain.OwnerId)) return new(403, "ACCESS_DENIED");
-        if (await db.DnsZones.AnyAsync(z => z.Name == domain.Name, ct)) return new(409, "ZONE_EXISTS");
-        var zone = new DnsZone { Name = domain.Name, DomainId = domain.Id, OwnerId = domain.OwnerId };
+        if (domain is not null && !ids.Contains(domain.OwnerId)) return new(403, "ACCESS_DENIED");
+        if (domain is null && principal.Kind != "admin") return new(403, "ACCESS_DENIED");
+        if (await db.DnsZones.AnyAsync(z => z.Name == name, ct)) return new(409, "ZONE_EXISTS");
+        var zone = new DnsZone { Name = name, DomainId = domain?.Id, OwnerId = domain?.OwnerId ?? principal.Id };
         db.DnsZones.Add(zone);
+        db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "@", Type = "A", Value = ip.ToString() });
+        foreach (var ns in new[] { input.Ns1, input.Ns2 }.Select(x => x.TrimEnd('.').ToLowerInvariant()).Distinct())
+            db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "@", Type = "NS", Value = ns + "." });
         Schedule("dns-zone", zone.Id, "create", new { zone.Name });
         await db.SaveChangesAsync(ct);
         return new(202, null);
@@ -559,12 +567,11 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
     {
         var principal = await AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
-        if (domain != confirmation) return new(400, "CONFIRMATION_REQUIRED");
+        if (!ValidDomain(domain) || domain != confirmation) return new(400, "CONFIRMATION_REQUIRED");
         var zone = await db.DnsZones.FirstOrDefaultAsync(z => z.Name == domain.ToLowerInvariant(), ct);
         if (zone is null) return new(404, "ZONE_NOT_FOUND");
-        var host = await db.Domains.FirstOrDefaultAsync(d => d.Id == zone.DomainId, ct);
         var ids = await VisibleAccountsAsync(principal, ct);
-        if (host is null || !ids.Contains(host.OwnerId)) return new(403, "ACCESS_DENIED");
+        if (!ids.Contains(zone.OwnerId)) return new(403, "ACCESS_DENIED");
         db.DnsZones.Remove(zone);
         Schedule("dns-zone", zone.Id, "delete", new { zone.Name });
         await db.SaveChangesAsync(ct);
