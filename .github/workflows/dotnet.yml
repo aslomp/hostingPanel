@@ -104,6 +104,15 @@ jobs:
       - name: Test mandatory login, session restore and logout
         run: python3 tests/required-login-smoke.py
 
+      - name: Install browser regression test dependencies
+        run: |
+          python3 -m venv /tmp/hostingpanel-browser-venv
+          /tmp/hostingpanel-browser-venv/bin/pip install playwright==1.56.0
+          /tmp/hostingpanel-browser-venv/bin/python -m playwright install --with-deps chromium
+
+      - name: Test interactive MudBlazor navigation
+        run: /tmp/hostingpanel-browser-venv/bin/python tests/browser-smoke.py
+
       - name: Validate pinned Swagger and static API endpoint
         shell: bash
         run: |

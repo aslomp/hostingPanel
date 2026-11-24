@@ -778,4 +778,5 @@
   <data name="Document root" xml:space="preserve"><value>Documentroot</value></data>
   <data name="PHP version" xml:space="preserve"><value>PHP-versie</value></data>
   <data name="PHP handler" xml:space="preserve"><value>PHP-handler</value></data>
+  <data name="Toggle navigation" xml:space="preserve"><value>Navigatie in- of uitklappen</value></data>
 </root>
