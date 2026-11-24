@@ -77,7 +77,7 @@ public sealed class PowerDnsClient(HttpClient http)
         {
             var name = current.GetProperty("name").GetString()!;
             var type = current.GetProperty("type").GetString()!;
-            if (type == "SOA") continue; // PowerDNS owns the SOA and serial.
+            if (type == "SOA" || (type == "TXT" && name.Split('.').Contains("_acme-challenge"))) { desired.Remove((name, type)); continue; } // PowerDNS owns the SOA and serial.
             if (!desired.Remove((name, type), out var target))
                 changes.Add(new(name, type, 0, "DELETE", []));
             else
@@ -89,7 +89,7 @@ public sealed class PowerDnsClient(HttpClient http)
                     changes.Add(target);
             }
         }
-        changes.AddRange(desired.Values);
+        changes.AddRange(desired.Values.Where(x => x.type != "TXT" || !x.name.Split('.').Contains("_acme-challenge")));
         if (changes.Count == 0) return;
         using var patch = await http.PatchAsJsonAsync(PathFor(zone), new { rrsets = changes }, ct);
         patch.EnsureSuccessStatusCode();

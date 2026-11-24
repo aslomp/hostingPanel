@@ -15,7 +15,7 @@ namespace HostingPanel.Api;
 /// no legacy command calls and no implicit fallback to DirectAdmin.
 /// Reconciliation with the cluster is deliberately a separate responsibility.
 /// </summary>
-public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, PowerDnsClient? powerDns = null, IConfiguration? configuration = null) :
+public sealed partial class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, PowerDnsClient? powerDns = null, IConfiguration? configuration = null) :
     IHostingBackend, IAccountCatalog, IAccountMutations, IAccessibleDomains,
     IUserDetails, IAccountOverview, IImpersonation, IDatabases,
     IAccessibleDatabases, IDomains, IFileAccess, ITickets, IBackendSettingsAccess, IHostingNetworkAccess
@@ -34,7 +34,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         // Older persisted settings lack the DNS properties. Fill only new keys from deployment defaults.
         var stored = document.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
         using var defaults = JsonDocument.Parse(BackendSettingsSchema.Serialize(configuredSettings));
-        foreach (var key in new[] { nameof(KubernetesBackendSettings.DnsAutoCreateZones), nameof(KubernetesBackendSettings.DnsWebIp), nameof(KubernetesBackendSettings.DnsNs1), nameof(KubernetesBackendSettings.DnsNs2), nameof(KubernetesBackendSettings.IpAddresses) })
+        foreach (var key in new[] { nameof(KubernetesBackendSettings.DnsAutoCreateZones), nameof(KubernetesBackendSettings.DnsWebIp), nameof(KubernetesBackendSettings.DnsNs1), nameof(KubernetesBackendSettings.DnsNs2), nameof(KubernetesBackendSettings.IpAddresses), nameof(KubernetesBackendSettings.AcmeProviders), nameof(KubernetesBackendSettings.AcmeDefaultProvider), nameof(KubernetesBackendSettings.AcmeUserProviders), nameof(KubernetesBackendSettings.AcmePackageProviders) })
             stored.TryAdd(key, defaults.RootElement.GetProperty(key).Clone());
         if (!BackendSettingsSchema.TryRead<KubernetesBackendSettings>(JsonSerializer.SerializeToElement(stored),
             out var settings, out _))
