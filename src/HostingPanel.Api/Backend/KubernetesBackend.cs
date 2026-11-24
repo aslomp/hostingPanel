@@ -29,7 +29,8 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
     {
         var row = await db.Configuration.AsNoTracking().SingleOrDefaultAsync(x => x.Key == SettingsKey, ct);
         if (row is null) return configuredSettings;
-        if (!BackendSettingsSchema.TryRead<KubernetesBackendSettings>(JsonDocument.Parse(row.ValueJson).RootElement,
+        using var document = JsonDocument.Parse(row.ValueJson);
+        if (!BackendSettingsSchema.TryRead<KubernetesBackendSettings>(document.RootElement,
             out var settings, out _))
             throw new InvalidOperationException("Stored Kubernetes backend settings are invalid.");
         return settings!;
@@ -60,7 +61,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
             var row = await db.Configuration.SingleOrDefaultAsync(x => x.Key == SettingsKey, ct);
             if (row is null) { row = new PanelConfiguration { Key = SettingsKey }; db.Configuration.Add(row); }
             row.ValueJson = BackendSettingsSchema.Serialize(proposed!);
-            Schedule("backend-settings", Guid.Empty, "update", proposed);
+            Schedule("backend-settings", Guid.Empty, "update", JsonSerializer.Deserialize<JsonElement>(row.ValueJson));
             await db.SaveChangesAsync(ct);
         }
         await tx.CommitAsync(ct);
