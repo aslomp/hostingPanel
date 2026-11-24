@@ -177,7 +177,9 @@ jobs:
           test "$code" = "401"
           code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X PATCH \
             http://127.0.0.1:5091/api/arbitrary/new-operation)
-          test "$code" = "404"
+          # Unknown API paths must not be forwarded. The Blazor catch-all
+          # can cause ASP.NET Core to return 405 for an unmatched PATCH.
+          test "$code" = "404" || test "$code" = "405"
           # Never submit authenticated mutations to the live DirectAdmin demo.
           code=$(curl -sS -o /tmp/hp-unauthorized -w '%{http_code}' -X POST \
             -H 'Content-Type: application/json' \
