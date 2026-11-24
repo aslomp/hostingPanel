@@ -43,3 +43,5 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 - Dedicated user and reseller package management uses DirectAdmin legacy package endpoints and Kubernetes SQLite package settings. Kubernetes stores limits but does not yet enforce all of them. Existing untyped packages are user packages; reseller packages must be created explicitly. Package names are unique per owner across kinds in the existing SQLite schema.
 
 - DNS zone inventory reads use component-owned cancellation and session guards, without changing provider authorization or DNS provisioning capabilities.
+
+- Account, database, domain and DNS-zone creation dialogs and DNS record editing share mutation lifecycle state; no additional backend mutation capabilities are implied.

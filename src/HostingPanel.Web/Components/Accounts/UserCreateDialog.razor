@@ -2,6 +2,7 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @using HostingPanel.Api.Services
 @inject PanelSession Session
+@implements IDisposable
 @inject AccountOperations Accounts
 @inject IConfiguration Configuration
 
@@ -40,11 +41,14 @@
   private string? packageError;
   protected override async Task OnInitializedAsync()
   {
+    openedChannel = Session.TicketChannel;
+    Session.Changed += SessionChanged;
     if (!Session.Connected) return;
     loadingPackages = true;
     try
     {
       var result = await Accounts.ListPackagesAsync(Kind);
+      if (disposed || !Session.Connected || Session.TicketChannel != openedChannel) return;
       if (result.Status == 200 && result.Packages is not null)
       {
         availablePackages.AddRange(result.Packages);
@@ -54,27 +58,38 @@
       else packageError = L["Backend HTTP {0}.", result.Status].Value + (result.Error is null ? "" : $" ({result.Error})");
     }
     catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
-    { packageError = ex.Message; }
+    { if (!disposed && Session.Connected && Session.TicketChannel == openedChannel) packageError = ex.Message; }
     finally { loadingPackages = false; }
   }
-  private string? error;
-  private bool busy;
+  private readonly DialogMutation mutation = new();
+  private string? error => mutation.Error;
+  private bool busy => mutation.Busy;
+  private string? openedChannel;
+  private bool disposed;
   private void Cancel() { if (!busy) MudDialog.Cancel(); }
-  private async Task Create()
+  private void SessionChanged() => _ = InvokeAsync(() =>
   {
-    if (busy || loadingPackages || !Session.Connected || !availablePackages.Contains(package, StringComparer.Ordinal)) return;
-    busy = true;
-    error = null;
-    try
-    {
+    if (!disposed && (!Session.Connected || Session.TicketChannel != openedChannel)) MudDialog.Cancel();
+  });
+  public void Dispose()
+  {
+    disposed = true;
+    Session.Changed -= SessionChanged;
+    mutation.Dispose();
+  }
+  private Task Create() => mutation.RunAsync(Session, openedChannel, async current =>
+  {
+      if (loadingPackages || !availablePackages.Contains(package, StringComparer.Ordinal)) return;
       await form.ValidateAsync();
-      if (!form.IsValid || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(package)) return;
-      if (string.Equals(Configuration["HostingPanel:Backend"], "Kubernetes", StringComparison.OrdinalIgnoreCase) && password.Length < 12) { error = L["Password must contain at least 12 characters."].Value; return; }
-      if (password.Length < 5) { error = L["Password must contain at least 5 characters."].Value; return; }
-      if (password != confirmation) { error = L["Passwords do not match."].Value; return; }
+      if (!current()) return;
+      if (!form.IsValid || string.IsNullOrWhiteSpace(username) || !availablePackages.Contains(package, StringComparer.Ordinal)) return;
+      if (string.Equals(Configuration["HostingPanel:Backend"], "Kubernetes", StringComparison.OrdinalIgnoreCase) && password.Length < 12) { mutation.SetError(L["Password must contain at least 12 characters."].Value); return; }
+      if (password.Length < 5) { mutation.SetError(L["Password must contain at least 5 characters."].Value); return; }
+      if (password != confirmation) { mutation.SetError(L["Passwords do not match."].Value); return; }
       var (status, errorCode) = await Accounts.CreateAsync(new CreateHostingAccount(Kind, username, email, password, domain, package, ip));
+      if (!current()) return;
       if (errorCode is null && status is >= 200 and < 300) { MudDialog.Close(DialogResult.Ok(username)); return; }
-      error = errorCode switch
+      mutation.SetError(errorCode switch
       {
         "PACKAGE_NOT_FOUND" => L["The selected hosting package does not exist or is not available to your account."].Value,
         "ACCOUNT_EXISTS" => L["An account with this name already exists."].Value,
@@ -82,10 +97,6 @@
         "INVALID_ACCOUNT_REQUEST" => L["Check the account name, email address, domain, package and password."].Value,
         "ACCESS_DENIED" or "UNAUTHORIZED" => L["You are not authorized to create this account."].Value,
         _ => L["Account not created: backend HTTP {0}.", status].Value + (errorCode is null ? "" : $" ({errorCode})")
-      };
-    }
-    catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
-    { error = ex.Message; }
-    finally { busy = false; }
-  }
+      });
+  });
 }
