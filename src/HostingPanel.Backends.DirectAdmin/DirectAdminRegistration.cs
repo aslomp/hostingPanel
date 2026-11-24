@@ -16,7 +16,9 @@ public static class DirectAdminRegistration
     services.AddScoped<IFileAccess>(sp => sp.GetRequiredService<DirectAdminBackend>().FileAccess);
     services.AddScoped<ITickets>(sp => sp.GetRequiredService<DirectAdminBackend>().Tickets);
     services.AddScoped<IAccountCatalog>(sp => sp.GetRequiredService<DirectAdminBackend>().AccountCatalog);
-    services.AddScoped<IAccountPackages, DirectAdminAccountPackages>();
+    services.AddScoped<DirectAdminAccountPackages>();
+    services.AddScoped<IPackageManagement>(sp => sp.GetRequiredService<DirectAdminAccountPackages>());
+    services.AddScoped<IAccountPackages>(sp => sp.GetRequiredService<DirectAdminAccountPackages>());
     services.AddScoped<IAccountMutations>(sp => sp.GetRequiredService<DirectAdminBackend>().AccountMutations);
     services.AddScoped<IImpersonation>(sp => sp.GetRequiredService<DirectAdminBackend>().Impersonation);
     services.AddScoped<IAccountOverview>(sp => sp.GetRequiredService<DirectAdminBackend>().AccountOverview);

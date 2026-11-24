@@ -92,6 +92,18 @@ def main():
                     dialog.get_by_role("button", name="Cancel", exact=True).click()
                     expect(dialog).to_have_count(0)
                     expect(add).to_be_enabled()
+                    # Create packages in the actual UI before creating accounts.
+                    for package_route, package_name in [("/user-packages", "browser-plan"), ("/reseller-packages", "browser-reseller-plan")]:
+                        page.goto(base + package_route)
+                        add_package = page.get_by_role("button", name="Add package", exact=True)
+                        expect(add_package).to_be_enabled(timeout=20000)
+                        add_package.click()
+                        dialog = page.get_by_role("dialog")
+                        expect(dialog).to_be_visible()
+                        dialog.get_by_label("Package name", exact=True).fill(package_name)
+                        dialog.get_by_role("button", name="Save", exact=True).click()
+                        expect(dialog).to_have_count(0, timeout=20000)
+                        expect(page.get_by_role("button", name=package_name, exact=True)).to_be_visible()
                     # Real account creation against an isolated SQLite database.
                     for route, button, account, role in [
                         ("/users", "Add user", "browseruser", "user"),
@@ -113,7 +125,9 @@ def main():
                         dialog.get_by_label("Account name", exact=True).fill(account)
                         dialog.get_by_label("Email address", exact=True).fill(account + "@example.invalid")
                         dialog.get_by_label("Primary domain", exact=True).fill(account + ".invalid")
-                        expect(dialog.get_by_label("Package", exact=True)).to_have_value("default")
+                        package_name = "browser-plan" if role == "user" else "browser-reseller-plan"
+                        dialog.get_by_label("Package", exact=True).click()
+                        page.get_by_text(package_name, exact=True).last.click()
                         dialog.get_by_label("New password", exact=True).fill("short")
                         dialog.get_by_label("Confirm password", exact=True).fill("short")
                         dialog.get_by_role("button", name="Create account", exact=True).click()
@@ -131,7 +145,7 @@ def main():
                         with sqlite3.connect(Path(directory) / "browser.db") as db:
                             assert db.execute(
                                 "SELECT COUNT(*) FROM Accounts a JOIN Domains d ON d.OwnerId=a.Id JOIN Packages p ON p.Id=a.PackageId WHERE a.Username=? AND a.Kind=? AND d.Name=? AND p.Name=?",
-                                (account, role, account + ".invalid", "default"),
+                                (account, role, account + ".invalid", package_name),
                             ).fetchone()[0] == 1
                     # Do not submit password mutations.
                     page.goto(base + "/change-password")
