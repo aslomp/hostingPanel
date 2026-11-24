@@ -5,9 +5,9 @@ namespace HostingPanel.Api;
 
 // Existing ListenerSet only. Reserve hp-tls-<domain GUID> names for this controller.
 // Optimistic JSON Patch prevents lost updates to unrelated listeners.
-internal sealed class ListenerSetReconciler(CertManagerClient client, string ns)
+internal sealed class ListenerSetReconciler(KubernetesResourceClient client, string ns)
 {
-    private const string Resource = "listenersets.gateway.networking.k8s.io";
+    private const string Group = "gateway.networking.k8s.io";
     private const string Prefix = "hp-tls-";
     private static string Name(Guid id) => Prefix + id.ToString("N");
     private static bool Managed(string? name) => name is not null && name.StartsWith(Prefix, StringComparison.Ordinal) &&
@@ -15,7 +15,7 @@ internal sealed class ListenerSetReconciler(CertManagerClient client, string ns)
     public async Task ReconcileAsync(string set, IReadOnlyList<(Guid Id, string Host)> domains, CancellationToken ct)
     {
         var desired = domains.ToDictionary(x => Name(x.Id), StringComparer.Ordinal);
-        var json = JsonNode.Parse(await client.ExecuteAsync(null, ct, "get", Resource, set, "-o", "json"))!.AsObject();
+        var json = JsonNode.Parse(await client.GetAsync(Group, "v1", ns, "listenersets", set, ct))!.AsObject();
         var spec = json["spec"]!.AsObject();
         var original = spec["listeners"]!.AsArray();
         var next = new JsonArray();
@@ -33,7 +33,7 @@ internal sealed class ListenerSetReconciler(CertManagerClient client, string ns)
                 new { op = "test", path = "/metadata/resourceVersion", value = (object)json["metadata"]!["resourceVersion"]!.GetValue<string>() },
                 new { op = "replace", path = "/spec/listeners", value = (object)next }
             };
-            await client.ExecuteAsync(null, ct, "patch", Resource, set, "--type=json", "-p", JsonSerializer.Serialize(patch));
+            await client.PatchAsync(Group, "v1", ns, "listenersets", set, JsonSerializer.Serialize(patch), ct);
         }
         foreach (var pair in desired)
         {
@@ -41,14 +41,14 @@ internal sealed class ListenerSetReconciler(CertManagerClient client, string ns)
                 metadata = new { name = pair.Key, @namespace = ns, labels = new Dictionary<string,string> { ["hostingpanel/component"] = "tls-route" } },
                 spec = new { parentRefs = new[] { new { group = "gateway.networking.k8s.io", kind = "ListenerSet", name = set, sectionName = pair.Key } },
                     hostnames = new[] { pair.Value.Host }, rules = new[] { new { backendRefs = new[] { new { name = "apache-baseline", port = 80 } } } } } });
-            await client.ExecuteAsync(manifest, ct, "apply", "--server-side", "--field-manager=hostingpanel-tls", "-f", "-");
+            await client.ApplyAsync(manifest, ns, "hostingpanel-tls", ct);
         }
-        using var routes = JsonDocument.Parse(await client.ExecuteAsync(null, ct, "get", "httproutes", "-l", "hostingpanel/component=tls-route", "-o", "json"));
+        using var routes = JsonDocument.Parse(await client.ListAsync(Group, "v1", ns, "httproutes", "hostingpanel/component=tls-route", ct));
         foreach (var item in routes.RootElement.GetProperty("items").EnumerateArray())
         {
             var name = item.GetProperty("metadata").GetProperty("name").GetString()!;
             if (Managed(name) && !desired.ContainsKey(name))
-                await client.ExecuteAsync(null, ct, "delete", "httproute", name, "--ignore-not-found=true");
+                await client.DeleteAsync(Group, "v1", ns, "httproutes", name, ct);
         }
     }
 }
