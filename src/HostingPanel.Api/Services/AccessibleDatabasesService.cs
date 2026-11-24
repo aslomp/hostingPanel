@@ -15,6 +15,7 @@ public sealed class AccessibleDatabasesService(
     AccountCatalogService accounts,
     ImpersonationService impersonation,
     IHttpClientFactory clients)
+: IAccessibleDatabases
 {
     public async Task<AccessibleDatabaseInventory> ListAsync(
         AuthenticationHeaderValue auth, CancellationToken ct)
