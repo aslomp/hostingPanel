@@ -21,6 +21,31 @@ public static class DnsForwardingContractTests
             "DNS reads should fall back after a definitive backend denial");
 
         backend.Paths.Clear();
+        backend.AdminReadStatus = HttpStatusCode.InternalServerError;
+        zone = service.ReadAsync("example.com", auth, CancellationToken.None)
+            .GetAwaiter().GetResult();
+        Assert(zone.Status == 200 && zone.Records?.Count == 1,
+            "An admin HTTP 500 must permit a read-only fallback");
+
+        backend.AdminReadStatus = HttpStatusCode.OK;
+        backend.AdminReadBody = """{"records":[{"type":"A","value":"192.0.2.8"}]}""";
+        zone = service.ReadAsync("example.com", auth, CancellationToken.None)
+            .GetAwaiter().GetResult();
+        Assert(zone.Status == 200 && zone.Records?.Count == 1,
+            "Missing admin DNS fields must permit a read-only fallback");
+
+        backend.ControlReadBody = """{"records":[{"type":"A","value":"192.0.2.8"}]}""";
+        zone = service.ReadAsync("example.com", auth, CancellationToken.None)
+            .GetAwaiter().GetResult();
+        Assert(zone.Status == 502 && zone.Error == "INVALID_LEGACY_RESPONSE",
+            "Malformed DNS records must not escape as HTTP 500");
+
+        var extraTypes = LegacyDnsAdapter.ParseRecords(
+            """{"records":[{"type":"HTTPS","index":"example.com.","value":"1 ."}]}""");
+        Assert(extraTypes.Count == 1 && extraTypes[0].Type == "HTTPS",
+            "Read-only DNS inventory must preserve additional record types");
+
+        backend.Paths.Clear();
         var change = new DnsChange("add", new DnsRecord("A", "www", "192.0.2.8"));
         var written = service.ChangeAsync("example.com", change, auth, CancellationToken.None)
             .GetAwaiter().GetResult();
@@ -55,6 +80,10 @@ public static class DnsForwardingContractTests
     {
         public List<string> Paths { get; } = [];
         public bool AmbiguousWriteFailure { get; set; }
+        public HttpStatusCode AdminReadStatus { get; set; } = HttpStatusCode.Forbidden;
+        public string AdminReadBody { get; set; } = "";
+        public string ControlReadBody { get; set; } =
+            """{"records":[{"type":"A","index":"www","value":"192.0.2.8","ttl":300}]}""";
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
             CancellationToken cancellationToken)
@@ -62,13 +91,14 @@ public static class DnsForwardingContractTests
             var path = request.RequestUri!.AbsolutePath.TrimStart('/');
             Paths.Add(request.Method.Method + " " + path);
             HttpResponseMessage response;
-            if (path is "CMD_DNS_ADMIN" or "CMD_API_DNS_ADMIN")
+            if (path == "CMD_DNS_ADMIN")
+                response = Reply(AdminReadStatus, AdminReadBody);
+            else if (path == "CMD_API_DNS_ADMIN")
                 response = AmbiguousWriteFailure && request.Method == HttpMethod.Post
                     ? Reply(HttpStatusCode.OK, "error=1&text=Denied")
                     : Reply(HttpStatusCode.Forbidden);
             else if (path == "CMD_DNS_CONTROL")
-                response = Reply(HttpStatusCode.OK,
-                    """{"records":[{"type":"A","index":"www","value":"192.0.2.8","ttl":300}]}""");
+                response = Reply(HttpStatusCode.OK, ControlReadBody);
             else if (path == "CMD_API_DNS_CONTROL")
                 response = Reply(HttpStatusCode.OK, "error=0&text=Success");
             else

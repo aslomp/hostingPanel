@@ -1,11 +1,13 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using HostingPanel.Api.Adapters;
 
 namespace HostingPanel.Api.Services;
 
-public sealed class DnsZoneService(IHttpClientFactory clients, IAccessibleDomains? accessibleDomains = null)
+public sealed class DnsZoneService(IHttpClientFactory clients, IAccessibleDomains? accessibleDomains = null,
+    ILogger<DnsZoneService>? logger = null)
 : IDNSProvider
 {
     public async Task<AccessibleDnsInventory> ListAccessibleZonesAsync(AuthenticationHeaderValue auth, CancellationToken ct)
@@ -161,6 +163,8 @@ public sealed class DnsZoneService(IHttpClientFactory clients, IAccessibleDomain
                     endpoint + "?domain=" + Uri.EscapeDataString(domain) + "&json=yes&ttl=yes");
                 request.Headers.Authorization = auth;
                 using var response = await clients.CreateClient("legacy-directadmin").SendAsync(request, ct);
+                logger?.LogDebug("DirectAdmin DNS read via {Endpoint}: HTTP {StatusCode}",
+                    endpoint, (int)response.StatusCode);
                 if (response.StatusCode == HttpStatusCode.Unauthorized)
                     return new(401, null, "UNAUTHORIZED");
                 if (!response.IsSuccessStatusCode)
@@ -169,6 +173,8 @@ public sealed class DnsZoneService(IHttpClientFactory clients, IAccessibleDomain
                     // DirectAdmin installation. In particular, it can return HTTP 500
                     // for a zone owned by a regular hosting user. A read-only retry
                     // through CMD_DNS_CONTROL does not duplicate any mutation.
+                    logger?.LogWarning("DirectAdmin DNS read via {Endpoint} failed with HTTP {StatusCode}",
+                        endpoint, (int)response.StatusCode);
                     if (endpoint == "CMD_DNS_ADMIN") continue;
                     return new((int)response.StatusCode, null,
                         response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound
@@ -181,8 +187,10 @@ public sealed class DnsZoneService(IHttpClientFactory clients, IAccessibleDomain
                     return new(200, records, null);
                 }
                 catch (Exception ex) when (endpoint == "CMD_DNS_ADMIN" &&
-                    ex is InvalidOperationException or JsonException or FormatException)
+                    ex is LegacyDnsReadRejectedException or JsonException or FormatException)
                 {
+                    logger?.LogWarning("DirectAdmin DNS read via {Endpoint} could not be parsed: {ErrorType}",
+                        endpoint, ex.GetType().Name);
                     // DirectAdmin also reports legacy errors inside HTTP 200 and
                     // occasionally returns a different admin-response shape.
                     // The user-facing DNS endpoint gets a separate read attempt.
@@ -190,9 +198,22 @@ public sealed class DnsZoneService(IHttpClientFactory clients, IAccessibleDomain
             }
             return new(403, null, "ACCESS_DENIED");
         }
-        catch (InvalidOperationException) { return new(403, null, "ACCESS_DENIED"); }
-        catch (JsonException) { return new(502, null, "INVALID_LEGACY_RESPONSE"); }
-        catch (FormatException) { return new(502, null, "INVALID_LEGACY_RESPONSE"); }
+        catch (LegacyDnsReadRejectedException) { return new(403, null, "ACCESS_DENIED"); }
+        catch (InvalidOperationException ex)
+        {
+            logger?.LogError("DNS read failed in the backend: {ErrorType}", ex.GetType().Name);
+            return new(500, null, "DNS_BACKEND_ERROR");
+        }
+        catch (JsonException)
+        {
+            logger?.LogWarning("DirectAdmin returned invalid DNS JSON");
+            return new(502, null, "INVALID_LEGACY_RESPONSE");
+        }
+        catch (FormatException ex)
+        {
+            logger?.LogWarning("DirectAdmin returned an invalid DNS record structure: {Reason}", ex.Message);
+            return new(502, null, "INVALID_LEGACY_RESPONSE");
+        }
         catch (HttpRequestException) { return new(502, null, "UPSTREAM_UNAVAILABLE"); }
         catch (TaskCanceledException) when (!ct.IsCancellationRequested)
         { return new(504, null, "UPSTREAM_TIMEOUT"); }
