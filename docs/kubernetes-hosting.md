@@ -1,15 +1,27 @@
 # Kubernetes website hosting
 
-Enable the Kubernetes backend and set KubernetesHosting:Enabled to true in appsettings or environment variables. Install kubectl in the HostingPanel runtime and configure its kubeconfig or in-cluster credentials. Run only one active reconciliation worker per SQLite database.
+Enable the Kubernetes backend and set KubernetesHosting:Enabled to true. Install kubectl in the HostingPanel runtime and configure kubeconfig or in-cluster credentials. Run one active reconciliation worker per SQLite database.
 
-Create the configured hosting namespace and grant the panel service account namespace-scoped permissions for ConfigMaps, Deployments, Services, HTTPRoutes and NetworkPolicies (get/list/create/patch/delete). Install Gateway API and Envoy Gateway separately. Configure GatewayName, GatewayNamespace, HttpListener and HttpsListener; the listener must permit HTTPRoutes from the hosting namespace. HTTPS certificates and listener provisioning are external prerequisites.
+Create the hosting namespace. Grant the panel service account namespace-scoped permissions for ConfigMaps, Deployments, Services, HTTPRoutes and NetworkPolicies (get/list/create/patch/delete), and get/list pods. Install Gateway API and Envoy Gateway separately. Configure GatewayName, GatewayNamespace, HttpListener and HttpsListener; the listener must permit HTTPRoutes from the hosting namespace. HTTPS certificates are external prerequisites.
 
-Set NfsServer and NfsPath to the NFS server and exported website root. Each website's directory must already exist at NfsPath/<domain GUID without hyphens>. The Apache deployment mounts only its directory, read-only, at /var/www/sites/<GUID>. PHP runtimes mount the entire export at /var/www/sites, writable, so FastCGI script paths match. Set appropriate NFS permissions. Website deletion intentionally preserves data.
+## Account identity and NFS
 
-Each site owns a ConfigMap, Apache Deployment, Service and HTTPRoute named site-<GUID>. A configuration hash triggers a rollout for only the affected site. Other vhosts are not regenerated. Reconciliation retries pending operations and does not claim that Kubernetes acceptance means the site is serving traffic.
+The provider-owned PhpAccountIdentities SQLite table allocates a stable UID, GID and TCP listener port per account from 10000–30000. Allocations are retained after account deletion to prevent reuse against retained NFS data. The same account uses the same identity on both PHP versions. Reserve this numeric range in the container images and on the NFS server.
 
-Shared PHP-FPM deployments and ClusterIP services php-fpm-8 and optionally php-fpm-7 listen on TCP 9000. DefaultPhpVersion selects the runtime; SitePhpVersions can override it by hostname. PHP 7 requires EnablePhp7 and an explicitly configured maintained Php7Image. PHP 7 is end-of-life upstream. A NetworkPolicy limits FastCGI ingress to Apache pods in the namespace if the CNI enforces policies.
+Set NfsServer and NfsPath to a dedicated website export. Each domain directory must already exist at NfsPath/<domain GUID without hyphens>, owned by the account's allocated UID:GID with mode 0700. The export root must permit traversal, but must not contain unrelated data or publicly accessible tenant directories. The Apache startup checks its directory's ownership and mode. Provision directories and ownership on the NFS server, preserving root squash; the panel does not automatically provision them yet. Website deletion intentionally preserves data.
 
-**Security boundary:** shared PHP runtimes are suitable only for mutually trusted applications. They can access the shared website tree with the same worker identity; NetworkPolicy does not isolate files or PHP scripts between tenants. Enable AllowSharedPhpRuntime only when this is acceptable. Untrusted multi-tenant hosting needs separately isolated PHP workers and storage permissions. Do not expose FastCGI publicly.
+Apache mounts only its domain directory read-only; PHP-FPM mounts the complete export read-write. Both see identical absolute script paths under /var/www/sites/<domain GUID>. Apache and PHP workers run under the allocated account identity.
 
-Changes to global configuration or per-domain PHP version overrides require a new website update operation to reconcile an existing website. This worker does not provision NFS directories, certificates, DNS or CGI and does not implement continuous drift detection. Validate images, permissions, Gateway acceptance and rollout readiness in a test cluster before production.
+## Apache and PHP
+
+Every site owns an Apache ConfigMap, Deployment, Service and HTTPRoute named site-<GUID>. Only the affected website is applied. A configuration hash triggers the corresponding Apache rollout. Kubernetes API acceptance does not imply the site is ready.
+
+PHP-FPM has one Deployment, ConfigMap and ClusterIP Service per enabled major version (php-fpm-8, optionally php-fpm-7). Each account with a PHP-enabled domain has its own on-demand worker pool, Unix identity and TCP port. Multiple domains of the same account and PHP version share the pool. Php8Replicas and Php7Replicas configure replica counts; runtimes scale to zero with no configured pools. DefaultPhpVersion and SitePhpVersions select the version. PHP 7 is end-of-life upstream; it requires EnablePhp7 and an explicitly configured maintained Php7Image.
+
+Account-specific NetworkPolicy ingress rules permit Apache pods to reach only their account's FastCGI port. PHP-FPM also restricts listen.allowed_clients to observed Apache IPv4 pod addresses; empty allowlists fail closed. PHP workers do not receive network capabilities or service-account credentials. Changes to account pools or Apache pod IPs may trigger a rollout of the corresponding shared PHP runtime, but do not regenerate other Apache configurations.
+
+## Security and validation
+
+AllowSharedPhpRuntime remains explicit opt-in. Shared processes and a shared network namespace are not a hard tenant boundary. The source-IP approach requires a CNI enforcing NetworkPolicy, preservation of client pod IPs, trusted namespace labels and careful handling of stale/reused IPs during rollouts. NFS permissions are essential and must be enforced for all directories, not just the directory inspected by Apache. Do not expose FastCGI publicly. Validate cross-account file and FastCGI access, including from inside a PHP worker, before allowing untrusted tenants. Use separately isolated PHP workloads for tenants requiring a stronger boundary.
+
+Global configuration changes and per-domain PHP version changes require a website update to reconcile its Apache configuration. The runtime pool manifest is checked periodically. DNS, certificates, CGI, NFS directory creation and general Kubernetes drift recovery are not implemented here. Build and cluster validation are required before production.
