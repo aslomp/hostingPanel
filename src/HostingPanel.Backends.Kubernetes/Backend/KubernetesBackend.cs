@@ -34,7 +34,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
         // Older persisted settings lack the DNS properties. Fill only new keys from deployment defaults.
         var stored = document.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
         using var defaults = JsonDocument.Parse(BackendSettingsSchema.Serialize(configuredSettings));
-        foreach (var key in new[] { nameof(KubernetesBackendSettings.DnsAutoCreateZones), nameof(KubernetesBackendSettings.DnsWebIp), nameof(KubernetesBackendSettings.DnsNs1), nameof(KubernetesBackendSettings.DnsNs2), nameof(KubernetesBackendSettings.IpAddresses), nameof(KubernetesBackendSettings.AcmeProviders), nameof(KubernetesBackendSettings.AcmeDefaultProvider), nameof(KubernetesBackendSettings.AcmeUserProviders), nameof(KubernetesBackendSettings.AcmePackageProviders) })
+        foreach (var key in new[] { nameof(KubernetesBackendSettings.DnsAutoCreateZones), nameof(KubernetesBackendSettings.DnsWebIp), nameof(KubernetesBackendSettings.DnsNs1), nameof(KubernetesBackendSettings.DnsNs2), nameof(KubernetesBackendSettings.IpAddresses), nameof(KubernetesBackendSettings.AcmeProviders), nameof(KubernetesBackendSettings.AcmeDefaultProvider), nameof(KubernetesBackendSettings.AcmeUserProviders), nameof(KubernetesBackendSettings.AcmePackageProviders), nameof(KubernetesBackendSettings.TlsListenerSetName) })
             stored.TryAdd(key, defaults.RootElement.GetProperty(key).Clone());
         if (!BackendSettingsSchema.TryRead<KubernetesBackendSettings>(JsonSerializer.SerializeToElement(stored),
             out var settings, out _))

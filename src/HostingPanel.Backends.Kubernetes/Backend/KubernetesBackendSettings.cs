@@ -46,6 +46,9 @@ public sealed class KubernetesBackendSettings : IBackendSettings
     [Display(Name = "Package ACME defaults", Description = "Map package GUIDs to provider IDs.")]
     public Dictionary<string,string> AcmePackageProviders { get; set; } = new();
 
+    [Display(Name = "TLS ListenerSet", Description = "Existing ListenerSet in the hosting namespace. Must match the Helm listenerSetName permission.")]
+    public string TlsListenerSetName { get; set; } = "";
+
     [JsonIgnore]
     public IBackendSettingsValidator Validator { get; } = new KubernetesBackendSettingsValidator();
 }
@@ -100,6 +103,8 @@ public sealed class KubernetesBackendSettingsValidator : IBackendSettingsValidat
             errors[nameof(typed.AcmeUserProviders)] = ["Unknown user provider."];
         if (typed.AcmePackageProviders.Any(x => !Guid.TryParse(x.Key, out _) || !providerIds.Contains(x.Value)))
             errors[nameof(typed.AcmePackageProviders)] = ["Invalid package GUID or unknown provider."];
+        if (typed.TlsListenerSetName.Length > 0 && !DnsLabel(typed.TlsListenerSetName))
+            errors[nameof(typed.TlsListenerSetName)] = ["Invalid ListenerSet name."];
         return errors;
     }
     private static bool DnsLabel(string? s) => s is { Length: > 0 and <= 63 } && char.IsAsciiLetterOrDigit(s[0]) && char.IsAsciiLetterOrDigit(s[^1]) && s.All(c => char.IsAsciiDigit(c) || c is >= 'a' and <= 'z' or '-');

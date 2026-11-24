@@ -65,3 +65,6 @@ powerDns:
 # External cert-manager installation required when enabled. No dependency or CRDs are installed.
 certManager:
   enabled: true
+
+  # Existing ListenerSet in the release namespace; reserve hp-tls-* listeners for HostingPanel.
+  listenerSetName: ""
