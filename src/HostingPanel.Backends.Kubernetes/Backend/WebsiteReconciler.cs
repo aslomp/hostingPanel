@@ -170,7 +170,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             new { apiVersion = "gateway.networking.k8s.io/v1", kind = "HTTPRoute", metadata = new { name, @namespace = Namespace }, spec = new {
                 parentRefs = new[] { new { name = Required("GatewayName"), @namespace = Required("GatewayNamespace"),
                     sectionName = Required(tls ? "HttpsListener" : "HttpListener") } },
-                hostnames = new[] { host }, rules = new[] { new { backendRefs = new[] { name = "apache-baseline", port = 80 } } } }
+                hostnames = new[] { host }, rules = new[] { new { backendRefs = new[] { new { name = "apache-baseline", port = 80 } } } }
             } }
         };
         return JsonSerializer.Serialize(new { apiVersion = "v1", kind = "List", items = resources });
