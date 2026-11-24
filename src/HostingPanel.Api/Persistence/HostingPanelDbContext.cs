@@ -20,6 +20,7 @@ public sealed class HostingPanelDbContext(DbContextOptions<HostingPanelDbContext
     public DbSet<HostedTicket> Tickets => Set<HostedTicket>();
     public DbSet<HostedTicketReply> TicketReplies => Set<HostedTicketReply>();
     public DbSet<HostedMessage> Messages => Set<HostedMessage>();
+    public DbSet<ReconciliationOperation> ReconciliationOperations => Set<ReconciliationOperation>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -43,6 +44,7 @@ public sealed class HostingPanelDbContext(DbContextOptions<HostingPanelDbContext
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.Name).IsUnique();
             e.HasOne<HostedDomain>().WithMany().HasForeignKey(x => x.DomainId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne<HostingAccount>().WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Restrict);
         });
         model.Entity<DnsRecordEntity>(e => {
             e.HasKey(x => x.Id);
@@ -80,6 +82,11 @@ public sealed class HostingPanelDbContext(DbContextOptions<HostingPanelDbContext
             e.HasIndex(x => new { x.ResourceType, x.ResourceId });
         });
         model.Entity<PanelConfiguration>().HasKey(x => x.Key);
+        model.Entity<ReconciliationOperation>(e => {
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.Status, x.CreatedAt });
+            e.HasIndex(x => new { x.ResourceType, x.ResourceId });
+        });
         model.Entity<HostedTicket>(e => {
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.OwnerId);
@@ -125,6 +132,7 @@ public sealed class HostedDomain {
 }
 public sealed class DnsZone {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid OwnerId { get; set; }
     public Guid? DomainId { get; set; }
     public string Name { get; set; } = "";
     public int DefaultTtl { get; set; } = 3600;
@@ -213,4 +221,17 @@ public sealed class HostedMessage {
     public string Subject { get; set; } = "";
     public bool Unread { get; set; } = true;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public sealed class ReconciliationOperation {
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string ResourceType { get; set; } = "";
+    public Guid ResourceId { get; set; }
+    public string Action { get; set; } = "";
+    public string PayloadJson { get; set; } = "{}";
+    public string Status { get; set; } = "pending";
+    public int Attempts { get; set; }
+    public string? LastError { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? CompletedAt { get; set; }
 }
