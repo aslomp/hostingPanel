@@ -20,73 +20,11 @@ public sealed class DnsController(IHostingBackend backend) : BackendController
         if (!TryGetBasic(HttpContext, out var auth))
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
 
-        var zones = new Dictionary<string, AccessibleDnsZone>(StringComparer.OrdinalIgnoreCase);
-        var warnings = new List<string>();
-        var adminStatus = 200;
-
-        // DirectAdmin may host standalone DNS zones that have no hosting domain.
-        // Discover those from the admin DNS interface, not just account domains.
-        // No assumed admin/reseller role and no locally constructed permission tree.
-        var lastPage = 0;
-        for (var page = 1; page <= 10000; page++)
-        {
-            var listed = await backend.Dns.ListAdminZonesAsync(auth, page, ct);
-            if (listed.Zones is null)
-            {
-                adminStatus = listed.Status;
-                if (page > 1 || listed.Status is not (401 or 403 or 404))
-                    warnings.Add("ADMIN_DNS_LIST_UNAVAILABLE");
-                break;
-            }
-            if (listed.Zones.Count == 0) { lastPage = page; break; }
-
-            var fresh = 0;
-            foreach (var zone in listed.Zones)
-            {
-                if (zones.TryAdd(zone.Domain, new AccessibleDnsZone(
-                    zone.Domain, zone.LocalData, zone.LocalMail, null)))
-                    fresh++;
-            }
-
-            if (fresh == 0)
-            {
-                // A legacy backend may ignore page= and repeat the same result.
-                warnings.Add("ADMIN_DNS_PAGINATION_UNVERIFIED");
-                break;
-            }
-            if (page == 10000)
-                warnings.Add("ADMIN_DNS_PAGE_LIMIT");
-        }
-
-        // Supplement DNS-only results with resources discoverable through the
-        // caller's accessible account hierarchy. Neither source is a role check.
-        var accessible = await backend.AccessibleDomains.ListAsync(auth, ct);
-        if (accessible.Items is not null)
-        {
-            foreach (var item in accessible.Items)
-            {
-                if (!zones.ContainsKey(item.Domain))
-                    zones[item.Domain] = new AccessibleDnsZone(item.Domain, null, null, item.Owner);
-                else if (string.IsNullOrWhiteSpace(zones[item.Domain].Owner))
-                    zones[item.Domain] = zones[item.Domain] with { Owner = item.Owner };
-            }
-            if (accessible.Warning is not null) warnings.Add(accessible.Warning);
-        }
-        else
-        {
-            warnings.Add(accessible.Warning ?? "DOMAIN_DISCOVERY_UNAVAILABLE");
-        }
-
-        if (zones.Count == 0 && accessible.Items is null)
-            return Results.Json(new { type = "DNS_INVENTORY_UNAVAILABLE" },
-                statusCode: adminStatus is 401 or 403 ? adminStatus : accessible.Status);
-
-        return Results.Json(new
-        {
-            zones = zones.Values.OrderBy(z => z.Domain, StringComparer.OrdinalIgnoreCase),
-            warning = warnings.Count == 0 ? null : string.Join(",", warnings.Distinct()),
-            complete = warnings.Count == 0
-        });
+        var result = await backend.Dns.ListAccessibleZonesAsync(auth, ct);
+        return result.Zones is null
+            ? Results.Json(new { type = result.Warning ?? "DNS_INVENTORY_UNAVAILABLE" }, statusCode: result.Status)
+            : Results.Json(new { zones = result.Zones, warning = result.Warning, complete = result.Warning is null },
+                statusCode: result.Status);
     }
 
     [HttpPost("/hosting/dns/zones")]
@@ -96,7 +34,7 @@ public sealed class DnsController(IHostingBackend backend) : BackendController
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
         var result = await backend.Dns.CreateZoneAsync(input, auth, ct);
         return result.Error is null
-            ? Results.Json(new { domain = input.Domain, created = true }, statusCode: result.Status)
+            ? Results.Json(new { domain = input.Domain, created = result.Executed, provisioningPending = result.ProvisioningPending }, statusCode: result.Status)
             : Results.Json(new { type = result.Error }, statusCode: result.Status);
     }
 
@@ -108,7 +46,7 @@ public sealed class DnsController(IHostingBackend backend) : BackendController
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
         var result = await backend.Dns.DeleteZoneAsync(domain, input.Confirmation, auth, ct);
         return result.Error is null
-            ? Results.Json(new { domain, deleted = true }, statusCode: result.Status)
+            ? Results.Json(new { domain, deleted = result.Executed, provisioningPending = result.ProvisioningPending }, statusCode: result.Status)
             : Results.Json(new { type = result.Error }, statusCode: result.Status);
     }
 
@@ -151,13 +89,12 @@ public sealed class DnsController(IHostingBackend backend) : BackendController
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var result = await service.ChangeAsync(domain, input, auth, context.RequestAborted);
             return result.Error is null
-                ? Results.Json(new { domain, action = input.Action, applied = true }, statusCode: result.Status)
+                ? Results.Json(new { domain, action = input.Action, applied = result.Executed, provisioningPending = result.ProvisioningPending }, statusCode: result.Status)
                 : Results.Json(new { type = result.Error }, statusCode: result.Status);
     }
 
 
 }
 
-public sealed record AccessibleDnsZone(string Domain, bool? LocalData, bool? LocalMail, string? Owner);
 
 public sealed record DnsZoneDeletion(string Confirmation);

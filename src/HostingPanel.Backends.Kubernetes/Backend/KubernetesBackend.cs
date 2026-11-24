@@ -17,7 +17,7 @@ namespace HostingPanel.Api;
 public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings) :
     IHostingBackend, IAccountCatalog, IAccountMutations, IAccessibleDomains,
     IUserDetails, IAccountOverview, IImpersonation, IDatabases,
-    IAccessibleDatabases, IDomains, IDns, IFileAccess, ITickets, IBackendSettingsAccess, IWebHosting
+    IAccessibleDatabases, IDomains, IDNSProvider, IFileAccess, ITickets, IBackendSettingsAccess, IWebHosting
 {
     public IBackendSettingsAccess Settings => this;
     private const string SettingsKey = "BackendSettings:Kubernetes";
@@ -78,7 +78,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
     public IAccessibleDatabases AccessibleDatabases => this;
     public IDomains Domains => this;
     public IWebHosting WebHosting => this;
-    public IDns Dns => this;
+    public IDNSProvider Dns => this;
     public IFileAccess FileAccess => this;
     public ITickets Tickets => this;
 
@@ -473,6 +473,19 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
     }
     Task<AccessibleDatabaseInventory> IAccessibleDatabases.ListAsync(AuthenticationHeaderValue auth, CancellationToken ct)
         => ListAccessibleDatabases(auth, ct);
+
+    public async Task<AccessibleDnsInventory> ListAccessibleZonesAsync(AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        var principal = await AuthenticateAsync(auth, ct);
+        if (principal is null) return new(401, null, "UNAUTHORIZED");
+        var ids = await VisibleAccountsAsync(principal, ct);
+        var zones = await (from z in db.DnsZones.AsNoTracking()
+            join a in db.Accounts.AsNoTracking() on z.OwnerId equals a.Id
+            where ids.Contains(z.OwnerId)
+            orderby z.Name
+            select new AccessibleDnsZone(z.Name, null, null, a.Username)).ToListAsync(ct);
+        return new(200, zones, null);
+    }
 
     public async Task<AdminDnsZoneListResult> ListAdminZonesAsync(AuthenticationHeaderValue auth, int page, CancellationToken ct)
     {

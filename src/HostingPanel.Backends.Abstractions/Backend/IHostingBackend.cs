@@ -19,7 +19,7 @@ public interface IHostingBackend : IAuthenticationProvider
     IAccessibleDatabases AccessibleDatabases { get; }
     IDomains Domains { get; }
     IWebHosting WebHosting { get; }
-    IDns Dns { get; }
+    IDNSProvider Dns { get; }
     IFileAccess FileAccess { get; }
     ITickets Tickets { get; }
     Task ForwardAsync(HttpContext context);
@@ -62,13 +62,6 @@ public interface IDomains {
     Task<DomainMutationResult> MutateAsync(DomainMutationRequest input, AuthenticationHeaderValue auth, CancellationToken ct);
     Task<DomainDetailResult> GetDetailsAsync(string domain, AuthenticationHeaderValue auth, CancellationToken ct);
     Task<DomainMutationResult> UpdateSettingAsync(string domain, string setting, string value, AuthenticationHeaderValue auth, CancellationToken ct);
-}
-public interface IDns {
-    Task<AdminDnsZoneListResult> ListAdminZonesAsync(AuthenticationHeaderValue auth, int page, CancellationToken ct);
-    Task<DnsZoneResult> ReadAsync(string domain, AuthenticationHeaderValue auth, CancellationToken ct);
-    Task<DnsChangeResult> ChangeAsync(string domain, DnsChange change, AuthenticationHeaderValue auth, CancellationToken ct);
-    Task<DnsChangeResult> CreateZoneAsync(DnsZoneCreate input, AuthenticationHeaderValue auth, CancellationToken ct);
-    Task<DnsChangeResult> DeleteZoneAsync(string domain, string confirmation, AuthenticationHeaderValue auth, CancellationToken ct);
 }
 public interface IFileAccess {
     Task<FileAccessResult> ListFtpAsync(string domain, AuthenticationHeaderValue credentials, CancellationToken ct);

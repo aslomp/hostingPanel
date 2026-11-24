@@ -5,9 +5,75 @@ using HostingPanel.Api.Adapters;
 
 namespace HostingPanel.Api.Services;
 
-public sealed class DnsZoneService(IHttpClientFactory clients)
-: IDns
+public sealed class DnsZoneService(IHttpClientFactory clients, IAccessibleDomains? accessibleDomains = null)
+: IDNSProvider
 {
+    public async Task<AccessibleDnsInventory> ListAccessibleZonesAsync(AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        if (accessibleDomains is null) return new(501, null, "DOMAIN_DISCOVERY_UNAVAILABLE");
+        var zones = new Dictionary<string, AccessibleDnsZone>(StringComparer.OrdinalIgnoreCase);
+        var warnings = new List<string>();
+        var adminStatus = 200;
+
+        // DirectAdmin may host standalone DNS zones that have no hosting domain.
+        // Discover those from the admin DNS interface, not just account domains.
+        // No assumed admin/reseller role and no locally constructed permission tree.
+        for (var page = 1; page <= 10000; page++)
+        {
+            var listed = await ListAdminZonesAsync(auth, page, ct);
+            if (listed.Zones is null)
+            {
+                adminStatus = listed.Status;
+                if (page > 1 || listed.Status is not (401 or 403 or 404))
+                    warnings.Add("ADMIN_DNS_LIST_UNAVAILABLE");
+                break;
+            }
+            if (listed.Zones.Count == 0) { break; }
+
+            var fresh = 0;
+            foreach (var zone in listed.Zones)
+            {
+                if (zones.TryAdd(zone.Domain, new AccessibleDnsZone(
+                    zone.Domain, zone.LocalData, zone.LocalMail, null)))
+                    fresh++;
+            }
+
+            if (fresh == 0)
+            {
+                // A legacy backend may ignore page= and repeat the same result.
+                warnings.Add("ADMIN_DNS_PAGINATION_UNVERIFIED");
+                break;
+            }
+            if (page == 10000)
+                warnings.Add("ADMIN_DNS_PAGE_LIMIT");
+        }
+
+        // Supplement DNS-only results with resources discoverable through the
+        // caller's accessible account hierarchy. Neither source is a role check.
+        var accessible = await accessibleDomains.ListAsync(auth, ct);
+        if (accessible.Items is not null)
+        {
+            foreach (var item in accessible.Items)
+            {
+                if (!zones.ContainsKey(item.Domain))
+                    zones[item.Domain] = new AccessibleDnsZone(item.Domain, null, null, item.Owner);
+                else if (string.IsNullOrWhiteSpace(zones[item.Domain].Owner))
+                    zones[item.Domain] = zones[item.Domain] with { Owner = item.Owner };
+            }
+            if (accessible.Warning is not null) warnings.Add(accessible.Warning);
+        }
+        else
+        {
+            warnings.Add(accessible.Warning ?? "DOMAIN_DISCOVERY_UNAVAILABLE");
+        }
+
+        if (zones.Count == 0 && accessible.Items is null)
+            return new(adminStatus is 401 or 403 ? adminStatus : accessible.Status, null, "DNS_INVENTORY_UNAVAILABLE");
+
+        return new(200, zones.Values.OrderBy(z => z.Domain, StringComparer.OrdinalIgnoreCase).ToArray(),
+            warnings.Count == 0 ? null : string.Join(",", warnings.Distinct()));
+    }
+
     public async Task<AdminDnsZoneListResult> ListAdminZonesAsync(
         AuthenticationHeaderValue auth, int page, CancellationToken ct)
     {

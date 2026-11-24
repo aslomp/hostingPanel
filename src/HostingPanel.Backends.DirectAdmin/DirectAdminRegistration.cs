@@ -13,6 +13,7 @@ public static class DirectAdminRegistration
     services.AddScoped<AccountCatalogService>();
     services.AddScoped<AccountMutationService>();
     services.AddScoped<AccessibleDomainsService>();
+    services.AddScoped<IAccessibleDomains>(sp => sp.GetRequiredService<AccessibleDomainsService>());
     services.AddScoped<ImpersonationService>();
     services.AddScoped<DnsZoneService>();
     services.AddScoped<DatabaseManagementService>();
