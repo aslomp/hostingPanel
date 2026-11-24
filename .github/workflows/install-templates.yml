@@ -24,8 +24,13 @@ jobs:
           helm template panel "$chart" -f deploy/helm/values-kubernetes.example.yaml > /tmp/k8s.yaml
           grep -q 'kind: PersistentVolumeClaim' /tmp/k8s.yaml
           grep -q 'kind: PersistentVolumeClaim' /tmp/da.yaml
-          test "$(grep -c '^kind: Deployment
+          test "$(grep -c '^kind: Deployment$' /tmp/da.yaml)" = 1
+          test "$(grep -c '^kind: Deployment$' /tmp/k8s.yaml)" = 2
+          grep -q 'name: panel-hostingpanel-powerdns' /tmp/k8s.yaml
           grep -q 'automountServiceAccountToken: false' /tmp/k8s.yaml
+          helm template panel "$chart" -f deploy/helm/values-kubernetes.example.yaml --set powerDns.enabled=false > /tmp/k8s-no-dns.yaml
+          test "$(grep -c '^kind: Deployment$' /tmp/k8s-no-dns.yaml)" = 1
+          ! grep -q 'name: panel-hostingpanel-powerdns' /tmp/da.yaml
       - name: Build and run installation in SQLite mode
         working-directory: deploy/compose
         env:
@@ -48,75 +53,6 @@ jobs:
           curl -fsS --user "$BOOTSTRAP_USERNAME:$BOOTSTRAP_PASSWORD" "http://127.0.0.1:8080/hosting/accounts" | grep -q testadmin
           test "$(curl -sS -o /dev/null -w '%{http_code}' --user testadmin:wrong "http://127.0.0.1:8080/hosting/accounts")" = 401
           docker compose restart web
-          curl --retry 10 --retry-connrefused --retry-delay 2 -fsS "http://127.0.0.1:8080/healthz"
-          curl -fsS --user "$BOOTSTRAP_USERNAME:$BOOTSTRAP_PASSWORD" "http://127.0.0.1:8080/hosting/accounts" | grep -q testadmin
-      - name: Cleanup
-        if: always()
-        working-directory: deploy/compose
-        run: |
-          docker compose logs --tail=100
-          docker compose down -v
- /tmp/da.yaml)" = 1
-          test "$(grep -c '^kind: Deployment
-          grep -q 'automountServiceAccountToken: false' /tmp/k8s.yaml
-      - name: Build and run installation in SQLite mode
-        working-directory: deploy/compose
-        env:
-          HOSTING_BACKEND: Kubernetes
-          BOOTSTRAP_USERNAME: testadmin
-          BOOTSTRAP_PASSWORD: installation-smoke-test-not-a-real-secret
-        run: |
-          set -euo pipefail
-          docker compose config --quiet
-          docker compose up -d --build
-          for attempt in {1..60}; do
-            if curl -fsS http://127.0.0.1:8080/login >/tmp/panel.html; then break; fi
-            sleep 2
-          done
-          grep -q 'action="/login"' /tmp/panel.html
-          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/)" = 302
-          curl -fsS http://127.0.0.1:8080/_framework/blazor.web.js > /tmp/blazor.js
-          test -s /tmp/blazor.js
-          api_id="$(docker compose ps -q api)"
-          api_ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$api_id")"
-          curl --retry 10 --retry-connrefused --retry-delay 2 -fsS "http://127.0.0.1:8080/healthz"
-          curl -fsS --user "$BOOTSTRAP_USERNAME:$BOOTSTRAP_PASSWORD" "http://127.0.0.1:8080/hosting/accounts" | grep -q testadmin
-          test "$(curl -sS -o /dev/null -w '%{http_code}' --user testadmin:wrong "http://127.0.0.1:8080/hosting/accounts")" = 401
-          docker compose restart api
-          curl --retry 10 --retry-connrefused --retry-delay 2 -fsS "http://127.0.0.1:8080/healthz"
-          curl -fsS --user "$BOOTSTRAP_USERNAME:$BOOTSTRAP_PASSWORD" "http://127.0.0.1:8080/hosting/accounts" | grep -q testadmin
-      - name: Cleanup
-        if: always()
-        working-directory: deploy/compose
-        run: |
-          docker compose logs --tail=100
-          docker compose down -v
- /tmp/k8s.yaml)" = 1
-          grep -q 'automountServiceAccountToken: false' /tmp/k8s.yaml
-      - name: Build and run installation in SQLite mode
-        working-directory: deploy/compose
-        env:
-          HOSTING_BACKEND: Kubernetes
-          BOOTSTRAP_USERNAME: testadmin
-          BOOTSTRAP_PASSWORD: installation-smoke-test-not-a-real-secret
-        run: |
-          set -euo pipefail
-          docker compose config --quiet
-          docker compose up -d --build
-          for attempt in {1..60}; do
-            if curl -fsS http://127.0.0.1:8080/login >/tmp/panel.html; then break; fi
-            sleep 2
-          done
-          grep -q 'action="/login"' /tmp/panel.html
-          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/)" = 302
-          curl -fsS http://127.0.0.1:8080/_framework/blazor.web.js > /tmp/blazor.js
-          test -s /tmp/blazor.js
-          api_id="$(docker compose ps -q api)"
-          api_ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$api_id")"
-          curl --retry 10 --retry-connrefused --retry-delay 2 -fsS "http://127.0.0.1:8080/healthz"
-          curl -fsS --user "$BOOTSTRAP_USERNAME:$BOOTSTRAP_PASSWORD" "http://127.0.0.1:8080/hosting/accounts" | grep -q testadmin
-          test "$(curl -sS -o /dev/null -w '%{http_code}' --user testadmin:wrong "http://127.0.0.1:8080/hosting/accounts")" = 401
-          docker compose restart api
           curl --retry 10 --retry-connrefused --retry-delay 2 -fsS "http://127.0.0.1:8080/healthz"
           curl -fsS --user "$BOOTSTRAP_USERNAME:$BOOTSTRAP_PASSWORD" "http://127.0.0.1:8080/hosting/accounts" | grep -q testadmin
       - name: Cleanup
