@@ -154,6 +154,9 @@ spec:
             - {name: data, mountPath: /data}
             {{- if $hosting }}
             - {name: sites, mountPath: /storage/sites}
+            {{- if .Values.kubernetesHosting.apacheConfigClaim }}
+            - {name: apache-config, mountPath: /storage/apache-config}
+            {{- end }}
             {{- end }}
       volumes:
         {{- if $hosting }}
@@ -167,6 +170,11 @@ spec:
             path: {{ .Values.kubernetesHosting.nfsPath | quote }}
             readOnly: false
           {{- end }}
+        {{- end }}
+        {{- if and $hosting .Values.kubernetesHosting.apacheConfigClaim }}
+        - name: apache-config
+          persistentVolumeClaim:
+            claimName: {{ .Values.kubernetesHosting.apacheConfigClaim | quote }}
         {{- end }}
         - name: data
           persistentVolumeClaim:
