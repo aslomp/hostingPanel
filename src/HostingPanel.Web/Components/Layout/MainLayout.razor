@@ -34,8 +34,8 @@
         <MudStack Spacing="2" Class="pa-3">
             <MudText Typo="Typo.overline">@L["Navigation context"]</MudText>
             <MudStack Row="true" Spacing="1">
-                <MudButton Variant="@(NavContext.Mode == "admin" ? Variant.Filled : Variant.Text)" Color="Color.Primary" OnClick='() => SetContext("admin")'>@L["Administrator"]</MudButton>
-                <MudButton Variant="@(NavContext.Mode == "user" ? Variant.Filled : Variant.Text)" Color="Color.Primary" OnClick='() => SetContext("user")'>@L["User"]</MudButton>
+                <MudButton Variant="@(NavContext.Mode == "admin" ? Variant.Filled : Variant.Text)" Color="Color.Primary" aria-pressed='@(NavContext.Mode == "admin" ? "true" : "false")' OnClick='() => SetContext("admin")'>@L["Administrator"]</MudButton>
+                <MudButton Variant="@(NavContext.Mode == "user" ? Variant.Filled : Variant.Text)" Color="Color.Primary" aria-pressed='@(NavContext.Mode == "user" ? "true" : "false")' OnClick='() => SetContext("user")'>@L["User"]</MudButton>
             </MudStack>
             <MudTextField T="string" @bind-Value="navSearch" Immediate="true" Label="@L["Search pages"].Value" Variant="Variant.Outlined" Margin="Margin.Dense" />
         </MudStack>

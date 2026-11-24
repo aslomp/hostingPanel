@@ -7,13 +7,13 @@
 <MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@(Kind == "reseller" ? L["Create reseller"].Value : L["Create user"].Value)</h2>
     <p>@L["DirectAdmin validates the package, IP address and permissions of the signed-in identity."]</p>
-    <MudTextField T="string" Label="@L["Account name"].Value" @bind-Value="username" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" AutoComplete="off" />
-    <MudTextField T="string" Label="@L["Email address"].Value" @bind-Value="email" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" AutoComplete="off" InputType="InputType.Email" />
+    <MudTextField T="string" Label="@L["Account name"].Value" @bind-Value="username" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="off" />
+    <MudTextField T="string" Label="@L["Email address"].Value" @bind-Value="email" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="off" InputType="InputType.Email" />
     <MudTextField T="string" Label="@L["Primary domain"].Value" @bind-Value="domain" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="example.com" />
-    <MudTextField T="string" Label="@L["Package"].Value" @bind-Value="package" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" AutoComplete="off" />
+    <MudTextField T="string" Label="@L["Package"].Value" @bind-Value="package" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="off" />
     <MudTextField T="string" Label="@L["IP / assignment"].Value" @bind-Value="ip" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="shared" />
-    <MudTextField T="string" Label="@L["New password"].Value" @bind-Value="password" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" AutoComplete="new-password" InputType="InputType.Password" />
-    <MudTextField T="string" Label="@L["Confirm password"].Value" @bind-Value="passwordConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" AutoComplete="new-password" InputType="InputType.Password" />
+    <MudTextField T="string" Label="@L["New password"].Value" @bind-Value="password" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="new-password" InputType="InputType.Password" />
+    <MudTextField T="string" Label="@L["Confirm password"].Value" @bind-Value="passwordConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="new-password" InputType="InputType.Password" />
     <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(package) || password != passwordConfirmation || password.Length < 5)" OnClick="Create">
         @(busy ? L["Processing…"].Value : L["Create account"].Value)
     </MudButton>

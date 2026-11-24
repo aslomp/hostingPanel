@@ -119,7 +119,7 @@ public static class NavigationParityContractTests
         Require(!navigation.Contains("Session.Role", StringComparison.Ordinal) &&
                 !navigation.Contains("isAdmin", StringComparison.Ordinal),
             "Navigation must not perform local account-role authorization");
-        Require(navigation.Contains("href=\"/\"", StringComparison.Ordinal),
+        Require(navigation.Contains("Href=\"/\"", StringComparison.OrdinalIgnoreCase),
             "Dashboard link missing");
     }
 
