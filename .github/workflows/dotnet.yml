@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - feature/web-hosting-contract
       - feature/separate-backend-projects
       - feature/blazor-directadmin-api
       - feature/kubernetes-sqlite-foundation
