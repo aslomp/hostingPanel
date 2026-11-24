@@ -14,7 +14,7 @@ namespace HostingPanel.Api;
 // A single active reconciler per SQLite database. kubectl uses the configured
 // kubeconfig or the in-cluster service account; no shell interpolation.
 public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguration configuration,
-    ILogger<WebsiteReconciler> logger) : BackgroundService
+    ILogger<WebsiteReconciler> logger, NfsDirectoryProvisioner storage) : BackgroundService
 {
     private string? appliedRuntimeHash;
 
@@ -53,8 +53,13 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                     await KubectlAsync(null, ct, "delete", "httproute,deployment,service,configmap", name,
                         "--ignore-not-found=true");
                 else
-                    await KubectlAsync(BuildManifest(domain, identities[domain.OwnerId]), ct, "apply", "--server-side",
+                {
+                    var identity = identities[domain.OwnerId];
+                    var manifest = BuildManifest(domain, identity);
+                    await storage.EnsureAsync(domain.Id, identity, ct);
+                    await KubectlAsync(manifest, ct, "apply", "--server-side",
                         "--field-manager=hostingpanel", "-f", "-");
+                }
                 completed.AddRange(group);
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
