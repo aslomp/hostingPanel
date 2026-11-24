@@ -20,7 +20,7 @@
         if (!Session.Restore(state.User.FindFirst(PanelSessionStore.SessionClaim)?.Value)) RedirectToLogin();
         Session.Changed += SessionChanged;
     }
-    private Task CheckSession(NavigationContext context)
+    private Task CheckSession(Microsoft.AspNetCore.Components.Routing.NavigationContext context)
     {
         if (!Session.Connected) RedirectToLogin();
         return Task.CompletedTask;
