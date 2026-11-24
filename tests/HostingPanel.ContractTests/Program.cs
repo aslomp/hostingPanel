@@ -6,6 +6,16 @@ using System.Text;
 
 var checks = new List<(string Description, Action Test)>
 {
+    ("Provider assemblies do not reference each other or API", () =>
+    {
+        var contract = typeof(HostingPanel.Api.IHostingBackend).Assembly;
+        var direct = typeof(HostingPanel.Api.DirectAdminBackend).Assembly;
+        var kube = typeof(HostingPanel.Api.KubernetesBackend).Assembly;
+        Require(contract != direct && contract != kube && direct != kube);
+        Require(!contract.GetReferencedAssemblies().Any(a => a.Name!.StartsWith("HostingPanel.")));
+        Require(!direct.GetReferencedAssemblies().Any(a => a.Name is "HostingPanel.Api" or "HostingPanel.Backends.Kubernetes"));
+        Require(!kube.GetReferencedAssemblies().Any(a => a.Name is "HostingPanel.Api" or "HostingPanel.Backends.DirectAdmin"));
+    }),
     ("Backend settings describe enum, validate and reject hidden or unknown fields", () =>
     {
         var settings = new HostingPanel.Api.KubernetesBackendSettings();
