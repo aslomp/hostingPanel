@@ -1,8 +1,10 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/domains/{Domain}/dns"
-@using System.Text.Json
-@inject DirectAdminSession Session
+@using HostingPanel.Api.Services
+@using HostingPanel.Api.Adapters
+@inject PanelSession Session
+@inject DnsOperations Dns
 @inject IDialogService Dialogs
 
 <PageTitle>DNS — @Domain</PageTitle>
@@ -48,13 +50,12 @@ else
 }
 @code {
     [Parameter] public string Domain { get; set; } = "";
-    private sealed record ZoneRecord(string Type, string Name, string Value, string? Ttl);
-    private List<ZoneRecord>? records;
+    private List<DnsRecord>? records;
     private string? error, message;
     private bool busy, editorOpen, failed;
     private string search = "";
     private Task NewRecord() => OpenEditor(null);
-    private Task Edit(ZoneRecord record) => OpenEditor(record);
+    private Task Edit(DnsRecord record) => OpenEditor(record);
     protected override async Task OnParametersSetAsync()
     {
         if (Session.Connected) await Load();
@@ -66,40 +67,22 @@ else
         error = null;
         try
         {
-            var (status, body) = await Session.GetDnsZoneAsync(Domain);
-            if (status != 200)
+            var result = await Dns.ReadAsync(Domain);
+            if (result.Status != 200 || result.Records is null)
             {
-                error = L["DNS zone unavailable: HTTP {0}.", status].Value;
-                try
-                {
-                    using var failure = JsonDocument.Parse(body);
-                    if (failure.RootElement.ValueKind == JsonValueKind.Object &&
-                        failure.RootElement.TryGetProperty("type", out var code) &&
-                        code.ValueKind == JsonValueKind.String)
-                    {
-                        var reason = code.GetString();
-                        if (!string.IsNullOrWhiteSpace(reason) &&
-                            reason.Length <= 80 && reason.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'))
-                            error += $" ({reason})";
-                    }
-                }
-                catch (JsonException) { }
+                error = L["DNS zone unavailable: HTTP {0}.", result.Status].Value;
+                if (result.Error is { Length: > 0 and <= 80 } reason && reason.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'))
+                    error += $" ({reason})";
                 records = null;
                 return;
             }
-            using var doc = JsonDocument.Parse(body);
-            var array = doc.RootElement.GetProperty("records");
-            records = array.EnumerateArray().Select(x => new ZoneRecord(
-                x.GetProperty("type").GetString() ?? "",
-                x.GetProperty("name").GetString() ?? "",
-                x.GetProperty("value").GetString() ?? "",
-                x.TryGetProperty("ttl", out var t) && t.ValueKind != JsonValueKind.Null ? t.ToString() : null)).ToList();
+            records = result.Records.ToList();
         }
-        catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException or ArgumentException)
+        catch (Exception e) when (e is HttpRequestException or InvalidOperationException or ArgumentException)
         { error = e.Message; }
         finally { busy = false; }
     }
-    private async Task OpenEditor(ZoneRecord? record)
+    private async Task OpenEditor(DnsRecord? record)
     {
         if (busy || editorOpen || deleteDialogOpen || !Session.Connected) return;
         editorOpen = true; message = null;
@@ -121,14 +104,14 @@ else
             if (result is { Canceled: false } && domain == Domain)
             {
                 failed = false;
-                message = L["DirectAdmin confirmed the DNS change."].Value;
+                message = L["DNS change request accepted."].Value;
                 await Load();
             }
         }
         finally { editorOpen = false; }
     }
     private bool deleteDialogOpen;
-    private async Task Remove(ZoneRecord r)
+    private async Task Remove(DnsRecord r)
     {
         if (busy || editorOpen || deleteDialogOpen || !Session.Connected || records?.Contains(r) != true) return;
         var domain = Domain;
@@ -148,13 +131,13 @@ else
             busy = true; message = null;
             try
             {
-                var (status, _) = await Session.ChangeDnsRecordAsync(domain, "delete", r.Type, r.Name, r.Value, r.Ttl,
-                    r.Type, r.Name, r.Value);
-                failed = status != 200;
+                var result = await Dns.ChangeAsync(domain, new DnsChange("delete", r, r));
+                var status = result.Status;
+                failed = !result.Executed && !result.ProvisioningPending;
                 message = failed ? L["DNS change not confirmed (HTTP {0}).", status].Value
                     : L["DirectAdmin confirmed the DNS change."].Value;
             }
-            catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException or ArgumentException)
+            catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
             { failed = true; message = ex.Message; }
             finally { busy = false; }
             if (!failed) await Load();
