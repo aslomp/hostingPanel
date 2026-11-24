@@ -17,7 +17,7 @@ namespace HostingPanel.Api;
 public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings) :
     IHostingBackend, IAccountCatalog, IAccountMutations, IAccessibleDomains,
     IUserDetails, IAccountOverview, IImpersonation, IDatabases,
-    IAccessibleDatabases, IDomains, IDns, IFileAccess, ITickets, IBackendSettingsAccess
+    IAccessibleDatabases, IDomains, IDns, IFileAccess, ITickets, IBackendSettingsAccess, IWebHosting
 {
     public IBackendSettingsAccess Settings => this;
     private const string SettingsKey = "BackendSettings:Kubernetes";
@@ -77,6 +77,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
     public IDatabases Databases => this;
     public IAccessibleDatabases AccessibleDatabases => this;
     public IDomains Domains => this;
+    public IWebHosting WebHosting => this;
     public IDns Dns => this;
     public IFileAccess FileAccess => this;
     public ITickets Tickets => this;
@@ -276,6 +277,36 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
                     where ids.Contains(account.Id) && (owner == null ? account.Id == principal.Id : account.Username == owner)
                     select domain.Name;
         return new(200, await query.OrderBy(x => x).ToListAsync(ct), null);
+    }
+
+    public async Task<WebsiteListResult> ListWebsitesAsync(string? owner, AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        var result = await ListAsync(owner, auth, ct);
+        return new(result.Status, result.Domains, result.Error);
+    }
+
+    public async Task<WebsiteResult> GetWebsiteAsync(string domain, AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        var result = await GetDetailsAsync(domain, auth, ct);
+        return new(result.Status, result.Settings is null ? null :
+            new WebsiteInfo(domain.ToLowerInvariant(), result.Settings, WebsiteProvisioningState.Unknown), result.Error);
+    }
+
+    public Task<WebsiteMutationResult> CreateWebsiteAsync(WebsiteConfiguration website, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        ApplyWebsiteAsync(website, "create", website.Domain, auth, ct);
+
+    public Task<WebsiteMutationResult> UpdateWebsiteAsync(WebsiteConfiguration website, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        ApplyWebsiteAsync(website, "modify", website.Domain, auth, ct);
+
+    public Task<WebsiteMutationResult> DeleteWebsiteAsync(string domain, string confirmation, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        ApplyWebsiteAsync(new WebsiteConfiguration(domain), "delete", confirmation, auth, ct);
+
+    private async Task<WebsiteMutationResult> ApplyWebsiteAsync(WebsiteConfiguration website, string action, string confirmation,
+        AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        var result = await MutateAsync(new DomainMutationRequest(website.Domain, action, confirmation,
+            website.Php, website.Tls, website.Cgi), auth, ct);
+        return new(result.Status, result.Error);
     }
 
     public async Task<DomainMutationResult> MutateAsync(DomainMutationRequest input, AuthenticationHeaderValue auth, CancellationToken ct)

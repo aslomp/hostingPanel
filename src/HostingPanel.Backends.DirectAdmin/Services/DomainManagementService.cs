@@ -6,8 +6,38 @@ using HostingPanel.Api.Adapters;
 namespace HostingPanel.Api.Services;
 
 public sealed class DomainManagementService(IHttpClientFactory clients)
-: IDomains
+: IDomains, IWebHosting
 {
+    public async Task<WebsiteListResult> ListWebsitesAsync(string? owner, AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        var result = await ListAsync(owner, auth, ct);
+        return new(result.Status, result.Domains, result.Error);
+    }
+
+    public async Task<WebsiteResult> GetWebsiteAsync(string domain, AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        var result = await GetDetailsAsync(domain, auth, ct);
+        return new(result.Status, result.Settings is null ? null :
+            new WebsiteInfo(domain.ToLowerInvariant(), result.Settings, WebsiteProvisioningState.Unknown), result.Error);
+    }
+
+    public Task<WebsiteMutationResult> CreateWebsiteAsync(WebsiteConfiguration website, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        ApplyWebsiteAsync(website, "create", website.Domain, auth, ct);
+
+    public Task<WebsiteMutationResult> UpdateWebsiteAsync(WebsiteConfiguration website, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        ApplyWebsiteAsync(website, "modify", website.Domain, auth, ct);
+
+    public Task<WebsiteMutationResult> DeleteWebsiteAsync(string domain, string confirmation, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        ApplyWebsiteAsync(new WebsiteConfiguration(domain), "delete", confirmation, auth, ct);
+
+    private async Task<WebsiteMutationResult> ApplyWebsiteAsync(WebsiteConfiguration website, string action, string confirmation,
+        AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        var result = await MutateAsync(new DomainMutationRequest(website.Domain, action, confirmation,
+            website.Php, website.Tls, website.Cgi), auth, ct);
+        return new(result.Status, result.Error);
+    }
+
     public async Task<DomainListResult> ListAsync(string? owner,
         AuthenticationHeaderValue credentials, CancellationToken cancellationToken)
 {

@@ -30,6 +30,7 @@ public sealed class DirectAdminBackend(
     public IDatabases Databases => databases;
     public IAccessibleDatabases AccessibleDatabases => accessibleDatabases;
     public IDomains Domains => domains;
+    public IWebHosting WebHosting => domains;
     public IDns Dns => dns;
     public IFileAccess FileAccess => fileAccess;
     public ITickets Tickets => tickets;
