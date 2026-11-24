@@ -12,9 +12,6 @@ public static class KubernetesRegistration
     if (errors.Count != 0)
         throw new InvalidOperationException("Invalid BackendSettings: " + string.Join("; ", errors.Select(x => x.Key + ": " + string.Join(", ", x.Value))));
     services.AddSingleton(settings);
-    services.AddDbContext<HostingPanelDbContext>(options =>
-        options.UseSqlite(configuration.GetConnectionString("HostingPanel")
-            ?? "Data Source=hostingpanel.db"));
     services.AddScoped<IHostingBackend, KubernetesBackend>();
 
         return services;
