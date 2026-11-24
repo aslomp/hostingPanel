@@ -58,15 +58,11 @@ else if (accounts is not null)
     </MudPaper>
     @if (ResellersOnly)
     {
-        <MudPaper Class="pa-4 my-3" Elevation="1">
-            <h2>@L["Reseller packages"]</h2>
-            <JsonOverview Json="@packages" />
-        </MudPaper>
+        <ResellerPackageOverview />
     }
 }
 @code {
     [Parameter] public bool ResellersOnly { get; set; }
-    private string? packages;
     private bool operationFailed;
     private string DeleteLabel(Account account) => L[account.Role.Equals("reseller", StringComparison.OrdinalIgnoreCase) ? "Delete reseller" : "Delete user"].Value;
     private string DetailHref(Account account) => $"/{(account.Role.Equals("reseller", StringComparison.OrdinalIgnoreCase) ? "resellers" : "users")}/{Uri.EscapeDataString(account.Username)}";
@@ -179,11 +175,6 @@ else if (accounts is not null)
                     x.TryGetProperty("creator", out var creator) &&
                         creator.ValueKind == JsonValueKind.String ? creator.GetString() : null))
                 .ToList();
-            if (ResellersOnly)
-            {
-                var (p, q) = await Session.GetRawAsync("api/reseller-packages");
-                packages = $"HTTP {p}\n{q}";
-            }
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
             or UnauthorizedAccessException or FormatException or JsonException)
