@@ -1,7 +1,9 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @using System.Text.Json
-@inject DirectAdminSession Session
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@inject AccountOperations Accounts
 @inject IDialogService Dialogs
 
 <MudPaper Class="pa-4 my-3" Elevation="1">
@@ -75,9 +77,9 @@
         busy = true; result = null;
         try
         {
-            var (status, _) = await Session.SetUserPackageAsync(packageUsername, newPackage);
-            result = status == 200
-                ? L["DirectAdmin confirmed the new user package."].Value
+            var (status, errorCode) = await Accounts.SetPackageAsync(packageUsername, newPackage);
+            result = errorCode is null && status is >= 200 and < 300
+                ? L["Package change request accepted."].Value
                 : L["Package change not confirmed: backend HTTP {0}.", status].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
@@ -91,10 +93,10 @@
         busy = true; result = null;
         try
         {
-            var (status, _) = await Session.SetAccountLimitAsync(
+            var (status, errorCode) = await Accounts.SetLimitAsync(
                 Kind, limitUsername, limitField, limitValue);
-            result = status == 200
-                ? L["DirectAdmin confirmed the new limit."].Value
+            result = errorCode is null && status is >= 200 and < 300
+                ? L["Limit change request accepted."].Value
                 : L["Limit not confirmed: backend HTTP {0}.", status].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
@@ -109,11 +111,11 @@
         try
         {
             var desired = suspend == "true";
-            var (status, _) = await Session.SetAccountSuspensionAsync(
+            var (status, errorCode) = await Accounts.SetSuspendedAsync(
                 suspensionUsername, desired);
-            result = status == 200
-                ? (desired ? L["DirectAdmin confirms: account suspended."].Value :
-                    L["DirectAdmin confirms: account activated."].Value)
+            result = errorCode is null && status is >= 200 and < 300
+                ? (desired ? L["Account suspension request accepted."].Value :
+                    L["Account activation request accepted."].Value)
                 : L["Status change not confirmed: backend HTTP {0}.", status].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
@@ -131,10 +133,10 @@
         busy = true; result = null;
         try
         {
-            var (status, _) = await Session.CreateHostingAccountAsync(
-                Kind, username, email, password, domain, package, ip);
-            result = status is >= 200 and < 300
-                ? L["DirectAdmin created account '{0}'.", username].Value
+            var (status, errorCode) = await Accounts.CreateAsync(new CreateHostingAccount(
+                Kind, username, email, password, domain, package, ip));
+            result = errorCode is null && status is >= 200 and < 300
+                ? L["Account creation request accepted for '{0}'.", username].Value
                 : L["Account not created: backend HTTP {0}.", status].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
@@ -173,10 +175,10 @@
         busy = true; result = null;
         try
         {
-            var (status, _) = await Session.DeleteHostingAccountAsync(
-                Kind, deleteUsername, deleteConfirmation);
-            result = status is >= 200 and < 300
-                ? L["DirectAdmin confirmed deletion of '{0}'.", deleteUsername].Value
+            var (status, errorCode) = await Accounts.DeleteAsync(
+                deleteUsername, deleteConfirmation);
+            result = errorCode is null && status is >= 200 and < 300
+                ? L["Deletion request accepted for '{0}'.", deleteUsername].Value
                 : L["Deletion not confirmed: backend HTTP {0}.", status].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)

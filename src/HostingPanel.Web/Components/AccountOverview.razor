@@ -1,14 +1,15 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
-@using System.Text.Json
-@inject DirectAdminSession Session
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@inject AccountOperations Accounts
 @inject IDialogService Dialogs
 
 <PageTitle>@L[ResellersOnly ? "Resellers — HostingPanel" : "Account tree — HostingPanel"]</PageTitle>
 <PanelPageHeader>
     <Breadcrumb>@L["Account management"]</Breadcrumb>
     <TitleContent>@L[ResellersOnly ? "Reseller management" : "User management"]</TitleContent>
-    <Description>@L[ResellersOnly ? "The overview includes accounts exposed by DirectAdmin to the current identity." : "All accounts exposed by DirectAdmin to the current session, including resellers and their users."]</Description>
+    <Description>@L[ResellersOnly ? "Accounts accessible to the current identity." : "All accessible accounts, including resellers and their users."]</Description>
     <Actions>
         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
             <CrudAddButton OnClick="OpenCreateDialog" Disabled="@(!Session.Connected || loading || mutating)">@L[ResellersOnly ? "Create reseller" : "Add user"]</CrudAddButton>
@@ -54,7 +55,7 @@ else if (accounts is not null)
             </tr>
         }
         </tbody></MudSimpleTable>
-        @if (!Visible.Any()) { <PanelEmptyState>@L["No accounts returned by DirectAdmin."]</PanelEmptyState> }
+        @if (!Visible.Any()) { <PanelEmptyState>@L["No accessible accounts."]</PanelEmptyState> }
     </MudPaper>
     @if (ResellersOnly)
     {
@@ -64,11 +65,10 @@ else if (accounts is not null)
 @code {
     [Parameter] public bool ResellersOnly { get; set; }
     private bool operationFailed;
-    private string DeleteLabel(Account account) => L[account.Role.Equals("reseller", StringComparison.OrdinalIgnoreCase) ? "Delete reseller" : "Delete user"].Value;
-    private string DetailHref(Account account) => $"/{(account.Role.Equals("reseller", StringComparison.OrdinalIgnoreCase) ? "resellers" : "users")}/{Uri.EscapeDataString(account.Username)}";
-    private sealed record Account(string Username, string Role, string? Creator);
-    private sealed record TreeItem(Account Account, int Depth);
-    private List<Account>? accounts;
+    private string DeleteLabel(VisibleAccount account) => L[account.Role.Equals("reseller", StringComparison.OrdinalIgnoreCase) ? "Delete reseller" : "Delete user"].Value;
+    private string DetailHref(VisibleAccount account) => $"/{(account.Role.Equals("reseller", StringComparison.OrdinalIgnoreCase) ? "resellers" : "users")}/{Uri.EscapeDataString(account.Username)}";
+    private sealed record TreeItem(VisibleAccount Account, int Depth);
+    private List<VisibleAccount>? accounts;
     private string search = "";
     private string? error;
     private bool loading;
@@ -95,7 +95,7 @@ else if (accounts is not null)
         foreach (var remaining in accounts)
             foreach (var item in Descendants(remaining, 0)) yield return item;
 
-        IEnumerable<TreeItem> Descendants(Account parent, int depth)
+        IEnumerable<TreeItem> Descendants(VisibleAccount parent, int depth)
         {
             if (!visited.Add(parent.Username)) yield break;
             yield return new(parent, depth);
@@ -118,15 +118,14 @@ else if (accounts is not null)
                 new DialogParameters<UserCreateDialog> { { x => x.Kind, ResellersOnly ? "reseller" : "user" } },
                 new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = false, BackdropClick = false, CloseOnEscapeKey = false });
             var result = await dialog.Result;
-            if (result is { Canceled: false }) { operationFailed = false; operationMessage = L["Account created."].Value; await Load(); }
+            if (result is { Canceled: false }) { operationFailed = false; operationMessage = L["Account creation request accepted."].Value; await Load(); }
         }
         finally { mutating = false; }
     }
 
-    private async Task ConfirmDelete(Account account)
+    private async Task ConfirmDelete(VisibleAccount account)
     {
         if (mutating || !Session.Connected) return;
-        var kind = account.Role.Equals("reseller", StringComparison.OrdinalIgnoreCase) ? "reseller" : "user";
         if (account.Role.Equals("admin", StringComparison.OrdinalIgnoreCase) ||
             account.Username.Equals(Session.Username, StringComparison.OrdinalIgnoreCase)) return;
         var identity = Session.Username;
@@ -140,9 +139,9 @@ else if (accounts is not null)
             L["Confirm account name"].Value);
         if (!confirmed || !Session.Connected || !string.Equals(identity, Session.Username, StringComparison.Ordinal))
             return;
-            var (status, _) = await Session.DeleteHostingAccountAsync(kind, account.Username, account.Username);
-            operationFailed = status is < 200 or >= 300;
-            if (!operationFailed) { operationMessage = L["DirectAdmin confirmed deletion of '{0}'.", account.Username].Value; await Load(); }
+            var (status, errorCode) = await Accounts.DeleteAsync(account.Username, account.Username);
+            operationFailed = errorCode is not null || status is < 200 or >= 300;
+            if (!operationFailed) { operationMessage = L["Deletion request accepted for '{0}'.", account.Username].Value; await Load(); }
             else operationMessage = L["Deletion not confirmed: backend HTTP {0}.", status].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
@@ -164,20 +163,13 @@ else if (accounts is not null)
         error = null;
         try
         {
-            var (status, body) = await Session.GetAccessibleAccountsAsync();
-            if (status != 200)
-                throw new HttpRequestException(L["DirectAdmin responded with HTTP {0}.", status].Value);
-            using var json = JsonDocument.Parse(body);
-            accounts = json.RootElement.GetProperty("accounts").EnumerateArray()
-                .Select(x => new Account(
-                    x.GetProperty("username").GetString() ?? "",
-                    x.GetProperty("role").GetString() ?? "user",
-                    x.TryGetProperty("creator", out var creator) &&
-                        creator.ValueKind == JsonValueKind.String ? creator.GetString() : null))
-                .ToList();
+            var result = await Accounts.ListAsync();
+            if (result.Status != 200 || result.Accounts is null)
+                throw new InvalidOperationException(L["Backend HTTP {0}.", result.Status].Value);
+            accounts = result.Accounts.ToList();
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
-            or UnauthorizedAccessException or FormatException or JsonException)
+            or UnauthorizedAccessException or FormatException)
         {
             error = ex.Message;
             accounts = null;

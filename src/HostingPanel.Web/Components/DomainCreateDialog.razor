@@ -1,7 +1,8 @@
 @using HostingPanel.Web.Localization
-@using System.Text.Json
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
-@inject DirectAdminSession Session
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@inject DomainOperations DomainOps
 
 <MudDialog>
     <DialogContent>
@@ -40,22 +41,15 @@
             await createForm.ValidateAsync();
             if (!createForm.IsValid || !Session.Connected || string.IsNullOrWhiteSpace(testDomain)) return;
             var domain = testDomain.Trim().ToLowerInvariant();
-            var (status, body) = await Session.ExecuteTestDomainAsync(domain, "create", domain, php, ssl, cgi);
-            if (status is >= 200 and < 300) { Dialog.Close(DialogResult.Ok(status)); return; }
+            var (status, errorCode) = await DomainOps.MutateAsync(new DomainMutationRequest(domain, "create", domain, php, ssl, cgi));
+            if (errorCode is null && status is >= 200 and < 300) { Dialog.Close(DialogResult.Ok(status)); return; }
             error = status switch
             {
                 409 => L["The backend reported a conflict for this domain operation."].Value,
                 400 => L["Invalid domain or settings."].Value,
                 _ => L["Domain operation failed: HTTP {0}.", status].Value
             };
-            try
-            {
-                using var problem = JsonDocument.Parse(body);
-                if (problem.RootElement.ValueKind == JsonValueKind.Object &&
-                    problem.RootElement.TryGetProperty("type", out var code) && code.ValueKind == JsonValueKind.String)
-                    error += " " + code.GetString();
-            }
-            catch (JsonException) { }
+            if (errorCode is not null) error += " " + errorCode;
         }
         catch (Exception ex) when (ex is HttpRequestException or ArgumentException or InvalidOperationException)
         { error = ex.Message; }

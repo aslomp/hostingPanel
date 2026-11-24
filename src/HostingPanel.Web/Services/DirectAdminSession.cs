@@ -8,66 +8,35 @@ namespace HostingPanel.Web.Services;
 
 // Credentials are held only for an interactive Blazor Server circuit.
 // Never persist or log login keys. Always deploy behind HTTPS.
-public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannelRegistry ticketChannels, PanelSessionStore? sessions = null, IServiceScopeFactory? backendScopes = null) : IDisposable
+public sealed class DirectAdminSession : IDisposable
 {
-    private string? _sessionId;
-    private string? _username;
-    private string? _loginKey;
-    private string? _impersonatedUsername;
-    private string? _ticketChannel;
-    public string? TicketChannel => _ticketChannel;
-    public event Action? Changed;
-    public event Action? TicketInboxChanged;
-    public void NotifyTicketInboxChanged() => TicketInboxChanged?.Invoke();
-    private void NotifyChanged() => Changed?.Invoke();
+    private readonly IHttpClientFactory clients;
+    private readonly IServiceScopeFactory? backendScopes;
+    private readonly PanelSession session;
+    private readonly bool ownsSession;
 
-    public bool Connected => _loginKey is not null &&
-        (_sessionId is null || sessions?.Get(_sessionId) is not null);
-
-    public bool Restore(string? sessionId)
+    public DirectAdminSession(IHttpClientFactory clients, TicketChannelRegistry ticketChannels,
+        PanelSessionStore? sessions = null, IServiceScopeFactory? backendScopes = null, PanelSession? panelSession = null)
     {
-        var session = sessions?.Get(sessionId);
-        if (session is null) return false;
-        SetCredentials(session.Username, session.Password);
-        _sessionId = sessionId;
-        return true;
-    }
-    public string Username => _impersonatedUsername ?? _username ?? "";
-    public string OriginalUsername => _username ?? "";
-    public bool IsImpersonating => _impersonatedUsername is not null;
-
-    public void SetCredentials(string username, string loginKey)
-    {
-        if (string.IsNullOrWhiteSpace(loginKey) || !IsValidAccountName(username))
-            throw new ArgumentException("A valid username and login key are required.");
-        ticketChannels.Revoke(_ticketChannel);
-        _ticketChannel = ticketChannels.Register();
-        _username = username.Trim();
-        _loginKey = loginKey;
-        _impersonatedUsername = null;
-        NotifyChanged();
+        this.clients = clients;
+        this.backendScopes = backendScopes;
+        session = panelSession ?? new PanelSession(ticketChannels, sessions);
+        ownsSession = panelSession is null;
     }
 
-    public void Disconnect()
-    {
-        sessions?.Remove(_sessionId);
-        _sessionId = null;
-        ticketChannels.Revoke(_ticketChannel);
-        _ticketChannel = null;
-        _username = null;
-        _loginKey = null;
-        _impersonatedUsername = null;
-        NotifyChanged();
-    }
-
-    public void Dispose()
-    {
-        ticketChannels.Revoke(_ticketChannel);
-        _ticketChannel = null;
-        _username = null;
-        _loginKey = null;
-        _impersonatedUsername = null;
-    }
+    public string? TicketChannel => session.TicketChannel;
+    public event Action? Changed { add => session.Changed += value; remove => session.Changed -= value; }
+    public event Action? TicketInboxChanged { add => session.TicketInboxChanged += value; remove => session.TicketInboxChanged -= value; }
+    public void NotifyTicketInboxChanged() => session.NotifyTicketInboxChanged();
+    public bool Connected => session.Connected;
+    public bool Restore(string? id) => session.Restore(id);
+    public string Username => session.Username;
+    public string OriginalUsername => session.OriginalUsername;
+    public bool IsImpersonating => session.IsImpersonating;
+    public void SetCredentials(string username, string loginKey) => session.SetCredentials(username, loginKey);
+    public void Disconnect() => session.Disconnect();
+    public void Dispose() { if (ownsSession) session.Dispose(); }
+    private AuthenticationHeaderValue EffectiveCredentials() => session.EffectiveCredentials();
 
     public Task<(int Status, string Body)> AuthenticateBackendAsync(CancellationToken ct = default) =>
         SendAsync(HttpMethod.Get, "hosting/session", null, ct);
@@ -122,10 +91,7 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         if (!Connected) throw new InvalidOperationException("Maak eerst verbinding met DirectAdmin.");
         var http = clients.CreateClient("hosting-api");
         using var request = new HttpRequestMessage(method, endpoint) { Content = content };
-        var authenticatedUsername = _impersonatedUsername is null
-            ? _username : _username + "|" + _impersonatedUsername;
-        var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes(authenticatedUsername + ":" + _loginKey));
-        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
+        request.Headers.Authorization = EffectiveCredentials();
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         return ((int)response.StatusCode, await response.Content.ReadAsStringAsync(cancellationToken));
     }
@@ -140,7 +106,7 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         if (!Connected) throw new InvalidOperationException("Maak eerst verbinding.");
         if (IsImpersonating)
             throw new InvalidOperationException("Keer eerst terug naar je eigen sessie.");
-        if (!IsValidAccountName(username) || username.Equals(_username, StringComparison.OrdinalIgnoreCase))
+        if (!IsValidAccountName(username) || username.Equals(OriginalUsername, StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Ongeldige doelgebruiker.", nameof(username));
 
         var (status, body) = await SendAsync(HttpMethod.Get,
@@ -163,18 +129,12 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
             !response.RootElement.TryGetProperty("effectiveUsername", out var actual) ||
             !username.Equals(actual.GetString(), StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("The target identity could not be confirmed.");
-        ticketChannels.Revoke(_ticketChannel);
-        _ticketChannel = ticketChannels.Register();
-        _impersonatedUsername = username;
-        NotifyChanged();
+        session.SetImpersonation(username);
     }
 
     public void EndImpersonation()
     {
-        ticketChannels.Revoke(_ticketChannel);
-        _ticketChannel = ticketChannels.Register();
-        _impersonatedUsername = null;
-        NotifyChanged();
+        session.SetImpersonation(null);
     }
 
     private static bool IsValidAccountName(string? username) =>
@@ -307,13 +267,6 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
     public Task<(int Status, string Body)> GetAccessibleAccountsAsync(
         CancellationToken cancellationToken = default) =>
         SendAsync(HttpMethod.Get, "hosting/accounts", null, cancellationToken);
-
-    private AuthenticationHeaderValue EffectiveCredentials()
-    {
-        if (!Connected) throw new InvalidOperationException("Sign in first.");
-        var username = _impersonatedUsername is null ? _username : _username + "|" + _impersonatedUsername;
-        return new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(username + ":" + _loginKey)));
-    }
 
     public async Task<string?> GetProvisioningStatusAsync(string domain, CancellationToken ct = default)
     {

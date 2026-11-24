@@ -1,8 +1,9 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/domains"
-@using System.Text.Json
-@inject DirectAdminSession Session
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@inject DomainOperations DomainOps
 @inject HostingPanel.Api.HostingOperationNotifications Operations
 @implements IDisposable
 @inject NavigationManager Navigation
@@ -109,7 +110,7 @@ else
             foreach (var domain in domains.ToArray())
             {
                 if (disposed || !Session.Connected) return;
-                var state = await Session.GetProvisioningStatusAsync(domain);
+                var state = await DomainOps.GetProvisioningStatusAsync(domain);
                 if (state is not null) current[domain] = state;
             }
             if (!disposed) { provisioning = current; StateHasChanged(); }
@@ -127,36 +128,33 @@ else
         try
         {
             var allAccounts = string.IsNullOrWhiteSpace(owner);
-            var (status, body) = allAccounts
-                ? await Session.GetAccessibleDomainsAsync()
-                : await Session.GetDomainsAsync(owner.Trim());
-            if (status != 200)
-            {
-                error = L["Domain list unavailable: HTTP {0}.", status].Value;
-                return;
-            }
-            using var json = JsonDocument.Parse(body);
-            if (!json.RootElement.TryGetProperty("domains", out var array) ||
-                array.ValueKind != JsonValueKind.Array)
-                throw new FormatException(L["Unexpected domain list."].Value);
-            domains = array.EnumerateArray().Select(e => e.GetString() ?? "").ToArray();
             ownership.Clear();
             warning = null;
             if (allAccounts)
             {
-                if (json.RootElement.TryGetProperty("warning", out var w) &&
-                    w.ValueKind == JsonValueKind.String) warning = w.GetString();
-                if (json.RootElement.TryGetProperty("items", out var items))
-                    foreach (var item in items.EnumerateArray())
-                    {
-                        var domain = item.GetProperty("domain").GetString() ?? "";
-                        var user = item.GetProperty("owner").GetString() ?? "";
-                        if (domain.Length > 0 && user.Length > 0) ownership[domain] = user;
-                    }
+                var result = await DomainOps.ListAccessibleAsync();
+                if (result.Status != 200 || result.Items is null)
+                {
+                    error = L["Domain list unavailable: HTTP {0}.", result.Status].Value;
+                    return;
+                }
+                domains = result.Items.Select(x => x.Domain).ToArray();
+                warning = result.Warning;
+                foreach (var item in result.Items) ownership[item.Domain] = item.Owner;
+            }
+            else
+            {
+                var result = await DomainOps.ListAsync(owner.Trim());
+                if (result.Status != 200 || result.Domains is null)
+                {
+                    error = L["Domain list unavailable: HTTP {0}.", result.Status].Value;
+                    return;
+                }
+                domains = result.Domains;
             }
         }
         catch (Exception exception) when (exception is HttpRequestException or FormatException
-            or InvalidOperationException or ArgumentException or JsonException)
+            or InvalidOperationException or ArgumentException)
         {
             error = exception.Message;
         }
@@ -190,8 +188,8 @@ else
         mutationStatus = null;
         try
         {
-            var (status, body) = await Session.ExecuteTestDomainAsync(domain, action, domain, true, true, false);
-            mutationFailed = status is < 200 or >= 300;
+            var (status, errorCode) = await DomainOps.MutateAsync(new DomainMutationRequest(domain, action, domain, true, true, false));
+            mutationFailed = errorCode is not null || status is < 200 or >= 300;
             mutationStatus = status switch
             {
                 200 or 201 or 204 => L["Domain operation completed."].Value,
@@ -201,17 +199,8 @@ else
                 400 => L["Invalid domain or settings."].Value,
                 _ => L["Domain operation failed: HTTP {0}.", status].Value
             };
-            if (status >= 400)
-            {
-                try
-                {
-                    using var problem = JsonDocument.Parse(body);
-                    if (problem.RootElement.TryGetProperty("type", out var code) && code.ValueKind == JsonValueKind.String)
-                        mutationStatus += " " + code.GetString();
-                }
-                catch (JsonException) { }
-            }
-            if (status is >= 200 and < 300)
+            if (errorCode is not null) mutationStatus += " " + errorCode;
+            if (!mutationFailed)
             {
                 await Refresh();
             }
