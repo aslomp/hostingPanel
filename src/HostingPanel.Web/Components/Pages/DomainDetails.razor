@@ -32,8 +32,8 @@ else
             <p>@L["The backend evaluates read and write operations separately."]</p>
         </MudPaper>
     }
-    <div class="tiles">
-        <MudPaper Class="pa-4 my-3" Elevation="1">
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="6"><MudPaper Class="pa-4 my-3" Elevation="1">
             <h2>@L["General"]</h2>
             <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><tbody>
                 @foreach (var item in new (string Label, string Key)[] {
@@ -48,8 +48,8 @@ else
                     }
                 }
             </tbody></MudSimpleTable>
-        </MudPaper>
-        <MudPaper Class="pa-4 my-3" Elevation="1">
+        </MudPaper></MudItem>
+        <MudItem xs="12" md="6"><MudPaper Class="pa-4 my-3" Elevation="1">
             <h2>@L["Change domain settings"]</h2>
             <p>@L["Each setting is saved separately."]</p>
             <label for="domainPhp">PHP</label>
@@ -69,8 +69,8 @@ else
             <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SaveQuota">@L["Save quota"]</MudButton>
             @if (saving) { <p role="status">@L["Saving change…"]</p> }
             @if (saveMessage is not null) { <p role="status">@saveMessage</p> }
-        </MudPaper>
-    </div>
+        </MudPaper></MudItem>
+    </MudGrid>
     <DomainAcmeSettings @key="Domain" Domain="@Domain" />
     <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Additional domain settings"]</h2>

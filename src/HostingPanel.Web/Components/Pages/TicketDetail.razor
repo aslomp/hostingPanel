@@ -25,12 +25,12 @@ else
         <MudPaper Class="pa-4 my-3" Elevation="1">
             <div class="dashboard-section-heading"><h2>@L["Ticket details"]</h2>
                 <MudChip T="string" Size="Size.Small" Color="@(IsOpen ? Color.Success : Color.Default)">@(IsOpen ? "Open" : L["Closed"].Value)</MudChip></div>
-            <div class="form-grid">
-                <div><label>@L["Sender"]</label><p>@Text(ticket.Value, "fromName") (@Text(ticket.Value, "from"))</p></div>
-                <div><label>@L["Date"]</label><p>@Text(ticket.Value, "timestamp")</p></div>
-                <div><label>@L["Ticket number"]</label><p>@Text(ticket.Value, "legacyId")</p></div>
-            </div>
-            <hr class="section-divider" />
+            <MudGrid Spacing="3">
+                <MudItem xs="12" sm="4"><label>@L["Sender"]</label><p>@Text(ticket.Value, "fromName") (@Text(ticket.Value, "from"))</p></MudItem>
+                <MudItem xs="12" sm="4"><label>@L["Date"]</label><p>@Text(ticket.Value, "timestamp")</p></MudItem>
+                <MudItem xs="12" sm="4"><label>@L["Ticket number"]</label><p>@Text(ticket.Value, "legacyId")</p></MudItem>
+            </MudGrid>
+            <MudDivider Class="my-4" />
             <p class="ticket-message">@Text(ticket.Value, "message")</p>
         </MudPaper>
         @if (ticket.Value.TryGetProperty("replies", out var replies) && replies.ValueKind == JsonValueKind.Array)
