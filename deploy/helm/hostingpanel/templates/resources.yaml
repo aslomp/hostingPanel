@@ -41,27 +41,6 @@ spec:
       automountServiceAccountToken: {{ $hosting }}
       {{- if $hosting }}
       serviceAccountName: {{ $name }}-controller
-      initContainers:
-        - name: kubectl
-          image: {{ .Values.kubernetesHosting.toolsImage | quote }}
-          command: ["/bin/sh", "-ec"]
-          args:
-            - |
-              case "$(uname -m)" in x86_64) arch=amd64 ;; aarch64) arch=arm64 ;; *) exit 1 ;; esac
-              url="https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/$arch/kubectl"
-              curl --fail --silent --show-error --location "$url" -o /tools/kubectl
-              curl --fail --silent --show-error --location "$url.sha256" -o /tools/kubectl.sha256
-              cd /tools
-              echo "$(cat kubectl.sha256)  kubectl" | sha256sum -c -
-              chmod 0755 kubectl
-          env:
-            - name: KUBECTL_VERSION
-              value: {{ .Values.kubernetesHosting.kubectlVersion | quote }}
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities: {drop: [ALL]}
-          volumeMounts:
-            - {name: tools, mountPath: /tools}
       {{- end }}
       securityContext:
         runAsNonRoot: true
@@ -100,8 +79,6 @@ spec:
               value: "true"
             - name: KubernetesHosting__Namespace
               value: {{ .Release.Namespace | quote }}
-            - name: KubernetesHosting__KubectlPath
-              value: /tools/kubectl
             - name: KubernetesHosting__NfsServer
               value: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}
             - name: KubernetesHosting__NfsPath
@@ -176,13 +153,10 @@ spec:
           volumeMounts:
             - {name: data, mountPath: /data}
             {{- if $hosting }}
-            - {name: tools, mountPath: /tools, readOnly: true}
             - {name: sites, mountPath: /storage/sites}
             {{- end }}
       volumes:
         {{- if $hosting }}
-        - name: tools
-          emptyDir: {}
         - name: sites
           {{- if .Values.kubernetesHosting.provisioningClaim }}
           persistentVolumeClaim:

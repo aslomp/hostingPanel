@@ -24,9 +24,6 @@ ingress:
 
 kubernetesHosting:
   enabled: false
-  # Match the cluster minor version (within supported kubectl skew).
-  kubectlVersion: v1.35.5
-  toolsImage: curlimages/curl:8.17.0
   nfsServer: ""
   # Existing DirectAdmin /home export, containing username/domains/domain/public_html
   nfsPath: ""

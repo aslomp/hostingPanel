@@ -5,7 +5,7 @@ using HostingPanel.Providers.CertManager;
 using Microsoft.EntityFrameworkCore;
 namespace HostingPanel.Api;
 
-public sealed partial class KubernetesCertificateProvider(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesSettingsService settingsProvider, IConfiguration? configuration = null) : ICertificateProvider
+public sealed partial class KubernetesCertificateProvider(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesSettingsService settingsProvider, IConfiguration? configuration = null, KubernetesResourceClient? resources = null) : ICertificateProvider
 {
     internal static string AcmeKey(Guid id) => "Acme:Domain:" + id.ToString("N");
     internal static async Task<DomainAcmeConfiguration> DomainAcmeAsync(HostingPanelDbContext db, Guid id, CancellationToken ct)
@@ -24,7 +24,7 @@ public sealed partial class KubernetesCertificateProvider(HostingPanelDbContext 
     internal static string[] CertificateNames(HostedDomain domain, DomainAcmeConfiguration acme) =>
         (acme.PreferWildcard ? new[] { domain.Name, "*." + domain.Name } : new[] { domain.Name })
         .Where(x => !acme.SkipDNSNames.Contains(x, StringComparer.OrdinalIgnoreCase)).ToArray();
-    internal static CertManagerClient CertificateClient(IConfiguration config) => new(config["KubernetesHosting:KubectlPath"] ?? "kubectl", config["KubernetesHosting:Namespace"] ?? "hosting");
+    private CertManagerClient CertificateClient(IConfiguration config) => new(resources ?? throw new InvalidOperationException("Kubernetes client not configured."), config["KubernetesHosting:Namespace"] ?? "hosting");
 
     public async Task HandleCertificateRequestAsync(HttpContext context)
     {

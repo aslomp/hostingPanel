@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using HostingPanel.Providers.CertManager;
 using System.Text.Json;
 using HostingPanel.Api.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -6,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace HostingPanel.Api;
 
 /// <summary>Owns persisted Kubernetes settings and network inventory.</summary>
-public sealed class KubernetesSettingsService(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, KubernetesIdentityService identity, IConfiguration? configuration = null) : IBackendSettingsAccess, IHostingNetworkAccess, IKubernetesSettingsReader
+public sealed class KubernetesSettingsService(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, KubernetesIdentityService identity, IConfiguration? configuration = null, KubernetesResourceClient? resources = null) : IBackendSettingsAccess, IHostingNetworkAccess, IKubernetesSettingsReader
 {
     private const string SettingsKey = "BackendSettings:Kubernetes";
 
@@ -108,24 +109,12 @@ public sealed class KubernetesSettingsService(HostingPanelDbContext db, Kubernet
                 var gateway = configuration["KubernetesHosting:GatewayName"] ?? throw new InvalidOperationException("Gateway not configured");
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 timeout.CancelAfter(TimeSpan.FromSeconds(10));
-                var start = new System.Diagnostics.ProcessStartInfo(configuration["KubernetesHosting:KubectlPath"] ?? "kubectl")
-                { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-                foreach (var arg in new[] { "-n", ns, "get", "gateway", gateway, "-o", "json" }) start.ArgumentList.Add(arg);
-                using var process = System.Diagnostics.Process.Start(start) ?? throw new InvalidOperationException("Cannot start kubectl");
-                try
-                {
-                    var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
-                    var error = process.StandardError.ReadToEndAsync(timeout.Token);
-                    await process.WaitForExitAsync(timeout.Token);
-                    await error;
-                    if (process.ExitCode != 0) throw new InvalidOperationException("Gateway read failed");
-                    using var json = JsonDocument.Parse(await output);
-                    if (json.RootElement.TryGetProperty("status", out var status) && status.TryGetProperty("addresses", out var addresses))
-                        foreach (var address in addresses.EnumerateArray())
-                            if (System.Net.IPAddress.TryParse(address.GetProperty("value").GetString(), out var ip))
-                                devices.Add(new(ip.ToString(), "Gateway/" + ns + "/" + gateway, ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128));
-                }
-                finally { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+                var api = resources ?? throw new InvalidOperationException("Kubernetes client not configured.");
+                using var json = JsonDocument.Parse(await api.GetAsync("gateway.networking.k8s.io", "v1", ns, "gateways", gateway, timeout.Token));
+                if (json.RootElement.TryGetProperty("status", out var status) && status.TryGetProperty("addresses", out var addresses))
+                    foreach (var address in addresses.EnumerateArray())
+                        if (System.Net.IPAddress.TryParse(address.GetProperty("value").GetString(), out var ip))
+                            devices.Add(new(ip.ToString(), "Gateway/" + ns + "/" + gateway, ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128));
             }
             catch (Exception) when (!ct.IsCancellationRequested) { warning = "Gateway address discovery unavailable."; }
         }

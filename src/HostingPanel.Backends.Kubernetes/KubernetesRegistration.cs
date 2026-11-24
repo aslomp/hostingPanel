@@ -1,4 +1,5 @@
 using HostingPanel.Providers.PowerDNS;
+using HostingPanel.Providers.CertManager;
 using HostingPanel.Api.Persistence;
 using Microsoft.EntityFrameworkCore;
 namespace HostingPanel.Api;
@@ -17,6 +18,7 @@ public static class KubernetesRegistration
     if (errors.Count != 0)
         throw new InvalidOperationException("Invalid BackendSettings: " + string.Join("; ", errors.Select(x => x.Key + ": " + string.Join(", ", x.Value))));
     services.AddSingleton(settings);
+    services.AddSingleton<KubernetesResourceClient>();
     services.AddScoped<KubernetesIdentityService>();
     services.AddScoped<IAuthenticationProvider>(sp => sp.GetRequiredService<KubernetesIdentityService>());
     services.AddScoped<KubernetesSettingsService>();
