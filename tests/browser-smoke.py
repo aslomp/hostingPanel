@@ -97,9 +97,21 @@ def main():
                         page.goto(base + package_route)
                         add_package = page.get_by_role("button", name="Add package", exact=True)
                         expect(add_package).to_be_enabled(timeout=20000)
-                        add_package.click()
+                        # A full navigation initially renders static HTML. Wait for a
+                        # real component event, rather than assuming enabled means interactive.
                         dialog = page.get_by_role("dialog")
-                        expect(dialog).to_be_visible()
+                        for _ in range(20):
+                            if dialog.is_visible():
+                                break
+                            if add_package.is_enabled():
+                                add_package.click(timeout=2000)
+                            try:
+                                expect(dialog).to_be_visible(timeout=1000)
+                                break
+                            except AssertionError:
+                                pass
+                        else:
+                            raise AssertionError(f"Package creation dialog did not open: {package_route}")
                         dialog.get_by_label("Package name", exact=True).fill(package_name)
                         dialog.get_by_role("button", name="Save", exact=True).click()
                         expect(dialog).to_have_count(0, timeout=20000)
