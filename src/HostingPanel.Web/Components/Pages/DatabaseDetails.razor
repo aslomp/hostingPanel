@@ -1,3 +1,5 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/databases/{Database}"
 @using System.Text.Json
 @inject DirectAdminSession Session
@@ -5,11 +7,11 @@
 
 <PageTitle>@Database — Databasebeheer</PageTitle>
 <div class="page-header">
-  <div><div class="eyebrow"><a href="/databases">Databasebeheer</a> / Details</div>
+  <div><div class="eyebrow"><a href="/databases">@L["Database management"]</a> / Details</div>
     <h1>@Database</h1>
-    <p>Databasegebruikers en beheeracties via DirectAdmin.</p>
+    <p>@L["Database users and management operations through DirectAdmin."]</p>
   </div>
-  <button disabled="@loading" @onclick="Load">Vernieuwen</button>
+  <button disabled="@loading" @onclick="Load">@L["Refresh"]</button>
 </div>
 @if(!Session.Connected)
 {
@@ -18,22 +20,22 @@
 else
 {
   <section class="card">
-    <h2>Databasegebruikers</h2>
+    <h2>@L["Database users"]</h2>
     @if(error is not null) { <p class="error" role="alert">@error</p> }
-    @if(loading) { <p role="status">Gebruikers laden…</p> }
+    @if(loading) { <p role="status">@L["Loading users…"]</p> }
     @if(users is not null)
     {
-      <table><thead><tr><th>Gebruikersnaam</th></tr></thead>
+      <table><thead><tr><th>@L["Username"]</th></tr></thead>
       <tbody>@foreach(var username in users){<tr><td>@username</td></tr>}</tbody></table>
-      @if(users.Count==0) { <p>Geen gebruikers door DirectAdmin geretourneerd.</p> }
+      @if(users.Count==0) { <p>@L["No users returned by DirectAdmin."]</p> }
     }
   </section>
   <section class="card">
-    <h2>Database verwijderen</h2>
-    <p>Dit verwijdert de database en kan onomkeerbaar dataverlies veroorzaken. Typ de exacte databasenaam om te bevestigen.</p>
+    <h2>@L["Delete database"]</h2>
+    <p>@L["This deletes the database and may cause irreversible data loss. Enter the exact database name to confirm."]</p>
     <label for="dbConfirmation">Typ @Database ter bevestiging</label>
     <input id="dbConfirmation" @bind="confirmation" autocomplete="off" />
-    <button disabled="@(deleting || confirmation != Database)" @onclick="Delete">Database definitief verwijderen</button>
+    <button disabled="@(deleting || confirmation != Database)" @onclick="Delete">@L["Permanently delete database"]</button>
     @if(deleteMessage is not null) { <p role="status">@deleteMessage</p> }
   </section>
 }
@@ -56,7 +58,7 @@ else
       var (status,body)=await Session.GetDatabaseUsersAsync(Database);
       if(status!=200)
       {
-        error=$"Databasegebruikers niet beschikbaar (HTTP {status}).";
+        error=L["Database users unavailable (HTTP {0}).", status].Value;
         users=null;return;
       }
       using var doc=JsonDocument.Parse(body);
@@ -81,9 +83,9 @@ else
         return;
       }
       deleteMessage=status switch {
-        409 => "Mutaties zijn uitgeschakeld of de wijziging kon niet worden bevestigd.",
-        403 => "DirectAdmin staat verwijderen niet toe.",
-        _ => $"Database is niet bevestigd verwijderd (HTTP {status})."
+        409 => L["Mutations are disabled or the change could not be confirmed."].Value,
+        403 => L["DirectAdmin does not allow deletion."].Value,
+        _ => L["Database deletion not confirmed (HTTP {0}).", status].Value
       };
     }
     catch(Exception e) when(e is HttpRequestException or ArgumentException or InvalidOperationException)

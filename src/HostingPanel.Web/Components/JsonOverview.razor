@@ -1,13 +1,15 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @using System.Text.Json
 
 @if (Root is null)
 {
-    <p class="muted">Nog geen gegevens opgehaald.</p>
+    <p class="muted">@L["No data retrieved yet."]</p>
 }
 else if (Root.Value.ValueKind == JsonValueKind.Array)
 {
     var rows = Root.Value.EnumerateArray().ToArray();
-    if (rows.Length == 0) { <p class="muted">Geen resultaten.</p> }
+    if (rows.Length == 0) { <p class="muted">@L["No results."]</p> }
     else if (rows.All(x => x.ValueKind == JsonValueKind.Object))
     {
         var columns = rows.SelectMany(x => x.EnumerateObject().Select(p => p.Name))
@@ -30,7 +32,7 @@ else if (Root.Value.ValueKind == JsonValueKind.Array)
     else
     {
         <div class="overview-scroll"><table class="overview-table">
-            <thead><tr><th>Waarde</th></tr></thead>
+            <thead><tr><th>@L["Value"]</th></tr></thead>
             <tbody>@foreach (var row in rows) { <tr><td><JsonOverview Value="@row" Depth="@(Depth + 1)" /></td></tr> }</tbody>
         </table></div>
     }
@@ -38,11 +40,11 @@ else if (Root.Value.ValueKind == JsonValueKind.Array)
 else if (Root.Value.ValueKind == JsonValueKind.Object)
 {
     var properties = Root.Value.EnumerateObject().ToArray();
-    if (properties.Length == 0) { <p class="muted">Geen gegevens.</p> }
+    if (properties.Length == 0) { <p class="muted">@L["No data."]</p> }
     else
     {
         <div class="overview-scroll"><table class="overview-table">
-            <thead><tr><th>Eigenschap</th><th>Waarde</th></tr></thead>
+            <thead><tr><th>@L["Property"]</th><th>@L["Value"]</th></tr></thead>
             <tbody>
                 @foreach (var property in properties)
                 {

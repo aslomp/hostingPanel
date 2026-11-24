@@ -1,8 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <root>
+  <data name="— directly from DirectAdmin." xml:space="preserve"><value>— rechtstreeks uit DirectAdmin.</value></data>
+  <data name="{0} saved in DirectAdmin." xml:space="preserve"><value>{0} opgeslagen in DirectAdmin.</value></data>
+  <data name="↻ Refresh" xml:space="preserve"><value>↻ Vernieuwen</value></data>
+  <data name="＋ Add DNS zone" xml:space="preserve"><value>＋ DNS-zone toevoegen</value></data>
+  <data name="＋ Create database" xml:space="preserve"><value>＋ Database aanmaken</value></data>
   <data name="About the control panel" xml:space="preserve"><value>Over het controlepaneel</value></data>
   <data name="Account" xml:space="preserve"><value>Account</value></data>
   <data name="Account management" xml:space="preserve"><value>Accountbeheer</value></data>
+  <data name="Account management / Databases" xml:space="preserve"><value>Accountbeheer / Databases</value></data>
+  <data name="Account name" xml:space="preserve"><value>Accountnaam</value></data>
+  <data name="Account not created: backend HTTP {0}." xml:space="preserve"><value>Account niet aangemaakt: backend HTTP {0}.</value></data>
+  <data name="Action" xml:space="preserve"><value>Actie</value></data>
+  <data name="Actions" xml:space="preserve"><value>Acties</value></data>
+  <data name="Activate" xml:space="preserve"><value>Activeren</value></data>
+  <data name="Add DNS record" xml:space="preserve"><value>DNS-record toevoegen</value></data>
   <data name="Add new user" xml:space="preserve"><value>Nieuwe Gebruiker Toevoegen</value></data>
   <data name="Additional HostingPanel features" xml:space="preserve"><value>Aanvullende HostingPanel-functies</value></data>
   <data name="Admin tools" xml:space="preserve"><value>Admin Gereedschap</value></data>
@@ -10,67 +22,173 @@
   <data name="Administrator features" xml:space="preserve"><value>Beheerdersfuncties</value></data>
   <data name="Administrator settings" xml:space="preserve"><value>Administrator instellingen</value></data>
   <data name="Administrators" xml:space="preserve"><value>Administrators</value></data>
+  <data name="All accessible databases" xml:space="preserve"><value>Alle toegankelijke databases</value></data>
+  <data name="All available fields from legacy domain configuration, without fabricated values." xml:space="preserve"><value>Alle beschikbare velden uit de legacy-domeinconfiguratie, zonder fictieve waarden.</value></data>
   <data name="All displayed resources use the existing HostingPanel API. Unimplemented navigation items are explicitly marked." xml:space="preserve"><value>Alle getoonde resources zijn verbonden met de bestaande HostingPanel API. Niet-geïmplementeerde onderdelen in de navigatie zijn expliciet gemarkeerd.</value></data>
+  <data name="All DNS zones exposed by the backend through DirectAdmin, including independently managed zones." xml:space="preserve"><value>Alle DNS-zones die de backend via DirectAdmin beschikbaar stelt, inclusief zelfstandig beheerde DNS-zones.</value></data>
   <data name="All users" xml:space="preserve"><value>Alle gebruikers</value></data>
   <data name="All users&apos; cron jobs" xml:space="preserve"><value>Cron Taken van alle Gebruikers</value></data>
   <data name="Backend disconnected" xml:space="preserve"><value>Backend niet verbonden</value></data>
   <data name="Backup and restore" xml:space="preserve"><value>Back-up en herstel</value></data>
   <data name="Backups" xml:space="preserve"><value>Back-ups</value></data>
+  <data name="Bandwidth (MB)" xml:space="preserve"><value>Bandbreedte (MB)</value></data>
+  <data name="Bandwidth (MiB or unlimited)" xml:space="preserve"><value>Bandbreedte (MiB of unlimited)</value></data>
+  <data name="Both" xml:space="preserve"><value>Beide</value></data>
   <data name="Brute force monitor" xml:space="preserve"><value>Brute Force Monitor</value></data>
+  <data name="Change account limit" xml:space="preserve"><value>Accountlimiet aanpassen</value></data>
+  <data name="Change account status" xml:space="preserve"><value>Accountstatus wijzigen</value></data>
+  <data name="Change domain settings" xml:space="preserve"><value>Domeininstellingen wijzigen</value></data>
+  <data name="Change limit" xml:space="preserve"><value>Limiet wijzigen</value></data>
+  <data name="Change package" xml:space="preserve"><value>Pakket wijzigen</value></data>
   <data name="Change password" xml:space="preserve"><value>Wachtwoord wijzigen</value></data>
   <data name="Change passwords" xml:space="preserve"><value>Wachtwoorden wijzigen</value></data>
+  <data name="Change user package" xml:space="preserve"><value>Gebruikerspakket wijzigen</value></data>
+  <data name="Changes only one limit. DirectAdmin then applies its own package and limit rules." xml:space="preserve"><value>Wijzigt slechts één limiet. DirectAdmin past daarna zijn eigen pakket- en limietregels toe.</value></data>
+  <data name="Check the database name, username and password." xml:space="preserve"><value>Controleer de database- en gebruikersnaam en het wachtwoord.</value></data>
   <data name="Checking connection…" xml:space="preserve"><value>Verbinding controleren…</value></data>
+  <data name="Complete inventory." xml:space="preserve"><value>Volledige inventarisatie.</value></data>
+  <data name="Complete Swagger documentation (274 API paths)" xml:space="preserve"><value>Volledige Swagger-documentatie (274 API-paden)</value></data>
   <data name="ConfigServer Security &amp; Firewall" xml:space="preserve"><value>ConfigServer Security &amp; Firewall</value></data>
+  <data name="Confirm account name" xml:space="preserve"><value>Bevestig accountnaam</value></data>
+  <data name="Confirm deletion" xml:space="preserve"><value>Verwijderen bevestigen</value></data>
+  <data name="Confirm deletion of only this record by entering its exact name:" xml:space="preserve"><value>Bevestig het verwijderen van uitsluitend dit record door de naam exact te typen:</value></data>
+  <data name="Confirm password" xml:space="preserve"><value>Wachtwoord bevestigen</value></data>
   <data name="Connect" xml:space="preserve"><value>Verbinden</value></data>
+  <data name="Connect first using the" xml:space="preserve"><value>Verbind eerst via het</value></data>
+  <data name="Connect to DirectAdmin first using the" xml:space="preserve"><value>Verbind eerst met DirectAdmin via het</value></data>
   <data name="Connect to your DirectAdmin server. Credentials remain in the interactive Blazor session." xml:space="preserve"><value>Maak verbinding met jouw DirectAdmin-server. De opgegeven gegevens blijven binnen de interactieve Blazor-sessie.</value></data>
+  <data name="Connect using the" xml:space="preserve"><value>Maak verbinding via het</value></data>
   <data name="Connected" xml:space="preserve"><value>Verbonden</value></data>
   <data name="Connected account" xml:space="preserve"><value>Verbonden account</value></data>
   <data name="Connected to DirectAdmin" xml:space="preserve"><value>Verbonden met DirectAdmin</value></data>
   <data name="Control panel" xml:space="preserve"><value>Controle Paneel</value></data>
+  <data name="Create account" xml:space="preserve"><value>Account aanmaken</value></data>
   <data name="Create administrator" xml:space="preserve"><value>Admin Aanmaken</value></data>
-  <data name="Create reseller" xml:space="preserve"><value>Reseller Aanmaken</value></data>
+  <data name="Create database" xml:space="preserve"><value>Database aanmaken</value></data>
+  <data name="Create database with user" xml:space="preserve"><value>Database met gebruiker aanmaken</value></data>
+  <data name="Create DNS zone" xml:space="preserve"><value>DNS-zone aanmaken</value></data>
+  <data name="Create reseller" xml:space="preserve"><value>Reseller aanmaken</value></data>
+  <data name="Create standalone DNS zone" xml:space="preserve"><value>Zelfstandige DNS-zone aanmaken</value></data>
   <data name="Create ticket" xml:space="preserve"><value>Ticket Aanmaken</value></data>
+  <data name="Create user" xml:space="preserve"><value>Gebruiker aanmaken</value></data>
+  <data name="Creation not confirmed: backend HTTP {0}." xml:space="preserve"><value>Aanmaken niet bevestigd: backend HTTP {0}.</value></data>
   <data name="Cron jobs" xml:space="preserve"><value>Cron Taken</value></data>
   <data name="Custom HTTPD configurations" xml:space="preserve"><value>Aangepaste HTTPD configuraties</value></data>
   <data name="CustomBuild" xml:space="preserve"><value>CustomBuild</value></data>
   <data name="Customize Evolution theme" xml:space="preserve"><value>Evolution Thema Aanpassen</value></data>
   <data name="Dashboard" xml:space="preserve"><value>Dashboard</value></data>
+  <data name="Data unavailable" xml:space="preserve"><value>Gegevens niet beschikbaar</value></data>
+  <data name="Database created. The overview has been refreshed." xml:space="preserve"><value>Database aangemaakt. Het overzicht is bijgewerkt.</value></data>
+  <data name="Database deletion not confirmed (HTTP {0})." xml:space="preserve"><value>Database is niet bevestigd verwijderd (HTTP {0}).</value></data>
   <data name="Database management" xml:space="preserve"><value>Databasebeheer</value></data>
+  <data name="Database management — HostingPanel" xml:space="preserve"><value>Databasebeheer — HostingPanel</value></data>
+  <data name="Database name" xml:space="preserve"><value>Databasenaam</value></data>
+  <data name="Database overview unavailable (HTTP {0})." xml:space="preserve"><value>Databaseoverzicht niet beschikbaar (HTTP {0}).</value></data>
+  <data name="Database user" xml:space="preserve"><value>Databasegebruiker</value></data>
+  <data name="Database users" xml:space="preserve"><value>Databasegebruikers</value></data>
+  <data name="Database users and management operations through DirectAdmin." xml:space="preserve"><value>Databasegebruikers en beheeracties via DirectAdmin.</value></data>
+  <data name="Database users unavailable (HTTP {0})." xml:space="preserve"><value>Databasegebruikers niet beschikbaar (HTTP {0}).</value></data>
   <data name="Databases" xml:space="preserve"><value>Databases</value></data>
+  <data name="Databases belonging to your account and all subordinate accounts accessible through the backend." xml:space="preserve"><value>Databases van jouw account en alle backend-toegankelijke onderliggende accounts.</value></data>
+  <data name="Databases in the current session" xml:space="preserve"><value>Databases van de huidige sessie</value></data>
+  <data name="Delete" xml:space="preserve"><value>Verwijderen</value></data>
+  <data name="Delete account" xml:space="preserve"><value>Account verwijderen</value></data>
+  <data name="Delete database" xml:space="preserve"><value>Database verwijderen</value></data>
+  <data name="Delete DNS record" xml:space="preserve"><value>DNS-record verwijderen</value></data>
+  <data name="Delete DNS zone" xml:space="preserve"><value>DNS-zone verwijderen</value></data>
+  <data name="Delete only the specified DNS zone; this is not the same as deleting a hosting domain." xml:space="preserve"><value>Verwijder uitsluitend de opgegeven DNS-zone; dit is niet hetzelfde als het verwijderen van een hostingdomein.</value></data>
+  <data name="Delete reseller" xml:space="preserve"><value>Reseller verwijderen</value></data>
+  <data name="Delete standalone DNS zone" xml:space="preserve"><value>Zelfstandige DNS-zone verwijderen</value></data>
+  <data name="Delete user" xml:space="preserve"><value>Gebruiker verwijderen</value></data>
+  <data name="Deletion not confirmed: backend HTTP {0}." xml:space="preserve"><value>Verwijderen niet bevestigd: backend HTTP {0}.</value></data>
+  <data name="DirectAdmin adds the account prefix where necessary. The exact name is retrieved from the backend after creation." xml:space="preserve"><value>DirectAdmin voegt waar nodig de accountprefix toe. De exacte naam wordt na aanmaken opnieuw uit de backend opgehaald.</value></data>
   <data name="DirectAdmin API" xml:space="preserve"><value>DirectAdmin API</value></data>
+  <data name="DirectAdmin confirmed deletion of &apos;{0}&apos;." xml:space="preserve"><value>DirectAdmin heeft de verwijdering van &apos;{0}&apos; bevestigd.</value></data>
+  <data name="DirectAdmin confirmed the DNS change" xml:space="preserve"><value>DirectAdmin heeft de DNS-wijziging bevestigd</value></data>
+  <data name="DirectAdmin confirmed the DNS change." xml:space="preserve"><value>DirectAdmin heeft de DNS-wijziging bevestigd.</value></data>
+  <data name="DirectAdmin confirmed the new limit." xml:space="preserve"><value>DirectAdmin heeft de nieuwe limiet bevestigd.</value></data>
+  <data name="DirectAdmin confirmed the new user package." xml:space="preserve"><value>DirectAdmin heeft het nieuwe gebruikerspakket bevestigd.</value></data>
+  <data name="DirectAdmin confirms: account activated." xml:space="preserve"><value>DirectAdmin bevestigt: account geactiveerd.</value></data>
+  <data name="DirectAdmin confirms: account suspended." xml:space="preserve"><value>DirectAdmin bevestigt: account geschorst.</value></data>
   <data name="DirectAdmin connection" xml:space="preserve"><value>DirectAdmin-verbinding</value></data>
   <data name="DirectAdmin connection active" xml:space="preserve"><value>DirectAdmin-verbinding actief</value></data>
+  <data name="DirectAdmin could not find the domain." xml:space="preserve"><value>DirectAdmin heeft het domein niet gevonden.</value></data>
+  <data name="DirectAdmin could not retrieve domain information (HTTP {0})." xml:space="preserve"><value>DirectAdmin kon deze domeininformatie niet ophalen (HTTP {0}).</value></data>
+  <data name="DirectAdmin created account &apos;{0}&apos;." xml:space="preserve"><value>DirectAdmin heeft het account &apos;{0}&apos; aangemaakt.</value></data>
+  <data name="DirectAdmin created the DNS zone." xml:space="preserve"><value>DirectAdmin heeft de DNS-zone aangemaakt.</value></data>
+  <data name="DirectAdmin deleted the DNS zone." xml:space="preserve"><value>DirectAdmin heeft de DNS-zone verwijderd.</value></data>
+  <data name="DirectAdmin denied the server-wide DNS zone overview." xml:space="preserve"><value>DirectAdmin heeft het serverbrede DNS-zoneoverzicht geweigerd.</value></data>
+  <data name="DirectAdmin denied this database operation." xml:space="preserve"><value>DirectAdmin weigert deze databasebewerking.</value></data>
+  <data name="DirectAdmin determines whether the change is permitted." xml:space="preserve"><value>DirectAdmin beslist of de wijziging is toegestaan.</value></data>
+  <data name="DirectAdmin did not confirm creation (HTTP {0})." xml:space="preserve"><value>DirectAdmin heeft het aanmaken niet bevestigd (HTTP {0}).</value></data>
+  <data name="DirectAdmin does not allow deletion." xml:space="preserve"><value>DirectAdmin staat verwijderen niet toe.</value></data>
+  <data name="DirectAdmin evaluates read and write operations separately." xml:space="preserve"><value>DirectAdmin beoordeelt lees- en schrijfacties afzonderlijk.</value></data>
   <data name="DirectAdmin Evolution-inspired management, with live data from the connected backend." xml:space="preserve"><value>DirectAdmin Evolution-geïnspireerd beheer, met live gegevens uit de aangesloten backend.</value></data>
   <data name="DirectAdmin rejected the sign-in." xml:space="preserve"><value>DirectAdmin heeft de aanmelding geweigerd.</value></data>
+  <data name="DirectAdmin reported a conflict for this DNS change." xml:space="preserve"><value>DirectAdmin meldt een conflict bij deze DNS-wijziging.</value></data>
   <data name="DirectAdmin session check: HTTP {0}." xml:space="preserve"><value>DirectAdmin sessiecontrole: HTTP {0}.</value></data>
+  <data name="DirectAdmin validates the package, IP address and permissions of the signed-in identity." xml:space="preserve"><value>DirectAdmin controleert het pakket, het IP-adres en de bevoegdheden van de aangemelde identiteit.</value></data>
   <data name="DirectAdmin-compatible API" xml:space="preserve"><value>DirectAdmin-compatibele API</value></data>
+  <data name="Disabled" xml:space="preserve"><value>Uitgeschakeld</value></data>
   <data name="Disconnect" xml:space="preserve"><value>Verbinding verbreken</value></data>
-  <data name="DNS management" xml:space="preserve"><value>DNS Beheer</value></data>
+  <data name="Disk space (MB)" xml:space="preserve"><value>Schijfruimte (MB)</value></data>
+  <data name="Disk space (MiB or unlimited)" xml:space="preserve"><value>Schijfruimte (MiB of unlimited)</value></data>
+  <data name="DNS change not confirmed (HTTP {0})." xml:space="preserve"><value>DNS-wijziging niet bevestigd (HTTP {0}).</value></data>
+  <data name="DNS management" xml:space="preserve"><value>DNS-beheer</value></data>
+  <data name="DNS management — HostingPanel" xml:space="preserve"><value>DNS Beheer — HostingPanel</value></data>
+  <data name="DNS zone unavailable: HTTP {0}. Check domain permissions." xml:space="preserve"><value>DNS-zone niet beschikbaar: HTTP {0}. Controleer de domeinrechten.</value></data>
+  <data name="DNS zones unavailable (HTTP {0})." xml:space="preserve"><value>DNS-zones niet beschikbaar (HTTP {0}).</value></data>
+  <data name="Domain" xml:space="preserve"><value>Domein</value></data>
+  <data name="Domain configuration and settings from DirectAdmin." xml:space="preserve"><value>Domeinconfiguratie en instellingen uit DirectAdmin.</value></data>
   <data name="Domain management" xml:space="preserve"><value>Domeinbeheer</value></data>
   <data name="Domains" xml:space="preserve"><value>Domeinen</value></data>
+  <data name="Edit" xml:space="preserve"><value>Bewerken</value></data>
+  <data name="Edit DNS record" xml:space="preserve"><value>DNS-record wijzigen</value></data>
   <data name="Email accounts" xml:space="preserve"><value>E-mailaccounts</value></data>
+  <data name="Email address" xml:space="preserve"><value>E-mailadres</value></data>
+  <data name="Enabled" xml:space="preserve"><value>Ingeschakeld</value></data>
+  <data name="Enter the account name to confirm" xml:space="preserve"><value>Typ de accountnaam ter bevestiging</value></data>
+  <data name="Enter the exact domain name to confirm" xml:space="preserve"><value>Typ de domeinnaam exact om te bevestigen</value></data>
+  <data name="Enter the username to confirm" xml:space="preserve"><value>Typ de gebruikersnaam ter bevestiging</value></data>
+  <data name="Exact record name" xml:space="preserve"><value>Exacte recordnaam</value></data>
   <data name="Extra programs" xml:space="preserve"><value>Extra Programma&apos;s</value></data>
   <data name="File management" xml:space="preserve"><value>Bestandsbeheer</value></data>
+  <data name="General" xml:space="preserve"><value>Algemeen</value></data>
   <data name="Global statistics" xml:space="preserve"><value>Globale Statistieken</value></data>
   <data name="Hosting administration / Dashboard" xml:space="preserve"><value>Hosting administratiesysteem / Dashboard</value></data>
   <data name="HostingPanel uses the same management groups as DirectAdmin Evolution. Permissions and available resources are provided by the backend." xml:space="preserve"><value>HostingPanel gebruikt dezelfde beheergroepen als de DirectAdmin Evolution-interface. De rechten en beschikbare resources komen volledig van de backend.</value></data>
   <data name="Impersonation active:" xml:space="preserve"><value>Impersonation actief:</value></data>
   <data name="Import cPanel" xml:space="preserve"><value>cPanel Importeren</value></data>
+  <data name="Includes databases of subordinate accounts where DirectAdmin permits access." xml:space="preserve"><value>Inclusief databases van onderliggende accounts, voor zover DirectAdmin die toegankelijk maakt.</value></data>
+  <data name="Incomplete: {0} accounts could not be read." xml:space="preserve"><value>Onvolledig: {0} accounts konden niet worden uitgelezen.</value></data>
   <data name="Integration" xml:space="preserve"><value>Integratie</value></data>
+  <data name="Invalid DNS record data." xml:space="preserve"><value>Ongeldige DNS-recordgegevens.</value></data>
+  <data name="IP / assignment" xml:space="preserve"><value>IP / toewijzing</value></data>
   <data name="IP management" xml:space="preserve"><value>IP Beheer</value></data>
+  <data name="IPv4 address" xml:space="preserve"><value>IPv4-adres</value></data>
   <data name="Language" xml:space="preserve"><value>Taal</value></data>
   <data name="Licensing" xml:space="preserve"><value>Licensering</value></data>
+  <data name="Limit" xml:space="preserve"><value>Limiet</value></data>
+  <data name="Limit not confirmed: backend HTTP {0}." xml:space="preserve"><value>Limiet niet bevestigd: backend HTTP {0}.</value></data>
   <data name="Live notifications via SignalR" xml:space="preserve"><value>Live meldingen via SignalR</value></data>
   <data name="Live resources" xml:space="preserve"><value>Live resources</value></data>
+  <data name="Loading databases…" xml:space="preserve"><value>Databases laden…</value></data>
+  <data name="Loading DNS zone…" xml:space="preserve"><value>DNS-zone laden…</value></data>
+  <data name="Loading users…" xml:space="preserve"><value>Gebruikers laden…</value></data>
+  <data name="Local data" xml:space="preserve"><value>Lokale gegevens</value></data>
+  <data name="Local mail" xml:space="preserve"><value>Lokale mail</value></data>
   <data name="Main navigation" xml:space="preserve"><value>Hoofdnavigatie</value></data>
   <data name="Maintenance" xml:space="preserve"><value>Onderhoud</value></data>
   <data name="Manage accounts" xml:space="preserve"><value>Accounts beheren</value></data>
+  <data name="Manage databases in the current session. For other accounts, use backend-supported session switching." xml:space="preserve"><value>Beheer databases in de huidige sessie. Voor databases van een ander account gebruik je de backend-ondersteunde sessiewissel.</value></data>
   <data name="Manage DNS" xml:space="preserve"><value>DNS beheren</value></data>
+  <data name="Manage DNS records" xml:space="preserve"><value>DNS-records beheren</value></data>
   <data name="Manage domains, users, DNS, databases and server services from one dashboard." xml:space="preserve"><value>Beheer domeinen, gebruikers, DNS, databases en serverdiensten vanuit één overzicht.</value></data>
   <data name="Manage mail queue" xml:space="preserve"><value>Beheer van e-mail wachtrij</value></data>
   <data name="Manage reseller packages" xml:space="preserve"><value>Beheer Reseller Pakketten</value></data>
   <data name="Manage tickets" xml:space="preserve"><value>Beheer Tickets</value></data>
   <data name="Manage user packages" xml:space="preserve"><value>Beheer gebruikers pakketten</value></data>
+  <data name="Management" xml:space="preserve"><value>Beheer</value></data>
   <data name="Management sections" xml:space="preserve"><value>Beheeronderdelen</value></data>
   <data name="Message all users" xml:space="preserve"><value>Bericht aan Alle Gebruikers</value></data>
   <data name="Message templates" xml:space="preserve"><value>Berichtsjablonen</value></data>
@@ -78,57 +196,120 @@
   <data name="ModSecurity and ClamAV" xml:space="preserve"><value>ModSecurity en ClamAV</value></data>
   <data name="Move users between resellers" xml:space="preserve"><value>Verplaats Gebruikers tussen Resellers</value></data>
   <data name="Multi-server setup" xml:space="preserve"><value>Multi Server Instellen</value></data>
+  <data name="Mutations are disabled or the change could not be confirmed." xml:space="preserve"><value>Mutaties zijn uitgeschakeld of de wijziging kon niet worden bevestigd.</value></data>
+  <data name="Mutations are disabled or the setting is unavailable." xml:space="preserve"><value>Mutaties zijn uitgeschakeld of de instelling is niet beschikbaar.</value></data>
   <data name="My hosting" xml:space="preserve"><value>Mijn hosting</value></data>
   <data name="My tickets" xml:space="preserve"><value>Mijn tickets</value></data>
   <data name="My users" xml:space="preserve"><value>Mijn Gebruikers</value></data>
+  <data name="Name" xml:space="preserve"><value>Naam</value></data>
   <data name="Name servers" xml:space="preserve"><value>Naam Servers</value></data>
   <data name="Navigation context" xml:space="preserve"><value>Navigatiecontext</value></data>
+  <data name="New limit (number)" xml:space="preserve"><value>Nieuwe limiet (getal)</value></data>
+  <data name="New package" xml:space="preserve"><value>Nieuw pakket</value></data>
+  <data name="New password" xml:space="preserve"><value>Nieuw wachtwoord</value></data>
+  <data name="New record" xml:space="preserve"><value>Nieuw record</value></data>
   <data name="New ticket" xml:space="preserve"><value>Nieuw ticket</value></data>
+  <data name="Next page" xml:space="preserve"><value>Volgende pagina</value></data>
+  <data name="No data retrieved yet." xml:space="preserve"><value>Nog geen gegevens opgehaald.</value></data>
+  <data name="No data." xml:space="preserve"><value>Geen gegevens.</value></data>
+  <data name="No databases found." xml:space="preserve"><value>Geen databases gevonden.</value></data>
+  <data name="No results." xml:space="preserve"><value>Geen resultaten.</value></data>
+  <data name="No users returned by DirectAdmin." xml:space="preserve"><value>Geen gebruikers door DirectAdmin geretourneerd.</value></data>
   <data name="Not implemented" xml:space="preserve"><value>Nog niet geïmplementeerd</value></data>
   <data name="Not signed in" xml:space="preserve"><value>Niet aangemeld</value></data>
   <data name="on behalf of administrator" xml:space="preserve"><value>namens beheerder</value></data>
+  <data name="Other DirectAdmin settings" xml:space="preserve"><value>Overige DirectAdmin-instellingen</value></data>
+  <data name="Overall database overview: HTTP {0}." xml:space="preserve"><value>Overall databaseoverzicht: HTTP {0}.</value></data>
+  <data name="Owner" xml:space="preserve"><value>Eigenaar</value></data>
+  <data name="Package" xml:space="preserve"><value>Pakket</value></data>
+  <data name="Package change not confirmed: backend HTTP {0}." xml:space="preserve"><value>Pakketwijziging niet bevestigd: backend HTTP {0}.</value></data>
+  <data name="Password" xml:space="preserve"><value>Wachtwoord</value></data>
   <data name="Password or login key" xml:space="preserve"><value>Wachtwoord of login key</value></data>
   <data name="Passwords" xml:space="preserve"><value>Wachtwoorden</value></data>
+  <data name="Permanently delete database" xml:space="preserve"><value>Database definitief verwijderen</value></data>
+  <data name="Permission to modify the DNS zone denied." xml:space="preserve"><value>Geen toestemming om de DNS-zone te wijzigen.</value></data>
   <data name="PHP settings" xml:space="preserve"><value>PHP Instellingen</value></data>
   <data name="Plugin management" xml:space="preserve"><value>Plugin Beheer</value></data>
+  <data name="Previous page" xml:space="preserve"><value>Vorige pagina</value></data>
+  <data name="Primary domain" xml:space="preserve"><value>Hoofddomein</value></data>
   <data name="Process monitor" xml:space="preserve"><value>Proces Monitor</value></data>
+  <data name="Property" xml:space="preserve"><value>Eigenschap</value></data>
   <data name="Quick access" xml:space="preserve"><value>Snelle toegang</value></data>
+  <data name="Refresh" xml:space="preserve"><value>Vernieuwen</value></data>
+  <data name="Refresh overview" xml:space="preserve"><value>Overzicht vernieuwen</value></data>
   <data name="Reseller management" xml:space="preserve"><value>Resellerbeheer</value></data>
   <data name="Resellers" xml:space="preserve"><value>Resellers</value></data>
+  <data name="Retrieve" xml:space="preserve"><value>Ophalen</value></data>
+  <data name="Retrieving databases from accessible accounts…" xml:space="preserve"><value>Databases uit toegankelijke accounts ophalen…</value></data>
+  <data name="Retrieving DNS zones…" xml:space="preserve"><value>DNS-zones ophalen…</value></data>
+  <data name="Retrieving domain information…" xml:space="preserve"><value>Domeininformatie wordt opgehaald…</value></data>
   <data name="Return to administrator" xml:space="preserve"><value>Terug naar beheerder</value></data>
+  <data name="Save bandwidth" xml:space="preserve"><value>Bandbreedte opslaan</value></data>
+  <data name="Save CGI" xml:space="preserve"><value>CGI opslaan</value></data>
+  <data name="Save change" xml:space="preserve"><value>Wijziging opslaan</value></data>
+  <data name="Save failed: HTTP {0}." xml:space="preserve"><value>Opslaan mislukt: HTTP {0}.</value></data>
+  <data name="Save PHP" xml:space="preserve"><value>PHP opslaan</value></data>
+  <data name="Save quota" xml:space="preserve"><value>Quota opslaan</value></data>
+  <data name="Save SSL" xml:space="preserve"><value>SSL opslaan</value></data>
+  <data name="Saving change…" xml:space="preserve"><value>Wijziging wordt opgeslagen…</value></data>
+  <data name="Search database or owner…" xml:space="preserve"><value>Database of eigenaar zoeken…</value></data>
+  <data name="Search databases" xml:space="preserve"><value>Zoeken in databases</value></data>
+  <data name="Search DNS zones" xml:space="preserve"><value>Zoeken in DNS-zones</value></data>
+  <data name="Search domain name…" xml:space="preserve"><value>Domeinnaam zoeken…</value></data>
   <data name="Search pages" xml:space="preserve"><value>Zoek naar pagina&apos;s</value></data>
   <data name="Search pages..." xml:space="preserve"><value>Zoek naar pagina&apos;s...</value></data>
   <data name="Security and API" xml:space="preserve"><value>Beveiliging en API</value></data>
   <data name="Server management" xml:space="preserve"><value>Server Beheer</value></data>
+  <data name="Server management / DNS" xml:space="preserve"><value>Serverbeheer / DNS</value></data>
   <data name="Server TLS" xml:space="preserve"><value>Server TLS</value></data>
   <data name="Server TLS certificate" xml:space="preserve"><value>Server TLS Certificaat</value></data>
   <data name="Sessions" xml:space="preserve"><value>Sessies</value></data>
+  <data name="Setting" xml:space="preserve"><value>Instelling</value></data>
   <data name="Settings" xml:space="preserve"><value>Instellingen</value></data>
   <data name="Settings and services" xml:space="preserve"><value>Instellingen en services</value></data>
+  <data name="Settings are saved separately without changing other DirectAdmin checkboxes." xml:space="preserve"><value>Instellingen worden afzonderlijk opgeslagen, zonder andere DirectAdmin-checkboxes te wijzigen.</value></data>
   <data name="Show all users" xml:space="preserve"><value>Toon Alle Gebruikers</value></data>
+  <data name="Size (bytes)" xml:space="preserve"><value>Grootte (bytes)</value></data>
   <data name="SSL certificates" xml:space="preserve"><value>SSL certificaten</value></data>
+  <data name="Status change not confirmed: backend HTTP {0}." xml:space="preserve"><value>Statuswijziging niet bevestigd: backend HTTP {0}.</value></data>
   <data name="Support" xml:space="preserve"><value>Support</value></data>
   <data name="Support and messages" xml:space="preserve"><value>Ondersteuning en berichten</value></data>
+  <data name="Suspend" xml:space="preserve"><value>Schorsen</value></data>
+  <data name="Suspend or activate account" xml:space="preserve"><value>Account schorsen of activeren</value></data>
   <data name="System backup" xml:space="preserve"><value>Systeem Backup</value></data>
   <data name="System file editor" xml:space="preserve"><value>Systeem bestand editor</value></data>
   <data name="System information" xml:space="preserve"><value>Systeeminformatie</value></data>
   <data name="System information &amp; files" xml:space="preserve"><value>Systeem Info &amp; Bestanden</value></data>
   <data name="System services" xml:space="preserve"><value>Systeem Services</value></data>
+  <data name="Tables" xml:space="preserve"><value>Tabellen</value></data>
   <data name="The backend controls access rights." xml:space="preserve"><value>De backend bepaalt de toegangsrechten.</value></data>
   <data name="The backend determines available data and actions. No account roles are assumed." xml:space="preserve"><value>De backend bepaalt de beschikbare gegevens en acties. Er worden geen accountrollen aangenomen.</value></data>
+  <data name="The backend returned no databases for accessible accounts." xml:space="preserve"><value>De backend heeft geen databases teruggegeven voor de raadpleegbare accounts.</value></data>
+  <data name="The complete pinned DirectAdmin specification; not every operation is implemented in HostingPanel yet." xml:space="preserve"><value>De volledige vastgepinde DirectAdmin-specificatie; niet iedere operatie is al in HostingPanel geïmplementeerd.</value></data>
+  <data name="The package must exist on the backend. The change is verified against the user configuration after saving." xml:space="preserve"><value>Het pakket moet op de backend bestaan. De wijziging wordt na opslaan gecontroleerd via de gebruikersconfiguratie.</value></data>
   <data name="The user navigation is a display mode. The backend determines access." xml:space="preserve"><value>De gebruikersnavigatie is een weergavemodus. De backend bepaalt de toegang.</value></data>
   <data name="Themes" xml:space="preserve"><value>Thema’s</value></data>
+  <data name="This deletes an account through DirectAdmin. Enter the exact account name to confirm." xml:space="preserve"><value>Dit verwijdert een account via DirectAdmin. Typ de accountnaam exact ter bevestiging.</value></data>
+  <data name="This deletes the database and may cause irreversible data loss. Enter the exact database name to confirm." xml:space="preserve"><value>Dit verwijdert de database en kan onomkeerbaar dataverlies veroorzaken. Typ de exacte databasenaam om te bevestigen.</value></data>
   <data name="Tickets" xml:space="preserve"><value>Tickets</value></data>
+  <data name="TTL (optional, 60–604800 seconds)" xml:space="preserve"><value>TTL (optioneel, 60–604800 seconden)</value></data>
+  <data name="Unavailable" xml:space="preserve"><value>Niet beschikbaar</value></data>
   <data name="Updates" xml:space="preserve"><value>Updates</value></data>
+  <data name="Use the documented DirectAdmin DNS admin API. The backend checks permissions." xml:space="preserve"><value>Gebruik de gedocumenteerde DirectAdmin DNS-admin API. De backend controleert de bevoegdheden.</value></data>
   <data name="User" xml:space="preserve"><value>Gebruiker</value></data>
   <data name="User features" xml:space="preserve"><value>Gebruikersfuncties</value></data>
   <data name="Username" xml:space="preserve"><value>Gebruikersnaam</value></data>
+  <data name="Users" xml:space="preserve"><value>Gebruikers</value></data>
   <data name="Users and packages" xml:space="preserve"><value>Gebruikers en pakketten</value></data>
+  <data name="Value" xml:space="preserve"><value>Waarde</value></data>
   <data name="View API documentation and responses" xml:space="preserve"><value>API-documentatie en responses bekijken</value></data>
   <data name="View logs" xml:space="preserve"><value>Bekijk Logboek</value></data>
+  <data name="View modern DirectAdmin-compatible HostingPanel API responses." xml:space="preserve"><value>Bekijk de moderne DirectAdmin-compatibele API-antwoorden van HostingPanel.</value></data>
   <data name="View services" xml:space="preserve"><value>Services bekijken</value></data>
+  <data name="View users / delete" xml:space="preserve"><value>Gebruikers bekijken / verwijderen</value></data>
   <data name="Website and resource management" xml:space="preserve"><value>Website- en resourcebeheer</value></data>
   <data name="Welcome to HostingPanel" xml:space="preserve"><value>Welkom bij HostingPanel</value></data>
   <data name="you are acting as" xml:space="preserve"><value>je werkt als</value></data>
   <data name="You choose the administrator or user view. DirectAdmin remains responsible for access rights." xml:space="preserve"><value>Je kiest zelf de beheerders- of gebruikersweergave. DirectAdmin blijft verantwoordelijk voor toegangsrechten.</value></data>
+  <data name="You do not have access to these domain settings." xml:space="preserve"><value>Je hebt geen toegang tot deze domeininstellingen.</value></data>
 </root>

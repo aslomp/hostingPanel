@@ -1,3 +1,5 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/domains/{Domain}/dns"
 @using System.Text.Json
 @inject DirectAdminSession Session
@@ -5,11 +7,11 @@
 <PageTitle>DNS — @Domain</PageTitle>
 <div class="page-header">
     <div>
-        <div class="eyebrow"><a href="/domains">Domeinen</a> / <a href="@($"/domains/{Uri.EscapeDataString(Domain)}")">@Domain</a> / DNS</div>
-        <h1>DNS-beheer</h1>
+        <div class="eyebrow"><a href="/domains">@L["Domains"]</a> / <a href="@($"/domains/{Uri.EscapeDataString(Domain)}")">@Domain</a> / DNS</div>
+        <h1>@L["DNS management"]</h1>
         <p>Zone: <strong>@Domain</strong> — rechtstreeks uit DirectAdmin.</p>
     </div>
-    <button @onclick="Load" disabled="@busy">Vernieuwen</button>
+    <button @onclick="Load" disabled="@busy">@L["Refresh"]</button>
 </div>
 @if (!Session.Connected)
 {
@@ -20,20 +22,20 @@ else
     <section class="card">
         <h2>DNS-records</h2>
         @if (error is not null) { <p class="error" role="alert">@error</p> }
-        @if (busy) { <p role="status">DNS-zone laden…</p> }
+        @if (busy) { <p role="status">@L["Loading DNS zone…"]</p> }
         @if (records is not null)
         {
             <p>@records.Count records gevonden.</p>
             <table>
-                <thead><tr><th>Type</th><th>Naam</th><th>Waarde</th><th>TTL</th><th>Beheer</th></tr></thead>
+                <thead><tr><th>Type</th><th>@L["Name"]</th><th>@L["Value"]</th><th>TTL</th><th>@L["Management"]</th></tr></thead>
                 <tbody>
                 @foreach (var record in records)
                 {
                     <tr>
                         <td>@record.Type</td><td>@record.Name</td><td>@record.Value</td><td>@record.Ttl</td>
                         <td>
-                            <button disabled="@busy" @onclick="() => Edit(record)">Bewerken</button>
-                            <button disabled="@busy" @onclick="() => Remove(record)">Verwijderen</button>
+                            <button disabled="@busy" @onclick="() => Edit(record)">@L["Edit"]</button>
+                            <button disabled="@busy" @onclick="() => Remove(record)">@L["Delete"]</button>
                         </td>
                     </tr>
                 }
@@ -42,29 +44,29 @@ else
         }
     </section>
     <section class="card">
-        <h2>@(action == "add" ? "DNS-record toevoegen" : action == "edit" ? "DNS-record wijzigen" : "DNS-record verwijderen")</h2>
-        <p>DirectAdmin beslist of de wijziging is toegestaan.</p>
+        <h2>@(action == "add" ? L["Add DNS record"].Value : action == "edit" ? L["Edit DNS record"].Value : L["Delete DNS record"].Value)</h2>
+        <p>@L["DirectAdmin determines whether the change is permitted."]</p>
         <label for="dnsType">Type</label>
         <select id="dnsType" @bind="type" disabled="@(action == "delete")">
             @foreach (var item in new [] {"A","AAAA","CNAME","MX","TXT","SRV","CAA","NS","PTR","DS","TLSA"})
             { <option value="@item">@item</option> }
         </select>
-        <label for="dnsName">Naam</label>
+        <label for="dnsName">@L["Name"]</label>
         <input id="dnsName" @bind="name" disabled="@(action == "delete")" placeholder="www" />
-        <label for="dnsValue">Waarde</label>
+        <label for="dnsValue">@L["Value"]</label>
         <textarea id="dnsValue" @bind="value" disabled="@(action == "delete")" rows="3" />
-        <label for="dnsTtl">TTL (optioneel, 60–604800 seconden)</label>
+        <label for="dnsTtl">@L["TTL (optional, 60–604800 seconds)"]</label>
         <input id="dnsTtl" @bind="ttl" disabled="@(action == "delete")" />
         @if (action == "delete")
         {
             <p>Bevestig het verwijderen van uitsluitend dit record door de naam exact te typen: <strong>@original?.Name</strong></p>
-            <input @bind="confirmation" placeholder="Exacte recordnaam" autocomplete="off" />
+            <input @bind="confirmation" placeholder="@L["Exact record name"]" autocomplete="off" />
         }
         <div class="domain-options">
             <button class="primary" disabled="@(busy || action == "delete" && confirmation != original?.Name)" @onclick="Save">
-                @(busy ? "Bezig…" : action == "add" ? "Toevoegen" : action == "edit" ? "Wijziging opslaan" : "Verwijderen bevestigen")
+                @(busy ? "Bezig…" : action == "add" ? "Toevoegen" : action == "edit" ? L["Save change"].Value : L["Confirm deletion"].Value)
             </button>
-            <button disabled="@busy" @onclick="Reset">Nieuw record</button>
+            <button disabled="@busy" @onclick="Reset">@L["New record"]</button>
         </div>
         @if (message is not null) { <p role="status">@message</p> }
     </section>
@@ -91,7 +93,7 @@ else
             var (status, body) = await Session.GetDnsZoneAsync(Domain);
             if (status != 200)
             {
-                error = $"DNS-zone niet beschikbaar: HTTP {status}. Controleer de domeinrechten.";
+                error = L["DNS zone unavailable: HTTP {0}. Check domain permissions.", status].Value;
                 records = null;
                 return;
             }
@@ -133,22 +135,22 @@ else
                 type, name, value, string.IsNullOrWhiteSpace(ttl) ? null : ttl,
                 original?.Type, original?.Name, original?.Value);
             message = status switch {
-                200 => "DirectAdmin heeft de DNS-wijziging bevestigd.",
-                409 => "DirectAdmin meldt een conflict bij deze DNS-wijziging.",
-                400 => "Ongeldige DNS-recordgegevens.",
-                403 => "Geen toestemming om de DNS-zone te wijzigen.",
-                _ => $"DNS-wijziging niet bevestigd (HTTP {status})."
+                200 => L["DirectAdmin confirmed the DNS change."].Value,
+                409 => L["DirectAdmin reported a conflict for this DNS change."].Value,
+                400 => L["Invalid DNS record data."].Value,
+                403 => L["Permission to modify the DNS zone denied."].Value,
+                _ => L["DNS change not confirmed (HTTP {0}).", status].Value
             };
             if (status == 200)
             {
                 Reset();
-                message = "DirectAdmin heeft de DNS-wijziging bevestigd.";
+                message = L["DirectAdmin confirmed the DNS change."].Value;
             }
         }
         catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException or ArgumentException)
         { message = e.Message; }
         finally { busy = false; }
-        if (message?.StartsWith("DirectAdmin heeft de DNS-wijziging bevestigd", StringComparison.Ordinal) == true)
+        if (message?.StartsWith(L["DirectAdmin confirmed the DNS change"].Value, StringComparison.Ordinal) == true)
             await Load();
     }
 }

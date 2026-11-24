@@ -1,57 +1,59 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @using System.Text.Json
 @inject DirectAdminSession Session
 
 <section class="card">
-    <h2>@(Kind == "reseller" ? "Reseller aanmaken" : "Gebruiker aanmaken")</h2>
-    <p>DirectAdmin controleert het pakket, het IP-adres en de bevoegdheden van de aangemelde identiteit.</p>
-    <label>Accountnaam</label><input @bind="username" autocomplete="off" />
-    <label>E-mailadres</label><input type="email" @bind="email" autocomplete="off" />
-    <label>Hoofddomein</label><input @bind="domain" placeholder="example.com" />
-    <label>Pakket</label><input @bind="package" autocomplete="off" />
-    <label>IP / toewijzing</label><input @bind="ip" placeholder="shared" />
-    <label>Nieuw wachtwoord</label><input type="password" @bind="password" autocomplete="new-password" />
-    <label>Wachtwoord bevestigen</label><input type="password" @bind="passwordConfirmation" autocomplete="new-password" />
+    <h2>@(Kind == "reseller" ? L["Create reseller"].Value : L["Create user"].Value)</h2>
+    <p>@L["DirectAdmin validates the package, IP address and permissions of the signed-in identity."]</p>
+    <label>@L["Account name"]</label><input @bind="username" autocomplete="off" />
+    <label>@L["Email address"]</label><input type="email" @bind="email" autocomplete="off" />
+    <label>@L["Primary domain"]</label><input @bind="domain" placeholder="example.com" />
+    <label>@L["Package"]</label><input @bind="package" autocomplete="off" />
+    <label>@L["IP / assignment"]</label><input @bind="ip" placeholder="shared" />
+    <label>@L["New password"]</label><input type="password" @bind="password" autocomplete="new-password" />
+    <label>@L["Confirm password"]</label><input type="password" @bind="passwordConfirmation" autocomplete="new-password" />
     <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(package) || password != passwordConfirmation || password.Length < 5)" @onclick="Create">
-        @(busy ? "Verwerken…" : "Account aanmaken")
+        @(busy ? "Verwerken…" : L["Create account"].Value)
     </button>
 </section>
 <section class="card">
-    <h2>@(Kind == "reseller" ? "Reseller verwijderen" : "Gebruiker verwijderen")</h2>
-    <p>Dit verwijdert een account via DirectAdmin. Typ de accountnaam exact ter bevestiging.</p>
-    <label>Accountnaam</label><input @bind="deleteUsername" />
-    <label>Bevestig accountnaam</label><input @bind="deleteConfirmation" />
+    <h2>@(Kind == "reseller" ? L["Delete reseller"].Value : L["Delete user"].Value)</h2>
+    <p>@L["This deletes an account through DirectAdmin. Enter the exact account name to confirm."]</p>
+    <label>@L["Account name"]</label><input @bind="deleteUsername" />
+    <label>@L["Confirm account name"]</label><input @bind="deleteConfirmation" />
     <button disabled="@(busy || string.IsNullOrWhiteSpace(deleteUsername) || deleteUsername != deleteConfirmation)"
-        @onclick="Delete">Account verwijderen</button>
+        @onclick="Delete">@L["Delete account"]</button>
 </section>
 @if (Kind == "user")
 {
 <section class="card">
-    <h2>Gebruikerspakket wijzigen</h2>
-    <p>Het pakket moet op de backend bestaan. De wijziging wordt na opslaan gecontroleerd via de gebruikersconfiguratie.</p>
-    <label>Gebruikersnaam</label><input @bind="packageUsername" />
-    <label>Nieuw pakket</label><input @bind="newPackage" />
-    <label>Typ de gebruikersnaam ter bevestiging</label><input @bind="packageConfirmation" />
+    <h2>@L["Change user package"]</h2>
+    <p>@L["The package must exist on the backend. The change is verified against the user configuration after saving."]</p>
+    <label>@L["Username"]</label><input @bind="packageUsername" />
+    <label>@L["New package"]</label><input @bind="newPackage" />
+    <label>@L["Enter the username to confirm"]</label><input @bind="packageConfirmation" />
     <button disabled="@(busy || string.IsNullOrWhiteSpace(packageUsername) || packageConfirmation != packageUsername)"
-        @onclick="ChangePackage">Pakket wijzigen</button>
+        @onclick="ChangePackage">@L["Change package"]</button>
 </section>
 }
 <section class="card">
-    <h2>Accountlimiet aanpassen</h2>
-    <p>Wijzigt slechts één limiet. DirectAdmin past daarna zijn eigen pakket- en limietregels toe.</p>
-    <label>Accountnaam</label><input @bind="limitUsername" />
-    <label>Limiet</label>
-    <select @bind="limitField"><option value="bandwidth">Bandbreedte (MB)</option><option value="quota">Schijfruimte (MB)</option><option value="inode">Inodes</option></select>
-    <label>Nieuwe limiet (getal)</label><input @bind="limitValue" />
-    <label>Typ de accountnaam ter bevestiging</label><input @bind="limitConfirmation" />
-    <button disabled="@(busy || string.IsNullOrWhiteSpace(limitUsername) || limitConfirmation != limitUsername)" @onclick="SetLimit">Limiet wijzigen</button>
+    <h2>@L["Change account limit"]</h2>
+    <p>@L["Changes only one limit. DirectAdmin then applies its own package and limit rules."]</p>
+    <label>@L["Account name"]</label><input @bind="limitUsername" />
+    <label>@L["Limit"]</label>
+    <select @bind="limitField"><option value="bandwidth">@L["Bandwidth (MB)"]</option><option value="quota">@L["Disk space (MB)"]</option><option value="inode">Inodes</option></select>
+    <label>@L["New limit (number)"]</label><input @bind="limitValue" />
+    <label>@L["Enter the account name to confirm"]</label><input @bind="limitConfirmation" />
+    <button disabled="@(busy || string.IsNullOrWhiteSpace(limitUsername) || limitConfirmation != limitUsername)" @onclick="SetLimit">@L["Change limit"]</button>
 </section>
 <section class="card">
-    <h2>Account schorsen of activeren</h2>
-    <label>Accountnaam</label><input @bind="suspensionUsername" />
-    <label>Actie</label><select @bind="suspend"><option value="true">Schorsen</option><option value="false">Activeren</option></select>
-    <label>Typ de accountnaam ter bevestiging</label><input @bind="suspensionConfirmation" />
+    <h2>@L["Suspend or activate account"]</h2>
+    <label>@L["Account name"]</label><input @bind="suspensionUsername" />
+    <label>@L["Action"]</label><select @bind="suspend"><option value="true">@L["Suspend"]</option><option value="false">@L["Activate"]</option></select>
+    <label>@L["Enter the account name to confirm"]</label><input @bind="suspensionConfirmation" />
     <button disabled="@(busy || string.IsNullOrWhiteSpace(suspensionUsername) || suspensionConfirmation != suspensionUsername)"
-        @onclick="SetSuspended">Accountstatus wijzigen</button>
+        @onclick="SetSuspended">@L["Change account status"]</button>
 </section>
 @if (result is not null) { <p role="status">@result</p> }
 
@@ -75,8 +77,8 @@
         {
             var (status, _) = await Session.SetUserPackageAsync(packageUsername, newPackage);
             result = status == 200
-                ? "DirectAdmin heeft het nieuwe gebruikerspakket bevestigd."
-                : $"Pakketwijziging niet bevestigd: backend HTTP {status}.";
+                ? L["DirectAdmin confirmed the new user package."].Value
+                : L["Package change not confirmed: backend HTTP {0}.", status].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
         { result = ex.Message; }
@@ -92,8 +94,8 @@
             var (status, _) = await Session.SetAccountLimitAsync(
                 Kind, limitUsername, limitField, limitValue);
             result = status == 200
-                ? "DirectAdmin heeft de nieuwe limiet bevestigd."
-                : $"Limiet niet bevestigd: backend HTTP {status}.";
+                ? L["DirectAdmin confirmed the new limit."].Value
+                : L["Limit not confirmed: backend HTTP {0}.", status].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
         { result = ex.Message; }
@@ -110,9 +112,9 @@
             var (status, _) = await Session.SetAccountSuspensionAsync(
                 suspensionUsername, desired);
             result = status == 200
-                ? (desired ? "DirectAdmin bevestigt: account geschorst." :
-                    "DirectAdmin bevestigt: account geactiveerd.")
-                : $"Statuswijziging niet bevestigd: backend HTTP {status}.";
+                ? (desired ? L["DirectAdmin confirms: account suspended."].Value :
+                    L["DirectAdmin confirms: account activated."].Value)
+                : L["Status change not confirmed: backend HTTP {0}.", status].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
         { result = ex.Message; }
@@ -128,8 +130,8 @@
             var (status, _) = await Session.CreateHostingAccountAsync(
                 Kind, username, email, password, domain, package, ip);
             result = status is >= 200 and < 300
-                ? $"DirectAdmin heeft het account '{username}' aangemaakt."
-                : $"Account niet aangemaakt: backend HTTP {status}.";
+                ? L["DirectAdmin created account '{0}'.", username].Value
+                : L["Account not created: backend HTTP {0}.", status].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
         { result = ex.Message; }
@@ -144,8 +146,8 @@
             var (status, _) = await Session.DeleteHostingAccountAsync(
                 Kind, deleteUsername, deleteConfirmation);
             result = status is >= 200 and < 300
-                ? $"DirectAdmin heeft de verwijdering van '{deleteUsername}' bevestigd."
-                : $"Verwijdering niet bevestigd: backend HTTP {status}.";
+                ? L["DirectAdmin confirmed deletion of '{0}'.", deleteUsername].Value
+                : L["Deletion not confirmed: backend HTTP {0}.", status].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
         { result = ex.Message; }
