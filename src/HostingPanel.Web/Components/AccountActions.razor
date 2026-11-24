@@ -2,6 +2,7 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @using System.Text.Json
 @inject DirectAdminSession Session
+@inject IDialogService Dialogs
 
 <MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@(Kind == "reseller" ? L["Create reseller"].Value : L["Create user"].Value)</h2>
@@ -21,8 +22,7 @@
     <h2>@(Kind == "reseller" ? L["Delete reseller"].Value : L["Delete user"].Value)</h2>
     <p>@L["This deletes an account through DirectAdmin. Enter the exact account name to confirm."]</p>
     <MudTextField T="string" Label="@L["Account name"].Value" @bind-Value="deleteUsername" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
-    <MudTextField T="string" Label="@L["Confirm account name"].Value" @bind-Value="deleteConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
-    <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@(busy || string.IsNullOrWhiteSpace(deleteUsername) || deleteUsername != deleteConfirmation)" OnClick="Delete">@L["Delete account"]</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@(busy || string.IsNullOrWhiteSpace(deleteUsername))" OnClick="ConfirmDeletion">@L["Delete account"]</MudButton>
 </MudPaper>
 @if (Kind == "user")
 {
@@ -134,7 +134,39 @@
         { result = ex.Message; }
         finally { password = ""; passwordConfirmation = ""; busy = false; }
     }
-    private async Task Delete()
+    private bool deleteDialogOpen;
+  private async Task ConfirmDeletion()
+  {
+      if (busy || !Session.Connected || deleteDialogOpen || string.IsNullOrWhiteSpace(deleteUsername)) return;
+      var target = deleteUsername;
+      var identity = Session.Username;
+      var kind = Kind;
+      deleteDialogOpen = true;
+      try
+      {
+          var parameters = new DialogParameters<DestructiveResourceDialog>
+          {
+              { x => x.ResourceName, target },
+              { x => x.Warning, L["This deletes an account through DirectAdmin. Enter the exact account name to confirm."].Value },
+              { x => x.Prompt, L["Confirm account name"].Value }
+          };
+          var reference = await Dialogs.ShowAsync<DestructiveResourceDialog>(
+              $"{L["Delete account"]}: {target}", parameters,
+              new DialogOptions { CloseOnEscapeKey = true, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
+          var result = await reference.Result;
+          if (result is { Canceled: false, Data: true } && Session.Connected &&
+              string.Equals(identity, Session.Username, StringComparison.Ordinal) &&
+              string.Equals(target, deleteUsername, StringComparison.Ordinal) && kind == Kind)
+          {
+              deleteConfirmation = target;
+              try { await Delete(); }
+              finally { deleteConfirmation = ""; }
+          }
+      }
+      finally { deleteDialogOpen = false; }
+  }
+
+  private async Task Delete()
     {
         if (busy || !Session.Connected || deleteUsername != deleteConfirmation) return;
         busy = true; result = null;

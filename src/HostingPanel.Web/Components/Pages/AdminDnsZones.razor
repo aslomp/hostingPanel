@@ -3,6 +3,7 @@
 @page "/dns-zones"
 @using System.Text.Json
 @inject DirectAdminSession Session
+@inject IDialogService Dialogs
 
 <PageTitle>@L["DNS management — HostingPanel"]</PageTitle>
 <div class="page-header">
@@ -82,8 +83,7 @@ else
         <h2>@L["Delete standalone DNS zone"]</h2>
         <p>@L["Delete only the specified DNS zone; this is not the same as deleting a hosting domain."]</p>
         <label>@L["Domain"]</label><MudTextField T="string" @bind-Value="deleteDomain" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
-        <label>@L["Enter the exact domain name to confirm"]</label><MudTextField T="string" @bind-Value="zoneConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
-        <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@(changing || string.IsNullOrWhiteSpace(deleteDomain) || deleteDomain != zoneConfirmation)" OnClick="DeleteZone">@L["Delete DNS zone"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@(changing || string.IsNullOrWhiteSpace(deleteDomain))" OnClick="ConfirmDeletion">@L["Delete DNS zone"]</MudButton>
     </section>
     @if (zoneMessage is not null) { <p role="status">@zoneMessage</p> }
 }
@@ -163,7 +163,39 @@ else
         if (zoneMessage == L["DirectAdmin created the DNS zone."].Value) await Reload();
     }
 
-    private async Task DeleteZone()
+    private bool deleteDialogOpen;
+  private async Task ConfirmDeletion()
+  {
+      if (changing || !Session.Connected || deleteDialogOpen || string.IsNullOrWhiteSpace(deleteDomain)) return;
+      var target = deleteDomain;
+      var identity = Session.Username;
+      
+      deleteDialogOpen = true;
+      try
+      {
+          var parameters = new DialogParameters<DestructiveResourceDialog>
+          {
+              { x => x.ResourceName, target },
+              { x => x.Warning, L["Delete only the specified DNS zone; this is not the same as deleting a hosting domain."].Value },
+              { x => x.Prompt, L["Enter the exact domain name to confirm"].Value }
+          };
+          var reference = await Dialogs.ShowAsync<DestructiveResourceDialog>(
+              $"{L["Delete standalone DNS zone"]}: {target}", parameters,
+              new DialogOptions { CloseOnEscapeKey = true, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
+          var result = await reference.Result;
+          if (result is { Canceled: false, Data: true } && Session.Connected &&
+              string.Equals(identity, Session.Username, StringComparison.Ordinal) &&
+              string.Equals(target, deleteDomain, StringComparison.Ordinal))
+          {
+              zoneConfirmation = target;
+              try { await DeleteZone(); }
+              finally { zoneConfirmation = ""; }
+          }
+      }
+      finally { deleteDialogOpen = false; }
+  }
+
+  private async Task DeleteZone()
     {
         if (changing || !Session.Connected || deleteDomain != zoneConfirmation) return;
         changing = true; zoneMessage = null;

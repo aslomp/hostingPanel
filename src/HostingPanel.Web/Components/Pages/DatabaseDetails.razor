@@ -3,6 +3,7 @@
 @page "/databases/{Database}"
 @using System.Text.Json
 @inject DirectAdminSession Session
+@inject IDialogService Dialogs
 @inject NavigationManager Navigation
 
 <PageTitle>@Database — Databasebeheer</PageTitle>
@@ -33,9 +34,7 @@ else
   <section class="card">
     <h2>@L["Delete database"]</h2>
     <p>@L["This deletes the database and may cause irreversible data loss. Enter the exact database name to confirm."]</p>
-    <label for="dbConfirmation">Typ @Database ter bevestiging</label>
-    <MudTextField T="string" @bind-Value="confirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbConfirmation" autocomplete="off" />
-    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(deleting || confirmation != Database)" OnClick="Delete">@L["Permanently delete database"]</MudButton>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@deleting" OnClick="ConfirmDeletion">@L["Permanently delete database"]</MudButton>
     @if(deleteMessage is not null) { <p role="status">@deleteMessage</p> }
   </section>
 }
@@ -69,6 +68,38 @@ else
     { error=e.Message; users=null; }
     finally { loading=false; }
   }
+  private bool deleteDialogOpen;
+  private async Task ConfirmDeletion()
+  {
+      if (deleting || !Session.Connected || deleteDialogOpen || string.IsNullOrWhiteSpace(Database)) return;
+      var target = Database;
+      var identity = Session.Username;
+      
+      deleteDialogOpen = true;
+      try
+      {
+          var parameters = new DialogParameters<DestructiveResourceDialog>
+          {
+              { x => x.ResourceName, target },
+              { x => x.Warning, L["This deletes the database and may cause irreversible data loss. Enter the exact database name to confirm."].Value },
+              { x => x.Prompt, L["Enter the exact database name to confirm."].Value }
+          };
+          var reference = await Dialogs.ShowAsync<DestructiveResourceDialog>(
+              $"{L["Delete database"]}: {target}", parameters,
+              new DialogOptions { CloseOnEscapeKey = true, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
+          var result = await reference.Result;
+          if (result is { Canceled: false, Data: true } && Session.Connected &&
+              string.Equals(identity, Session.Username, StringComparison.Ordinal) &&
+              string.Equals(target, Database, StringComparison.Ordinal))
+          {
+              confirmation = target;
+              try { await Delete(); }
+              finally { confirmation = ""; }
+          }
+      }
+      finally { deleteDialogOpen = false; }
+  }
+
   private async Task Delete()
   {
     if(deleting || confirmation!=Database || !Session.Connected) return;
