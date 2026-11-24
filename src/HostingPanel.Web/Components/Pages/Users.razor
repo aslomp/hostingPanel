@@ -3,14 +3,19 @@
 @page "/users"
 @using System.Text.Json
 @inject DirectAdminSession Session
+@inject IDialogService Dialogs
 
 <PageTitle>@L["Account tree — HostingPanel"]</PageTitle>
 <PanelPageHeader>
     <Breadcrumb>@L["Account management"]</Breadcrumb>
     <TitleContent>@L["User management"]</TitleContent>
     <Description>@L["All accounts exposed by DirectAdmin to the current session, including resellers and their users."]</Description>
-    <Actions><MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2"><MudButton Href="#account-create" Variant="Variant.Filled" Color="Color.Primary">@L["＋ Add user"]</MudButton>
-    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@loading">@(loading ? L["Loading…"].Value : L["↻ Refresh"].Value)</MudButton></MudStack></Actions>
+    <Actions>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog" Disabled="@loading">@L["Add user"]</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton>
+        </MudStack>
+    </Actions>
 </PanelPageHeader>
 @if (!Session.Connected)
 {
@@ -26,11 +31,12 @@ else if (loading)
 }
 else if (accounts is not null)
 {
+    @if (operationMessage is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@operationMessage</MudAlert> }
     <MudPaper Class="pa-4 my-3" Elevation="1">
         <div class="dashboard-section-heading"><h2>@L["All accessible accounts"]</h2><MudChip T="string" Size="Size.Small" Color="Color.Success">@accounts.Count accounts</MudChip></div>
         <label for="userFilter">@L["Search users"]</label>
         <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="userFilter" Placeholder="@L["Search username or owner…"].Value" />
-        <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>Account</th><th>@L["Role"]</th><th>@L["Created by"]</th><th>@L["Domains"]</th></tr></thead>
+        <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>Account</th><th>@L["Role"]</th><th>@L["Created by"]</th><th>@L["Domains"]</th><th>@L["Actions"]</th></tr></thead>
         <tbody>
         @foreach (var item in Visible)
         {
@@ -39,12 +45,24 @@ else if (accounts is not null)
                 <td><MudChip T="string" Size="Size.Small" Color="Color.Default">@item.Account.Role</MudChip></td>
                 <td>@(item.Account.Creator ?? "—")</td>
                 <td><a href="@($"/domains?user={Uri.EscapeDataString(item.Account.Username)}")">@L["View domains"]</a></td>
+                <td>
+                    @if (!item.Account.Role.Equals("admin", StringComparison.OrdinalIgnoreCase) &&
+                        !item.Account.Username.Equals(Session.Username, StringComparison.OrdinalIgnoreCase))
+                    {
+                        <MudTooltip Text="@L["Delete user"].Value">
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                                           Size="Size.Small" Disabled="@mutating"
+                                           OnClick="@(() => ConfirmDelete(item.Account))"
+                                           aria-label="@L["Delete user"].Value" />
+                        </MudTooltip>
+                    }
+                </td>
             </tr>
         }
         </tbody></MudSimpleTable>
         @if (accounts.Count == 0) { <PanelEmptyState>@L["No accounts returned by DirectAdmin."]</PanelEmptyState> }
     </MudPaper>
-    <div id="account-create"><AccountActions Kind="user" /></div>
+
 }
 @code {
     private sealed record Account(string Username, string Role, string? Creator);
@@ -53,6 +71,8 @@ else if (accounts is not null)
     private string search = "";
     private string? error;
     private bool loading;
+    private bool mutating;
+    private string? operationMessage;
 
     private IEnumerable<TreeItem> Visible => Ordered().Where(item =>
         item.Account.Username.Contains(search, StringComparison.OrdinalIgnoreCase) ||
@@ -83,6 +103,45 @@ else if (accounts is not null)
                 foreach (var item in Descendants(child, depth + 1))
                     yield return item;
         }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        if (mutating || !Session.Connected) return;
+        operationMessage = null;
+        var dialog = await Dialogs.ShowAsync<UserCreateDialog>(
+            L["Create user"].Value,
+            new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await Load();
+    }
+
+    private async Task ConfirmDelete(Account account)
+    {
+        if (mutating || !Session.Connected) return;
+        var kind = account.Role.Equals("reseller", StringComparison.OrdinalIgnoreCase) ? "reseller" : "user";
+        if (account.Role.Equals("admin", StringComparison.OrdinalIgnoreCase) ||
+            account.Username.Equals(Session.Username, StringComparison.OrdinalIgnoreCase)) return;
+        var identity = Session.Username;
+        var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+            $"{L["Delete account"]}: {account.Username}", account.Username,
+            L["Deleting this account is irreversible. All associated data will be removed."].Value,
+            L["Confirm account name"].Value);
+        if (!confirmed || !Session.Connected || !string.Equals(identity, Session.Username, StringComparison.Ordinal))
+            return;
+        mutating = true;
+        operationMessage = null;
+        try
+        {
+            var (status, _) = await Session.DeleteHostingAccountAsync(kind, account.Username, account.Username);
+            if (status is >= 200 and < 300) await Load();
+            else operationMessage = L["Deletion not confirmed: backend HTTP {0}.", status].Value;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        {
+            operationMessage = ex.Message;
+        }
+        finally { mutating = false; }
     }
 
     protected override async Task OnInitializedAsync()
