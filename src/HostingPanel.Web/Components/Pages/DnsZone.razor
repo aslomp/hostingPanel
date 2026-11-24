@@ -6,14 +6,12 @@
 @inject IDialogService Dialogs
 
 <PageTitle>DNS — @Domain</PageTitle>
-<div class="page-header">
-    <div>
-        <div class="eyebrow"><a href="/domains">@L["Domains"]</a> / <a href="@($"/domains/{Uri.EscapeDataString(Domain)}")">@Domain</a> / DNS</div>
-        <h1>@L["DNS management"]</h1>
-        <p>Zone: <strong>@Domain</strong> — rechtstreeks uit DirectAdmin.</p>
-    </div>
-    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@busy">@L["Refresh"]</MudButton>
-</div>
+<PanelPageHeader>
+    <Breadcrumb><a href="/domains">@L["Domains"]</a> / <a href="@($"/domains/{Uri.EscapeDataString(Domain)}")">@Domain</a> / DNS</Breadcrumb>
+    <TitleContent>@L["DNS management"]</TitleContent>
+    <Description>Zone: <strong>@Domain</strong> — rechtstreeks uit DirectAdmin.</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@busy">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
 @if (!Session.Connected)
 {
     <div class="card">Verbind eerst via het <a href="/">dashboard</a>.</div>
@@ -22,8 +20,8 @@ else
 {
     <section class="card">
         <h2>DNS-records</h2>
-        @if (error is not null) { <p class="error" role="alert">@error</p> }
-        @if (busy) { <p role="status">@L["Loading DNS zone…"]</p> }
+        @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
+        @if (busy) { <PanelLoading>@L["Loading DNS zone…"]</PanelLoading> }
         @if (records is not null)
         {
             <p>@records.Count records gevonden.</p>

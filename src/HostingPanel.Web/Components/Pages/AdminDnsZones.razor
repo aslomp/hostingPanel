@@ -6,17 +6,15 @@
 @inject IDialogService Dialogs
 
 <PageTitle>@L["DNS management — HostingPanel"]</PageTitle>
-<div class="page-header">
-    <div>
-        <div class="eyebrow">@L["Server management / DNS"]</div>
-        <h1>@L["DNS management"]</h1>
-        <p>@L["All DNS zones exposed by the backend through DirectAdmin, including independently managed zones."]</p>
-    </div>
-    <div class="form-actions">
+<PanelPageHeader>
+    <Breadcrumb>@L["Server management / DNS"]</Breadcrumb>
+    <TitleContent>@L["DNS management"]</TitleContent>
+    <Description>@L["All DNS zones exposed by the backend through DirectAdmin, including independently managed zones."]</Description>
+    <Actions><div class="form-actions">
       <a href="#dns-create" class="btn">@L["＋ Add DNS zone"]</a>
       <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Reload" Disabled="@loading">@(loading ? "Laden…" : L["↻ Refresh"].Value)</MudButton>
-    </div>
-</div>
+    </div></Actions>
+</PanelPageHeader>
 @if (!Session.Connected)
 {
     <section class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</section>
@@ -42,8 +40,8 @@ else
                 <MudSelectItem T="string" Value='@("no")'>@L["Disabled"]</MudSelectItem>
             </MudSelect>
         </div>
-        @if (error is not null) { <p class="error" role="alert">@error</p> }
-        @if (loading) { <p role="status">@L["Retrieving DNS zones…"]</p> }
+        @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
+        @if (loading) { <PanelLoading>@L["Retrieving DNS zones…"]</PanelLoading> }
         @if (zones is not null)
         {
             <p>@Visible.Count DNS-zone(s) gevonden. @(warning is null ? "" : "Inventarisatie mogelijk onvolledig: " + warning)</p>

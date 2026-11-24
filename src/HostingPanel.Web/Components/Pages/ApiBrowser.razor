@@ -4,8 +4,13 @@
 @inject DirectAdminSession Session
 
 <PageTitle>API — HostingPanel</PageTitle>
-<div class="page-header"><div><div class="eyebrow">@L["Integration"]</div><h1>DirectAdmin API</h1><p>@L["View modern DirectAdmin-compatible HostingPanel API responses."]</p></div></div>
-<div class="card"><p><a href="@SwaggerUrl" target="_blank" rel="noopener noreferrer">@L["Complete Swagger documentation (274 API paths)"]</a></p><p>@L["The complete pinned DirectAdmin specification; not every operation is implemented in HostingPanel yet."]</p></div>
+<PanelPageHeader>
+    <Breadcrumb>@L["Integration"]</Breadcrumb>
+    <TitleContent>DirectAdmin API</TitleContent>
+    <Description>@L["View modern DirectAdmin-compatible HostingPanel API responses."]</Description>
+    <Actions></div>
+<div class="card"><p><a href="@SwaggerUrl" target="_blank" rel="noopener noreferrer">@L["Complete Swagger documentation (274 API paths)"]</a></p><p>@L["The complete pinned DirectAdmin specification; not every operation is implemented in HostingPanel yet."]</p></Actions>
+</PanelPageHeader>
 @if (!Session.Connected) { <div class="card">Verbind eerst via het <a href="/">dashboard</a>.</div> }
 else
 {

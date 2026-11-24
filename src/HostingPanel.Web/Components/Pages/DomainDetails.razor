@@ -7,14 +7,12 @@
 @implements IDisposable
 
 <PageTitle>@Domain — Domeinbeheer</PageTitle>
-<div class="page-header">
-    <div>
-        <div class="eyebrow"><a href="/domains">@L["Domain management"]</a> / Details</div>
-        <h1>@Domain</h1>
-        <p>@L["Domain configuration and settings."] <a href="@($"/domains/{Uri.EscapeDataString(Domain)}/dns")">@L["Manage DNS records"]</a></p>
-    </div>
-    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Refresh" Disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton>
-</div>
+<PanelPageHeader>
+    <Breadcrumb><a href="/domains">@L["Domain management"]</a> / Details</Breadcrumb>
+    <TitleContent>@Domain</TitleContent>
+    <Description>@L["Domain configuration and settings."] <a href="@($"/domains/{Uri.EscapeDataString(Domain)}/dns")">@L["Manage DNS records"]</a></Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Refresh" Disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton></Actions>
+</PanelPageHeader>
 
 @if (!Session.Connected)
 {
@@ -30,7 +28,7 @@ else
     {
         <div class="card">
             <h2>@L["Data unavailable"]</h2>
-            <p class="error" role="alert">@error</p>
+            <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert>
             <p>@L["The backend evaluates read and write operations separately."]</p>
         </div>
     }

@@ -6,9 +6,12 @@
 @implements IDisposable
 <PageTitle>@L["Messages — HostingPanel"]</PageTitle>
 
-<div class="page-header"><div><div class="eyebrow">@L["Support / Messages"]</div><h1>@L["Messages"]</h1>
-    <p>@L["Messages from DirectAdmin. New items appear through the SignalR notification in the navigation bar."]</p></div>
-    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="Load">@L["↻ Refresh"]</MudButton></div>
+<PanelPageHeader>
+    <Breadcrumb>@L["Support / Messages"]</Breadcrumb>
+    <TitleContent>@L["Messages"]</TitleContent>
+    <Description>@L["Messages from DirectAdmin. New items appear through the SignalR notification in the navigation bar."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="Load">@L["↻ Refresh"]</MudButton></Actions>
+</PanelPageHeader>
 @if (!Session.Connected)
 {
     <section class="card">Maak verbinding via het <a href="/">dashboard</a>.</section>
@@ -18,8 +21,8 @@ else
     <section class="card">
         <label for="messageSearch">@L["Search messages"]</label>
         <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="messageSearch" />
-        @if (loading) { <p role="status">@L["Retrieving messages…"]</p> }
-        @if (error is not null) { <p class="error" role="alert">@error</p> }
+        @if (loading) { <PanelLoading>@L["Retrieving messages…"]</PanelLoading> }
+        @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
         @if (messages is not null)
         {
             <MudSimpleTable Dense="true" Hover="true" Striped="true"><thead><tr><th>@L["Subject"]</th><th>@L["Sender"]</th><th>@L["Received"]</th><th>Status</th></tr></thead>

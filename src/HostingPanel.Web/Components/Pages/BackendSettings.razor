@@ -6,11 +6,12 @@
 @inject DirectAdminSession Session
 
 <PageTitle>@L[NameserversOnly ? "Name servers" : IpOnly ? "IP management" : "Backend settings"] — HostingPanel</PageTitle>
-<div class="page-header">
-    <div><div class="eyebrow">@L["Server management"]</div><h1>@L[NameserversOnly ? "Name servers" : IpOnly ? "IP management" : "Backend settings"]</h1>
-        <p>@L[NameserversOnly ? "Default nameservers assigned to new users." : IpOnly ? "Manage hosting IP addresses." : "Configuration contract of the active backend."]</p></div>
-    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || !Session.Connected)" OnClick="Load">@L["Refresh"]</MudButton>
-</div>
+<PanelPageHeader>
+    <Breadcrumb>@L["Server management"]</Breadcrumb>
+    <TitleContent>@L[NameserversOnly ? "Name servers" : IpOnly ? "IP management" : "Backend settings"]</TitleContent>
+    <Description>@L[NameserversOnly ? "Default nameservers assigned to new users." : IpOnly ? "Manage hosting IP addresses." : "Configuration contract of the active backend."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || !Session.Connected)" OnClick="Load">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
 @if (!Session.Connected)
 {
     <section class="card"><a href="/">@L["Connect first via the dashboard."]</a></section>
@@ -126,7 +127,7 @@ else
                             }
                             @if (errors.TryGetValue(field.Name, out var fieldErrors))
                             {
-                                @foreach (var error in fieldErrors) { <p class="error" role="alert">@error</p> }
+                                @foreach (var error in fieldErrors) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
                             }
                         </div>
                     }

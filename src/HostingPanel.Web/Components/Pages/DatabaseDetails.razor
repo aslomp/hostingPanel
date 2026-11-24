@@ -7,13 +7,12 @@
 @inject NavigationManager Navigation
 
 <PageTitle>@Database — Databasebeheer</PageTitle>
-<div class="page-header">
-  <div><div class="eyebrow"><a href="/databases">@L["Database management"]</a> / Details</div>
-    <h1>@Database</h1>
-    <p>@L["Database users and management operations through DirectAdmin."]</p>
-  </div>
-  <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="Load">@L["Refresh"]</MudButton>
-</div>
+<PanelPageHeader>
+    <Breadcrumb><a href="/databases">@L["Database management"]</a> / Details</Breadcrumb>
+    <TitleContent>@Database</TitleContent>
+    <Description>@L["Database users and management operations through DirectAdmin."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="Load">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
 @if(!Session.Connected)
 {
   <section class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</section>
@@ -22,8 +21,8 @@ else
 {
   <section class="card">
     <h2>@L["Database users"]</h2>
-    @if(error is not null) { <p class="error" role="alert">@error</p> }
-    @if(loading) { <p role="status">@L["Loading users…"]</p> }
+    @if(error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
+    @if(loading) { <PanelLoading>@L["Loading users…"]</PanelLoading> }
     @if(users is not null)
     {
       <MudSimpleTable Dense="true" Hover="true" Striped="true"><thead><tr><th>@L["Username"]</th></tr></thead>
