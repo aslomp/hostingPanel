@@ -5,22 +5,6 @@ using Microsoft.AspNetCore.Mvc;
 namespace HostingPanel.Api;
 
 /// <summary>A request-scoped backend facade. Controllers never construct transport adapters.</summary>
-public interface IHostingBackend
-{
-    AccountCatalogService AccountCatalog { get; }
-    AccountMutationService AccountMutations { get; }
-    AccessibleDomainsService AccessibleDomains { get; }
-    LegacyUserDetailsService LegacyUserDetails { get; }
-    LegacyAccountOverviewService LegacyAccountOverview { get; }
-    ImpersonationService Impersonation { get; }
-    DatabaseManagementService Databases { get; }
-    AccessibleDatabasesService AccessibleDatabases { get; }
-    DomainManagementService Domains { get; }
-    DnsZoneService Dns { get; }
-    FileAccessService FileAccess { get; }
-    IHttpClientFactory Clients { get; }
-}
-
 public sealed class DirectAdminBackend(
     AccountCatalogService accountCatalog,
     AccountMutationService accountMutations,
@@ -35,18 +19,18 @@ public sealed class DirectAdminBackend(
     FileAccessService fileAccess,
     IHttpClientFactory clients) : IHostingBackend
 {
-    public AccountCatalogService AccountCatalog => accountCatalog;
-    public AccountMutationService AccountMutations => accountMutations;
-    public AccessibleDomainsService AccessibleDomains => accessibleDomains;
-    public LegacyUserDetailsService LegacyUserDetails => legacyUserDetails;
-    public LegacyAccountOverviewService LegacyAccountOverview => legacyAccountOverview;
-    public ImpersonationService Impersonation => impersonation;
-    public DatabaseManagementService Databases => databases;
-    public AccessibleDatabasesService AccessibleDatabases => accessibleDatabases;
-    public DomainManagementService Domains => domains;
-    public DnsZoneService Dns => dns;
-    public FileAccessService FileAccess => fileAccess;
-    public IHttpClientFactory Clients => clients;
+    public IAccountCatalog AccountCatalog => accountCatalog;
+    public IAccountMutations AccountMutations => accountMutations;
+    public IAccessibleDomains AccessibleDomains => accessibleDomains;
+    public IUserDetails UserDetails => legacyUserDetails;
+    public IAccountOverview AccountOverview => legacyAccountOverview;
+    public IImpersonation Impersonation => impersonation;
+    public IDatabases Databases => databases;
+    public IAccessibleDatabases AccessibleDatabases => accessibleDatabases;
+    public IDomains Domains => domains;
+    public IDns Dns => dns;
+    public IFileAccess FileAccess => fileAccess;
+    public Task ForwardAsync(HttpContext context) => BackendController.ForwardToBackendAsync(context, clients);
 }
 
 public abstract class BackendController : ControllerBase
@@ -78,7 +62,7 @@ public abstract class BackendController : ControllerBase
         || header.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)
         || header.Equals("Upgrade", StringComparison.OrdinalIgnoreCase);
 
-    protected static async Task ForwardToBackendAsync(HttpContext context, IHttpClientFactory clients)
+    internal static async Task ForwardToBackendAsync(HttpContext context, IHttpClientFactory clients)
     {
         // Authentication and authorization for official DirectAdmin routes belong
         // to the backend. In particular, login/logout may not have Basic credentials.
