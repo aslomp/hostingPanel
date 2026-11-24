@@ -6,6 +6,7 @@ namespace HostingPanel.Api.Services;
 /// <summary>Queries each account exposed by DirectAdmin; no local role or owner filter.</summary>
 public sealed class AccessibleDomainsService(
     AccountCatalogService accounts, DomainManagementService domains)
+: IAccessibleDomains
 {
     private static string EffectiveAccount(AuthenticationHeaderValue authorization)
     {
