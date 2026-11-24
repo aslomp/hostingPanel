@@ -33,8 +33,8 @@ else
                 {
                     <tr><td><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="() => OpenMessage(item)">@Text(item, "subject")</MudButton></td>
                         <td>@Text(item, "fromName")</td><td>@Text(item, "timestamp")</td>
-                        <td><span class="status-pill @(Flag(item, "unread") ? "warning" : "muted")">
-                            @(Flag(item, "unread") ? "Nieuw" : "Gelezen")</span></td></tr>
+                        <td><MudChip T="string" Size="Size.Small" Color="@(Flag(item, "unread") ? Color.Warning : Color.Default)">
+                            @(Flag(item, "unread") ? "Nieuw" : "Gelezen")</MudChip></td></tr>
                 }
             </tbody></MudSimpleTable>
         }
@@ -45,7 +45,7 @@ else
             <h2>@Text(selected.Value, "subject")</h2>
             <p>Van @Text(selected.Value, "fromName") · @Text(selected.Value, "timestamp")</p>
             <p class="ticket-message">@Text(selected.Value, "message")</p>
-            <div class="form-actions"><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Close">@L["Close"]</MudButton></div>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mt-3"><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Close">@L["Close"]</MudButton></MudStack>
         </MudPaper>
     }
 }

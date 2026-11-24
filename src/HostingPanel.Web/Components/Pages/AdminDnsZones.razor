@@ -59,6 +59,7 @@ else
                 }
                 </tbody>
             </MudSimpleTable>
+            @if (Visible.Count == 0) { <PanelEmptyState>@L["No DNS zones match this filter."]</PanelEmptyState> }
             <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
                 <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(loading || currentPage == 1)" OnClick="Previous">@L["Previous page"]</MudButton>
                 <span>Pagina @currentPage</span>

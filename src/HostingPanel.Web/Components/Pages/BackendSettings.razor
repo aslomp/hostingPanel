@@ -24,15 +24,15 @@ else
         <MudPaper Class="pa-4 my-3" Elevation="1">
             @if (IpOnly && view.Fields.Any(f => f.Name == "IpAddresses"))
             {
-                <div class="form-actions"><MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddIp" Disabled="@busy">+ @L["Add IP"]</MudButton></div>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mt-3"><MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddIp" Disabled="@busy">+ @L["Add IP"]</MudButton></MudStack>
                 <h2>@L["IP addresses"]</h2>
-                <div class="form-actions">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mt-3">
                     <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick='() => SetSelectedStatus("shared")'>@L["Share"]</MudButton>
                     <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick='() => SetSelectedStatus("available")'>@L["Available"]</MudButton>
                     <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="ClearSelectedNs">@L["Clear NS"]</MudButton>
                     <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="ToggleGlobal">@L["Toggle global"]</MudButton>
                     <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@busy" OnClick="DeleteSelected">@L["Delete"]</MudButton>
-                </div>
+                </MudStack>
                 <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true">
                     <thead><tr><th></th><th>IP</th><th>@L["Status"]</th><th>@L["Device"]</th><th>@L["Resellers"]</th><th>@L["Users"]</th><th>@L["Global"]</th><th>@L["Name server"]</th><th>@L["Netmask"]</th><th></th></tr></thead>
                     <tbody>
@@ -64,11 +64,11 @@ else
                     @foreach (var ip in addresses.Where(x => x.Status is "server" or "shared"))
                     { <MudSelectItem T="string" Value='@ip.Address'>@ip.Address</MudSelectItem> }
                 </MudSelect>
-                <div class="form-actions"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@busy" OnClick="Save">@L["Save settings"]</MudButton></div>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mt-3"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@busy" OnClick="Save">@L["Save settings"]</MudButton></MudStack>
             }
             @if (NameserversOnly && view.Fields.Any(f => f.Name == "IpAddresses"))
             {
-                <div class="form-actions"><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="() => editingNs = !editingNs">+ @L["Create nameservers"]</MudButton></div>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mt-3"><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="() => editingNs = !editingNs">+ @L["Create nameservers"]</MudButton></MudStack>
                 @if (editingNs)
                 {
                     <MudSelect T="string" @bind-Value="nsAddress" Margin="Margin.Dense"><MudSelectItem T="string" Value='@("")'>@L["Select IP"]</MudSelectItem>@foreach (var ip in addresses) { <MudSelectItem T="string" Value='@ip.Address'>@ip.Address</MudSelectItem> }</MudSelect>
@@ -132,7 +132,7 @@ else
                         </MudItem>
                     }
                 </MudGrid>
-                <div class="form-actions"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@busy" OnClick="Save">@L["Save settings"]</MudButton></div>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mt-3"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@busy" OnClick="Save">@L["Save settings"]</MudButton></MudStack>
             }
         </MudPaper>
     }

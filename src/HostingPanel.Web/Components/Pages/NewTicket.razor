@@ -32,10 +32,10 @@ else
         <MudTextField T="string" @bind-Value="subject" Required="true" RequiredError="@L["Subject"].Value" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketSubject" Placeholder="@L["Briefly describe the request"].Value" MaxLength="200" />
         <label for="ticketBody">@L["Message"]</label>
         <MudTextField T="string" @bind-Value="body" Required="true" RequiredError="@L["Message"].Value" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketBody" Placeholder="@L["Write the message…"].Value" Lines="10" MaxLength="65536" />
-        <div class="form-actions">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mt-3">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(sending || string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(body) || string.IsNullOrWhiteSpace(recipient))" OnClick="Send">@(sending ? "Verzenden…" : L["Send ticket"].Value)</MudButton>
             <a href="/tickets">@L["Cancel"]</a>
-        </div>
+        </MudStack>
         @if (feedback is not null) { <p role="status">@feedback</p> }
         </MudForm>
     </MudPaper>

@@ -54,13 +54,13 @@ else
             <MudTextField T="string" @bind-Value="replyMessage" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketReply" Lines="8" MaxLength="65536" />
             <label for="ticketTo">@L["Recipient"]</label>
             <MudTextField T="string" @bind-Value="recipient" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketTo" />
-            <div class="form-actions">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mt-3">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(sending || string.IsNullOrWhiteSpace(replyMessage) || string.IsNullOrWhiteSpace(recipient))" OnClick="SendReply">@L["Send reply"]</MudButton>
                 @if (Source == "received")
                 {
                     <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@sending" OnClick="ToggleStatus">@(IsOpen ? L["Close ticket"].Value : L["Reopen ticket"].Value)</MudButton>
                 }
-            </div>
+            </MudStack>
             @if (feedback is not null) { <p role="status">@feedback</p> }
         </MudPaper>
     }
