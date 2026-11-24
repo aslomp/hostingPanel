@@ -22,6 +22,12 @@ These instructions apply to the entire repository. Read [current architecture](d
 - DNS, website, certificate and cleanup work must remain retryable and idempotent. A queued operation or Kubernetes API acceptance is not proof of serving readiness.
 - Domain deletion requires explicit confirmation and cleanup of owned DNS, routes, certificates and files. Do not introduce quarantine or delete unrelated data.
 
+## DirectAdmin-specific work
+- Read docs/directadmin.md before changing any DirectAdmin capability or compatibility route. Inspect the corresponding service/adapter and pinned Swagger; do not infer support from Kubernetes behavior.
+- Preserve original/effective identity and upstream permission decisions. Keep official API forwarding separate from legacy adapters and /hosting workflows.
+- Verify legacy response semantics (including application-level errors), scope, partial inventories and independent read-back when appropriate. Never blindly replay ambiguous writes.
+- A new UI feature must be evaluated for both backends; document differences and unsupported functionality instead of silently implementing Kubernetes-only behavior.
+
 ## UI and maintainability
 - Use MudBlazor and existing shared page headers, dialogs, loading/error components and operation services. Keep Razor focused on presentation, not backend-specific transport or provisioning.
 - Overview pages show a table, create action above it, clickable detail rows and explicit delete actions with confirmation. Reuse components across user/reseller/profile workflows where semantics match.

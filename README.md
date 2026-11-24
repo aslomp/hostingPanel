@@ -25,7 +25,7 @@ Availability of individual operations depends on the selected backend. The inter
 
 Connect to an existing DirectAdmin installation over HTTPS. HostingPanel delegates operations to DirectAdmin using the caller's credentials, including delegated credentials when impersonation is supported. DirectAdmin remains authoritative for account permissions, resource ownership and hosting configuration.
 
-The provider uses modern API forwarding and legacy adapters where required. No local mirror of DirectAdmin's hosting database is required.
+The provider uses modern API forwarding and dedicated legacy adapters for accounts, resellers, websites, DNS, databases, FTP and support. DirectAdmin also handles server administration and TLS. No local mirror of DirectAdmin's hosting database is required. See the [DirectAdmin backend guide](docs/directadmin.md) for the concrete service map, API contracts and workflows.
 
 ### Kubernetes
 

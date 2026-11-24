@@ -37,7 +37,11 @@ The pinned official DirectAdmin Swagger lives at src/HostingPanel.Web/spec/direc
 
 The browser uses cookie authentication and a server-side panel session. The application validates session state and supplies effective credentials to operations. A UI action is not proof of resource permission.
 
-## Desired and observed state
+## DirectAdmin backend
+
+DirectAdmin is a full backend, not a compatibility-only stub. Its services own the translation of account/reseller, website/domain, DNS, database, FTP and support operations; server administration and TLS use official upstream routes. DirectAdmin performs the actual changes and supplies authoritative results. The local control-plane database is not a mirror. See [DirectAdmin backend](directadmin.md) for the concrete capability-to-service mapping, authentication, delegation, mutations, API and operational boundaries.
+
+## Desired and observed state (Kubernetes only)
 
 Kubernetes services persist desired resources and reconciliation operations. WebsiteReconciler manages website ConfigMaps/routes, shared PHP resources and cleanup; DnsReconciler handles deferred zone staging and PowerDNS publication; CertificateReconciler and ListenerSetReconciler manage certificate intent and TLS listener integration. Reconciliation is asynchronous. A 202 response means accepted intent, not operational availability.
 

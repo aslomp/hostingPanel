@@ -4,6 +4,8 @@
 
 IDNSProvider delegates inventory, zone and record operations to the DirectAdmin adapter. DirectAdmin owns the resource state and permissions. The application must preserve caller identity and distinguish upstream HTTP success from application-level rejection. The official Swagger includes ns1/ns2 in session user config; do not assume the modern profile PATCH supports those fields. Verify the documented account mutation and permissions before exposing an editor.
 
+The existing profile reads nameservers through DirectAdminAccountNameservers; write support is not implemented on audited main. See [DirectAdmin backend](directadmin.md) for the concrete upstream capability map and permission handling.
+
 ## Kubernetes domain provisioning
 
 Source: src/HostingPanel.Backends.Kubernetes/Backend/KubernetesProvisioningService.cs, method StageDomainDnsAsync. Called by account/domain creation and by deferred DNS reconciliation.

@@ -1,6 +1,6 @@
 # Backend capability inventory
 
-Source-reviewed against main at 86d7b279. "Implemented" means code exists, not that production acceptance has been demonstrated. DirectAdmin forwarded routes depend on upstream version and permissions; inspect actual responses. This is not a complete endpoint-by-endpoint conformance matrix.
+Source-reviewed against main at 510684cd. "Implemented" means code exists, not that production acceptance has been demonstrated. DirectAdmin forwarded routes depend on upstream version and permissions; inspect actual responses. This is not a complete endpoint-by-endpoint conformance matrix.
 
 | Capability | DirectAdmin | Kubernetes |
 | --- | --- | --- |
@@ -11,12 +11,16 @@ Source-reviewed against main at 86d7b279. "Implemented" means code exists, not t
 | Domain and website CRUD | Upstream domain lifecycle | SQLite intent, website reconciliation |
 | DNS zones and records | Upstream legacy adapters | SQLite CRUD and PowerDNS reconciliation when enabled |
 | Automatic DNS for new domains | Upstream | StageDomainDnsAsync; deferred retries for missing settings |
-| Account nameserver management | Upstream capabilities; verify specific operation | Existing IP/reseller/default resolution; no dedicated profile editor on audited main |
+| Account nameserver management | Read-only own profile via upstream session config; editing not implemented | Existing IP/reseller/default resolution; profile displays effective nameservers (read-only) |
 | TLS / ACME | Upstream operations | cert-manager Certificate reconciliation and optional existing ListenerSet integration |
 | Database inventory | Upstream | SQLite inventory; real database runtime provisioning not established |
 | File access | Upstream operations where supported | Inspect service support; not proof of deployed SSH/SFTP authentication |
 | Tickets | Upstream | SQLite ticket service |
 | General modern /api compatibility | Explicit forwarding | Compatibility handler returns 501 for unsupported calls |
+
+## DirectAdmin server administration
+
+Official server settings, TLS/ACME, sessions, service actions, updates, system information, security and packages are routed to DirectAdmin; upstream version and authorization determine success. Legacy services implement resource operations separately. See the [DirectAdmin backend guide](directadmin.md) for concrete endpoints, services and UI boundaries.
 
 ## Validation boundaries
 

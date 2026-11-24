@@ -13,7 +13,11 @@
 
 KubernetesSettingsService.GetEffectiveSettingsAsync reads the saved JSON, filling supported missing keys from deployment defaults. Startup configuration is authoritative only when no persisted value exists (or for missing keys). GET /hosting/backend-settings returns schema, values and revision; PUT validates the complete replacement and checks revision, permissions and IP constraints. Unsupported providers may return 501.
 
-## DNS and IP settings
+## DirectAdmin configuration
+
+DirectAdmin:BaseUrl and HostingPanel:Backend select a fixed upstream and its adapter. The caller's session credentials authorize operations. Server configuration, nameservers, IP allocation, account settings, packages and hosting resources remain on DirectAdmin. Use the documented upstream operations, not KubernetesBackendSettings or local account rows. See [DirectAdmin backend](directadmin.md).
+
+## DNS and IP settings (Kubernetes)
 
 DnsAutoCreateZones, DnsWebIp, DnsNs1, DnsNs2 and IpAddresses live in KubernetesBackendSettings. Each HostingIpAddress carries Address, PrefixLength, Status, Device, NameServer, Global, Resellers and AssignedUsers. Server administration manages IPs and nameservers through existing BackendSettings screens. Nameserver resolution consumes these existing relationships; they also participate in hosting-IP allocation, so changes cannot be treated as independent nameserver assignments. See [DNS](dns.md).
 
