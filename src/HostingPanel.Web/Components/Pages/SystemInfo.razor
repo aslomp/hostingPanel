@@ -4,7 +4,7 @@
 @using System.Text.Json
 @inject DirectAdminSession Session
 <PageTitle>@L["System information — HostingPanel"]</PageTitle>
-<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>@L["System information"]</h1><p>@L["Live information from the connected backend."]</p></div><button disabled="@busy" @onclick="Refresh">@L["Refresh"]</button></div>
+<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>@L["System information"]</h1><p>@L["Live information from the connected backend."]</p></div><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Refresh">@L["Refresh"]</MudButton></div>
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {

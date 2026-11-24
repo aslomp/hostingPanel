@@ -4,7 +4,7 @@
 @using System.Text.Json
 @inject DirectAdminSession Session
 <PageTitle>@L["Server settings — HostingPanel"]</PageTitle>
-<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>@L["Server settings"]</h1><p>@L["DirectAdmin configuration and server settings through the official API."]</p></div><button disabled="@busy" @onclick="Load">@L["Refresh"]</button></div>
+<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>@L["Server settings"]</h1><p>@L["DirectAdmin configuration and server settings through the official API."]</p></div><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></div>
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {
@@ -19,7 +19,7 @@ else
             <option value="api/server-settings/email/outbound-filter">@L["Outbound mail filter"]</option>
             <option value="api/server-settings/timezone/current">@L["Time zone"]</option>
         </select>
-        <button disabled="@busy" @onclick="Load">@L["Retrieve configuration"]</button>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Retrieve configuration"]</MudButton>
         <p>@message</p>
         <JsonOverview Json="@result" />
     </section>
@@ -35,7 +35,7 @@ else
         <h2>@L["Test or change database connection"]</h2>
         <p>@L["Complete the official DirectAdmin database configuration contract. A test does not save settings."]</p>
         <textarea rows="10" @bind="dbConfigJson" spellcheck="false"></textarea>
-        <button disabled="@busy" @onclick="TestDatabaseConfig">@L["Test connection"]</button>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="TestDatabaseConfig">@L["Test connection"]</MudButton>
         <label>@L["Enter SAVE DB to replace database configuration"]</label>
         <input @bind="dbConfirmation" />
         <button disabled="@(busy || dbConfirmation != "SAVE DB")" @onclick="SaveDatabaseConfig">@L["Save database configuration"]</button>
@@ -49,7 +49,7 @@ else
     <section class="card">
         <h2>@L["Change time zone"]</h2>
         <label>@L["Time zone (IANA)"]</label><input @bind="timezone" placeholder="Europe/Amsterdam" />
-        <button disabled="@busy" @onclick="ListTimezones">@L["Retrieve available time zones"]</button>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="ListTimezones">@L["Retrieve available time zones"]</MudButton>
         <JsonOverview Json="@timezones" />
         <label>@L["Enter TIMEZONE to confirm"]</label><input @bind="timezoneConfirmation" />
         <button disabled="@(busy || string.IsNullOrWhiteSpace(timezone) || timezoneConfirmation != "TIMEZONE")" @onclick="ChangeTimezone">@L["Change time zone"]</button>
