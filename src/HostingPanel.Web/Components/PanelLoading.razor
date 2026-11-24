@@ -1,0 +1,8 @@
+<div role="status" aria-live="polite">
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="my-2" />
+    <MudText Typo="Typo.body2">@ChildContent</MudText>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

@@ -53,7 +53,15 @@ jobs:
           curl -fsS --user "$BOOTSTRAP_USERNAME:$BOOTSTRAP_PASSWORD" "http://127.0.0.1:8080/hosting/accounts" | grep -q testadmin
           test "$(curl -sS -o /dev/null -w '%{http_code}' --user testadmin:wrong "http://127.0.0.1:8080/hosting/accounts")" = 401
           docker compose restart web
-          curl --retry 10 --retry-connrefused --retry-delay 2 -fsS "http://127.0.0.1:8080/healthz"
+          ready=false
+          for attempt in {1..60}; do
+            if curl --connect-timeout 2 --max-time 5 -fsS "http://127.0.0.1:8080/healthz"; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = true
           curl -fsS --user "$BOOTSTRAP_USERNAME:$BOOTSTRAP_PASSWORD" "http://127.0.0.1:8080/hosting/accounts" | grep -q testadmin
       - name: Cleanup
         if: always()

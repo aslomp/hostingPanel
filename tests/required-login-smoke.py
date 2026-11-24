@@ -96,10 +96,10 @@ def main():
                 location = urllib.parse.urlsplit(headers["Location"])
                 assert location.path == "/login"
                 assert urllib.parse.parse_qs(location.query)["ReturnUrl"] == [path]
-                assert 'class="shell"' not in html
+                assert 'mud-layout' not in html
 
             status, _, html = request("GET", "/login?ReturnUrl=%2Fusers")
-            assert status == 200 and 'action="/login"' in html and 'class="shell"' not in html
+            assert status == 200 and 'action="/login"' in html and 'mud-layout' not in html
             fields = FormParser(html).fields
             assert fields.get("__RequestVerificationToken")
             assert request("POST", "/login", {"username": "testuser", "password": "test-password"})[0] == 400
@@ -115,9 +115,9 @@ def main():
             # Explicit cookie forwarding on loopback HTTP tests the server session;
             # deployed browsers only transmit this secure cookie over HTTPS.
             status, _, html = request("GET", "/")
-            assert status == 200 and 'class="shell"' in html and "testuser" in html
+            assert status == 200 and 'mud-layout' in html and "testuser" in html
             status, _, html = request("GET", "/")
-            assert status == 200 and 'class="shell"' in html
+            assert status == 200 and 'mud-layout' in html
             logout = FormParser(html).fields
             assert logout.get("__RequestVerificationToken")
             assert request("POST", "/logout", {})[0] == 400

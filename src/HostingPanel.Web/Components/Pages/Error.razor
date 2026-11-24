@@ -2,8 +2,8 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/error"
 <PageTitle>@L["Error — HostingPanel"]</PageTitle>
-<div class="card" role="alert">
+<MudAlert Severity="Severity.Error" Class="my-4">
     <h1>@L["An error occurred"]</h1>
     <p>@L["The request cannot be processed right now. Try again or check server logs."]</p>
     <a href="/">@L["Return to dashboard"]</a>
-</div>
+</MudAlert>

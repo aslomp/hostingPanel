@@ -3,50 +3,49 @@
 @page "/dns-zones"
 @using System.Text.Json
 @inject DirectAdminSession Session
+@inject IDialogService Dialogs
 
 <PageTitle>@L["DNS management — HostingPanel"]</PageTitle>
-<div class="page-header">
-    <div>
-        <div class="eyebrow">@L["Server management / DNS"]</div>
-        <h1>@L["DNS management"]</h1>
-        <p>@L["All DNS zones exposed by the backend through DirectAdmin, including independently managed zones."]</p>
-    </div>
-    <div class="form-actions">
-      <a href="#dns-create" class="btn">@L["＋ Add DNS zone"]</a>
-      <button @onclick="Reload" disabled="@loading">@(loading ? "Laden…" : L["↻ Refresh"].Value)</button>
-    </div>
-</div>
+<PanelPageHeader>
+    <Breadcrumb>@L["Server management / DNS"]</Breadcrumb>
+    <TitleContent>@L["DNS management"]</TitleContent>
+    <Description>@L["All DNS zones exposed by the backend through DirectAdmin, including independently managed zones."]</Description>
+    <Actions><MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+      <MudButton Href="#dns-create" Variant="Variant.Filled" Color="Color.Primary">@L["＋ Add DNS zone"]</MudButton>
+      <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Reload" Disabled="@loading">@(loading ? L["Loading…"].Value : L["↻ Refresh"].Value)</MudButton>
+    </MudStack></Actions>
+</PanelPageHeader>
 @if (!Session.Connected)
 {
-    <section class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</section>
+    <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
 }
 else
 {
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <div class="dashboard-section-heading">
           <h2>DNS-zones</h2>
-          @if (zones is not null) { <span class="status-pill good">@zones.Count zones</span> }
+          @if (zones is not null) { <MudChip T="string" Size="Size.Small" Color="Color.Success">@zones.Count zones</MudChip> }
         </div>
         <label for="dnsSearch">@L["Search DNS zones"]</label>
-        <input id="dnsSearch" type="search" @bind="search" @bind:event="oninput" placeholder="@L["Search domain name…"]" />
-        <div class="domain-options">
+        <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dnsSearch" Placeholder="@L["Search domain name…"].Value" />
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
             <label for="localData">@L["Local data"]</label>
-            <select id="localData" @bind="localDataFilter">
-                <option value="all">@L["Both"]</option><option value="yes">@L["Enabled"]</option>
-                <option value="no">@L["Disabled"]</option>
-            </select>
+            <MudSelect T="string" @bind-Value="localDataFilter" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="localData">
+                <MudSelectItem T="string" Value='@("all")'>@L["Both"]</MudSelectItem><MudSelectItem T="string" Value='@("yes")'>@L["Enabled"]</MudSelectItem>
+                <MudSelectItem T="string" Value='@("no")'>@L["Disabled"]</MudSelectItem>
+            </MudSelect>
             <label for="localMail">@L["Local mail"]</label>
-            <select id="localMail" @bind="localMailFilter">
-                <option value="all">@L["Both"]</option><option value="yes">@L["Enabled"]</option>
-                <option value="no">@L["Disabled"]</option>
-            </select>
-        </div>
-        @if (error is not null) { <p class="error" role="alert">@error</p> }
-        @if (loading) { <p role="status">@L["Retrieving DNS zones…"]</p> }
+            <MudSelect T="string" @bind-Value="localMailFilter" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="localMail">
+                <MudSelectItem T="string" Value='@("all")'>@L["Both"]</MudSelectItem><MudSelectItem T="string" Value='@("yes")'>@L["Enabled"]</MudSelectItem>
+                <MudSelectItem T="string" Value='@("no")'>@L["Disabled"]</MudSelectItem>
+            </MudSelect>
+        </MudStack>
+        @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
+        @if (loading) { <PanelLoading>@L["Retrieving DNS zones…"]</PanelLoading> }
         @if (zones is not null)
         {
-            <p>@Visible.Count DNS-zone(s) gevonden. @(warning is null ? "" : "Inventarisatie mogelijk onvolledig: " + warning)</p>
-            <table>
+            <p>@L["DNS zones found: {0}.", Visible.Count] @(warning is null ? "" : L["Inventory may be incomplete: {0}", warning].Value)</p>
+            <MudSimpleTable Dense="true" Hover="true" Striped="true">
                 <thead><tr><th>@L["Domain"]</th><th>@L["Owner"]</th><th>@L["Local data"]</th><th>@L["Local mail"]</th></tr></thead>
                 <tbody>
                 @foreach (var zone in Visible.Skip((currentPage - 1) * PageSize).Take(PageSize))
@@ -54,38 +53,37 @@ else
                     <tr>
                         <td><a href="@($"/domains/{Uri.EscapeDataString(zone.Domain)}/dns")">@zone.Domain</a></td>
                         <td>@(string.IsNullOrWhiteSpace(zone.Owner) ? "—" : zone.Owner)</td>
-                        <td><span class="status-pill @(zone.LocalData is true ? "good" : "muted")">@Display(zone.LocalData)</span></td>
-                        <td><span class="status-pill @(zone.LocalMail is true ? "good" : "muted")">@Display(zone.LocalMail)</span></td>
+                        <td><MudChip T="string" Size="Size.Small" Color="@(zone.LocalData is true ? Color.Success : Color.Default)">@Display(zone.LocalData)</MudChip></td>
+                        <td><MudChip T="string" Size="Size.Small" Color="@(zone.LocalMail is true ? Color.Success : Color.Default)">@Display(zone.LocalMail)</MudChip></td>
                     </tr>
                 }
                 </tbody>
-            </table>
-            <div class="domain-options">
-                <button disabled="@(loading || currentPage == 1)" @onclick="Previous">@L["Previous page"]</button>
+            </MudSimpleTable>
+            @if (Visible.Count == 0) { <PanelEmptyState>@L["No DNS zones match this filter."]</PanelEmptyState> }
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(loading || currentPage == 1)" OnClick="Previous">@L["Previous page"]</MudButton>
                 <span>Pagina @currentPage</span>
-                <button disabled="@(loading || currentPage * PageSize >= Visible.Count)" @onclick="Next">@L["Next page"]</button>
-            </div>
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(loading || currentPage * PageSize >= Visible.Count)" OnClick="Next">@L["Next page"]</MudButton>
+            </MudStack>
         }
-    </section>
-    <section class="card" id="dns-create">
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1" id="dns-create">
         <h2>@L["Create standalone DNS zone"]</h2>
         <p>@L["Use the documented DirectAdmin DNS admin API. The backend checks permissions."]</p>
-        <div class="form-grid">
-          <div><label>@L["Domain"]</label><input @bind="zoneDomain" placeholder="example.com" /></div>
-          <div><label>@L["IPv4 address"]</label><input @bind="zoneIp" placeholder="192.0.2.1" /></div>
-          <div><label>Nameserver 1</label><input @bind="zoneNs1" placeholder="ns1.example.com" /></div>
-          <div><label>Nameserver 2</label><input @bind="zoneNs2" placeholder="ns2.example.com" /></div>
-        </div>
-        <div class="form-actions"><button class="primary" disabled="@(changing || string.IsNullOrWhiteSpace(zoneDomain))" @onclick="CreateZone">@L["Create DNS zone"]</button></div>
-    </section>
-    <section class="card">
+        <MudGrid Spacing="3">
+          <MudItem xs="12" sm="6"><label>@L["Domain"]</label><MudTextField T="string" @bind-Value="zoneDomain" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="example.com" /></MudItem>
+          <MudItem xs="12" sm="6"><label>@L["IPv4 address"]</label><MudTextField T="string" @bind-Value="zoneIp" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="192.0.2.1" /></MudItem>
+          <MudItem xs="12" sm="6"><label>Nameserver 1</label><MudTextField T="string" @bind-Value="zoneNs1" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="ns1.example.com" /></MudItem>
+          <MudItem xs="12" sm="6"><label>Nameserver 2</label><MudTextField T="string" @bind-Value="zoneNs2" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="ns2.example.com" /></MudItem>
+        </MudGrid>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(changing || string.IsNullOrWhiteSpace(zoneDomain))" OnClick="CreateZone">@L["Create DNS zone"]</MudButton></MudStack>
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Delete standalone DNS zone"]</h2>
         <p>@L["Delete only the specified DNS zone; this is not the same as deleting a hosting domain."]</p>
-        <label>@L["Domain"]</label><input @bind="deleteDomain" />
-        <label>@L["Enter the exact domain name to confirm"]</label><input @bind="zoneConfirmation" />
-        <button disabled="@(changing || string.IsNullOrWhiteSpace(deleteDomain) || deleteDomain != zoneConfirmation)"
-            @onclick="DeleteZone">@L["Delete DNS zone"]</button>
-    </section>
+        <label>@L["Domain"]</label><MudTextField T="string" @bind-Value="deleteDomain" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+        <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@(changing || string.IsNullOrWhiteSpace(deleteDomain))" OnClick="ConfirmDeletion">@L["Delete DNS zone"]</MudButton>
+    </MudPaper>
     @if (zoneMessage is not null) { <p role="status">@zoneMessage</p> }
 }
 @code {
@@ -164,7 +162,33 @@ else
         if (zoneMessage == L["DirectAdmin created the DNS zone."].Value) await Reload();
     }
 
-    private async Task DeleteZone()
+    private bool deleteDialogOpen;
+  private async Task ConfirmDeletion()
+  {
+      if (changing || !Session.Connected || deleteDialogOpen || string.IsNullOrWhiteSpace(deleteDomain)) return;
+      var target = deleteDomain;
+      var identity = Session.Username;
+      
+      deleteDialogOpen = true;
+      try
+      {
+          var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+              $"{L["Delete standalone DNS zone"]}: {target}", target,
+              L["Delete only the specified DNS zone; this is not the same as deleting a hosting domain."].Value,
+              L["Enter the exact domain name to confirm"].Value);
+          if (confirmed && Session.Connected &&
+              string.Equals(identity, Session.Username, StringComparison.Ordinal) &&
+              string.Equals(target, deleteDomain, StringComparison.Ordinal))
+          {
+              zoneConfirmation = target;
+              try { await DeleteZone(); }
+              finally { zoneConfirmation = ""; }
+          }
+      }
+      finally { deleteDialogOpen = false; }
+  }
+
+  private async Task DeleteZone()
     {
         if (changing || !Session.Connected || deleteDomain != zoneConfirmation) return;
         changing = true; zoneMessage = null;

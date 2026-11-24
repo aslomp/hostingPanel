@@ -4,20 +4,25 @@
 @using System.Text.Json
 @inject DirectAdminSession Session
 <PageTitle>@L["System information — HostingPanel"]</PageTitle>
-<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>@L["System information"]</h1><p>@L["Live information from the connected backend."]</p></div><button disabled="@busy" @onclick="Refresh">@L["Refresh"]</button></div>
-@if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
+<PanelPageHeader>
+    <Breadcrumb>@L["Server management"]</Breadcrumb>
+    <TitleContent>@L["System information"]</TitleContent>
+    <Description>@L["Live information from the connected backend."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Refresh">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
+@if (!Session.Connected) { <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper> }
 else
 {
-    @if (busy) { <p role="status">@L["Retrieving system information…"]</p> }
-    <div class="tiles">
+    @if (busy) { <PanelLoading>@L["Retrieving system information…"]</PanelLoading> }
+    <MudGrid Spacing="3">
         @foreach (var item in checks)
         {
-            <section class="card">
+            <MudItem xs="12" md="6"><MudPaper Class="pa-4 my-3" Elevation="1">
                 <h2>@item.Label</h2><p>HTTP @item.Status</p>
                 <JsonOverview Json="@item.Body" />
-            </section>
+            </MudPaper></MudItem>
         }
-    </div>
+    </MudGrid>
 }
 @code {
     private sealed record Check(string Label, string Endpoint, int Status, string Body);

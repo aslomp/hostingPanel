@@ -3,30 +3,29 @@
 @page "/domains/{Domain}/dns"
 @using System.Text.Json
 @inject DirectAdminSession Session
+@inject IDialogService Dialogs
 
 <PageTitle>DNS — @Domain</PageTitle>
-<div class="page-header">
-    <div>
-        <div class="eyebrow"><a href="/domains">@L["Domains"]</a> / <a href="@($"/domains/{Uri.EscapeDataString(Domain)}")">@Domain</a> / DNS</div>
-        <h1>@L["DNS management"]</h1>
-        <p>Zone: <strong>@Domain</strong> — rechtstreeks uit DirectAdmin.</p>
-    </div>
-    <button @onclick="Load" disabled="@busy">@L["Refresh"]</button>
-</div>
+<PanelPageHeader>
+    <Breadcrumb><a href="/domains">@L["Domains"]</a> / <a href="@($"/domains/{Uri.EscapeDataString(Domain)}")">@Domain</a> / DNS</Breadcrumb>
+    <TitleContent>@L["DNS management"]</TitleContent>
+    <Description>Zone: <strong>@Domain</strong> — @L["Directly from DirectAdmin."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@busy">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
 @if (!Session.Connected)
 {
-    <div class="card">Verbind eerst via het <a href="/">dashboard</a>.</div>
+    <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
 }
 else
 {
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>DNS-records</h2>
-        @if (error is not null) { <p class="error" role="alert">@error</p> }
-        @if (busy) { <p role="status">@L["Loading DNS zone…"]</p> }
+        @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
+        @if (busy) { <PanelLoading>@L["Loading DNS zone…"]</PanelLoading> }
         @if (records is not null)
         {
-            <p>@records.Count records gevonden.</p>
-            <table>
+            <p>@L["Records found: {0}.", records.Count]</p>
+            <MudSimpleTable Dense="true" Hover="true" Striped="true">
                 <thead><tr><th>Type</th><th>@L["Name"]</th><th>@L["Value"]</th><th>TTL</th><th>@L["Management"]</th></tr></thead>
                 <tbody>
                 @foreach (var record in records)
@@ -34,42 +33,38 @@ else
                     <tr>
                         <td>@record.Type</td><td>@record.Name</td><td>@record.Value</td><td>@record.Ttl</td>
                         <td>
-                            <button disabled="@busy" @onclick="() => Edit(record)">@L["Edit"]</button>
-                            <button disabled="@busy" @onclick="() => Remove(record)">@L["Delete"]</button>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="() => Edit(record)">@L["Edit"]</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@busy" OnClick="() => Remove(record)">@L["Delete"]</MudButton>
                         </td>
                     </tr>
                 }
                 </tbody>
-            </table>
+            </MudSimpleTable>
+            @if (records.Count == 0) { <PanelEmptyState>@L["No DNS records found."]</PanelEmptyState> }
         }
-    </section>
-    <section class="card">
-        <h2>@(action == "add" ? L["Add DNS record"].Value : action == "edit" ? L["Edit DNS record"].Value : L["Delete DNS record"].Value)</h2>
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <h2>@(action == "add" ? L["Add DNS record"].Value : L["Edit DNS record"].Value)</h2>
         <p>@L["DirectAdmin determines whether the change is permitted."]</p>
         <label for="dnsType">Type</label>
-        <select id="dnsType" @bind="type" disabled="@(action == "delete")">
+        <MudSelect T="string" @bind-Value="type" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="dnsType" Disabled="@(action == "delete")">
             @foreach (var item in new [] {"A","AAAA","CNAME","MX","TXT","SRV","CAA","NS","PTR","DS","TLSA"})
-            { <option value="@item">@item</option> }
-        </select>
+            { <MudSelectItem T="string" Value='@item'>@item</MudSelectItem> }
+        </MudSelect>
         <label for="dnsName">@L["Name"]</label>
-        <input id="dnsName" @bind="name" disabled="@(action == "delete")" placeholder="www" />
+        <MudTextField T="string" @bind-Value="name" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dnsName" Placeholder="www" Disabled="@(action == "delete")" />
         <label for="dnsValue">@L["Value"]</label>
-        <textarea id="dnsValue" @bind="value" disabled="@(action == "delete")" rows="3" />
+        <MudTextField T="string" @bind-Value="value" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dnsValue" Disabled="@(action == "delete")" Lines="3" />
         <label for="dnsTtl">@L["TTL (optional, 60–604800 seconds)"]</label>
-        <input id="dnsTtl" @bind="ttl" disabled="@(action == "delete")" />
-        @if (action == "delete")
-        {
-            <p>Bevestig het verwijderen van uitsluitend dit record door de naam exact te typen: <strong>@original?.Name</strong></p>
-            <input @bind="confirmation" placeholder="@L["Exact record name"]" autocomplete="off" />
-        }
-        <div class="domain-options">
-            <button class="primary" disabled="@(busy || action == "delete" && confirmation != original?.Name)" @onclick="Save">
-                @(busy ? "Bezig…" : action == "add" ? "Toevoegen" : action == "edit" ? L["Save change"].Value : L["Confirm deletion"].Value)
-            </button>
-            <button disabled="@busy" @onclick="Reset">@L["New record"]</button>
-        </div>
+        <MudTextField T="string" @bind-Value="ttl" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dnsTtl" Disabled="@(action == "delete")" />
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || deleteDialogOpen || action == "delete")" OnClick="Save">
+                @(busy ? "Bezig…" : action == "add" ? "Toevoegen" : L["Save change"].Value)
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Reset">@L["New record"]</MudButton>
+        </MudStack>
         @if (message is not null) { <p role="status">@message</p> }
-    </section>
+    </MudPaper>
 }
 @code {
     [Parameter] public string Domain { get; set; } = "";
@@ -128,10 +123,34 @@ else
         original = r; action = "edit"; type = r.Type; name = r.Name; value = r.Value;
         ttl = r.Ttl ?? ""; confirmation = ""; message = null;
     }
-    private void Remove(ZoneRecord r)
+    private bool deleteDialogOpen;
+    private async Task Remove(ZoneRecord r)
     {
-        original = r; action = "delete"; type = r.Type; name = r.Name;
-        value = r.Value; ttl = r.Ttl ?? ""; confirmation = ""; message = null;
+        if (busy || deleteDialogOpen || !Session.Connected || records?.Contains(r) != true) return;
+        var domain = Domain;
+        var identity = Session.Username;
+        deleteDialogOpen = true;
+        try
+        {
+            var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+                $"{L["Delete DNS record"]}: {r.Name}", r.Name,
+                L["Permanently delete this DNS record?"].Value,
+                L["Exact record name"].Value,
+                $"{domain} — {r.Type} {r.Name} {r.Value}");
+            if (!confirmed || busy || !Session.Connected ||
+                !string.Equals(identity, Session.Username, StringComparison.Ordinal) ||
+                !string.Equals(domain, Domain, StringComparison.Ordinal) ||
+                records?.Contains(r) != true) return;
+            original = r; action = "delete"; type = r.Type; name = r.Name;
+            value = r.Value; ttl = r.Ttl ?? ""; confirmation = r.Name;
+            try { await Save(); }
+            finally
+            {
+                confirmation = "";
+                if (action == "delete") { action = "edit"; }
+            }
+        }
+        finally { deleteDialogOpen = false; }
     }
     private void Reset()
     {
@@ -140,7 +159,7 @@ else
     }
     private async Task Save()
     {
-        if (busy || (action == "delete" && confirmation != original?.Name)) return;
+        if (busy || !Session.Connected || (action == "delete" && (original is null || confirmation != original.Name))) return;
         busy = true;
         message = null;
         try

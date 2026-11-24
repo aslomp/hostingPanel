@@ -1,3 +1,4 @@
+using MudBlazor.Services;
 using HostingPanel.Api;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -71,6 +72,7 @@ builder.Services.AddRateLimiter(options =>
         { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+builder.Services.AddMudServices();
 // Transitional same-host adapter until all UI operations use typed backend contracts.
 builder.Services.AddHttpClient("hosting-api", (services, client) =>
 {

@@ -6,44 +6,47 @@
 @implements IDisposable
 <PageTitle>@L["Messages — HostingPanel"]</PageTitle>
 
-<div class="page-header"><div><div class="eyebrow">@L["Support / Messages"]</div><h1>@L["Messages"]</h1>
-    <p>@L["Messages from DirectAdmin. New items appear through the SignalR notification in the navigation bar."]</p></div>
-    <button disabled="@loading" @onclick="Load">@L["↻ Refresh"]</button></div>
+<PanelPageHeader>
+    <Breadcrumb>@L["Support / Messages"]</Breadcrumb>
+    <TitleContent>@L["Messages"]</TitleContent>
+    <Description>@L["Messages from DirectAdmin. New items appear through the SignalR notification in the navigation bar."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="Load">@L["↻ Refresh"]</MudButton></Actions>
+</PanelPageHeader>
 @if (!Session.Connected)
 {
-    <section class="card">Maak verbinding via het <a href="/">dashboard</a>.</section>
+    <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
 }
 else
 {
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <label for="messageSearch">@L["Search messages"]</label>
-        <input id="messageSearch" type="search" @bind="search" @bind:event="oninput" />
-        @if (loading) { <p role="status">@L["Retrieving messages…"]</p> }
-        @if (error is not null) { <p class="error" role="alert">@error</p> }
+        <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="messageSearch" />
+        @if (loading) { <PanelLoading>@L["Retrieving messages…"]</PanelLoading> }
+        @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
         @if (messages is not null)
         {
-            <table><thead><tr><th>@L["Subject"]</th><th>@L["Sender"]</th><th>@L["Received"]</th><th>Status</th></tr></thead>
+            <MudSimpleTable Dense="true" Hover="true" Striped="true"><thead><tr><th>@L["Subject"]</th><th>@L["Sender"]</th><th>@L["Received"]</th><th>Status</th></tr></thead>
             <tbody>
                 @foreach (var item in messages.Value.EnumerateArray().Where(x =>
                     Text(x, "subject").Contains(search, StringComparison.OrdinalIgnoreCase) ||
                     Text(x, "fromName").Contains(search, StringComparison.OrdinalIgnoreCase)))
                 {
-                    <tr><td><button type="button" disabled="@loading" @onclick="() => OpenMessage(item)">@Text(item, "subject")</button></td>
+                    <tr><td><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="() => OpenMessage(item)">@Text(item, "subject")</MudButton></td>
                         <td>@Text(item, "fromName")</td><td>@Text(item, "timestamp")</td>
-                        <td><span class="status-pill @(Flag(item, "unread") ? "warning" : "muted")">
-                            @(Flag(item, "unread") ? "Nieuw" : "Gelezen")</span></td></tr>
+                        <td><MudChip T="string" Size="Size.Small" Color="@(Flag(item, "unread") ? Color.Warning : Color.Default)">
+                            @(Flag(item, "unread") ? "Nieuw" : "Gelezen")</MudChip></td></tr>
                 }
-            </tbody></table>
+            </tbody></MudSimpleTable>
         }
-    </section>
+    </MudPaper>
     @if (selected is not null)
     {
-        <section class="card">
+        <MudPaper Class="pa-4 my-3" Elevation="1">
             <h2>@Text(selected.Value, "subject")</h2>
             <p>Van @Text(selected.Value, "fromName") · @Text(selected.Value, "timestamp")</p>
             <p class="ticket-message">@Text(selected.Value, "message")</p>
-            <div class="form-actions"><button @onclick="Close">@L["Close"]</button></div>
-        </section>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mt-3"><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Close">@L["Close"]</MudButton></MudStack>
+        </MudPaper>
     }
 }
 @code {

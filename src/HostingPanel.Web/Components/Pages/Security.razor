@@ -3,40 +3,45 @@
 @page "/security"
 @inject DirectAdminSession Session
 <PageTitle>@L["Security — HostingPanel"]</PageTitle>
-<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>@L["Security"]</h1><p>@L["ModSecurity and ClamAV through the official DirectAdmin API."]</p></div><button disabled="@busy" @onclick="Load">@L["Refresh"]</button></div>
-@if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
+<PanelPageHeader>
+    <Breadcrumb>@L["Server management"]</Breadcrumb>
+    <TitleContent>@L["Security"]</TitleContent>
+    <Description>@L["ModSecurity and ClamAV through the official DirectAdmin API."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
+@if (!Session.Connected) { <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper> }
 else
 {
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>ModSecurity</h2>
         <label>@L["Configuration overview"]</label><JsonOverview Json="@modsecurity" />
         <label>@L["Audit logs — summary"]</label><JsonOverview Json="@audit" />
-    </section>
-    <section class="card">
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>ClamAV</h2>
         <p>@L["Active scan processes"]</p><JsonOverview Json="@clamav" />
         <h2>@L["Start scan"]</h2>
         <p>@L["Use a path that the DirectAdmin backend is permitted to scan. The backend validates the path and determines access."]</p>
-        <label>@L["Server path"]</label><input @bind="scanPath" placeholder="/home/..." />
-        <label>@L["Enter SCAN to confirm"]</label><input @bind="scanConfirmation" />
+        <label>@L["Server path"]</label><MudTextField T="string" @bind-Value="scanPath" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="/home/..." />
+        <label>@L["Enter SCAN to confirm"]</label><MudTextField T="string" @bind-Value="scanConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
         <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(scanPath) || scanConfirmation != "SCAN")" @onclick="Scan">@L["Start ClamAV scan"]</button>
         <h2>@L["Cancel scan"]</h2>
-        <label>@L["ClamAV process ID (PID)"]</label><input @bind="scanPid" />
-        <label>@L["Enter the same PID to confirm"]</label><input @bind="pidConfirmation" />
-        <button disabled="@(busy || string.IsNullOrWhiteSpace(scanPid) || scanPid != pidConfirmation)" @onclick="CancelScan">@L["Cancel scan"]</button>
-    </section>
-    <section class="card">
+        <label>@L["ClamAV process ID (PID)"]</label><MudTextField T="string" @bind-Value="scanPid" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+        <label>@L["Enter the same PID to confirm"]</label><MudTextField T="string" @bind-Value="pidConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || string.IsNullOrWhiteSpace(scanPid) || scanPid != pidConfirmation)" OnClick="CancelScan">@L["Cancel scan"]</MudButton>
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["ModSecurity for domain"]</h2>
-        <label>@L["Hostname"]</label><input @bind="hostname" placeholder="example.com" />
-        <button disabled="@busy" @onclick="LoadHostConfig">@L["Retrieve configuration"]</button>
+        <label>@L["Hostname"]</label><MudTextField T="string" @bind-Value="hostname" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="example.com" />
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="LoadHostConfig">@L["Retrieve configuration"]</MudButton>
         <JsonOverview Json="@hostConfig" />
         <label>@L["New domain configuration (JSON)"]</label>
-        <textarea rows="6" @bind="configJson" spellcheck="false"></textarea>
+        <MudTextField T="string" @bind-Value="configJson" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Lines="6" spellcheck="false" />
         <p>Vereist velden <code>engineEnabled</code> en <code>disabledRules</code>.</p>
-        <label>@L["Enter the hostname to confirm"]</label><input @bind="hostConfirmation" />
-        <button disabled="@(busy || hostname != hostConfirmation)" @onclick="SaveHostConfig">@L["Replace configuration"]</button>
-        <button disabled="@(busy || hostname != hostConfirmation)" @onclick="ResetHostConfig">@L["Restore default configuration"]</button>
-    </section>
+        <label>@L["Enter the hostname to confirm"]</label><MudTextField T="string" @bind-Value="hostConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || hostname != hostConfirmation)" OnClick="SaveHostConfig">@L["Replace configuration"]</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || hostname != hostConfirmation)" OnClick="ResetHostConfig">@L["Restore default configuration"]</MudButton>
+    </MudPaper>
     @if (feedback is not null) { <p role="status">@feedback</p> }
 }
 @code {

@@ -4,17 +4,21 @@
 @inject DirectAdminSession Session
 
 <PageTitle>API — HostingPanel</PageTitle>
-<div class="page-header"><div><div class="eyebrow">@L["Integration"]</div><h1>DirectAdmin API</h1><p>@L["View modern DirectAdmin-compatible HostingPanel API responses."]</p></div></div>
-<div class="card"><p><a href="@SwaggerUrl" target="_blank" rel="noopener noreferrer">@L["Complete Swagger documentation (274 API paths)"]</a></p><p>@L["The complete pinned DirectAdmin specification; not every operation is implemented in HostingPanel yet."]</p></div>
-@if (!Session.Connected) { <div class="card">Verbind eerst via het <a href="/">dashboard</a>.</div> }
+<PanelPageHeader>
+    <Breadcrumb>@L["Integration"]</Breadcrumb>
+    <TitleContent>DirectAdmin API</TitleContent>
+    <Description>@L["View modern DirectAdmin-compatible HostingPanel API responses."]</Description>
+    </PanelPageHeader>
+<MudPaper Class="pa-4 my-3" Elevation="1"><p><a href="@SwaggerUrl" target="_blank" rel="noopener noreferrer">@L["Complete Swagger documentation (274 API paths)"]</a></p><p>@L["The complete pinned DirectAdmin specification; not every operation is implemented in HostingPanel yet."]</p></MudPaper>
+@if (!Session.Connected) { <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper> }
 else
 {
-    <div class="card">
-        <label>Endpoint<input @bind="endpoint" /></label>
-        <button class="primary" @onclick="Fetch">@L["Retrieve"]</button>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <label>Endpoint<MudTextField T="string" @bind-Value="endpoint" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></label>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Fetch">@L["Retrieve"]</MudButton>
         <p>@status</p>
         <JsonOverview Json="@body" />
-    </div>
+    </MudPaper>
 }
 @code {
     private string SwaggerUrl => "/swagger/index.html";

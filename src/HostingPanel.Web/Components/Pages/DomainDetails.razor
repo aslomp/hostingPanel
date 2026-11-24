@@ -6,84 +6,82 @@
 @inject HostingPanel.Api.HostingOperationNotifications Operations
 @implements IDisposable
 
-<PageTitle>@Domain — Domeinbeheer</PageTitle>
-<div class="page-header">
-    <div>
-        <div class="eyebrow"><a href="/domains">@L["Domain management"]</a> / Details</div>
-        <h1>@Domain</h1>
-        <p>@L["Domain configuration and settings."] <a href="@($"/domains/{Uri.EscapeDataString(Domain)}/dns")">@L["Manage DNS records"]</a></p>
-    </div>
-    <button @onclick="Refresh" disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</button>
-</div>
+<PageTitle>@Domain — @L["Domain management"]</PageTitle>
+<PanelPageHeader>
+    <Breadcrumb><a href="/domains">@L["Domain management"]</a> / Details</Breadcrumb>
+    <TitleContent>@Domain</TitleContent>
+    <Description>@L["Domain configuration and settings."] <a href="@($"/domains/{Uri.EscapeDataString(Domain)}/dns")">@L["Manage DNS records"]</a></Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Refresh" Disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton></Actions>
+</PanelPageHeader>
 
 @if (!Session.Connected)
 {
-    <div class="card">Verbind eerst met DirectAdmin via het <a href="/">dashboard</a>.</div>
+    <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
 }
 else if (loading)
 {
-    <div class="card" role="status">@L["Retrieving domain information…"]</div>
+    <MudPaper Class="pa-4 my-3" Elevation="1" role="status">@L["Retrieving domain information…"]</MudPaper>
 }
 else
 {
     @if (error is not null)
     {
-        <div class="card">
+        <MudPaper Class="pa-4 my-3" Elevation="1">
             <h2>@L["Data unavailable"]</h2>
-            <p class="error" role="alert">@error</p>
+            <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert>
             <p>@L["The backend evaluates read and write operations separately."]</p>
-        </div>
+        </MudPaper>
     }
-    <div class="tiles">
-        <section class="card">
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="6"><MudPaper Class="pa-4 my-3" Elevation="1">
             <h2>@L["General"]</h2>
-            <table><tbody>
+            <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><tbody>
                 @foreach (var item in new (string Label, string Key)[] {
-                    ("Domein", "domain"), ("Gebruiker", "username"), ("IP-adres", "ip"),
-                    ("Standaarddomein", "defaultdomain"), ("Opgeschort", "suspended"),
-                    ("Subdomeinen", "subdomain"), ("Documentroot", "private_html"),
-                    ("PHP-versie", "php1_ver"), ("PHP-handler", "php1_info"), ("Provisioning", "provisioning") })
+                    ("Domain", "domain"), ("User", "username"), ("IP address", "ip"),
+                    ("Default domain", "defaultdomain"), ("Suspended", "suspended"),
+                    ("Subdomains", "subdomain"), ("Document root", "private_html"),
+                    ("PHP version", "php1_ver"), ("PHP handler", "php1_info"), ("Provisioning", "provisioning") })
                 {
                     @if (fields is not null && fields.TryGetValue(item.Key, out var value))
                     {
                         <tr><th>@L[item.Label]</th><td>@(item.Key == "provisioning" ? L[value].Value : value)</td></tr>
                     }
                 }
-            </tbody></table>
-        </section>
-        <section class="card">
+            </tbody></MudSimpleTable>
+        </MudPaper></MudItem>
+        <MudItem xs="12" md="6"><MudPaper Class="pa-4 my-3" Elevation="1">
             <h2>@L["Change domain settings"]</h2>
             <p>@L["Each setting is saved separately."]</p>
             <label for="domainPhp">PHP</label>
-            <select id="domainPhp" @bind="php"><option value="ON">@L["Enabled"]</option><option value="OFF">@L["Disabled"]</option></select>
-            <button disabled="@saving" @onclick="SavePhp">@L["Save PHP"]</button>
+            <MudSelect T="string" @bind-Value="php" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="domainPhp"><MudSelectItem T="string" Value='@("ON")'>@L["Enabled"]</MudSelectItem><MudSelectItem T="string" Value='@("OFF")'>@L["Disabled"]</MudSelectItem></MudSelect>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SavePhp">@L["Save PHP"]</MudButton>
             <label for="domainSsl">SSL / HTTPS</label>
-            <select id="domainSsl" @bind="ssl"><option value="ON">@L["Enabled"]</option><option value="OFF">@L["Disabled"]</option></select>
-            <button disabled="@saving" @onclick="SaveSsl">@L["Save SSL"]</button>
+            <MudSelect T="string" @bind-Value="ssl" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="domainSsl"><MudSelectItem T="string" Value='@("ON")'>@L["Enabled"]</MudSelectItem><MudSelectItem T="string" Value='@("OFF")'>@L["Disabled"]</MudSelectItem></MudSelect>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SaveSsl">@L["Save SSL"]</MudButton>
             <label for="domainCgi">CGI</label>
-            <select id="domainCgi" @bind="cgi"><option value="ON">@L["Enabled"]</option><option value="OFF">@L["Disabled"]</option></select>
-            <button disabled="@saving" @onclick="SaveCgi">@L["Save CGI"]</button>
+            <MudSelect T="string" @bind-Value="cgi" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="domainCgi"><MudSelectItem T="string" Value='@("ON")'>@L["Enabled"]</MudSelectItem><MudSelectItem T="string" Value='@("OFF")'>@L["Disabled"]</MudSelectItem></MudSelect>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SaveCgi">@L["Save CGI"]</MudButton>
             <label for="domainBandwidth">@L["Bandwidth (MiB or unlimited)"]</label>
-            <input id="domainBandwidth" @bind="bandwidth" />
-            <button disabled="@saving" @onclick="SaveBandwidth">@L["Save bandwidth"]</button>
+            <MudTextField T="string" @bind-Value="bandwidth" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="domainBandwidth" />
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SaveBandwidth">@L["Save bandwidth"]</MudButton>
             <label for="domainQuota">@L["Disk space (MiB or unlimited)"]</label>
-            <input id="domainQuota" @bind="quota" />
-            <button disabled="@saving" @onclick="SaveQuota">@L["Save quota"]</button>
+            <MudTextField T="string" @bind-Value="quota" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="domainQuota" />
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SaveQuota">@L["Save quota"]</MudButton>
             @if (saving) { <p role="status">@L["Saving change…"]</p> }
             @if (saveMessage is not null) { <p role="status">@saveMessage</p> }
-        </section>
-    </div>
+        </MudPaper></MudItem>
+    </MudGrid>
     <DomainAcmeSettings @key="Domain" Domain="@Domain" />
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Additional domain settings"]</h2>
         <p>@L["Additional settings reported by the backend."]</p>
-        <table><thead><tr><th>@L["Setting"]</th><th>@L["Value"]</th></tr></thead><tbody>
+        <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>@L["Setting"]</th><th>@L["Value"]</th></tr></thead><tbody>
             @foreach (var item in (fields ?? new Dictionary<string,string>()).OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
             {
                 <tr><th>@item.Key</th><td>@item.Value</td></tr>
             }
-        </tbody></table>
-    </section>
+        </tbody></MudSimpleTable>
+    </MudPaper>
 }
 @code {
     [Parameter] public string Domain { get; set; } = "";

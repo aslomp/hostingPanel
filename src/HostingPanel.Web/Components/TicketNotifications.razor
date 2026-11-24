@@ -5,32 +5,21 @@
 @inject DirectAdminSession Session
 @inject TicketLiveMonitor Monitor
 @inject NavigationManager Navigation
+@inject ISnackbar Snackbar
 @implements IAsyncDisposable
 
-<div class="ticket-notifications" aria-live="polite">
+<div aria-live="polite">
     @if (Session.Connected)
     {
-        <a href="/tickets" class="notification-link" title="@L["Tickets and messages"]">
-            <span class="notification-icon" aria-hidden="true">✉</span>
-            @if (newCount > 0) { <span class="notification-count">@newCount</span> }
-            <span>Tickets</span>
-        </a>
-        @if (lastNotice is not null)
-        {
-            <div class="notification-toast" role="status">
-                <strong>Nieuw @(lastNotice.Kind == "message" ? "bericht" : "ticketantwoord")</strong>
-                <span>@lastNotice.Subject</span>
-                <a href="/tickets" @onclick="Clear">Open tickets</a>
-                <button type="button" aria-label="@L["Dismiss notification"]" @onclick="Clear">×</button>
-            </div>
-        }
+        <MudBadge Content="@newCount" Visible="@(newCount > 0)" Color="Color.Error" Overlap="true">
+            <MudButton Href="/tickets" OnClick="Clear" StartIcon="@Icons.Material.Filled.Mail" Color="Color.Inherit" Variant="Variant.Text" title="@L["Tickets and messages"]">@L["Tickets"]</MudButton>
+        </MudBadge>
     }
 </div>
 
 @code {
     private HubConnection? connection;
     private string? joinedChannel;
-    private TicketSignal? lastNotice;
     private int newCount;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -45,7 +34,6 @@
             connection = null;
         }
         joinedChannel = null;
-        lastNotice = null;
         newCount = 0;
         if (!Session.Connected || channel is null) return;
 
@@ -55,9 +43,9 @@
             .Build();
         hub.On<TicketSignal>("InboxChanged", notice => _ = InvokeAsync(() =>
         {
-            if (joinedChannel != channel) return;
+            if (joinedChannel != channel || Session.TicketChannel != channel) return;
             newCount++;
-            lastNotice = notice;
+            Snackbar.Add(L["New ticket activity"].Value, Severity.Info);
             Session.NotifyTicketInboxChanged();
             StateHasChanged();
         }));
@@ -84,7 +72,6 @@
     private void Clear()
     {
         newCount = 0;
-        lastNotice = null;
     }
 
     public async ValueTask DisposeAsync()

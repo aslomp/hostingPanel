@@ -504,6 +504,8 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
             return false;
 
         var path = endpoint.Split('?', 2)[0];
-        return path.StartsWith("api/", StringComparison.Ordinal);
+        return path.StartsWith("api/", StringComparison.Ordinal)
+            || path == "hosting/tickets/inbox"
+            || path.StartsWith("hosting/tickets/", StringComparison.Ordinal);
     }
 }

@@ -5,92 +5,94 @@
 @inject DirectAdminSession Session
 
 <PageTitle>@L["Database management — HostingPanel"]</PageTitle>
-<div class="page-header">
-  <div><div class="eyebrow">@L["Account management / Databases"]</div>
-    <h1>@L["Database management"]</h1>
-    <p>@L["Databases belonging to your account and all subordinate accounts accessible through the backend."]</p>
-  </div>
-  <div class="form-actions">
-    <a class="btn" href="#database-create">@L["＋ Create database"]</a>
-    <button disabled="@(loading || overallLoading)" @onclick="RefreshAll">@L["↻ Refresh"]</button>
-  </div>
-</div>
+<PanelPageHeader>
+    <Breadcrumb>@L["Account management / Databases"]</Breadcrumb>
+    <TitleContent>@L["Database management"]</TitleContent>
+    <Description>@L["Databases belonging to your account and all subordinate accounts accessible through the backend."]</Description>
+    <Actions><MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+    <MudButton Href="#database-create" Variant="Variant.Filled" Color="Color.Primary">@L["＋ Create database"]</MudButton>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(loading || overallLoading)" OnClick="RefreshAll">@L["↻ Refresh"]</MudButton>
+  </MudStack></Actions>
+</PanelPageHeader>
 @if (!Session.Connected)
 {
-  <section class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</section>
+  <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
 }
 else
 {
-  <section class="card">
+  <MudPaper Class="pa-4 my-3" Elevation="1">
     <div class="dashboard-section-heading"><h2>@L["All accessible databases"]</h2>
-      @if (overall is not null) { <span class="status-pill @(overallWarnings.Count == 0 ? "good" : "warning")">@overall.Count gevonden</span> }
+      @if (overall is not null) { <MudChip T="string" Size="Size.Small" Color="@(overallWarnings.Count == 0 ? Color.Success : Color.Warning)">@L["Found: {0}", overall.Count]</MudChip> }
     </div>
     <p>@L["Includes databases of subordinate accounts where DirectAdmin permits access."]</p>
-    <button disabled="@overallLoading" @onclick="LoadOverall">@L["Refresh overview"]</button>
-    @if (overallLoading) { <p role="status">@L["Retrieving databases from accessible accounts…"]</p> }
-    @if (overallError is not null) { <p class="error" role="alert">@overallError</p> }
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@overallLoading" OnClick="LoadOverall">@L["Refresh overview"]</MudButton>
+    @if (overallLoading) { <PanelLoading>@L["Retrieving databases from accessible accounts…"]</PanelLoading> }
+    @if (overallError is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@overallError</MudAlert> }
     @if (overall is not null)
     {
-      <p>@overall.Count databases gevonden. @(overallWarnings.Count == 0 ? L["Complete inventory."].Value : L["Incomplete: {0} accounts could not be read.", overallWarnings.Count].Value)</p>
+      <p>@L["Databases found: {0}.", overall.Count] @(overallWarnings.Count == 0 ? L["Complete inventory."].Value : L["Incomplete: {0} accounts could not be read.", overallWarnings.Count].Value)</p>
       <label for="overallDbFilter">@L["Search databases"]</label>
-      <input id="overallDbFilter" type="search" @bind="overallSearch" @bind:event="oninput" placeholder="@L["Search database or owner…"]" />
-      <table><thead><tr><th>@L["Owner"]</th><th>Database</th><th>@L["Tables"]</th><th>@L["Users"]</th><th>@L["Size (bytes)"]</th><th>Definer issues</th></tr></thead><tbody>
+      <MudTextField T="string" @bind-Value="overallSearch" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="overallDbFilter" Placeholder="@L["Search database or owner…"].Value" />
+      <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>@L["Owner"]</th><th>Database</th><th>@L["Tables"]</th><th>@L["Users"]</th><th>@L["Size (bytes)"]</th><th>Definer issues</th></tr></thead><tbody>
         @foreach (var item in overall.Where(x => x.Owner.Contains(overallSearch, StringComparison.OrdinalIgnoreCase) || x.Name.Contains(overallSearch, StringComparison.OrdinalIgnoreCase)))
         {
           <tr>
             <td><a href="@($"/users/{Uri.EscapeDataString(item.Owner)}")">@item.Owner</a></td>
             <td><strong>@item.Name</strong></td>
             <td>@item.TableCount.ToString("N0")</td><td>@item.UserCount.ToString("N0")</td>
-            <td>@FormatBytes(item.SizeBytes)</td><td><span class="status-pill @(item.DefinerIssues == 0 ? "good" : "warning")">@item.DefinerIssues</span></td>
+            <td>@FormatBytes(item.SizeBytes)</td><td><MudChip T="string" Size="Size.Small" Color="@(item.DefinerIssues == 0 ? Color.Success : Color.Warning)">@item.DefinerIssues</MudChip></td>
           </tr>
         }
-      </tbody></table>
-      @if (overall.Count == 0) { <p>@L["The backend returned no databases for accessible accounts."]</p> }
+      </tbody></MudSimpleTable>
+      @if (overall.Count == 0) { <PanelEmptyState>@L["The backend returned no databases for accessible accounts."]</PanelEmptyState> }
       @foreach (var warning in overallWarnings)
       {
         <p class="error">@warning</p>
       }
     }
-  </section>
-  <section class="card">
+  </MudPaper>
+  <MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@L["Databases in the current session"]</h2>
     <p>@L["Manage databases in the current session. For other accounts, use backend-supported session switching."]</p>
 
-    @if (error is not null) { <p role="alert" class="error">@error</p> }
-    @if (loading) { <p role="status">@L["Loading databases…"]</p> }
+    @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
+    @if (loading) { <PanelLoading>@L["Loading databases…"]</PanelLoading> }
     @if (databases is not null)
     {
       <label for="dbFilter">Zoek database (@databases.Count)</label>
-      <input id="dbFilter" @bind="search" @bind:event="oninput" placeholder="@L["Database name"]" />
-      <table><thead><tr><th>Database</th><th>@L["Actions"]</th></tr></thead><tbody>
+      <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbFilter" Placeholder="@L["Database name"].Value" />
+      <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>Database</th><th>@L["Actions"]</th></tr></thead><tbody>
         @foreach(var database in databases.Where(x => x.Contains(search,StringComparison.OrdinalIgnoreCase)))
         {
           <tr><td><a href="@($"/databases/{Uri.EscapeDataString(database)}")">@database</a></td>
             <td><a href="@($"/databases/{Uri.EscapeDataString(database)}")">@L["View users / delete"]</a></td></tr>
         }
-      </tbody></table>
-      @if(databases.Count==0) { <p>@L["No databases found."]</p> }
+      </tbody></MudSimpleTable>
+      @if(databases.Count==0) { <PanelEmptyState>@L["No databases found."]</PanelEmptyState> }
     }
-  </section>
-  <section class="card" id="database-create">
+  </MudPaper>
+  <MudPaper Class="pa-4 my-3" Elevation="1" id="database-create">
+    <MudForm @ref="createForm">
     <h2>@L["Create database with user"]</h2>
     <p>@L["DirectAdmin adds the account prefix where necessary. The exact name is retrieved from the backend after creation."]</p>
-    <div class="form-grid">
-      <div><label for="databaseName">@L["Database name"]</label>
-        <input id="databaseName" @bind="newDatabase" autocomplete="off" placeholder="app" /></div>
-      <div><label for="dbUsername">@L["Database user"]</label>
-        <input id="dbUsername" @bind="newUser" autocomplete="off" placeholder="app" /></div>
-      <div><label for="dbPassword">@L["Password"]</label>
-        <input id="dbPassword" type="password" @bind="newPassword" autocomplete="new-password" /></div>
-    </div>
-    <div class="form-actions"><button class="primary" disabled="@creating" @onclick="Create">
-      @(creating ? "Aanmaken…" : L["Create database"].Value)
-    </button>
-    </div>
+    <MudGrid Spacing="3">
+      <MudItem xs="12" sm="6"><label for="databaseName">@L["Database name"]</label>
+        <MudTextField T="string" @bind-Value="newDatabase" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="databaseName" autocomplete="off" Placeholder="app" /></MudItem>
+      <MudItem xs="12" sm="6"><label for="dbUsername">@L["Database user"]</label>
+        <MudTextField T="string" @bind-Value="newUser" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbUsername" autocomplete="off" Placeholder="app" /></MudItem>
+      <MudItem xs="12" sm="6"><label for="dbPassword">@L["Password"]</label>
+        <MudTextField T="string" @bind-Value="newPassword" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbPassword" autocomplete="new-password" InputType="InputType.Password" /></MudItem>
+    </MudGrid>
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@creating" OnClick="Create">
+      @(creating ? L["Creating…"].Value : L["Create database"].Value)
+    </MudButton>
+    </MudStack>
+    </MudForm>
     @if (createMessage is not null) { <p role="status">@createMessage</p> }
-  </section>
+  </MudPaper>
 }
 @code {
+  private MudForm createForm = default!;
   private sealed record OwnedDb(string Owner, string Name, long TableCount, long UserCount, long SizeBytes, long DefinerIssues);
   private List<OwnedDb>? overall;
   private List<string> overallWarnings = [];
@@ -173,6 +175,8 @@ else
   private async Task Create()
   {
     if (creating || !Session.Connected) return;
+    await createForm.ValidateAsync();
+    if (!createForm.IsValid || creating || !Session.Connected) return;
     creating=true; createMessage=null;
     try
     {

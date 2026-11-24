@@ -2,62 +2,62 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @using System.Text.Json
 @inject DirectAdminSession Session
+@inject IDialogService Dialogs
 
-<section class="card">
+<MudPaper Class="pa-4 my-3" Elevation="1">
+    <MudForm @ref="createForm">
     <h2>@(Kind == "reseller" ? L["Create reseller"].Value : L["Create user"].Value)</h2>
     <p>@L["DirectAdmin validates the package, IP address and permissions of the signed-in identity."]</p>
-    <label>@L["Account name"]</label><input @bind="username" autocomplete="off" />
-    <label>@L["Email address"]</label><input type="email" @bind="email" autocomplete="off" />
-    <label>@L["Primary domain"]</label><input @bind="domain" placeholder="example.com" />
-    <label>@L["Package"]</label><input @bind="package" autocomplete="off" />
-    <label>@L["IP / assignment"]</label><input @bind="ip" placeholder="shared" />
-    <label>@L["New password"]</label><input type="password" @bind="password" autocomplete="new-password" />
-    <label>@L["Confirm password"]</label><input type="password" @bind="passwordConfirmation" autocomplete="new-password" />
-    <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(package) || password != passwordConfirmation || password.Length < 5)" @onclick="Create">
+    <MudTextField T="string" Label="@L["Account name"].Value" @bind-Value="username" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="off" />
+    <MudTextField T="string" Label="@L["Email address"].Value" @bind-Value="email" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="off" InputType="InputType.Email" />
+    <MudTextField T="string" Label="@L["Primary domain"].Value" @bind-Value="domain" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="example.com" />
+    <MudTextField T="string" Label="@L["Package"].Value" @bind-Value="package" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="off" />
+    <MudTextField T="string" Label="@L["IP / assignment"].Value" @bind-Value="ip" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="shared" />
+    <MudTextField T="string" Label="@L["New password"].Value" @bind-Value="password" Validation="@(new Func<string, string?>(ValidatePassword))" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="new-password" InputType="InputType.Password" />
+    <MudTextField T="string" Label="@L["Confirm password"].Value" @bind-Value="passwordConfirmation" Validation="@(new Func<string, string?>(ValidatePasswordConfirmation))" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" autocomplete="new-password" InputType="InputType.Password" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(package) || password != passwordConfirmation || password.Length < 5)" OnClick="Create">
         @(busy ? L["Processing…"].Value : L["Create account"].Value)
-    </button>
-</section>
-<section class="card">
+    </MudButton>
+    </MudForm>
+</MudPaper>
+<MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@(Kind == "reseller" ? L["Delete reseller"].Value : L["Delete user"].Value)</h2>
     <p>@L["This deletes an account through DirectAdmin. Enter the exact account name to confirm."]</p>
-    <label>@L["Account name"]</label><input @bind="deleteUsername" />
-    <label>@L["Confirm account name"]</label><input @bind="deleteConfirmation" />
-    <button disabled="@(busy || string.IsNullOrWhiteSpace(deleteUsername) || deleteUsername != deleteConfirmation)"
-        @onclick="Delete">@L["Delete account"]</button>
-</section>
+    <MudTextField T="string" Label="@L["Account name"].Value" @bind-Value="deleteUsername" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+    <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@(busy || string.IsNullOrWhiteSpace(deleteUsername))" OnClick="ConfirmDeletion">@L["Delete account"]</MudButton>
+</MudPaper>
 @if (Kind == "user")
 {
-<section class="card">
+<MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@L["Change user package"]</h2>
     <p>@L["The package must exist on the backend. The change is verified against the user configuration after saving."]</p>
-    <label>@L["Username"]</label><input @bind="packageUsername" />
-    <label>@L["New package"]</label><input @bind="newPackage" />
-    <label>@L["Enter the username to confirm"]</label><input @bind="packageConfirmation" />
-    <button disabled="@(busy || string.IsNullOrWhiteSpace(packageUsername) || packageConfirmation != packageUsername)"
-        @onclick="ChangePackage">@L["Change package"]</button>
-</section>
+    <MudTextField T="string" Label="@L["Username"].Value" @bind-Value="packageUsername" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+    <MudTextField T="string" Label="@L["New package"].Value" @bind-Value="newPackage" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+    <MudTextField T="string" Label="@L["Enter the username to confirm"].Value" @bind-Value="packageConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || string.IsNullOrWhiteSpace(packageUsername) || packageConfirmation != packageUsername)" OnClick="ChangePackage">@L["Change package"]</MudButton>
+</MudPaper>
 }
-<section class="card">
+<MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@L["Change account limit"]</h2>
     <p>@L["Changes only one limit. DirectAdmin then applies its own package and limit rules."]</p>
-    <label>@L["Account name"]</label><input @bind="limitUsername" />
+    <MudTextField T="string" Label="@L["Account name"].Value" @bind-Value="limitUsername" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
     <label>@L["Limit"]</label>
-    <select @bind="limitField"><option value="bandwidth">@L["Bandwidth (MB)"]</option><option value="quota">@L["Disk space (MB)"]</option><option value="inode">Inodes</option></select>
-    <label>@L["New limit (number)"]</label><input @bind="limitValue" />
-    <label>@L["Enter the account name to confirm"]</label><input @bind="limitConfirmation" />
-    <button disabled="@(busy || string.IsNullOrWhiteSpace(limitUsername) || limitConfirmation != limitUsername)" @onclick="SetLimit">@L["Change limit"]</button>
-</section>
-<section class="card">
+    <MudSelect T="string" @bind-Value="limitField" Variant="Variant.Outlined" Margin="Margin.Dense"><MudSelectItem T="string" Value='@("bandwidth")'>@L["Bandwidth (MB)"]</MudSelectItem><MudSelectItem T="string" Value='@("quota")'>@L["Disk space (MB)"]</MudSelectItem><MudSelectItem T="string" Value='@("inode")'>Inodes</MudSelectItem></MudSelect>
+    <MudTextField T="string" Label="@L["New limit (number)"].Value" @bind-Value="limitValue" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+    <MudTextField T="string" Label="@L["Enter the account name to confirm"].Value" @bind-Value="limitConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || string.IsNullOrWhiteSpace(limitUsername) || limitConfirmation != limitUsername)" OnClick="SetLimit">@L["Change limit"]</MudButton>
+</MudPaper>
+<MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@L["Suspend or activate account"]</h2>
-    <label>@L["Account name"]</label><input @bind="suspensionUsername" />
-    <label>@L["Action"]</label><select @bind="suspend"><option value="true">@L["Suspend"]</option><option value="false">@L["Activate"]</option></select>
-    <label>@L["Enter the account name to confirm"]</label><input @bind="suspensionConfirmation" />
-    <button disabled="@(busy || string.IsNullOrWhiteSpace(suspensionUsername) || suspensionConfirmation != suspensionUsername)"
-        @onclick="SetSuspended">@L["Change account status"]</button>
-</section>
+    <MudTextField T="string" Label="@L["Account name"].Value" @bind-Value="suspensionUsername" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+    <label>@L["Action"]</label><MudSelect T="string" @bind-Value="suspend" Variant="Variant.Outlined" Margin="Margin.Dense"><MudSelectItem T="string" Value='@("true")'>@L["Suspend"]</MudSelectItem><MudSelectItem T="string" Value='@("false")'>@L["Activate"]</MudSelectItem></MudSelect>
+    <MudTextField T="string" Label="@L["Enter the account name to confirm"].Value" @bind-Value="suspensionConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || string.IsNullOrWhiteSpace(suspensionUsername) || suspensionConfirmation != suspensionUsername)" OnClick="SetSuspended">@L["Change account status"]</MudButton>
+</MudPaper>
 @if (result is not null) { <p role="status">@result</p> }
 
 @code {
+    private MudForm createForm = default!;
     [Parameter] public string Kind { get; set; } = "user";
     private string username = "", email = "", domain = "", package = "", ip = "shared";
     private string password = "", passwordConfirmation = "";
@@ -121,9 +121,13 @@
         finally { busy = false; suspensionConfirmation = ""; }
     }
 
+    private string? ValidatePassword(string value) => string.IsNullOrEmpty(value) || value.Length < 5 ? L["Password must contain at least 5 characters."].Value : null;
+    private string? ValidatePasswordConfirmation(string value) => value != password ? L["Passwords do not match."].Value : null;
     private async Task Create()
     {
-        if (busy || !Session.Connected || password != passwordConfirmation || password.Length < 5) return;
+        if (busy || !Session.Connected) return;
+        await createForm.ValidateAsync();
+        if (!createForm.IsValid || busy || !Session.Connected || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(package) || password != passwordConfirmation || password.Length < 5) return;
         busy = true; result = null;
         try
         {
@@ -137,7 +141,33 @@
         { result = ex.Message; }
         finally { password = ""; passwordConfirmation = ""; busy = false; }
     }
-    private async Task Delete()
+    private bool deleteDialogOpen;
+  private async Task ConfirmDeletion()
+  {
+      if (busy || !Session.Connected || deleteDialogOpen || string.IsNullOrWhiteSpace(deleteUsername)) return;
+      var target = deleteUsername;
+      var identity = Session.Username;
+      var kind = Kind;
+      deleteDialogOpen = true;
+      try
+      {
+          var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+              $"{L["Delete account"]}: {target}", target,
+              L["This deletes an account through DirectAdmin. Enter the exact account name to confirm."].Value,
+              L["Confirm account name"].Value);
+          if (confirmed && Session.Connected &&
+              string.Equals(identity, Session.Username, StringComparison.Ordinal) &&
+              string.Equals(target, deleteUsername, StringComparison.Ordinal) && kind == Kind)
+          {
+              deleteConfirmation = target;
+              try { await Delete(); }
+              finally { deleteConfirmation = ""; }
+          }
+      }
+      finally { deleteDialogOpen = false; }
+  }
+
+  private async Task Delete()
     {
         if (busy || !Session.Connected || deleteUsername != deleteConfirmation) return;
         busy = true; result = null;

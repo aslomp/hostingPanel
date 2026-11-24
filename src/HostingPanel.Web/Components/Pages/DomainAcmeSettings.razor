@@ -1,48 +1,50 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @using System.Text.Json
 @using System.Text.Json.Nodes
 @inject DirectAdminSession Session
 @if (config is not null)
 {
-    <section class="card">
-        <h2>SSL Certificates / ACME Settings</h2>
-        <label><input type="checkbox" @bind="enabled" /> Automatic certificate renewal</label>
-        <label>ACME provider</label>
-        <select @bind="provider"><option value="">Default (inherited)</option>
-            @foreach (var option in providers) { <option value="@option.Id">@option.Name</option> }
-        </select>
-        <label>Private key</label>
-        <select @bind="keyType"><option>ec256</option><option>ec384</option><option>rsa2048</option><option>rsa3072</option><option>rsa4096</option><option>rsa8192</option></select>
-        <label><input type="checkbox" @bind="wildcard" /> Prefer wildcard</label>
-        <button disabled="@busy" @onclick="Save">Save ACME settings</button>
-        <button disabled="@busy" @onclick="Provision">Request certificate</button>
-        <button disabled="@busy" @onclick="LoadStatus">Refresh certificate information</button>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <h2>@L["SSL Certificates / ACME Settings"]</h2>
+        <MudCheckBox T="bool" @bind-Value="enabled" Label="@L["Automatic certificate renewal"].Value" />
+        <label>@L["ACME provider"]</label>
+        <MudSelect T="string" @bind-Value="provider" Variant="Variant.Outlined" Margin="Margin.Dense"><MudSelectItem T="string" Value='@("")'>@L["Default (inherited)"]</MudSelectItem>
+            @foreach (var option in providers) { <MudSelectItem T="string" Value='@option.Id'>@option.Name</MudSelectItem> }
+        </MudSelect>
+        <label>@L["Private key"]</label>
+        <MudSelect T="string" @bind-Value="keyType" Variant="Variant.Outlined" Margin="Margin.Dense"><MudSelectItem T="string" Value='@("ec256")'>ec256</MudSelectItem><MudSelectItem T="string" Value='@("ec384")'>ec384</MudSelectItem><MudSelectItem T="string" Value='@("rsa2048")'>rsa2048</MudSelectItem><MudSelectItem T="string" Value='@("rsa3072")'>rsa3072</MudSelectItem><MudSelectItem T="string" Value='@("rsa4096")'>rsa4096</MudSelectItem><MudSelectItem T="string" Value='@("rsa8192")'>rsa8192</MudSelectItem></MudSelect>
+        <MudCheckBox T="bool" @bind-Value="wildcard" Label="@L["Prefer wildcard"].Value" />
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Save">@L["Save ACME settings"]</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Provision">@L["Request certificate"]</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="LoadStatus">@L["Refresh certificate information"]</MudButton>
         @if (certificateStatus is not null) { <p role="status">@certificateStatus</p> }
         @foreach (var cert in certificates)
         {
-            <table><tbody>
-                <tr><th>Status</th><td>@(cert.Error.Length == 0 ? "Issued" : cert.Error)</td></tr>
-                <tr><th>Automatic renewal</th><td>@cert.AutorenewEnabled</td></tr>
+            <MudSimpleTable Dense="true" Hover="true" Striped="true"><tbody>
+                <tr><th>@L["Status"]</th><td>@(cert.Error.Length == 0 ? L["Issued"].Value : cert.Error)</td></tr>
+                <tr><th>@L["Automatic renewal"]</th><td>@cert.AutorenewEnabled</td></tr>
                 @if (cert.Certificate is not null)
                 {
-                    <tr><th>Subject</th><td>@cert.Certificate.Subject</td></tr>
-                    <tr><th>Issuer</th><td>@cert.Certificate.Issuer</td></tr>
-                    <tr><th>DNS names</th><td>@string.Join(", ", cert.Certificate.DnsNames)</td></tr>
-                    <tr><th>Valid from</th><td>@cert.Certificate.NotBefore.ToLocalTime()</td></tr>
-                    <tr><th>Expires</th><td>@cert.Certificate.NotAfter.ToLocalTime()</td></tr>
-                    <tr><th>Key type</th><td>@cert.Certificate.PrettyType</td></tr>
-                    <tr><th>Serial number</th><td>@cert.Certificate.SerialNumber</td></tr>
+                    <tr><th>@L["Subject"]</th><td>@cert.Certificate.Subject</td></tr>
+                    <tr><th>@L["Issuer"]</th><td>@cert.Certificate.Issuer</td></tr>
+                    <tr><th>@L["DNS names"]</th><td>@string.Join(", ", cert.Certificate.DnsNames)</td></tr>
+                    <tr><th>@L["Valid from"]</th><td>@cert.Certificate.NotBefore.ToLocalTime()</td></tr>
+                    <tr><th>@L["Expires"]</th><td>@cert.Certificate.NotAfter.ToLocalTime()</td></tr>
+                    <tr><th>@L["Key type"]</th><td>@cert.Certificate.PrettyType</td></tr>
+                    <tr><th>@L["Serial number"]</th><td>@cert.Certificate.SerialNumber</td></tr>
                 }
-            </tbody></table>
+            </tbody></MudSimpleTable>
         }
         @if (logs.Length > 0)
         {
-            <h3>ACME logs</h3>
-            <table><thead><tr><th>Created</th><th>Challenge</th><th>Status</th></tr></thead><tbody>
+            <h3>@L["ACME logs"]</h3>
+            <MudSimpleTable Dense="true" Hover="true" Striped="true"><thead><tr><th>@L["Created"]</th><th>@L["Challenge"]</th><th>@L["Status"]</th></tr></thead><tbody>
             @foreach(var log in logs) { <tr><td>@log.CreateTime</td><td>@log.ChallengeType</td><td>@log.Status</td></tr> }
-            </tbody></table>
+            </tbody></MudSimpleTable>
         }
         @if (message is not null) { <p role="status">@message</p> }
-    </section>
+    </MudPaper>
 }
 @code {
     [Parameter] public string Domain { get; set; } = "";
@@ -61,11 +63,11 @@
         try {
             var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
             var (status, body) = await Session.GetRawAsync(Endpoint + "/certs");
-            if (status == 200) { certificates = JsonSerializer.Deserialize<CertResponse>(body,options)?.Certs ?? []; if(certificates.Length==0) certificateStatus="No certificate issued yet."; }
-            else certificateStatus=$"Certificate information unavailable (HTTP {status}).";
+            if (status == 200) { certificates = JsonSerializer.Deserialize<CertResponse>(body,options)?.Certs ?? []; if(certificates.Length==0) certificateStatus=L["No certificate issued yet."].Value; }
+            else certificateStatus=L["Certificate information unavailable (HTTP {0}).", status].Value;
             var (ls, lb) = await Session.GetRawAsync(Endpoint + "/acme-logs");
             if(ls==200) logs=JsonSerializer.Deserialize<AcmeLog[]>(lb,options) ?? [];
-        } catch(Exception ex) when(ex is JsonException or HttpRequestException or InvalidOperationException) { certificateStatus="Certificate information unavailable."; }
+        } catch(Exception ex) when(ex is JsonException or HttpRequestException or InvalidOperationException) { certificateStatus=L["Certificate information unavailable."].Value; }
     }
     private JsonObject? config;
     private string provider = "", keyType = "ec256";
@@ -98,7 +100,7 @@
         try {
             config["enabled"] = enabled; config["provider"] = provider; config["keyType"] = keyType; config["preferWildcard"] = wildcard;
             var (status, body) = await Session.RequestApiAsync(HttpMethod.Put, Endpoint + "/acme-config", config.ToJsonString());
-            message = status == 204 ? "ACME settings saved." : $"HTTP {status}: {body}";
+            message = status == 204 ? L["ACME settings saved."].Value : $"HTTP {status}: {body}";
         } catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { message = ex.Message; }
         finally { busy = false; }
     }
@@ -106,7 +108,7 @@
     {
         if (busy) return;
         busy = true;
-        try { var (status, body) = await Session.RequestApiAsync(HttpMethod.Post, Endpoint + "/provision-certs?nonblock=true"); message = status == 200 ? "Certificate request submitted." : $"HTTP {status}: {body}"; }
+        try { var (status, body) = await Session.RequestApiAsync(HttpMethod.Post, Endpoint + "/provision-certs?nonblock=true"); message = status == 200 ? L["Certificate request submitted."].Value : $"HTTP {status}: {body}"; }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { message = ex.Message; }
         finally { busy = false; }
     }

@@ -14,7 +14,7 @@ else if (Root.Value.ValueKind == JsonValueKind.Array)
     {
         var columns = rows.SelectMany(x => x.EnumerateObject().Select(p => p.Name))
             .Distinct(StringComparer.Ordinal).ToArray();
-        <div class="overview-scroll"><table class="overview-table">
+        <div class="overview-scroll"><MudSimpleTable Dense="true" Hover="true" Class="overview-table">
             <thead><tr>@foreach (var column in columns) { <th>@Label(column)</th> }</tr></thead>
             <tbody>
                 @foreach (var row in rows)
@@ -27,14 +27,14 @@ else if (Root.Value.ValueKind == JsonValueKind.Array)
                     </tr>
                 }
             </tbody>
-        </table></div>
+        </MudSimpleTable></div>
     }
     else
     {
-        <div class="overview-scroll"><table class="overview-table">
+        <div class="overview-scroll"><MudSimpleTable Dense="true" Hover="true" Class="overview-table">
             <thead><tr><th>@L["Value"]</th></tr></thead>
             <tbody>@foreach (var row in rows) { <tr><td><JsonOverview Value="@row" Depth="@(Depth + 1)" /></td></tr> }</tbody>
-        </table></div>
+        </MudSimpleTable></div>
     }
 }
 else if (Root.Value.ValueKind == JsonValueKind.Object)
@@ -43,7 +43,7 @@ else if (Root.Value.ValueKind == JsonValueKind.Object)
     if (properties.Length == 0) { <p class="muted">@L["No data."]</p> }
     else
     {
-        <div class="overview-scroll"><table class="overview-table">
+        <div class="overview-scroll"><MudSimpleTable Dense="true" Hover="true" Class="overview-table">
             <thead><tr><th>@L["Property"]</th><th>@L["Value"]</th></tr></thead>
             <tbody>
                 @foreach (var property in properties)
@@ -52,7 +52,7 @@ else if (Root.Value.ValueKind == JsonValueKind.Object)
                         <td><JsonOverview Value="@property.Value" Depth="@(Depth + 1)" /></td></tr>
                 }
             </tbody>
-        </table></div>
+        </MudSimpleTable></div>
     }
 }
 else

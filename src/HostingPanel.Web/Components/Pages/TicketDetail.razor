@@ -6,35 +6,37 @@
 @implements IDisposable
 @inject NavigationManager Navigation
 <PageTitle>Ticket #@Id — HostingPanel</PageTitle>
-<div class="page-header"><div><div class="eyebrow"><a href="/tickets">@L["Ticket management"]</a> / Ticket #@Id</div>
-    <h1>@(ticket is null ? $"Ticket #{Id}" : Text(ticket.Value, "subject"))</h1>
-    <p>@L["Messages and replies from DirectAdmin."]</p></div>
-    <button disabled="@loading" @onclick="Load">@L["↻ Refresh"]</button></div>
+<PanelPageHeader>
+    <Breadcrumb><a href="/tickets">@L["Ticket management"]</a> / Ticket #@Id</Breadcrumb>
+    <TitleContent>@(ticket is null ? $"Ticket #{Id}" : Text(ticket.Value, "subject"))</TitleContent>
+    <Description>@L["Messages and replies from DirectAdmin."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="Load">@L["↻ Refresh"]</MudButton></Actions>
+</PanelPageHeader>
 @if (!Session.Connected)
 {
-    <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section>
+    <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
 }
 else
 {
-    @if (error is not null) { <section class="card"><p class="error" role="alert">@error</p></section> }
-    @if (loading) { <p role="status">@L["Retrieving ticket…"]</p> }
+    @if (error is not null) { <MudPaper Class="pa-4 my-3" Elevation="1"><MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert></MudPaper> }
+    @if (loading) { <PanelLoading>@L["Retrieving ticket…"]</PanelLoading> }
     @if (ticket is not null)
     {
-        <section class="card">
+        <MudPaper Class="pa-4 my-3" Elevation="1">
             <div class="dashboard-section-heading"><h2>@L["Ticket details"]</h2>
-                <span class="status-pill @(IsOpen ? "good" : "muted")">@(IsOpen ? "Open" : L["Closed"].Value)</span></div>
-            <div class="form-grid">
-                <div><label>@L["Sender"]</label><p>@Text(ticket.Value, "fromName") (@Text(ticket.Value, "from"))</p></div>
-                <div><label>@L["Date"]</label><p>@Text(ticket.Value, "timestamp")</p></div>
-                <div><label>@L["Ticket number"]</label><p>@Text(ticket.Value, "legacyId")</p></div>
-            </div>
-            <hr class="section-divider" />
+                <MudChip T="string" Size="Size.Small" Color="@(IsOpen ? Color.Success : Color.Default)">@(IsOpen ? "Open" : L["Closed"].Value)</MudChip></div>
+            <MudGrid Spacing="3">
+                <MudItem xs="12" sm="4"><label>@L["Sender"]</label><p>@Text(ticket.Value, "fromName") (@Text(ticket.Value, "from"))</p></MudItem>
+                <MudItem xs="12" sm="4"><label>@L["Date"]</label><p>@Text(ticket.Value, "timestamp")</p></MudItem>
+                <MudItem xs="12" sm="4"><label>@L["Ticket number"]</label><p>@Text(ticket.Value, "legacyId")</p></MudItem>
+            </MudGrid>
+            <MudDivider Class="my-4" />
             <p class="ticket-message">@Text(ticket.Value, "message")</p>
-        </section>
+        </MudPaper>
         @if (ticket.Value.TryGetProperty("replies", out var replies) && replies.ValueKind == JsonValueKind.Array)
         {
-            <section class="card">
-                <h2>Gesprek (@replies.GetArrayLength() antwoorden)</h2>
+            <MudPaper Class="pa-4 my-3" Elevation="1">
+                <h2>@L["Conversation ({0} replies)", replies.GetArrayLength()]</h2>
                 @foreach (var reply in replies.EnumerateArray())
                 {
                     <article class="ticket-reply">
@@ -43,25 +45,24 @@ else
                         <p class="ticket-message">@Text(reply, "message")</p>
                     </article>
                 }
-            </section>
+            </MudPaper>
         }
-        <section class="card">
+        <MudPaper Class="pa-4 my-3" Elevation="1">
             <h2>@L["Replies"]</h2>
             <p>@L["Replies are saved through DirectAdmin. Only backend confirmation is considered successful."]</p>
             <label for="ticketReply">@L["Message"]</label>
-            <textarea id="ticketReply" rows="8" @bind="replyMessage" maxlength="65536"></textarea>
+            <MudTextField T="string" @bind-Value="replyMessage" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketReply" Lines="8" MaxLength="65536" />
             <label for="ticketTo">@L["Recipient"]</label>
-            <input id="ticketTo" @bind="recipient" />
-            <div class="form-actions">
-                <button class="primary" disabled="@(sending || string.IsNullOrWhiteSpace(replyMessage) || string.IsNullOrWhiteSpace(recipient))"
-                    @onclick="SendReply">@L["Send reply"]</button>
+            <MudTextField T="string" @bind-Value="recipient" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketTo" />
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mt-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(sending || string.IsNullOrWhiteSpace(replyMessage) || string.IsNullOrWhiteSpace(recipient))" OnClick="SendReply">@L["Send reply"]</MudButton>
                 @if (Source == "received")
                 {
-                    <button disabled="@sending" @onclick="ToggleStatus">@(IsOpen ? L["Close ticket"].Value : L["Reopen ticket"].Value)</button>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@sending" OnClick="ToggleStatus">@(IsOpen ? L["Close ticket"].Value : L["Reopen ticket"].Value)</MudButton>
                 }
-            </div>
+            </MudStack>
             @if (feedback is not null) { <p role="status">@feedback</p> }
-        </section>
+        </MudPaper>
     }
 }
 @code {

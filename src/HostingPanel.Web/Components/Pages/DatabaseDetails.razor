@@ -3,41 +3,39 @@
 @page "/databases/{Database}"
 @using System.Text.Json
 @inject DirectAdminSession Session
+@inject IDialogService Dialogs
 @inject NavigationManager Navigation
 
 <PageTitle>@Database — Databasebeheer</PageTitle>
-<div class="page-header">
-  <div><div class="eyebrow"><a href="/databases">@L["Database management"]</a> / Details</div>
-    <h1>@Database</h1>
-    <p>@L["Database users and management operations through DirectAdmin."]</p>
-  </div>
-  <button disabled="@loading" @onclick="Load">@L["Refresh"]</button>
-</div>
+<PanelPageHeader>
+    <Breadcrumb><a href="/databases">@L["Database management"]</a> / Details</Breadcrumb>
+    <TitleContent>@Database</TitleContent>
+    <Description>@L["Database users and management operations through DirectAdmin."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="Load">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
 @if(!Session.Connected)
 {
-  <section class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</section>
+  <MudPaper Class="pa-4 my-3" Elevation="1">Maak eerst verbinding via het <a href="/">dashboard</a>.</MudPaper>
 }
 else
 {
-  <section class="card">
+  <MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@L["Database users"]</h2>
-    @if(error is not null) { <p class="error" role="alert">@error</p> }
-    @if(loading) { <p role="status">@L["Loading users…"]</p> }
+    @if(error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
+    @if(loading) { <PanelLoading>@L["Loading users…"]</PanelLoading> }
     @if(users is not null)
     {
-      <table><thead><tr><th>@L["Username"]</th></tr></thead>
-      <tbody>@foreach(var username in users){<tr><td>@username</td></tr>}</tbody></table>
-      @if(users.Count==0) { <p>@L["No users returned by DirectAdmin."]</p> }
+      <MudSimpleTable Dense="true" Hover="true" Striped="true"><thead><tr><th>@L["Username"]</th></tr></thead>
+      <tbody>@foreach(var username in users){<tr><td>@username</td></tr>}</tbody></MudSimpleTable>
+      @if(users.Count==0) { <PanelEmptyState>@L["No users returned by DirectAdmin."]</PanelEmptyState> }
     }
-  </section>
-  <section class="card">
+  </MudPaper>
+  <MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@L["Delete database"]</h2>
     <p>@L["This deletes the database and may cause irreversible data loss. Enter the exact database name to confirm."]</p>
-    <label for="dbConfirmation">Typ @Database ter bevestiging</label>
-    <input id="dbConfirmation" @bind="confirmation" autocomplete="off" />
-    <button disabled="@(deleting || confirmation != Database)" @onclick="Delete">@L["Permanently delete database"]</button>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@deleting" OnClick="ConfirmDeletion">@L["Permanently delete database"]</MudButton>
     @if(deleteMessage is not null) { <p role="status">@deleteMessage</p> }
-  </section>
+  </MudPaper>
 }
 @code {
   [Parameter] public string Database { get; set; } = "";
@@ -69,6 +67,32 @@ else
     { error=e.Message; users=null; }
     finally { loading=false; }
   }
+  private bool deleteDialogOpen;
+  private async Task ConfirmDeletion()
+  {
+      if (deleting || !Session.Connected || deleteDialogOpen || string.IsNullOrWhiteSpace(Database)) return;
+      var target = Database;
+      var identity = Session.Username;
+      
+      deleteDialogOpen = true;
+      try
+      {
+          var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+              $"{L["Delete database"]}: {target}", target,
+              L["This deletes the database and may cause irreversible data loss. Enter the exact database name to confirm."].Value,
+              L["Enter the exact database name to confirm."].Value);
+          if (confirmed && Session.Connected &&
+              string.Equals(identity, Session.Username, StringComparison.Ordinal) &&
+              string.Equals(target, Database, StringComparison.Ordinal))
+          {
+              confirmation = target;
+              try { await Delete(); }
+              finally { confirmation = ""; }
+          }
+      }
+      finally { deleteDialogOpen = false; }
+  }
+
   private async Task Delete()
   {
     if(deleting || confirmation!=Database || !Session.Connected) return;

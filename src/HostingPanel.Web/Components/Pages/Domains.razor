@@ -6,79 +6,70 @@
 @inject HostingPanel.Api.HostingOperationNotifications Operations
 @implements IDisposable
 @inject NavigationManager Navigation
+@inject IDialogService Dialogs
 
 <PageTitle>@L["Domain management — HostingPanel"]</PageTitle>
-<div class="page-header">
-    <div>
-        <div class="eyebrow">@L["Account management / Domains"]</div>
-        <h1>@L["Domain management"]</h1>
-        <p>@L["Manage domains and website configuration through the selected hosting backend."]</p>
-    </div>
-    <button @onclick="Refresh" disabled="@loading">@(loading ? "Laden…" : L["Refresh"].Value)</button>
-</div>
+<PanelPageHeader>
+    <Breadcrumb>@L["Account management / Domains"]</Breadcrumb>
+    <TitleContent>@L["Domain management"]</TitleContent>
+    <Description>@L["Manage domains and website configuration through the selected hosting backend."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Refresh" Disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton></Actions>
+</PanelPageHeader>
 
 @if (!Session.Connected)
 {
-    <div class="card"><p>Verbind eerst via het <a href="/">dashboard</a>.</p></div>
+    <MudPaper Class="pa-4 my-3" Elevation="1"><p>@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</p></MudPaper>
 }
 else
 {
-    <div class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Domains of an account"]</h2>
         <p>@L["Leave blank to list all accessible domains, or enter an account to filter."]</p>
         <label for="owner">@L["Username (optional)"]</label>
-        <input id="owner" @bind="owner" placeholder="@L["For example, an existing user"]" />
-        <button class="primary" @onclick="Refresh" disabled="@loading">@L["Retrieve"]</button>
-        @if (error is not null) { <p class="error" role="alert">@error</p> }
-        @if (warning is not null) { <p role="status">Niet alle accountgegevens zijn beschikbaar: @warning</p> }
-        else if (loading) { <p role="status">@L["Retrieving domains…"]</p> }
+        <MudTextField T="string" @bind-Value="owner" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="owner" Placeholder="@L["For example, an existing user"].Value" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Refresh" Disabled="@loading">@L["Retrieve"]</MudButton>
+        @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
+        @if (warning is not null) { <p role="status">@L["Not all account data is available: {0}", warning]</p> }
+        else if (loading) { <PanelLoading>@L["Retrieving domains…"]</PanelLoading> }
         else if (domains is not null)
         {
-            <p>@domains.Count domein(en) gevonden.</p>
+            <p>@L["Domains found: {0}", domains.Count]</p>
             <label for="domainFilter">@L["Filter domains"]</label>
-            <input id="domainFilter" @bind="filter" @bind:event="oninput" placeholder="@L["Search domain name"]" />
-            <table>
+            <MudTextField T="string" @bind-Value="filter" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="domainFilter" Placeholder="@L["Search domain name"].Value" />
+            <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true">
                 <thead><tr><th>@L["Domain"]</th><th>Account</th><th>@L["Provisioning"]</th><th>@L["Actions"]</th></tr></thead>
                 <tbody>
                 @foreach (var domain in domains.Where(d => d.Contains(filter, StringComparison.OrdinalIgnoreCase)))
                 {
-                    <tr><td><a href="@($"/domains/{Uri.EscapeDataString(domain)}")">@domain</a> — <a href="@($"/domains/{Uri.EscapeDataString(domain)}/dns")">DNS</a></td><td>@(ownership.TryGetValue(domain, out var domainOwner) ? domainOwner : (string.IsNullOrWhiteSpace(owner) ? "—" : owner))</td><td>@L[provisioning.GetValueOrDefault(domain) ?? "Unknown"]</td><td><button @onclick="() => SelectDelete(domain)" disabled="@mutationBusy">@L["Delete"]</button></td></tr>
+                    <tr><td><a href="@($"/domains/{Uri.EscapeDataString(domain)}")">@domain</a> — <a href="@($"/domains/{Uri.EscapeDataString(domain)}/dns")">DNS</a></td><td>@(ownership.TryGetValue(domain, out var domainOwner) ? domainOwner : (string.IsNullOrWhiteSpace(owner) ? "—" : owner))</td><td>@L[provisioning.GetValueOrDefault(domain) ?? "Unknown"]</td><td><MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="() => SelectDelete(domain)" Disabled="@mutationBusy">@L["Delete"]</MudButton></td></tr>
                 }
                 </tbody>
-            </table>
-            @if (domains.Count == 0) { <p>@L["No domains found for this account."]</p> }
+            </MudSimpleTable>
+            @if (domains.Count == 0) { <PanelEmptyState>@L["No domains found for this account."]</PanelEmptyState> }
         }
-    </div>
+    </MudPaper>
 
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Add domain"]</h2>
         <p>@L["Create a website for the signed-in account."]</p>
-        <label for="newDomain">@L["Domain name"]</label>
-        <input id="newDomain" @bind="testDomain" placeholder="example.com" />
-        <div class="domain-options">
-            <label><input type="checkbox" @bind="php" /> PHP</label>
-            <label><input type="checkbox" @bind="ssl" /> SSL</label>
-            <label><input type="checkbox" @bind="cgi" /> CGI</label>
-        </div>
-        <button class="primary" disabled="@(mutationBusy || string.IsNullOrWhiteSpace(testDomain))" @onclick="CreateDomain">@L["Add domain"]</button>
+        <MudForm @ref="createForm">
+        <MudTextField T="string" @bind-Value="testDomain" Label="@L["Domain name"].Value" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="newDomain" Placeholder="example.com" />
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudCheckBox T="bool" @bind-Value="php" Label="PHP" />
+            <MudCheckBox T="bool" @bind-Value="ssl" Label="SSL" />
+            <MudCheckBox T="bool" @bind-Value="cgi" Label="CGI" />
+        </MudStack>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(mutationBusy || string.IsNullOrWhiteSpace(testDomain))" OnClick="CreateDomain">@L["Add domain"]</MudButton>
+        </MudForm>
         @if (mutationStatus is not null)
         {
             <p role="status">@mutationStatus</p>
         }
-    </section>
-    @if (deleteDomain is not null)
-    {
-        <section class="card">
-            <h2>@L["Delete domain"]: @deleteDomain</h2>
-            <p class="error" role="alert"><strong>@L["Permanently delete this domain? This cannot be undone."]</strong> @L["All domain website files, DNS records, routes and certificates will be removed."]</p>
-            <label for="confirmDomain">@L["Enter the exact domain name to confirm."]</label>
-            <input id="confirmDomain" @bind="confirmation" autocomplete="off" />
-            <button disabled="@(mutationBusy || confirmation != deleteDomain)" @onclick="DeleteDomain">@L["Permanently delete"]</button>
-            <button disabled="@mutationBusy" @onclick="CancelDelete">@L["Cancel"]</button>
-        </section>
-    }
+    </MudPaper>
+
 }
 @code {
+    private MudForm createForm = default!;
     [SupplyParameterFromQuery(Name = "user")]
     [Parameter] public string? User { get; set; }
     private string owner = "";
@@ -94,8 +85,6 @@ else
     private bool php = true;
     private bool ssl = true;
     private bool cgi;
-    private string? deleteDomain;
-    private string confirmation = "";
     private bool mutationBusy;
     private string? mutationStatus;
 
@@ -175,11 +164,32 @@ else
         await RefreshOperationState();
     }
 
-    private void SelectDelete(string domain) { deleteDomain = domain; confirmation = ""; mutationStatus = null; }
-    private void CancelDelete() { deleteDomain = null; confirmation = ""; }
-    private Task CreateDomain() => ExecuteMutation(testDomain.Trim().ToLowerInvariant(), "create");
-    private Task DeleteDomain() => deleteDomain is null || confirmation != deleteDomain
-        ? Task.CompletedTask : ExecuteMutation(deleteDomain, "delete");
+    private bool deleteDialogOpen;
+    private async Task SelectDelete(string domain)
+    {
+        if (mutationBusy || deleteDialogOpen || !Session.Connected) return;
+        deleteDialogOpen = true;
+        var identity = Session.Username;
+        try
+        {
+            var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+              $"{L["Delete domain"]}: {domain}", domain,
+              L["Permanently delete this domain? This cannot be undone."].Value,
+              L["Enter the exact domain name to confirm."].Value,
+              L["All domain website files, DNS records, routes and certificates will be removed."].Value);
+          if (confirmed &&
+                Session.Connected && string.Equals(identity, Session.Username, StringComparison.Ordinal))
+                await ExecuteMutation(domain, "delete");
+        }
+        finally { deleteDialogOpen = false; }
+    }
+    private async Task CreateDomain()
+    {
+        if (mutationBusy || !Session.Connected) return;
+        await createForm.ValidateAsync();
+        if (!createForm.IsValid || mutationBusy || !Session.Connected || string.IsNullOrWhiteSpace(testDomain)) return;
+        await ExecuteMutation(testDomain.Trim().ToLowerInvariant(), "create");
+    }
 
     private async Task ExecuteMutation(string domain, string action)
     {
@@ -211,7 +221,6 @@ else
             if (status is >= 200 and < 300)
             {
                 if (action == "create") { testDomain = ""; owner = ""; }
-                CancelDelete();
                 await Refresh();
             }
         }
