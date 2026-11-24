@@ -39,14 +39,14 @@
             </MudStack>
             <MudTextField T="string" @bind-Value="navSearch" Immediate="true" Label="@L["Search pages"].Value" Variant="Variant.Outlined" Margin="Margin.Dense" />
         </MudStack>
-        <MudNavMenu Dense="true">
+        <MudNavMenu Dense="true" aria-label="@L["Navigation context"].Value" data-testid="panel-navigation">
             <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">@L["Dashboard"]</MudNavLink>
             @foreach (var navGroup in FilteredSections)
             {
-                <MudNavGroup Title="@L[navGroup.Title].Value" Expanded="true">
+                <MudNavGroup @key="navGroup.Title" Title="@L[navGroup.Title].Value" Expanded="true">
                     @foreach (var item in navGroup.Items)
                     {
-                        <MudNavLink Href="@item.Path" Match="NavLinkMatch.All">@L[item.Label]</MudNavLink>
+                        <MudNavLink @key="item.Label" Href="@item.Path" Match="NavLinkMatch.All">@L[item.Label]</MudNavLink>
                     }
                 </MudNavGroup>
             }
