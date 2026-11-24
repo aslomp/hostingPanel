@@ -24,11 +24,11 @@ else
 
 @if (!Session.Connected)
 {
-    <section class="card">@L["Sign in first using the"] <a href="/">dashboard</a>.</section>
+    <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">dashboard</a>.</MudPaper>
 }
 else
 {
-    <section class="card">
+    <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Data from DirectAdmin"]</h2>
         @if (Sources.Count == 0)
         {
@@ -69,7 +69,7 @@ else
                 <JsonOverview Json="@response" />
             }
         }
-    </section>
+    </MudPaper>
 }
 
 }
