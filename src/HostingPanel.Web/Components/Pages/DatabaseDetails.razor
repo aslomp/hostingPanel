@@ -11,7 +11,7 @@
     <h1>@Database</h1>
     <p>@L["Database users and management operations through DirectAdmin."]</p>
   </div>
-  <button disabled="@loading" @onclick="Load">@L["Refresh"]</button>
+  <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="Load">@L["Refresh"]</MudButton>
 </div>
 @if(!Session.Connected)
 {
@@ -25,8 +25,8 @@ else
     @if(loading) { <p role="status">@L["Loading users…"]</p> }
     @if(users is not null)
     {
-      <table><thead><tr><th>@L["Username"]</th></tr></thead>
-      <tbody>@foreach(var username in users){<tr><td>@username</td></tr>}</tbody></table>
+      <MudSimpleTable Dense="true" Hover="true" Striped="true"><thead><tr><th>@L["Username"]</th></tr></thead>
+      <tbody>@foreach(var username in users){<tr><td>@username</td></tr>}</tbody></MudSimpleTable>
       @if(users.Count==0) { <p>@L["No users returned by DirectAdmin."]</p> }
     }
   </section>
@@ -35,7 +35,7 @@ else
     <p>@L["This deletes the database and may cause irreversible data loss. Enter the exact database name to confirm."]</p>
     <label for="dbConfirmation">Typ @Database ter bevestiging</label>
     <input id="dbConfirmation" @bind="confirmation" autocomplete="off" />
-    <button disabled="@(deleting || confirmation != Database)" @onclick="Delete">@L["Permanently delete database"]</button>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(deleting || confirmation != Database)" OnClick="Delete">@L["Permanently delete database"]</MudButton>
     @if(deleteMessage is not null) { <p role="status">@deleteMessage</p> }
   </section>
 }

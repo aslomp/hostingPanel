@@ -11,7 +11,7 @@
         <h1>@L["DNS management"]</h1>
         <p>Zone: <strong>@Domain</strong> — rechtstreeks uit DirectAdmin.</p>
     </div>
-    <button @onclick="Load" disabled="@busy">@L["Refresh"]</button>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@busy">@L["Refresh"]</MudButton>
 </div>
 @if (!Session.Connected)
 {
@@ -26,7 +26,7 @@ else
         @if (records is not null)
         {
             <p>@records.Count records gevonden.</p>
-            <table>
+            <MudSimpleTable Dense="true" Hover="true" Striped="true">
                 <thead><tr><th>Type</th><th>@L["Name"]</th><th>@L["Value"]</th><th>TTL</th><th>@L["Management"]</th></tr></thead>
                 <tbody>
                 @foreach (var record in records)
@@ -34,13 +34,13 @@ else
                     <tr>
                         <td>@record.Type</td><td>@record.Name</td><td>@record.Value</td><td>@record.Ttl</td>
                         <td>
-                            <button disabled="@busy" @onclick="() => Edit(record)">@L["Edit"]</button>
-                            <button disabled="@busy" @onclick="() => Remove(record)">@L["Delete"]</button>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="() => Edit(record)">@L["Edit"]</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@busy" OnClick="() => Remove(record)">@L["Delete"]</MudButton>
                         </td>
                     </tr>
                 }
                 </tbody>
-            </table>
+            </MudSimpleTable>
         }
     </section>
     <section class="card">
@@ -66,7 +66,7 @@ else
             <button class="primary" disabled="@(busy || action == "delete" && confirmation != original?.Name)" @onclick="Save">
                 @(busy ? "Bezig…" : action == "add" ? "Toevoegen" : action == "edit" ? L["Save change"].Value : L["Confirm deletion"].Value)
             </button>
-            <button disabled="@busy" @onclick="Reset">@L["New record"]</button>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Reset">@L["New record"]</MudButton>
         </div>
         @if (message is not null) { <p role="status">@message</p> }
     </section>

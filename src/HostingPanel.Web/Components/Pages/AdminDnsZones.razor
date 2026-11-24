@@ -13,7 +13,7 @@
     </div>
     <div class="form-actions">
       <a href="#dns-create" class="btn">@L["＋ Add DNS zone"]</a>
-      <button @onclick="Reload" disabled="@loading">@(loading ? "Laden…" : L["↻ Refresh"].Value)</button>
+      <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Reload" Disabled="@loading">@(loading ? "Laden…" : L["↻ Refresh"].Value)</MudButton>
     </div>
 </div>
 @if (!Session.Connected)
@@ -46,7 +46,7 @@ else
         @if (zones is not null)
         {
             <p>@Visible.Count DNS-zone(s) gevonden. @(warning is null ? "" : "Inventarisatie mogelijk onvolledig: " + warning)</p>
-            <table>
+            <MudSimpleTable Dense="true" Hover="true" Striped="true">
                 <thead><tr><th>@L["Domain"]</th><th>@L["Owner"]</th><th>@L["Local data"]</th><th>@L["Local mail"]</th></tr></thead>
                 <tbody>
                 @foreach (var zone in Visible.Skip((currentPage - 1) * PageSize).Take(PageSize))
@@ -59,11 +59,11 @@ else
                     </tr>
                 }
                 </tbody>
-            </table>
+            </MudSimpleTable>
             <div class="domain-options">
-                <button disabled="@(loading || currentPage == 1)" @onclick="Previous">@L["Previous page"]</button>
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(loading || currentPage == 1)" OnClick="Previous">@L["Previous page"]</MudButton>
                 <span>Pagina @currentPage</span>
-                <button disabled="@(loading || currentPage * PageSize >= Visible.Count)" @onclick="Next">@L["Next page"]</button>
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(loading || currentPage * PageSize >= Visible.Count)" OnClick="Next">@L["Next page"]</MudButton>
             </div>
         }
     </section>
@@ -76,15 +76,14 @@ else
           <div><label>Nameserver 1</label><input @bind="zoneNs1" placeholder="ns1.example.com" /></div>
           <div><label>Nameserver 2</label><input @bind="zoneNs2" placeholder="ns2.example.com" /></div>
         </div>
-        <div class="form-actions"><button class="primary" disabled="@(changing || string.IsNullOrWhiteSpace(zoneDomain))" @onclick="CreateZone">@L["Create DNS zone"]</button></div>
+        <div class="form-actions"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(changing || string.IsNullOrWhiteSpace(zoneDomain))" OnClick="CreateZone">@L["Create DNS zone"]</MudButton></div>
     </section>
     <section class="card">
         <h2>@L["Delete standalone DNS zone"]</h2>
         <p>@L["Delete only the specified DNS zone; this is not the same as deleting a hosting domain."]</p>
         <label>@L["Domain"]</label><input @bind="deleteDomain" />
         <label>@L["Enter the exact domain name to confirm"]</label><input @bind="zoneConfirmation" />
-        <button disabled="@(changing || string.IsNullOrWhiteSpace(deleteDomain) || deleteDomain != zoneConfirmation)"
-            @onclick="DeleteZone">@L["Delete DNS zone"]</button>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@(changing || string.IsNullOrWhiteSpace(deleteDomain) || deleteDomain != zoneConfirmation)" OnClick="DeleteZone">@L["Delete DNS zone"]</MudButton>
     </section>
     @if (zoneMessage is not null) { <p role="status">@zoneMessage</p> }
 }

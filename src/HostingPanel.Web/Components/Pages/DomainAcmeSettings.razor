@@ -13,13 +13,13 @@
         <label>Private key</label>
         <select @bind="keyType"><option>ec256</option><option>ec384</option><option>rsa2048</option><option>rsa3072</option><option>rsa4096</option><option>rsa8192</option></select>
         <label><input type="checkbox" @bind="wildcard" /> Prefer wildcard</label>
-        <button disabled="@busy" @onclick="Save">Save ACME settings</button>
-        <button disabled="@busy" @onclick="Provision">Request certificate</button>
-        <button disabled="@busy" @onclick="LoadStatus">Refresh certificate information</button>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Save">Save ACME settings</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Provision">Request certificate</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="LoadStatus">Refresh certificate information</MudButton>
         @if (certificateStatus is not null) { <p role="status">@certificateStatus</p> }
         @foreach (var cert in certificates)
         {
-            <table><tbody>
+            <MudSimpleTable Dense="true" Hover="true" Striped="true"><tbody>
                 <tr><th>Status</th><td>@(cert.Error.Length == 0 ? "Issued" : cert.Error)</td></tr>
                 <tr><th>Automatic renewal</th><td>@cert.AutorenewEnabled</td></tr>
                 @if (cert.Certificate is not null)
@@ -32,14 +32,14 @@
                     <tr><th>Key type</th><td>@cert.Certificate.PrettyType</td></tr>
                     <tr><th>Serial number</th><td>@cert.Certificate.SerialNumber</td></tr>
                 }
-            </tbody></table>
+            </tbody></MudSimpleTable>
         }
         @if (logs.Length > 0)
         {
             <h3>ACME logs</h3>
-            <table><thead><tr><th>Created</th><th>Challenge</th><th>Status</th></tr></thead><tbody>
+            <MudSimpleTable Dense="true" Hover="true" Striped="true"><thead><tr><th>Created</th><th>Challenge</th><th>Status</th></tr></thead><tbody>
             @foreach(var log in logs) { <tr><td>@log.CreateTime</td><td>@log.ChallengeType</td><td>@log.Status</td></tr> }
-            </tbody></table>
+            </tbody></MudSimpleTable>
         }
         @if (message is not null) { <p role="status">@message</p> }
     </section>

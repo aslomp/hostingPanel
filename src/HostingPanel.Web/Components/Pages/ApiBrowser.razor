@@ -11,7 +11,7 @@ else
 {
     <div class="card">
         <label>Endpoint<input @bind="endpoint" /></label>
-        <button class="primary" @onclick="Fetch">@L["Retrieve"]</button>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Fetch">@L["Retrieve"]</MudButton>
         <p>@status</p>
         <JsonOverview Json="@body" />
     </div>
