@@ -26,6 +26,8 @@ AccountOverview and the user, database, domain and DNS detail pages own a Latest
 
 The database overview owns independent LatestRead lifecycles for the current account and accessible-account inventories. Both reset on identity change and discard stale results; each operation resolves its own backend scope. Partial inventory warnings belong to the same accepted result. Existing mutation semantics are unchanged.
 
+The DNS zone overview uses LatestRead for its authorized inventory, clears records and partial-inventory warnings on session changes, and cancels reads on disposal. Zone creation/deletion retain existing mutation semantics; feedback and confirmation are tied to the captured session channel.
+
 ## Dialog mutation lifecycle
 
 Account, database, domain and standalone DNS creation dialogs and the DNS record editor use component-owned DialogMutation for exclusive submission and error state. The dialog captures the session channel at opening, validates it again after asynchronous form validation and before accepting backend results, and closes on identity changes. Dispatched writes are never cancelled or replayed by the UI. Backend-specific result interpretation remains with the feature; authorization remains with the provider.

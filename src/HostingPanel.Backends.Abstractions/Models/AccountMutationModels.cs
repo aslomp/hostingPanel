@@ -15,3 +15,11 @@ public sealed record AccountLimitChange(string Field, string Value);
 public sealed record AccountSuspension(bool Suspended);
 
 public sealed record AccountOperationResult(int Status, string? Error);
+
+// Backend-authoritative packages available to the authenticated account creator.
+public interface IAccountPackages
+{
+    Task<AccountPackagesResult> ListAsync(string kind, AuthenticationHeaderValue auth, CancellationToken ct);
+}
+
+public sealed record AccountPackagesResult(int Status, IReadOnlyList<string>? Packages, string? Error);

@@ -1,0 +1,86 @@
+@using HostingPanel.Api.Services
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject PackageOperations PackagesApi
+@inject PanelSession Session
+@inject IConfiguration Configuration
+
+<MudDialog>
+    <DialogContent>
+        @if (Configuration["HostingPanel:Backend"] == "Kubernetes")
+        {
+            <MudAlert Severity="Severity.Info">@L["Kubernetes package settings are stored; enforcement is not yet complete."]</MudAlert>
+        }
+        <MudTextField T="string" Label="@L["Package name"].Value" @bind-Value="name" Immediate="true" Disabled="@(busy || Package is not null)" />
+        @foreach (var key in PackageFields.Limits)
+        {
+            <MudStack Row="true" AlignItems="AlignItems.Center">
+                <MudNumericField T="long" Label="@L[FieldLabel(key)].Value" Value="@Number(key)" ValueChanged="@((long value) => SetNumber(key,value))" Min="0" Disabled="@(busy || Unlimited(key))" />
+                <MudCheckBox T="bool" Label="@L["Unlimited"].Value" Value="@Unlimited(key)" ValueChanged="@((bool value) => SetUnlimited(key,value))" Disabled="@busy" />
+            </MudStack>
+        }
+        @foreach (var key in PackageFields.Flags.Concat(Kind == "reseller" ? PackageFields.ResellerFlags : Array.Empty<string>()))
+        {
+            <MudCheckBox T="bool" Label="@L[FieldLabel(key)].Value" Value="@(settings.GetValueOrDefault(key) == "ON")" ValueChanged="@((bool value) => settings[key] = value ? "ON" : "OFF")" Disabled="@busy" />
+        }
+        @if (Kind == "reseller")
+        {
+            <MudNumericField T="long" Label="@L["IP addresses"].Value" Value="@Number("ips")" ValueChanged="@((long value) => SetNumber("ips",value))" Min="0" Disabled="@busy" />
+            <MudSelect T="string" Label="@L["DNS"].Value" Value="@(settings.GetValueOrDefault("dns") ?? "OFF")" ValueChanged="@((string value) => settings["dns"] = value)" Disabled="@busy">
+                <MudSelectItem T="string" Value="@("OFF")">OFF</MudSelectItem>
+                <MudSelectItem T="string" Value="@("TWO")">TWO</MudSelectItem>
+                <MudSelectItem T="string" Value="@("THREE")">THREE</MudSelectItem>
+            </MudSelect>
+        }
+        @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Disabled="@busy" OnClick="Cancel">@L["Cancel"]</MudButton>
+        <MudButton Disabled="@(busy || !PackageFields.ValidName(name))" Variant="Variant.Filled" Color="Color.Primary" OnClick="Save">@L["Save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public string Kind { get; set; } = "user";
+    [Parameter] public HostingPackageDefinition? Package { get; set; }
+    private string name = "";
+    private readonly Dictionary<string,string> settings = new(StringComparer.Ordinal);
+    private bool busy;
+    private string? error;
+    private string? channel;
+    protected override void OnInitialized()
+    {
+        channel = Session.TicketChannel;
+        name = Package?.Name ?? "";
+        foreach (var key in PackageFields.Limits) settings[key] = Package?.Settings.GetValueOrDefault(key) ?? "0";
+        foreach (var key in PackageFields.Flags.Concat(Kind == "reseller" ? PackageFields.ResellerFlags : Array.Empty<string>()))
+            settings[key] = Package?.Settings.GetValueOrDefault(key)?.ToUpperInvariant() == "ON" ? "ON" : "OFF";
+        if (Kind == "reseller") { settings["ips"] = Package?.Settings.GetValueOrDefault("ips") ?? "0"; settings["dns"] = Package?.Settings.GetValueOrDefault("dns") ?? "OFF"; }
+    }
+    private bool Unlimited(string key) => settings.GetValueOrDefault(key) == "unlimited";
+    private long Number(string key) => long.TryParse(settings.GetValueOrDefault(key),out var n) ? n : 0;
+    private void SetNumber(string key, long value) => settings[key] = value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    private void SetUnlimited(string key, bool value) => settings[key] = value ? "unlimited" : "0";
+    private static string FieldLabel(string key) => key switch
+    {
+        "quota" => "Disk space (MB)", "bandwidth" => "Bandwidth (MB)", "vdomains" => "Domains", "nsubdomains" => "Subdomains",
+        "domainptr" => "Domain pointers", "mysql" => "Databases", "nemails" => "Email accounts", "nemailf" => "Email forwarders",
+        "nemailml" => "Mailing lists", "nemailr" => "Autoresponders", "ftp" => "FTP accounts",
+        "aftp" => "Anonymous FTP", "dnscontrol" => "DNS management", "suspend_at_limit" => "Suspend at limit",
+        "userssh" => "User SSH", "serverip" => "Server IP", _ => key.ToUpperInvariant()
+    };
+    private void Cancel() => MudDialog.Cancel();
+    private async Task Save()
+    {
+        if (busy || !Session.Connected || Session.TicketChannel != channel) return;
+        busy = true; error = null;
+        try
+        {
+            var result = await PackagesApi.SaveAsync(Kind,new(name,settings),Package is null);
+            if (result.Error is null && result.Status is >= 200 and < 300) MudDialog.Close(DialogResult.Ok(name));
+            else error = result.Error ?? L["Backend HTTP {0}.", result.Status].Value;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { error = ex.Message; }
+        finally { busy = false; }
+    }
+}
