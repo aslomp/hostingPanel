@@ -8,7 +8,9 @@ public static class NavigationParityContractTests
         var root = FindRoot();
         var reference = File.ReadAllText(Path.Combine(root, "index.html"));
         var navigation = File.ReadAllText(Path.Combine(root,
-            "src/HostingPanel.Web/Components/Layout/MainLayout.razor"));
+            "src/HostingPanel.Web/Components/Layout/NavigationCatalog.cs"));
+        var sidebar = File.ReadAllText(Path.Combine(root,
+            "src/HostingPanel.Web/Components/Layout/PanelSidebar.razor"));
         var placeholder = File.ReadAllText(Path.Combine(root,
             "src/HostingPanel.Web/Components/Pages/NavigationPage.razor"));
         var pages = Path.Combine(root, "src/HostingPanel.Web/Components/Pages");
@@ -108,18 +110,18 @@ public static class NavigationParityContractTests
                     "Unmapped prototype-only menu item: " + destination);
         }
 
-        Require(navigation.Contains("private static readonly NavSection[] AdminSections", StringComparison.Ordinal) &&
-                navigation.Contains("private static readonly NavSection[] UserSections", StringComparison.Ordinal) &&
-                navigation.Contains("NavContext.Mode == \"user\" ? UserSections : AdminSections",
+        Require(navigation.Contains("internal static readonly NavSection[] AdminSections", StringComparison.Ordinal) &&
+                navigation.Contains("internal static readonly NavSection[] UserSections", StringComparison.Ordinal) &&
+                sidebar.Contains("NavContext.Mode == \"user\" ? UserSections : AdminSections",
                     StringComparison.Ordinal),
             "Administrator and user navigation must be separate presentation contexts.");
-        Require(navigation.Contains("SetContext", StringComparison.Ordinal) &&
-                navigation.Contains("aria-pressed", StringComparison.Ordinal),
+        Require(sidebar.Contains("SetContext", StringComparison.Ordinal) &&
+                sidebar.Contains("aria-pressed", StringComparison.Ordinal),
             "Manual navigation context selector is required.");
-        Require(!navigation.Contains("Session.Role", StringComparison.Ordinal) &&
-                !navigation.Contains("isAdmin", StringComparison.Ordinal),
+        Require(!sidebar.Contains("Session.Role", StringComparison.Ordinal) &&
+                !sidebar.Contains("isAdmin", StringComparison.Ordinal),
             "Navigation must not perform local account-role authorization");
-        Require(navigation.Contains("Href=\"/\"", StringComparison.OrdinalIgnoreCase),
+        Require(sidebar.Contains("Href=\"/\"", StringComparison.OrdinalIgnoreCase),
             "Dashboard link missing");
     }
 

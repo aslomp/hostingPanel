@@ -1,0 +1,25 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject PanelSession Session
+@inject ImpersonationOperations Impersonation
+@inject NavigationManager Navigation
+@implements IDisposable
+            @if (Session.IsImpersonating)
+            {
+                <MudAlert Severity="Severity.Warning" Class="my-3">
+                    <strong>@L["Impersonation active:"]</strong> @L["you are acting as"] <strong>@Session.Username</strong>
+                    @L["on behalf of administrator"] <strong>@Session.OriginalUsername</strong>.
+                    <MudButton OnClick="ReturnToAdministrator">@L["Return to administrator"]</MudButton>
+                </MudAlert>
+            }
+
+@code {
+    protected override void OnInitialized() => Session.Changed += OnSessionChanged;
+    private void OnSessionChanged() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => Session.Changed -= OnSessionChanged;
+    private void ReturnToAdministrator()
+    {
+        Impersonation.End();
+        Navigation.NavigateTo("/");
+    }
+}
