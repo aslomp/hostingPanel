@@ -17,7 +17,7 @@ namespace HostingPanel.Api;
 public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings) :
     IHostingBackend, IAccountCatalog, IAccountMutations, IAccessibleDomains,
     IUserDetails, IAccountOverview, IImpersonation, IDatabases,
-    IAccessibleDatabases, IDomains, IDNSProvider, IFileAccess, ITickets, IBackendSettingsAccess, IWebHosting
+    IAccessibleDatabases, IDomains, IFileAccess, ITickets, IBackendSettingsAccess
 {
     public IBackendSettingsAccess Settings => this;
     private const string SettingsKey = "BackendSettings:Kubernetes";
