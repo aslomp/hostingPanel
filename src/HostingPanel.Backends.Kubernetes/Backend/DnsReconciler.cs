@@ -25,7 +25,7 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
     {
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
-        var backend = scope.ServiceProvider.GetRequiredService<IHostingBackend>();
+        var backend = scope.ServiceProvider.GetRequiredService<IDNSProvider>();
         var provider = new PowerDnsProvider(backend, scope.ServiceProvider.GetRequiredService<PowerDnsClient>());
         // Stage deferred zone creation from durable domain requests. A new scope
         // per request prevents failed work from leaking tracked changes into other domains.
@@ -36,7 +36,7 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
             {
                 using var retryScope = scopes.CreateScope();
                 var retryDb = retryScope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
-                var retryBackend = (KubernetesBackend)retryScope.ServiceProvider.GetRequiredService<IHostingBackend>();
+                var retryBackend = retryScope.ServiceProvider.GetRequiredService<IDomainDnsStaging>();
                 await using var tx = await retryDb.Database.BeginTransactionAsync(ct);
                 var operation = await retryDb.ReconciliationOperations.SingleOrDefaultAsync(x => x.Id == id && x.Status == "pending", ct);
                 if (operation is null) continue;

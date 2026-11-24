@@ -18,6 +18,8 @@ public static class KubernetesRegistration
         throw new InvalidOperationException("Invalid BackendSettings: " + string.Join("; ", errors.Select(x => x.Key + ": " + string.Join(", ", x.Value))));
     services.AddSingleton(settings);
     services.AddScoped<KubernetesBackend>();
+    services.AddScoped<IKubernetesSettingsReader>(sp => sp.GetRequiredService<KubernetesBackend>());
+    services.AddScoped<IDomainDnsStaging>(sp => sp.GetRequiredService<KubernetesBackend>());
     services.AddScoped<IHostingBackend>(sp => sp.GetRequiredService<KubernetesBackend>());
     services.AddScoped<IAuthenticationProvider>(sp => sp.GetRequiredService<KubernetesBackend>());
     services.AddScoped<IApiCompatibilityHandler>(sp => sp.GetRequiredService<KubernetesBackend>());

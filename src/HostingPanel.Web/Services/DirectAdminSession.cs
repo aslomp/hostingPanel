@@ -319,8 +319,8 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
     {
         if (backendScopes is null || !Connected) return null;
         using var scope = backendScopes.CreateScope();
-        var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IHostingBackend>();
-        var result = await backend.Domains.GetDetailsAsync(domain, EffectiveCredentials(), ct);
+        var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IDomains>();
+        var result = await backend.GetDetailsAsync(domain, EffectiveCredentials(), ct);
         return result.Status == 200 && result.Settings is not null
             && result.Settings.TryGetValue("provisioning", out var state) ? state : null;
     }
@@ -331,8 +331,8 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         if (backendScopes is null)
             return await SendAsync(HttpMethod.Get, "hosting/domains/accessible", null, cancellationToken);
         using var scope = backendScopes.CreateScope();
-        var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IHostingBackend>();
-        var result = await backend.AccessibleDomains.ListAsync(EffectiveCredentials(), cancellationToken);
+        var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IAccessibleDomains>();
+        var result = await backend.ListAsync(EffectiveCredentials(), cancellationToken);
         return (result.Status, JsonSerializer.Serialize(new {
             items = result.Items, domains = result.Items?.Select(x => x.Domain).ToArray(), warning = result.Warning
         }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
@@ -347,8 +347,8 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         if (backendScopes is not null)
         {
             using var scope = backendScopes.CreateScope();
-            var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IHostingBackend>();
-            var result = await backend.Domains.ListAsync(username, EffectiveCredentials(), cancellationToken);
+            var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IDomains>();
+            var result = await backend.ListAsync(username, EffectiveCredentials(), cancellationToken);
             return (result.Status, JsonSerializer.Serialize(new { domains = result.Domains, error = result.Error }));
         }
         return await SendAsync(HttpMethod.Get,
@@ -373,8 +373,8 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         if (backendScopes is not null)
         {
             using var scope = backendScopes.CreateScope();
-            var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IHostingBackend>();
-            var result = await backend.Domains.MutateAsync(new HostingPanel.Api.Services.DomainMutationRequest(domain, action, confirmation, php, ssl, cgi), EffectiveCredentials(), cancellationToken);
+            var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IDomains>();
+            var result = await backend.MutateAsync(new HostingPanel.Api.Services.DomainMutationRequest(domain, action, confirmation, php, ssl, cgi), EffectiveCredentials(), cancellationToken);
             return (result.Status, JsonSerializer.Serialize(new { error = result.Error }));
         }
         using var content = new StringContent(
@@ -392,8 +392,8 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         if (backendScopes is not null)
         {
             using var scope = backendScopes.CreateScope();
-            var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IHostingBackend>();
-            var result = await backend.Domains.GetDetailsAsync(domain, EffectiveCredentials(), cancellationToken);
+            var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IDomains>();
+            var result = await backend.GetDetailsAsync(domain, EffectiveCredentials(), cancellationToken);
             return (result.Status, JsonSerializer.Serialize(new { settings = result.Settings, error = result.Error }));
         }
         return await SendAsync(HttpMethod.Get,
@@ -409,8 +409,8 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
         if (backendScopes is not null)
         {
             using var scope = backendScopes.CreateScope();
-            var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IHostingBackend>();
-            var result = await backend.Domains.UpdateSettingAsync(domain, setting, value, EffectiveCredentials(), cancellationToken);
+            var backend = scope.ServiceProvider.GetRequiredService<HostingPanel.Api.IDomains>();
+            var result = await backend.UpdateSettingAsync(domain, setting, value, EffectiveCredentials(), cancellationToken);
             return (result.Status, JsonSerializer.Serialize(new { error = result.Error }));
         }
         using var content = new StringContent(
