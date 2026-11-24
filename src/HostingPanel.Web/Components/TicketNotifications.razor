@@ -21,7 +21,7 @@
                 <strong>Nieuw @(lastNotice.Kind == "message" ? "bericht" : "ticketantwoord")</strong>
                 <span>@lastNotice.Subject</span>
                 <a href="/tickets" @onclick="Clear">Open tickets</a>
-                <button type="button" aria-label="@L["Dismiss notification"]" @onclick="Clear">×</button>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Inherit" aria-label="@L["Dismiss notification"]" OnClick="Clear" />
             </div>
         }
     }

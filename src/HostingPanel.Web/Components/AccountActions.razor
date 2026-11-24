@@ -3,7 +3,7 @@
 @using System.Text.Json
 @inject DirectAdminSession Session
 
-<section class="card">
+<MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@(Kind == "reseller" ? L["Create reseller"].Value : L["Create user"].Value)</h2>
     <p>@L["DirectAdmin validates the package, IP address and permissions of the signed-in identity."]</p>
     <label>@L["Account name"]</label><input @bind="username" autocomplete="off" />
@@ -13,31 +13,29 @@
     <label>@L["IP / assignment"]</label><input @bind="ip" placeholder="shared" />
     <label>@L["New password"]</label><input type="password" @bind="password" autocomplete="new-password" />
     <label>@L["Confirm password"]</label><input type="password" @bind="passwordConfirmation" autocomplete="new-password" />
-    <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(package) || password != passwordConfirmation || password.Length < 5)" @onclick="Create">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(package) || password != passwordConfirmation || password.Length < 5)" OnClick="Create">
         @(busy ? L["Processing…"].Value : L["Create account"].Value)
-    </button>
-</section>
-<section class="card">
+    </MudButton>
+</MudPaper>
+<MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@(Kind == "reseller" ? L["Delete reseller"].Value : L["Delete user"].Value)</h2>
     <p>@L["This deletes an account through DirectAdmin. Enter the exact account name to confirm."]</p>
     <label>@L["Account name"]</label><input @bind="deleteUsername" />
     <label>@L["Confirm account name"]</label><input @bind="deleteConfirmation" />
-    <button disabled="@(busy || string.IsNullOrWhiteSpace(deleteUsername) || deleteUsername != deleteConfirmation)"
-        @onclick="Delete">@L["Delete account"]</button>
-</section>
+    <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@(busy || string.IsNullOrWhiteSpace(deleteUsername) || deleteUsername != deleteConfirmation)" OnClick="Delete">@L["Delete account"]</MudButton>
+</MudPaper>
 @if (Kind == "user")
 {
-<section class="card">
+<MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@L["Change user package"]</h2>
     <p>@L["The package must exist on the backend. The change is verified against the user configuration after saving."]</p>
     <label>@L["Username"]</label><input @bind="packageUsername" />
     <label>@L["New package"]</label><input @bind="newPackage" />
     <label>@L["Enter the username to confirm"]</label><input @bind="packageConfirmation" />
-    <button disabled="@(busy || string.IsNullOrWhiteSpace(packageUsername) || packageConfirmation != packageUsername)"
-        @onclick="ChangePackage">@L["Change package"]</button>
-</section>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || string.IsNullOrWhiteSpace(packageUsername) || packageConfirmation != packageUsername)" OnClick="ChangePackage">@L["Change package"]</MudButton>
+</MudPaper>
 }
-<section class="card">
+<MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@L["Change account limit"]</h2>
     <p>@L["Changes only one limit. DirectAdmin then applies its own package and limit rules."]</p>
     <label>@L["Account name"]</label><input @bind="limitUsername" />
@@ -45,16 +43,15 @@
     <select @bind="limitField"><option value="bandwidth">@L["Bandwidth (MB)"]</option><option value="quota">@L["Disk space (MB)"]</option><option value="inode">Inodes</option></select>
     <label>@L["New limit (number)"]</label><input @bind="limitValue" />
     <label>@L["Enter the account name to confirm"]</label><input @bind="limitConfirmation" />
-    <button disabled="@(busy || string.IsNullOrWhiteSpace(limitUsername) || limitConfirmation != limitUsername)" @onclick="SetLimit">@L["Change limit"]</button>
-</section>
-<section class="card">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || string.IsNullOrWhiteSpace(limitUsername) || limitConfirmation != limitUsername)" OnClick="SetLimit">@L["Change limit"]</MudButton>
+</MudPaper>
+<MudPaper Class="pa-4 my-3" Elevation="1">
     <h2>@L["Suspend or activate account"]</h2>
     <label>@L["Account name"]</label><input @bind="suspensionUsername" />
     <label>@L["Action"]</label><select @bind="suspend"><option value="true">@L["Suspend"]</option><option value="false">@L["Activate"]</option></select>
     <label>@L["Enter the account name to confirm"]</label><input @bind="suspensionConfirmation" />
-    <button disabled="@(busy || string.IsNullOrWhiteSpace(suspensionUsername) || suspensionConfirmation != suspensionUsername)"
-        @onclick="SetSuspended">@L["Change account status"]</button>
-</section>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || string.IsNullOrWhiteSpace(suspensionUsername) || suspensionConfirmation != suspensionUsername)" OnClick="SetSuspended">@L["Change account status"]</MudButton>
+</MudPaper>
 @if (result is not null) { <p role="status">@result</p> }
 
 @code {

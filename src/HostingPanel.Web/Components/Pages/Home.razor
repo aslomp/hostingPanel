@@ -17,16 +17,16 @@
   }
 </div>
 
-<div class="banner">
+<MudPaper Class="pa-5 my-4" Elevation="1">
   <h2>@L["Welcome to HostingPanel"]</h2>
   <p>@L["DirectAdmin Evolution-inspired management, with live data from the connected backend."]</p>
-</div>
+</MudPaper>
 
 @if (NavContext.Mode == "user")
 {
   <div class="dashboard-layout">
     <div>
-      <section class="card">
+      <MudPaper Class="pa-4 my-3" Elevation="1">
         <div class="dashboard-section-heading"><h2>@L["My hosting"]</h2><small>@L["User features"]</small></div>
         <div class="dashboard-links">
           <a href="/domains"><span class="glyph">◎</span>@L["Domain management"]</a>
@@ -34,24 +34,24 @@
           <a href="/databases"><span class="glyph">▦</span>@L["Databases"]</a>
           <a href="/change-password"><span class="glyph">⚿</span>@L["Change password"]</a>
         </div>
-      </section>
-      <section class="card">
+      </MudPaper>
+      <MudPaper Class="pa-4 my-3" Elevation="1">
         <div class="dashboard-section-heading"><h2>@L["Support and messages"]</h2><small>@L["Live notifications via SignalR"]</small></div>
         <div class="dashboard-links">
           <a href="/tickets"><span class="glyph">☏</span>@L["My tickets"]</a>
           <a href="/tickets/new"><span class="glyph">✉</span>@L["Create ticket"]</a>
           <a href="/messages"><span class="glyph">✉</span>@L["Messages"]</a>
         </div>
-      </section>
+      </MudPaper>
     </div>
     <aside class="dashboard-aside">
-      <section class="card">
+      <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Account"]</h2>
         <div class="state-row"><span class="state-dot connected"></span>@L["Connected to backend"]</div>
         <h3>@Session.Username</h3>
         <p>@L["The user navigation is a display mode. The backend determines access."]</p>
-        <form method="post" action="/logout" data-enhance="false"><AntiforgeryToken /><button type="submit">@L["Disconnect"]</button></form>
-      </section>
+        <form method="post" action="/logout" data-enhance="false"><AntiforgeryToken /><MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined">@L["Disconnect"]</MudButton></form>
+      </MudPaper>
     </aside>
   </div>
 }
@@ -59,7 +59,7 @@ else
 {
   <div class="dashboard-layout">
     <div>
-      <section class="card">
+      <MudPaper Class="pa-4 my-3" Elevation="1">
         <div class="dashboard-section-heading"><h2>@L["Account management"]</h2><small>@L["Users and packages"]</small></div>
         <div class="dashboard-links">
           <a href="/users"><span class="glyph">♙</span>@L["All users"]</a>
@@ -67,8 +67,8 @@ else
           <a href="/change-password"><span class="glyph">⚿</span>@L["Passwords"]</a>
           <a href="/domains"><span class="glyph">◎</span>@L["Domains"]</a>
         </div>
-      </section>
-      <section class="card">
+      </MudPaper>
+      <MudPaper Class="pa-4 my-3" Elevation="1">
         <div class="dashboard-section-heading"><h2>@L["Website and resource management"]</h2><small>@L["Live resources"]</small></div>
         <div class="dashboard-links">
           <a href="/domains"><span class="glyph">◎</span>@L["Domain management"]</a>
@@ -76,8 +76,8 @@ else
           <a href="/databases"><span class="glyph">▦</span>@L["Databases"]</a>
           <a href="/server-tls"><span class="glyph">♢</span>Server TLS</a>
         </div>
-      </section>
-      <section class="card">
+      </MudPaper>
+      <MudPaper Class="pa-4 my-3" Elevation="1">
         <div class="dashboard-section-heading"><h2>@L["Server management"]</h2><small>@L["Settings and services"]</small></div>
         <div class="dashboard-links">
           <a href="/server-settings"><span class="glyph">⚙</span>@L["Settings"]</a>
@@ -85,8 +85,8 @@ else
           <a href="/system-info"><span class="glyph">◴</span>@L["System information"]</a>
           <a href="/system-updates"><span class="glyph">↻</span>@L["Updates"]</a>
         </div>
-      </section>
-      <section class="card">
+      </MudPaper>
+      <MudPaper Class="pa-4 my-3" Elevation="1">
         <div class="dashboard-section-heading"><h2>@L["Admin tools"]</h2><small>@L["Security and API"]</small></div>
         <div class="dashboard-links">
           <a href="/security"><span class="glyph">♢</span>@L["ModSecurity and ClamAV"]</a>
@@ -94,28 +94,28 @@ else
           <a href="/api-browser"><span class="glyph">⌘</span>@L["DirectAdmin API"]</a>
           <a href="/navigation/backup-restore"><span class="glyph">▣</span>@L["Backup and restore"]</a>
         </div>
-      </section>
+      </MudPaper>
     </div>
     <aside class="dashboard-aside">
-      <section class="card">
+      <MudPaper Class="pa-4 my-3" Elevation="1">
         <div class="dashboard-section-heading"><h2>@L["Connected account"]</h2></div>
         <div class="state-row"><span class="state-dot connected"></span><span>@L["Backend connection active"]</span></div>
         <h3>@Session.Username</h3>
         <p>@L["The backend determines available data and actions. No account roles are assumed."]</p>
-        <div class="form-actions"><form method="post" action="/logout" data-enhance="false"><AntiforgeryToken /><button type="submit">@L["Disconnect"]</button></form></div>
-      </section>
-      <section class="card">
+        <div class="form-actions"><form method="post" action="/logout" data-enhance="false"><AntiforgeryToken /><MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined">@L["Disconnect"]</MudButton></form></div>
+      </MudPaper>
+      <MudPaper Class="pa-4 my-3" Elevation="1">
         <div class="dashboard-section-heading"><h2>@L["Quick access"]</h2></div>
         <a class="dashboard-link-row" href="/databases"><span class="glyph">▦</span>@L["Database management"]</a>
         <a class="dashboard-link-row" href="/dns-zones"><span class="glyph">◎</span>@L["Manage DNS"]</a>
         <a class="dashboard-link-row" href="/system-services"><span class="glyph">⚙</span>@L["View services"]</a>
         <a class="dashboard-link-row" href="/resellers"><span class="glyph">♙</span>@L["Manage accounts"]</a>
-      </section>
-      <section class="card">
+      </MudPaper>
+      <MudPaper Class="pa-4 my-3" Elevation="1">
         <div class="dashboard-section-heading"><h2>@L["Integration"]</h2></div>
         <p>@L["All displayed resources use the existing HostingPanel API. Unimplemented navigation items are explicitly marked."]</p>
         <a href="/api-browser">@L["View API documentation and responses"]</a>
-      </section>
+      </MudPaper>
     </aside>
   </div>
 }
