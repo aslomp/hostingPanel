@@ -1,0 +1,102 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@implements IDisposable
+@inject AccountOperations Accounts
+@inject IConfiguration Configuration
+
+<MudDialog>
+  <DialogContent>
+    <MudForm @ref="form">
+      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Account name"].Value" @bind-Value="username" Required="true" />
+      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Email address"].Value" @bind-Value="email" Required="true" InputType="InputType.Email" />
+      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Primary domain"].Value" @bind-Value="domain" Required="true" />
+      <MudSelect T="string" Disabled="@(busy || loadingPackages || availablePackages.Count == 0)" Label="@L["Package"].Value" @bind-Value="package" Required="true">
+        @foreach (var name in availablePackages)
+        {
+          <MudSelectItem T="string" Value="@name">@name</MudSelectItem>
+        }
+      </MudSelect>
+      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["IP / assignment"].Value" @bind-Value="ip" />
+      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["New password"].Value" @bind-Value="password" autocomplete="new-password" InputType="InputType.Password" Required="true" />
+      <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Confirm password"].Value" @bind-Value="confirmation" autocomplete="new-password" InputType="InputType.Password" Required="true" />
+    </MudForm>
+    @if (packageError is not null) { <MudAlert Severity="Severity.Error">@packageError</MudAlert> }
+    @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+  </DialogContent>
+  <DialogActions>
+    <MudButton OnClick="Cancel" Disabled="@busy">@L["Cancel"]</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Create" Disabled="@(busy || loadingPackages || availablePackages.Count == 0)">@L["Create account"]</MudButton>
+  </DialogActions>
+</MudDialog>
+
+@code {
+  [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+  [Parameter] public string Kind { get; set; } = "user";
+  private MudForm form = default!;
+  private string username = "", email = "", domain = "", package = "", ip = "shared", password = "", confirmation = "";
+  private readonly List<string> availablePackages = [];
+  private bool loadingPackages;
+  private string? packageError;
+  protected override async Task OnInitializedAsync()
+  {
+    openedChannel = Session.TicketChannel;
+    Session.Changed += SessionChanged;
+    if (!Session.Connected) return;
+    loadingPackages = true;
+    try
+    {
+      var result = await Accounts.ListPackagesAsync(Kind);
+      if (disposed || !Session.Connected || Session.TicketChannel != openedChannel) return;
+      if (result.Status == 200 && result.Packages is not null)
+      {
+        availablePackages.AddRange(result.Packages);
+        if (availablePackages.Count == 1) package = availablePackages[0];
+        if (availablePackages.Count == 0) packageError = L["No packages found."].Value;
+      }
+      else packageError = L["Backend HTTP {0}.", result.Status].Value + (result.Error is null ? "" : $" ({result.Error})");
+    }
+    catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+    { if (!disposed && Session.Connected && Session.TicketChannel == openedChannel) packageError = ex.Message; }
+    finally { loadingPackages = false; }
+  }
+  private readonly DialogMutation mutation = new();
+  private string? error => mutation.Error;
+  private bool busy => mutation.Busy;
+  private string? openedChannel;
+  private bool disposed;
+  private void Cancel() { if (!busy) MudDialog.Cancel(); }
+  private void SessionChanged() => _ = InvokeAsync(() =>
+  {
+    if (!disposed && (!Session.Connected || Session.TicketChannel != openedChannel)) MudDialog.Cancel();
+  });
+  public void Dispose()
+  {
+    disposed = true;
+    Session.Changed -= SessionChanged;
+    mutation.Dispose();
+  }
+  private Task Create() => mutation.RunAsync(Session, openedChannel, async current =>
+  {
+      if (loadingPackages || !availablePackages.Contains(package, StringComparer.Ordinal)) return;
+      await form.ValidateAsync();
+      if (!current()) return;
+      if (!form.IsValid || string.IsNullOrWhiteSpace(username) || !availablePackages.Contains(package, StringComparer.Ordinal)) return;
+      if (string.Equals(Configuration["HostingPanel:Backend"], "Kubernetes", StringComparison.OrdinalIgnoreCase) && password.Length < 12) { mutation.SetError(L["Password must contain at least 12 characters."].Value); return; }
+      if (password.Length < 5) { mutation.SetError(L["Password must contain at least 5 characters."].Value); return; }
+      if (password != confirmation) { mutation.SetError(L["Passwords do not match."].Value); return; }
+      var (status, errorCode) = await Accounts.CreateAsync(new CreateHostingAccount(Kind, username, email, password, domain, package, ip));
+      if (!current()) return;
+      if (errorCode is null && status is >= 200 and < 300) { MudDialog.Close(DialogResult.Ok(username)); return; }
+      mutation.SetError(errorCode switch
+      {
+        "PACKAGE_NOT_FOUND" => L["The selected hosting package does not exist or is not available to your account."].Value,
+        "ACCOUNT_EXISTS" => L["An account with this name already exists."].Value,
+        "DOMAIN_EXISTS" or "DNS_ZONE_EXISTS" => L["This domain is already in use."].Value,
+        "INVALID_ACCOUNT_REQUEST" => L["Check the account name, email address, domain, package and password."].Value,
+        "ACCESS_DENIED" or "UNAUTHORIZED" => L["You are not authorized to create this account."].Value,
+        _ => L["Account not created: backend HTTP {0}.", status].Value + (errorCode is null ? "" : $" ({errorCode})")
+      });
+  });
+}

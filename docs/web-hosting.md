@@ -1,23 +1,13 @@
 # Web hosting capability
 
-IHostingBackend.WebHosting exposes IWebHosting. A website is the logical web-serving configuration for a domain, not an Apache virtual host, NGINX server block or Kubernetes object. The current providers use one website per hosted domain and share the existing domain lifecycle, avoiding duplicate records. Domain registration at a registrar is not implemented here.
+IWebHosting is an independent capability for the logical website of a hosted domain. The two providers share domain lifecycle semantics rather than creating a second website inventory. DirectAdmin uses its existing domain operations; Kubernetes persists intent and schedules website reconciliation.
 
 | Operation | DirectAdmin | Kubernetes |
-|---|---|---|
-| Create/update/delete | Existing DirectAdmin domain lifecycle calls, authorized by DirectAdmin | SQLite desired state + website reconciliation outbox |
-| List/get | Existing domain inventory and configuration | SQLite inventory/configuration; pending operations reported |
-| Runtime readiness | Unknown until observed | Unknown or pending; no running reconciler yet |
+| --- | --- | --- |
+| List/get | Upstream inventory/config | SQLite desired state and operation status |
+| Create/update/delete | Upstream domain operations | Desired state and asynchronous reconciliation |
+| Runtime readiness | Requires observation | Requires observation of configuration, routes and serving workloads |
 
-The Kubernetes backend records website intent with the domain ID, owner ID, desired configuration and selected ingress provider. Existing domain/account creation routes also enqueue that intent. A future reconciler should resolve current effective backend settings, reconcile the web workload/service and routing resources, observe readiness and remove only provider-owned resources on deletion. The outbox payload is not evidence that a cluster resource exists. Treat old queued operations as signals to reconcile current desired state rather than blindly replaying outdated configuration. Actual Apache/NGINX virtual host generation, Kubernetes workload creation and routing reconciliation are not implemented by this change.
+HTTP routes: GET /hosting/websites (optional owner), GET /hosting/websites/{domain}, POST /hosting/websites, PUT /hosting/websites, DELETE /hosting/websites/{domain}. Delete requires exact domain confirmation. Verify request DTOs and supported flags in the current contract before extending them.
 
-## HTTP API
-
-- GET /hosting/websites?owner=optional
-- GET /hosting/websites/{domain}
-- POST /hosting/websites
-- PUT /hosting/websites/{domain}
-- DELETE /hosting/websites/{domain} with JSON confirmation equal to domain
-
-Create/update request: {"domain":"example.com","php":true,"tls":true,"cgi":false}. Update replaces these three settings. Current providers retain existing domain lifecycle semantics, including deletion restrictions and DirectAdmin's coupled domain deletion behavior. No registrar, DNS or certificate provisioning is implied. Authorization stays in the provider. 200 indicates provider-confirmed configuration, 202 accepted desired state, not HTTP availability. The official DirectAdmin Swagger remains unchanged.
-
-New providers implement IWebHosting independently, with server-specific configuration in BackendSettings. The API has no dependency on the chosen server technology.
+Kubernetes uses one shared Apache service and per-domain vhost ConfigMaps/HTTPRoutes, not separate Apache deployments. Domain lifecycle also stages DNS where enabled and reconciles certificates and cleanup. Do not confuse website acceptance with a ready URL. See [Kubernetes hosting](kubernetes-hosting.md) and [DNS](dns.md).

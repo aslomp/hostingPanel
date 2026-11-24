@@ -1,0 +1,200 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@page "/users/{Username}"
+@inject PanelSession Session
+@inject AccountOperations Accounts
+@inject ImpersonationOperations Impersonation
+@inject NavigationManager Navigation
+
+<PageTitle>@Username — Accountbeheer</PageTitle>
+<PanelPageHeader>
+    <Breadcrumb><a href="/users">@L["Account management"]</a> / @L["User details"]</Breadcrumb>
+    <TitleContent>@Username</TitleContent>
+    <Description>@L["Account settings, assigned hosting package and package limits available in DirectAdmin."]</Description>
+    <Actions><div>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton>
+        @if (Session.Connected && !Session.IsImpersonating &&
+            !Username.Equals(Session.OriginalUsername, StringComparison.OrdinalIgnoreCase))
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Impersonate" Disabled="@switching">
+                @(switching ? L["Checking permission…"].Value : L["Sign in as this user"].Value)
+            </MudButton>
+        }
+    </div></Actions>
+</PanelPageHeader>
+@if (impersonationError is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="my-2">@impersonationError</MudAlert>
+}
+@if (!Session.Connected)
+{
+    <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
+}
+else if (loading)
+{
+    <PanelLoading>@L["Retrieving account and package information…"]</PanelLoading>
+}
+else if (error is not null)
+{
+    <MudPaper Class="pa-4 my-3" Elevation="1"><MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert></MudPaper>
+}
+else if (settings is not null)
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="6"><MudPaper Class="pa-4 my-3" Elevation="1">
+            <h2>Account</h2>
+            <p>@L["Live account information from the legacy DirectAdmin server."]</p>
+            <MudSimpleTable Dense="true" Hover="true" Striped="true"><tbody>
+                @foreach (var entry in new (string Label,string Key)[] {
+                    ("Username","username"), ("Name","name"), ("Email address","email"),
+                    ("Account type","usertype"), ("Created by","creator"),
+                    ("Primary domain","domain"), ("IP address","ip"), ("Package","package"),
+                    ("Suspended","suspended"), ("Language","language"), ("Skin","skin") })
+                {
+                    @if (settings.TryGetValue(entry.Key, out var value))
+                    {
+                        <tr><th>@L[entry.Label]</th><td>@value</td></tr>
+                    }
+                }
+            </tbody></MudSimpleTable>
+            <p><a href="@($"/domains?user={Uri.EscapeDataString(Username)}")">@L["View this user's domains"]</a></p>
+        </MudPaper></MudItem>
+        <MudItem xs="12" md="6"><MudPaper Class="pa-4 my-3" Elevation="1">
+            <h2>@L["Hosting package"]</h2>
+            @if (package is not null)
+            {
+                <p>@L["Assigned package:"] <strong>@package</strong></p>
+            }
+            else
+            {
+                <p>@L["No package name found in account configuration."]</p>
+            }
+            @if (packageError is not null)
+            {
+                <p class="error" role="status">@L["Package information unavailable: {0}", packageError]</p>
+            }
+            @if (packageSettings is not null)
+            {
+                <MudSimpleTable Dense="true" Hover="true" Striped="true"><tbody>
+                    @foreach (var field in packageSettings.OrderBy(f => f.Key, StringComparer.OrdinalIgnoreCase))
+                    {
+                        <tr><th>@field.Key</th><td>@field.Value</td></tr>
+                    }
+                </tbody></MudSimpleTable>
+            }
+            else if (packageError is null)
+            {
+                <p>@L["The package returned no additional configuration fields."]</p>
+            }
+        </MudPaper></MudItem>
+    </MudGrid>
+    <UserManagementActions Username="@Username" OnChanged="Load" />
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <h2>@L["All available user settings"]</h2>
+        <p>@L["Original DirectAdmin field names, with confidential values filtered."]</p>
+        <MudSimpleTable Dense="true" Hover="true" Striped="true"><thead><tr><th>@L["Setting"]</th><th>@L["Value"]</th></tr></thead><tbody>
+            @foreach (var field in settings.OrderBy(f => f.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                <tr><th>@field.Key</th><td>@field.Value</td></tr>
+            }
+        </tbody></MudSimpleTable>
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <h2>@L["Resource usage"]</h2>
+        <p>@L["Usage returned by DirectAdmin for this user."]</p>
+        @if (usageError is not null) { <p class="error" role="status">@usageError</p> }
+        else if (usage is not null)
+        {
+            <MudSimpleTable Dense="true" Hover="true" Striped="true"><tbody>
+                @foreach (var field in usage.OrderBy(f => f.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    <tr><th>@field.Key</th><td>@field.Value</td></tr>
+                }
+            </tbody></MudSimpleTable>
+        }
+    </MudPaper>
+}
+@implements IDisposable
+@code {
+    [Parameter] public string Username { get; set; } = "";
+    private Dictionary<string,string>? settings;
+    private Dictionary<string,string>? packageSettings;
+    private Dictionary<string,string>? usage;
+    private string? package;
+    private string? error;
+    private string? packageError;
+    private string? usageError;
+    private readonly LatestRead read = new();
+    private bool loading => read.Loading;
+    private bool switching;
+    private string? impersonationError;
+
+    private bool disposed;
+    protected override void OnInitialized() => Session.Changed += SessionChanged;
+    protected override Task OnParametersSetAsync() => Load();
+    private void SessionChanged() => _ = InvokeAsync(async () =>
+    {
+        if (disposed) return;
+        var task = Load();
+        StateHasChanged();
+        await task;
+        if (!disposed) StateHasChanged();
+    });
+    public void Dispose()
+    {
+        disposed = true;
+        Session.Changed -= SessionChanged;
+        read.Dispose();
+    }
+
+    private Task Load()
+    {
+        if (disposed) return Task.CompletedTask;
+        settings = null; packageSettings = null; usage = null; package = null;
+        error = packageError = usageError = null;
+        if (!Session.Connected)
+        {
+            read.Cancel();
+            return Task.CompletedTask;
+        }
+        var target = Username;
+        var channel = Session.TicketChannel;
+        return read.RunAsync(ct => Accounts.OverviewAsync(target, ct),
+            () => Session.Connected && Session.TicketChannel == channel && Username == target,
+            result =>
+            {
+                if (result.Status != 200 || result.Config is null)
+                {
+                    error = L["Failed to retrieve user data (HTTP {0}).", result.Status].Value;
+                    return;
+                }
+                settings = Copy(result.Config);
+                package = result.Package;
+                packageSettings = Copy(result.PackageSettings);
+                packageError = result.Error;
+                usage = Copy(result.Usage);
+                usageError = result.UsageError;
+            }, ex => error = ex.Message);
+    }
+
+    private async Task Impersonate()
+    {
+        if (switching || Session.IsImpersonating) return;
+        switching = true;
+        impersonationError = null;
+        try
+        {
+            await Impersonation.StartAsync(Username);
+            Navigation.NavigateTo("/domains");
+        }
+        catch (Exception error) when (error is UnauthorizedAccessException or InvalidOperationException
+            or ArgumentException or HttpRequestException)
+        {
+            impersonationError = error.Message;
+        }
+        finally { switching = false; }
+    }
+
+    private static Dictionary<string,string>? Copy(IReadOnlyDictionary<string,string>? fields) =>
+        fields?.ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
+}

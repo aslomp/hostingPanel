@@ -1,0 +1,49 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@using static HostingPanel.Web.Components.Layout.NavigationCatalog
+@inject NavigationContextState NavContext
+@implements IDisposable
+<div class="analytics-sidebar">
+    <div class="analytics-context">
+        <MudText Typo="Typo.overline" Class="analytics-nav-caption">@L["Navigation context"]</MudText>
+        <div class="analytics-context-switch" role="group" aria-label="@L["Navigation context"]">
+            <MudButton Size="Size.Small" Variant="@(NavContext.Mode == "admin" ? Variant.Filled : Variant.Text)" Color="Color.Primary" aria-pressed='@(NavContext.Mode == "admin" ? "true" : "false")' OnClick='() => SetContext("admin")'>@L["Administrator"]</MudButton>
+            <MudButton Size="Size.Small" Variant="@(NavContext.Mode == "user" ? Variant.Filled : Variant.Text)" Color="Color.Primary" aria-pressed='@(NavContext.Mode == "user" ? "true" : "false")' OnClick='() => SetContext("user")'>@L["User"]</MudButton>
+        </div>
+        <MudTextField T="string" @bind-Value="navSearch" Immediate="true" Placeholder="@L["Search pages"].Value" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Class="analytics-nav-search" aria-label="@L["Search pages"].Value" />
+    </div>
+    <MudNavMenu Dense="true" Class="analytics-nav" aria-label="@L["Navigation context"].Value" data-testid="panel-navigation">
+        <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">@L["Dashboard"]</MudNavLink>
+        @foreach (var navGroup in FilteredSections)
+        {
+            <MudNavGroup @key="navGroup.Title" Title="@L[navGroup.Title].Value" Expanded="true">
+                @foreach (var item in navGroup.Items)
+                {
+                    <MudNavLink @key="item.Label" Href="@item.Path" Match="NavLinkMatch.All">@L[item.Label]</MudNavLink>
+                }
+            </MudNavGroup>
+        }
+    </MudNavMenu>
+</div>
+
+@code {
+    private string navSearch = "";
+    protected override void OnInitialized() => NavContext.Changed += OnContextChanged;
+    private void OnContextChanged() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => NavContext.Changed -= OnContextChanged;
+    private void SetContext(string value)
+    {
+        NavContext.Select(value);
+        navSearch = "";
+    }
+    private IEnumerable<NavSection> CurrentSections =>
+        NavContext.Mode == "user" ? UserSections : AdminSections;
+    private IEnumerable<NavSection> FilteredSections => string.IsNullOrWhiteSpace(navSearch)
+        ? CurrentSections
+        : CurrentSections.Select(section => section with {
+            Items = L[section.Title].Value.Contains(navSearch, StringComparison.OrdinalIgnoreCase)
+                ? section.Items
+                : section.Items.Where(item => L[item.Label].Value.Contains(navSearch,
+                    StringComparison.OrdinalIgnoreCase)).ToArray()
+        }).Where(section => section.Items.Length > 0);
+}

@@ -1,0 +1,56 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@using HostingPanel.Api.Services
+@using HostingPanel.Api.Adapters
+@inject PanelSession Session
+@implements IDisposable
+@inject DnsOperations Dns
+<MudDialog>
+    <DialogContent>
+        <p>@L["Use the documented DirectAdmin DNS admin API. The backend checks permissions."]</p>
+        <MudGrid Spacing="3">
+          <MudItem xs="12" sm="6"><label>@L["Domain"]</label><MudTextField T="string" Disabled="@busy" @bind-Value="zoneDomain" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="example.com" /></MudItem>
+          <MudItem xs="12" sm="6"><label>@L["IPv4 address"]</label><MudTextField T="string" Disabled="@busy" @bind-Value="zoneIp" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="192.0.2.1" /></MudItem>
+          <MudItem xs="12" sm="6"><label>Nameserver 1</label><MudTextField T="string" Disabled="@busy" @bind-Value="zoneNs1" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="ns1.example.com" /></MudItem>
+          <MudItem xs="12" sm="6"><label>Nameserver 2</label><MudTextField T="string" Disabled="@busy" @bind-Value="zoneNs2" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="ns2.example.com" /></MudItem>
+        </MudGrid>
+
+        @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Disabled="@busy" OnClick="Cancel">@L["Cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || string.IsNullOrWhiteSpace(zoneDomain))" OnClick="Create">@L["Create DNS zone"]</MudButton>
+    </DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    private string zoneDomain = "", zoneIp = "", zoneNs1 = "", zoneNs2 = "";
+    private string? error => mutation.Error;
+    private readonly DialogMutation mutation = new();
+  private bool busy => mutation.Busy;
+  private string? openedChannel;
+    protected override void OnInitialized()
+  {
+    openedChannel = Session.TicketChannel;
+    Session.Changed += SessionChanged;
+  }
+  private void Cancel() { if (!busy) Dialog.Cancel(); }
+    private void SessionChanged() => _ = InvokeAsync(() =>
+  {
+    if (!Session.Connected || Session.TicketChannel != openedChannel) Dialog.Cancel();
+  });
+  public void Dispose()
+  {
+    Session.Changed -= SessionChanged;
+    mutation.Dispose();
+  }
+  private Task Create() => mutation.RunAsync(Session, openedChannel, async current =>
+  {
+      if (string.IsNullOrWhiteSpace(zoneDomain)) return;
+            var result = await Dns.CreateAsync(new DnsZoneCreate(zoneDomain.Trim(), zoneIp.Trim(), zoneNs1.Trim(), zoneNs2.Trim()));
+      if (!current()) return;
+            var status = result.Status;
+            if (result.Executed || result.ProvisioningPending) { Dialog.Close(DialogResult.Ok(true)); return; }
+            mutation.SetError(L["Creation not confirmed: backend HTTP {0}.", status].Value);
+  });
+}

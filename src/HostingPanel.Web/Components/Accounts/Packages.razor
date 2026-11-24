@@ -1,0 +1,114 @@
+@page "/user-packages"
+@page "/reseller-packages"
+@using HostingPanel.Api.Services
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject NavigationManager Navigation
+@inject PackageOperations PackagesApi
+@inject PanelSession Session
+@inject IDialogService Dialogs
+@implements IDisposable
+
+<PageTitle>@L[Heading]</PageTitle>
+<PanelPageHeader>
+    <Breadcrumb>@L["Account management"]</Breadcrumb>
+    <TitleContent>@L[Heading]</TitleContent>
+    <Actions>
+        <CrudAddButton Disabled="@(busy || names is null)" OnClick="@(() => Edit(null))">@L["Add package"]</CrudAddButton>
+        <MudButton Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton>
+    </Actions>
+</PanelPageHeader>
+@if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+@if (busy) { <PanelLoading>@L["Processing…"]</PanelLoading> }
+@if (names is not null)
+{
+    <MudPaper Class="pa-4">
+        <MudTextField T="string" Label="@L["Search"].Value" @bind-Value="search" Immediate="true" />
+        <MudTable T="string" Items="@names.Where(n => n.Contains(search, StringComparison.OrdinalIgnoreCase))" Dense="true" Hover="true">
+            <HeaderContent><MudTh>@L["Package"]</MudTh><MudTh>@L["Actions"]</MudTh></HeaderContent>
+            <RowTemplate>
+                <MudTd><MudButton Disabled="@busy" OnClick="@(() => Edit(context))">@context</MudButton></MudTd>
+                <MudTd><CrudDeleteButton Disabled="@busy" Label="@L["Delete package"].Value" OnClick="@(() => Delete(context))" /></MudTd>
+            </RowTemplate>
+            <NoRecordsContent><PanelEmptyState>@L["No packages found."]</PanelEmptyState></NoRecordsContent>
+            <PagerContent><MudTablePager /></PagerContent>
+        </MudTable>
+    </MudPaper>
+}
+@code {
+    private string Kind => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?')[0].TrimEnd('/') == "reseller-packages" ? "reseller" : "user";
+    private string Heading => Kind == "reseller" ? "Manage reseller packages" : "Manage user packages";
+    private IReadOnlyList<string>? names;
+    private string search = "";
+    private string? error;
+    private bool busy, disposed;
+    private string? loadedKind;
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedKind != Kind) await Load();
+    }
+    protected override void OnInitialized() => Session.Changed += SessionChanged;
+    private void SessionChanged() => _ = InvokeAsync(async () => { if (!disposed) { await Load(); StateHasChanged(); } });
+    public void Dispose() { disposed = true; Session.Changed -= SessionChanged; }
+    private async Task Load()
+    {
+        names = null; error = null;
+        if (!Session.Connected || disposed) return;
+        busy = true;
+        var kind = Kind;
+        var channel = Session.TicketChannel;
+        loadedKind = kind;
+        try
+        {
+            var result = await PackagesApi.ListAsync(kind);
+            if (disposed || Kind != kind || Session.TicketChannel != channel) return;
+            names = result.Packages;
+            if (names is null) error = L["Backend HTTP {0}.", result.Status].Value + " " + result.Error;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { error = ex.Message; }
+        finally { busy = false; }
+    }
+    private async Task Edit(string? name)
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; error = null;
+        var kind = Kind;
+        var channel = Session.TicketChannel;
+        try
+        {
+            HostingPackageDefinition? package = null;
+            if (name is not null)
+            {
+                var result = await PackagesApi.GetAsync(kind,name);
+                if (result.Package is null) { error = result.Error; return; }
+                package = result.Package;
+            }
+            if (disposed || Kind != kind || Session.TicketChannel != channel) return;
+            var dialog = await Dialogs.ShowAsync<PackageEditDialog>(
+                L[name is null ? "Add package" : "Edit package"].Value,
+                new DialogParameters<PackageEditDialog> { { x => x.Kind, kind }, { x => x.Package, package } },
+                new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Medium });
+            var resultDialog = await dialog.Result;
+            if (resultDialog is { Canceled: false } && !disposed && Kind == kind && Session.TicketChannel == channel) await Load();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { error = ex.Message; }
+        finally { busy = false; }
+    }
+    private async Task Delete(string name)
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; error = null;
+        var kind = Kind; var channel = Session.TicketChannel;
+        try
+        {
+            if (!await Dialogs.ConfirmResourceDeletionAsync(L["Delete package"].Value, name,
+                L["Permanently delete this package?"].Value, L["Enter the exact package name to confirm."].Value)) return;
+            if (disposed || Kind != kind || Session.TicketChannel != channel || !Session.Connected) return;
+            var result = await PackagesApi.DeleteAsync(kind,name);
+            if (result.Error is null && result.Status is >= 200 and < 300) await Load();
+            else error = result.Error ?? L["Backend HTTP {0}.", result.Status].Value;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { error = ex.Message; }
+        finally { busy = false; }
+    }
+}

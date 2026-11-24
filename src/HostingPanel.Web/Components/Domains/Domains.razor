@@ -1,0 +1,242 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@page "/domains"
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@inject DomainOperations DomainOps
+@inject HostingPanel.Api.HostingOperationNotifications Operations
+@implements IDisposable
+@inject NavigationManager Navigation
+@inject IDialogService Dialogs
+
+<PageTitle>@L["Domain management — HostingPanel"]</PageTitle>
+<PanelPageHeader>
+    <Breadcrumb>@L["Account management / Domains"]</Breadcrumb>
+    <TitleContent>@L["Domain management"]</TitleContent>
+    <Description>@L["Manage domains and website configuration through the selected hosting backend."]</Description>
+    <Actions><MudStack Row="true" Spacing="2"><CrudAddButton Disabled="@(!Session.Connected || mutationBusy || deleteDialogOpen)" OnClick="OpenCreate">@L["Add domain"]</CrudAddButton><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Refresh" Disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton></MudStack></Actions>
+</PanelPageHeader>
+
+@if (!Session.Connected)
+{
+    <MudPaper Class="pa-4 my-3" Elevation="1"><p>@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</p></MudPaper>
+}
+else
+{
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <h2>@L["Domains of an account"]</h2>
+        <p>@L["Leave blank to list all accessible domains, or enter an account to filter."]</p>
+        <label for="owner">@L["Username (optional)"]</label>
+        <MudTextField T="string" @bind-Value="owner" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="owner" Placeholder="@L["For example, an existing user"].Value" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Refresh" Disabled="@loading">@L["Retrieve"]</MudButton>
+        @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
+        @if (warning is not null) { <p role="status">@L["Not all account data is available: {0}", warning]</p> }
+        else if (loading) { <PanelLoading>@L["Retrieving domains…"]</PanelLoading> }
+        else if (domains is not null)
+        {
+            <p>@L["Domains found: {0}", domains.Count]</p>
+            <label for="domainFilter">@L["Filter domains"]</label>
+            <MudTextField T="string" @bind-Value="filter" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="domainFilter" Placeholder="@L["Search domain name"].Value" />
+            <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true">
+                <thead><tr><th>@L["Domain"]</th><th>Account</th><th>@L["Provisioning"]</th><th>@L["Actions"]</th></tr></thead>
+                <tbody>
+                @foreach (var domain in domains.Where(d => d.Contains(filter, StringComparison.OrdinalIgnoreCase)).OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
+                {
+                    <tr><td><a href="@($"/domains/{Uri.EscapeDataString(domain)}")">@domain</a> — <a href="@($"/domains/{Uri.EscapeDataString(domain)}/dns")">DNS</a></td><td>@(ownership.TryGetValue(domain, out var domainOwner) ? domainOwner : (string.IsNullOrWhiteSpace(owner) ? "—" : owner))</td><td>@L[provisioning.GetValueOrDefault(domain) ?? "Unknown"]</td><td><CrudDeleteButton Label="@L["Delete domain"].Value" OnClick="() => SelectDelete(domain)" Disabled="@mutationBusy" /></td></tr>
+                }
+                </tbody>
+            </MudSimpleTable>
+            @if (domains.Count == 0) { <PanelEmptyState>@L["No domains found for this account."]</PanelEmptyState> }
+        }
+    </MudPaper>
+
+    @if (mutationStatus is not null) { <MudAlert Severity="@(mutationFailed ? Severity.Error : Severity.Success)" Class="my-2">@mutationStatus</MudAlert> }
+
+}
+@code {
+    [SupplyParameterFromQuery(Name = "user")]
+    [Parameter] public string? User { get; set; }
+    private string owner = "";
+    private string filter = "";
+    private IReadOnlyList<string>? domains;
+    private Dictionary<string,string> ownership = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string,string> provisioning = new(StringComparer.OrdinalIgnoreCase);
+    private string? warning;
+    private string? error;
+    private bool loading;
+    private bool mutationBusy;
+    private string? mutationStatus;
+    private bool mutationFailed;
+    private async Task OpenCreate()
+    {
+        if (mutationBusy || deleteDialogOpen || !Session.Connected) return;
+        mutationBusy = true; mutationStatus = null;
+        try
+        {
+            var dialog = await Dialogs.ShowAsync<DomainCreateDialog>(L["Add domain"].Value,
+                new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = false, BackdropClick = false, CloseOnEscapeKey = false });
+            var result = await dialog.Result;
+            if (result is { Canceled: false })
+            {
+                mutationFailed = false;
+                mutationStatus = result.Data is int status && status == 202
+                    ? L["Domain operation accepted. Provisioning is pending."].Value
+                    : L["Domain operation completed."].Value;
+                await Refresh();
+            }
+        }
+        finally { mutationBusy = false; }
+    }
+
+    private bool disposed;
+    protected override void OnInitialized()
+    {
+        Operations.Changed += OperationChanged;
+        Session.Changed += SessionChanged;
+    }
+    private void SessionChanged() => _ = InvokeAsync(async () =>
+    {
+        if (disposed) return;
+        domains = null;
+        ownership.Clear();
+        provisioning.Clear();
+        warning = error = null;
+        await Refresh();
+        if (!disposed) StateHasChanged();
+    });
+    private void OperationChanged() { if (!disposed) _ = InvokeAsync(RefreshOperationState); }
+    public void Dispose() { disposed = true; Operations.Changed -= OperationChanged; Session.Changed -= SessionChanged; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        owner = User ?? "";
+        if (Session.Connected) await Refresh();
+    }
+
+    private Task RefreshOperationState() => Refresh();
+
+    private async Task Refresh()
+    {
+        if (disposed || !Session.Connected) return;
+        if (loading) { refreshRequested = true; return; }
+        loading = true;
+        var channel = Session.TicketChannel;
+        var selected = owner.Trim();
+        try
+        {
+            error = null;
+            IReadOnlyList<string> nextDomains;
+            var nextOwnership = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+            IReadOnlyDictionary<string,string>? nextStatus;
+            string? nextWarning = null;
+            if (selected.Length == 0)
+            {
+                var result = await DomainOps.ListAccessibleAsync();
+                if (disposed || Session.TicketChannel != channel || !Session.Connected || owner.Trim() != selected) return;
+                if (result.Status != 200 || result.Items is null)
+                {
+                    error = L["Domain list unavailable: HTTP {0}.", result.Status].Value;
+                    domains = null;
+                    return;
+                }
+                nextDomains = result.Items.Select(x => x.Domain).ToArray();
+                nextWarning = result.Warning;
+                nextStatus = result.Provisioning;
+                foreach (var item in result.Items) nextOwnership[item.Domain] = item.Owner;
+            }
+            else
+            {
+                var result = await DomainOps.ListAsync(selected);
+                if (disposed || Session.TicketChannel != channel || !Session.Connected || owner.Trim() != selected) return;
+                if (result.Status != 200 || result.Domains is null)
+                {
+                    error = L["Domain list unavailable: HTTP {0}.", result.Status].Value;
+                    domains = null;
+                    return;
+                }
+                nextDomains = result.Domains;
+                nextStatus = result.Provisioning;
+                foreach (var domain in nextDomains) nextOwnership[domain] = selected;
+            }
+            domains = nextDomains;
+            ownership = nextOwnership;
+            provisioning = nextStatus?.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)
+                ?? new(StringComparer.OrdinalIgnoreCase);
+            warning = nextWarning;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or FormatException
+            or InvalidOperationException or ArgumentException)
+        {
+            if (!disposed && Session.TicketChannel == channel && owner.Trim() == selected)
+            {
+                error = exception.Message;
+                domains = null;
+            }
+        }
+        finally
+        {
+            loading = false;
+            if (!disposed)
+            {
+                StateHasChanged();
+                if (refreshRequested)
+                {
+                    refreshRequested = false;
+                    await Refresh();
+                }
+            }
+        }
+    }
+    private bool refreshRequested;
+
+    private bool deleteDialogOpen;
+    private async Task SelectDelete(string domain)
+    {
+        if (mutationBusy || deleteDialogOpen || !Session.Connected) return;
+        deleteDialogOpen = true;
+        var identity = Session.Username;
+        try
+        {
+            var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+              $"{L["Delete domain"]}: {domain}", domain,
+              L["Permanently delete this domain? This cannot be undone."].Value,
+              L["Enter the exact domain name to confirm."].Value,
+              L["All domain website files, DNS records, routes and certificates will be removed."].Value);
+          if (confirmed &&
+                Session.Connected && string.Equals(identity, Session.Username, StringComparison.Ordinal))
+                await ExecuteMutation(domain, "delete");
+        }
+        finally { deleteDialogOpen = false; }
+    }
+    private async Task ExecuteMutation(string domain, string action)
+    {
+        if (mutationBusy || !Session.Connected || string.IsNullOrWhiteSpace(domain)) return;
+        mutationBusy = true;
+        mutationStatus = null;
+        try
+        {
+            var (status, errorCode) = await DomainOps.MutateAsync(new DomainMutationRequest(domain, action, domain, true, true, false));
+            mutationFailed = errorCode is not null || status is < 200 or >= 300;
+            mutationStatus = status switch
+            {
+                200 or 201 or 204 => L["Domain operation completed."].Value,
+                202 => L["Domain operation accepted. Provisioning is pending."].Value,
+                409 => L["The backend reported a conflict for this domain operation."].Value,
+                404 => L["Domain not found."].Value,
+                400 => L["Invalid domain or settings."].Value,
+                _ => L["Domain operation failed: HTTP {0}.", status].Value
+            };
+            if (errorCode is not null) mutationStatus += " " + errorCode;
+            if (!mutationFailed)
+            {
+                await Refresh();
+            }
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or ArgumentException)
+        {
+            mutationFailed = true;
+            mutationStatus = exception.Message;
+        }
+        finally { mutationBusy = false; }
+    }
+}

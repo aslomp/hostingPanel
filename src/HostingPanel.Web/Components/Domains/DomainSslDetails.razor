@@ -1,0 +1,21 @@
+@page "/domains/{Domain}/ssl"
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject PanelSession Session
+<PageTitle>@Domain — @L["Domain SSL"]</PageTitle>
+<PanelPageHeader>
+    <Breadcrumb><a href="/navigation/domain-ssl">@L["Domain SSL"]</a> / @Domain</Breadcrumb>
+    <TitleContent>@Domain</TitleContent>
+    <Description>@L["SSL Certificates / ACME Settings"]</Description>
+</PanelPageHeader>
+@if (Session.Connected)
+{
+    <DomainAcmeSettings @key="Domain" Domain="@Domain" />
+}
+else
+{
+    <PanelEmptyState>@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</PanelEmptyState>
+}
+@code {
+    [Parameter] public string Domain { get; set; } = "";
+}

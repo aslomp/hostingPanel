@@ -1,0 +1,67 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@inject AccountOperations Accounts
+
+<MudPaper Class="pa-4 my-3" Elevation="1">
+    <h2>@L["Account management"]</h2>
+    <MudStack Spacing="3">
+        @if (Kind == "user")
+        {
+        <MudTextField T="string" Label="@L["New package"].Value" @bind-Value="newPackage" Variant="Variant.Outlined" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@busy" OnClick="ChangePackage">@L["Change package"]</MudButton>
+        <MudDivider />
+        }
+        <MudSelect T="string" Label="@L["Limit"].Value" @bind-Value="limitField" Variant="Variant.Outlined">
+            <MudSelectItem T="string" Value="@("bandwidth")">@L["Bandwidth (MB)"]</MudSelectItem>
+            <MudSelectItem T="string" Value="@("quota")">@L["Disk space (MB)"]</MudSelectItem>
+            <MudSelectItem T="string" Value="@("inode")">Inodes</MudSelectItem>
+        </MudSelect>
+        <MudTextField T="string" Label="@L["New limit (number)"].Value" @bind-Value="limitValue" Variant="Variant.Outlined" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@busy" OnClick="ChangeLimit">@L["Change limit"]</MudButton>
+        <MudDivider />
+        <MudSelect T="string" Label="@L["Action"].Value" @bind-Value="suspend" Variant="Variant.Outlined">
+            <MudSelectItem T="string" Value="@("true")">@L["Suspend"]</MudSelectItem>
+            <MudSelectItem T="string" Value="@("false")">@L["Activate"]</MudSelectItem>
+        </MudSelect>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@busy" OnClick="ChangeSuspension">@L["Change account status"]</MudButton>
+    </MudStack>
+    @if (message is not null) { <MudAlert Severity="@(failed ? Severity.Error : Severity.Success)" Class="my-2">@message</MudAlert> }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public string Username { get; set; } = "";
+    [Parameter] public string Kind { get; set; } = "user";
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private string newPackage = "", limitField = "bandwidth", limitValue = "", suspend = "true";
+    private bool busy, failed;
+    private string? message;
+
+    private Task ChangePackage() => Run(() => Accounts.SetPackageAsync(Username, newPackage),
+        L["Package change request accepted."].Value);
+    private Task ChangeLimit() => Run(() => Accounts.SetLimitAsync(Kind, Username, limitField, limitValue),
+        L["Limit change request accepted."].Value);
+    private Task ChangeSuspension() => Run(() => Accounts.SetSuspendedAsync(Username, suspend == "true"),
+        L["Account status change request accepted."].Value);
+
+    private async Task Run(Func<Task<AccountOperationResult>> action, string success)
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; failed = false; message = null;
+        try
+        {
+            var (status, errorCode) = await action();
+            failed = errorCode is not null || status is < 200 or >= 300;
+            message = failed ? L["Backend HTTP {0}.", status].Value : success;
+            if (!failed) await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        {
+            failed = true;
+            message = ex.Message;
+        }
+        finally { busy = false; }
+    }
+}

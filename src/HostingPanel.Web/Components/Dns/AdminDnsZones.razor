@@ -1,0 +1,194 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@page "/dns-zones"
+@using HostingPanel.Api.Services
+@using HostingPanel.Api.Adapters
+@inject PanelSession Session
+@inject DnsOperations Dns
+@inject IDialogService Dialogs
+@implements IDisposable
+
+<PageTitle>@L["DNS management — HostingPanel"]</PageTitle>
+<PanelPageHeader>
+    <Breadcrumb>@L["Server management / DNS"]</Breadcrumb>
+    <TitleContent>@L["DNS management"]</TitleContent>
+    <Description>@L["All DNS zones exposed by the backend through DirectAdmin, including independently managed zones."]</Description>
+    <Actions><MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+      <CrudAddButton Disabled="@(loading || changing || !Session.Connected)" OnClick="CreateZone">@L["Create DNS zone"]</CrudAddButton>
+      <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Reload" Disabled="@(loading || changing)">@(loading ? L["Loading…"].Value : L["↻ Refresh"].Value)</MudButton>
+    </MudStack></Actions>
+</PanelPageHeader>
+@if (!Session.Connected)
+{
+    <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
+}
+else
+{
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <div class="dashboard-section-heading">
+          <h2>DNS-zones</h2>
+          @if (zones is not null) { <MudChip T="string" Size="Size.Small" Color="Color.Success">@zones.Count zones</MudChip> }
+        </div>
+        <label for="dnsSearch">@L["Search DNS zones"]</label>
+        <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dnsSearch" Placeholder="@L["Search domain name…"].Value" />
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <label for="localData">@L["Local data"]</label>
+            <MudSelect T="string" @bind-Value="localDataFilter" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="localData">
+                <MudSelectItem T="string" Value='@("all")'>@L["Both"]</MudSelectItem><MudSelectItem T="string" Value='@("yes")'>@L["Enabled"]</MudSelectItem>
+                <MudSelectItem T="string" Value='@("no")'>@L["Disabled"]</MudSelectItem>
+            </MudSelect>
+            <label for="localMail">@L["Local mail"]</label>
+            <MudSelect T="string" @bind-Value="localMailFilter" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="localMail">
+                <MudSelectItem T="string" Value='@("all")'>@L["Both"]</MudSelectItem><MudSelectItem T="string" Value='@("yes")'>@L["Enabled"]</MudSelectItem>
+                <MudSelectItem T="string" Value='@("no")'>@L["Disabled"]</MudSelectItem>
+            </MudSelect>
+        </MudStack>
+        @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
+        @if (loading) { <PanelLoading>@L["Retrieving DNS zones…"]</PanelLoading> }
+        @if (zones is not null)
+        {
+            <p>@L["DNS zones found: {0}.", Visible.Count] @(warning is null ? "" : L["Inventory may be incomplete: {0}", warning].Value)</p>
+            <MudSimpleTable Dense="true" Hover="true" Striped="true">
+                <thead><tr><th>@L["Domain"]</th><th>@L["Owner"]</th><th>@L["Local data"]</th><th>@L["Local mail"]</th><th>@L["Actions"]</th></tr></thead>
+                <tbody>
+                @foreach (var zone in Visible.Skip((EffectivePage - 1) * PageSize).Take(PageSize))
+                {
+                    <tr>
+                        <td><a href="@($"/domains/{Uri.EscapeDataString(zone.Domain)}/dns")">@zone.Domain</a></td>
+                        <td>@(string.IsNullOrWhiteSpace(zone.Owner) ? "—" : zone.Owner)</td>
+                        <td><MudChip T="string" Size="Size.Small" Color="@(zone.LocalData is true ? Color.Success : Color.Default)">@Display(zone.LocalData)</MudChip></td>
+                        <td><MudChip T="string" Size="Size.Small" Color="@(zone.LocalMail is true ? Color.Success : Color.Default)">@Display(zone.LocalMail)</MudChip></td>
+                        <td><CrudDeleteButton Label="@L["Delete DNS zone"].Value" Disabled="@(loading || changing)" OnClick="() => ConfirmDeletion(zone)" /></td>
+                    </tr>
+                }
+                </tbody>
+            </MudSimpleTable>
+            @if (Visible.Count == 0) { <PanelEmptyState>@L["No DNS zones match this filter."]</PanelEmptyState> }
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(loading || EffectivePage == 1)" OnClick="Previous">@L["Previous page"]</MudButton>
+                <span>@L["Page"] @EffectivePage</span>
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(loading || EffectivePage * PageSize >= Visible.Count)" OnClick="Next">@L["Next page"]</MudButton>
+            </MudStack>
+        }
+    </MudPaper>
+    @if (zoneMessage is not null) { <MudAlert Severity="@(failed ? Severity.Error : Severity.Success)">@zoneMessage</MudAlert> }
+}
+@code {
+    private const int PageSize = 50;
+    private List<AccessibleDnsZone>? zones;
+    private string search = "", localDataFilter = "all", localMailFilter = "all";
+    private string? error, warning;
+    private int currentPage = 1;
+    private readonly LatestRead read = new();
+    private bool loading => read.Loading;
+    private bool changing, disposed;
+    private bool failed;
+    private string? zoneMessage;
+
+    private IReadOnlyList<AccessibleDnsZone> Visible => (zones ?? [])
+        .Where(z => z.Domain.Contains(search, StringComparison.OrdinalIgnoreCase) &&
+            Matches(z.LocalData, localDataFilter) && Matches(z.LocalMail, localMailFilter))
+        .OrderBy(z => z.Domain, StringComparer.OrdinalIgnoreCase).ToArray();
+
+    private static bool Matches(bool? value, string filter) =>
+        filter == "all" || (value is not null && (filter == "yes") == value.Value);
+
+    private string Display(bool? value) =>
+        value switch { true => L["Yes"].Value, false => L["No"].Value, null => L["Unavailable"].Value };
+
+    protected override async Task OnInitializedAsync()
+    {
+        Session.Changed += SessionChanged;
+        await Reload();
+    }
+    private void SessionChanged() => _ = InvokeAsync(async () =>
+    {
+        if (disposed) return;
+        zoneMessage = null;
+        var task = Reload();
+        StateHasChanged();
+        await task;
+        if (!disposed) StateHasChanged();
+    });
+    public void Dispose()
+    {
+        disposed = true;
+        Session.Changed -= SessionChanged;
+        read.Dispose();
+    }
+    private int EffectivePage => Math.Clamp(currentPage, 1, Math.Max(1, (Visible.Count + PageSize - 1) / PageSize));
+    private void Previous() => currentPage = Math.Max(1, EffectivePage - 1);
+    private void Next() => currentPage = EffectivePage + 1;
+
+    private Task Reload()
+    {
+        if (disposed) return Task.CompletedTask;
+        zones = null;
+        warning = error = null;
+        if (!Session.Connected)
+        {
+            read.Cancel();
+            return Task.CompletedTask;
+        }
+        var channel = Session.TicketChannel;
+        return read.RunAsync(ct => Dns.ListAsync(ct),
+            () => Session.Connected && Session.TicketChannel == channel,
+            result =>
+            {
+                if (result.Status != 200 || result.Zones is null)
+                {
+                    error = result.Status == 403 ? L["The backend denied the server-wide DNS zone overview."].Value
+                        : L["DNS zones unavailable (HTTP {0}).", result.Status].Value;
+                    return;
+                }
+                zones = result.Zones.ToList();
+                warning = result.Warning;
+                currentPage = 1;
+            }, ex => error = ex.Message);
+    }
+    private async Task CreateZone()
+    {
+        if (disposed || changing || loading || !Session.Connected) return;
+        var channel = Session.TicketChannel;
+        changing = true; zoneMessage = null;
+        try
+        {
+            var dialog = await Dialogs.ShowAsync<DnsZoneCreateDialog>(L["Create standalone DNS zone"].Value,
+                new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = false, BackdropClick = false, CloseOnEscapeKey = false });
+            var result = await dialog.Result;
+            if (result is { Canceled: false } && !disposed && Session.Connected && Session.TicketChannel == channel)
+            {
+                failed = false; zoneMessage = L["DNS zone creation request accepted."].Value;
+                await Reload();
+            }
+        }
+        finally { changing = false; }
+    }
+
+    private async Task ConfirmDeletion(AccessibleDnsZone zone)
+    {
+        if (disposed || changing || loading || !Session.Connected || zones?.Contains(zone) != true) return;
+        var channel = Session.TicketChannel;
+        var identity = Session.Username;
+        changing = true; zoneMessage = null;
+        try
+        {
+            var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+                $"{L["Delete standalone DNS zone"]}: {zone.Domain}", zone.Domain,
+                L["Delete only the specified DNS zone; this is not the same as deleting a hosting domain."].Value,
+                L["Enter the exact domain name to confirm"].Value);
+            if (!confirmed || disposed || !Session.Connected || Session.TicketChannel != channel || identity != Session.Username || zones?.Contains(zone) != true) return;
+            var result = await Dns.DeleteAsync(zone.Domain, zone.Domain);
+            if (disposed || !Session.Connected || Session.TicketChannel != channel) return;
+            var status = result.Status;
+            failed = !result.Executed && !result.ProvisioningPending;
+            zoneMessage = failed ? L["Deletion not confirmed: backend HTTP {0}.", status].Value
+                : L["DNS zone deletion request accepted."].Value;
+            if (!failed) await Reload();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        { if (!disposed && Session.Connected && Session.TicketChannel == channel) { failed = true; zoneMessage = ex.Message; } }
+        finally { changing = false; }
+    }
+
+}

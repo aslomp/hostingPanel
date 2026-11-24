@@ -1,0 +1,69 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@implements IDisposable
+@inject DatabaseOperations DatabaseOps
+
+<MudDialog>
+  <DialogContent>
+    <MudForm @ref="form">
+    <p>@L["DirectAdmin adds the account prefix where necessary. The exact name is retrieved from the backend after creation."]</p>
+    <MudGrid Spacing="3">
+      <MudItem xs="12" sm="6"><label for="databaseName">@L["Database name"]</label>
+        <MudTextField T="string" Disabled="@busy" @bind-Value="newDatabase" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="databaseName" autocomplete="off" Placeholder="app" /></MudItem>
+      <MudItem xs="12" sm="6"><label for="dbUsername">@L["Database user"]</label>
+        <MudTextField T="string" Disabled="@busy" @bind-Value="newUser" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbUsername" autocomplete="off" Placeholder="app" /></MudItem>
+      <MudItem xs="12" sm="6"><label for="dbPassword">@L["Password"]</label>
+        <MudTextField T="string" Disabled="@busy" @bind-Value="newPassword" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbPassword" autocomplete="new-password" InputType="InputType.Password" /></MudItem>
+    </MudGrid>
+
+    </MudForm>
+    @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+  </DialogContent>
+  <DialogActions>
+    <MudButton OnClick="Cancel" Disabled="@busy">@L["Cancel"]</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Create" Disabled="@busy">@L["Create database"]</MudButton>
+  </DialogActions>
+</MudDialog>
+
+@code {
+  [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+  private MudForm form = default!;
+  private string newDatabase = "app", newUser = "app", newPassword = "";
+  private readonly DialogMutation mutation = new();
+  private bool busy => mutation.Busy;
+  private string? openedChannel;
+  private string? error => mutation.Error;
+  protected override void OnInitialized()
+  {
+    openedChannel = Session.TicketChannel;
+    Session.Changed += SessionChanged;
+  }
+  private void Cancel() { if (!busy) Dialog.Cancel(); }
+  private void SessionChanged() => _ = InvokeAsync(() =>
+  {
+    if (!Session.Connected || Session.TicketChannel != openedChannel) Dialog.Cancel();
+  });
+  public void Dispose()
+  {
+    Session.Changed -= SessionChanged;
+    mutation.Dispose();
+  }
+  private Task Create() => mutation.RunAsync(Session, openedChannel, async current =>
+  {
+      await form.ValidateAsync();
+      if (!current()) return;
+      if (!form.IsValid || !Session.Connected) return;
+      var (status, errorCode) = await DatabaseOps.CreateAsync(new DatabaseCreateRequest(newDatabase.Trim(), newUser.Trim(), newPassword));
+      if (!current()) return;
+      if (errorCode is null && status is >= 200 and < 300) { Dialog.Close(DialogResult.Ok(true)); return; }
+      mutation.SetError(status switch
+      {
+        409 => L["Mutations are disabled or the change could not be confirmed."].Value,
+        400 => L["Check the database name, username and password."].Value,
+        403 => L["The backend denied this database operation."].Value,
+        _ => L["The backend did not confirm creation (HTTP {0}).", status].Value
+      });
+  });
+}

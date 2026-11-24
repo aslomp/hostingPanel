@@ -1,3 +1,4 @@
+using HostingPanel.Api.Services;
 using HostingPanel.Providers.PowerDNS;
 using HostingPanel.Providers.CertManager;
 using HostingPanel.Api.Persistence;
@@ -22,6 +23,7 @@ public static class KubernetesRegistration
     services.AddScoped<KubernetesIdentityService>();
     services.AddScoped<IAuthenticationProvider>(sp => sp.GetRequiredService<KubernetesIdentityService>());
     services.AddScoped<KubernetesSettingsService>();
+    services.AddScoped<IAccountNameservers, KubernetesAccountNameservers>();
     services.AddScoped<IKubernetesSettingsReader>(sp => sp.GetRequiredService<KubernetesSettingsService>());
     services.AddScoped<IBackendSettingsAccess>(sp => sp.GetRequiredService<KubernetesSettingsService>());
     services.AddScoped<IHostingNetworkAccess>(sp => sp.GetRequiredService<KubernetesSettingsService>());
@@ -30,6 +32,9 @@ public static class KubernetesRegistration
     services.AddScoped<IDomainDnsStaging>(sp => sp.GetRequiredService<KubernetesProvisioningService>());
     services.AddScoped<KubernetesAccountService>();
     services.AddScoped<IAccountCatalog>(sp => sp.GetRequiredService<KubernetesAccountService>());
+    services.AddScoped<KubernetesPackageManagement>();
+    services.AddScoped<IPackageManagement>(sp => sp.GetRequiredService<KubernetesPackageManagement>());
+    services.AddScoped<IAccountPackages>(sp => sp.GetRequiredService<KubernetesPackageManagement>());
     services.AddScoped<IAccountMutations>(sp => sp.GetRequiredService<KubernetesAccountService>());
     services.AddScoped<IAccountOverview>(sp => sp.GetRequiredService<KubernetesAccountService>());
     services.AddScoped<IUserDetails>(sp => sp.GetRequiredService<KubernetesAccountService>());
@@ -107,6 +112,13 @@ public static class KubernetesRegistration
             });
             await db.SaveChangesAsync();
         }
+    }
+
+    // Existing installations with no packages also need a usable initial package.
+    if (!await db.Packages.AnyAsync())
+    {
+        db.Packages.Add(new HostingPackage { Name = "default", LimitsJson = "{}" });
+        await db.SaveChangesAsync();
     }
 
     }

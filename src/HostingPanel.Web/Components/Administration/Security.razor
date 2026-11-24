@@ -1,0 +1,161 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@page "/security"
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
+<PageTitle>@L["Security — HostingPanel"]</PageTitle>
+<PanelPageHeader>
+    <Breadcrumb>@L["Server management"]</Breadcrumb>
+    <TitleContent>@L["Security"]</TitleContent>
+    <Description>@L["ModSecurity and ClamAV through the official DirectAdmin API."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
+@if (!Session.Connected) { <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper> }
+else
+{
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <h2>ModSecurity</h2>
+        <label>@L["Configuration overview"]</label><JsonOverview Json="@modsecurity" />
+        <label>@L["Audit logs — summary"]</label><JsonOverview Json="@audit" />
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <h2>ClamAV</h2>
+        <p>@L["Active scan processes"]</p><JsonOverview Json="@clamav" />
+        <h2>@L["Start scan"]</h2>
+        <p>@L["Use a path that the DirectAdmin backend is permitted to scan. The backend validates the path and determines access."]</p>
+        <label>@L["Server path"]</label><MudTextField T="string" @bind-Value="scanPath" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="/home/..." />
+        <label>@L["Enter SCAN to confirm"]</label><MudTextField T="string" @bind-Value="scanConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+        <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(scanPath) || scanConfirmation != "SCAN")" @onclick="Scan">@L["Start ClamAV scan"]</button>
+        <h2>@L["Cancel scan"]</h2>
+        <label>@L["ClamAV process ID (PID)"]</label><MudTextField T="string" @bind-Value="scanPid" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+        <label>@L["Enter the same PID to confirm"]</label><MudTextField T="string" @bind-Value="pidConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || string.IsNullOrWhiteSpace(scanPid) || scanPid != pidConfirmation)" OnClick="CancelScan">@L["Cancel scan"]</MudButton>
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <h2>@L["ModSecurity for domain"]</h2>
+        <label>@L["Hostname"]</label><MudTextField T="string" @bind-Value="hostname" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="example.com" />
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="LoadHostConfig">@L["Retrieve configuration"]</MudButton>
+        <JsonOverview Json="@hostConfig" />
+        <label>@L["New domain configuration (JSON)"]</label>
+        <MudTextField T="string" @bind-Value="configJson" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Lines="6" spellcheck="false" />
+        <p>Vereist velden <code>engineEnabled</code> en <code>disabledRules</code>.</p>
+        <label>@L["Enter the hostname to confirm"]</label><MudTextField T="string" @bind-Value="hostConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || hostname != hostConfirmation)" OnClick="SaveHostConfig">@L["Replace configuration"]</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || hostname != hostConfirmation)" OnClick="ResetHostConfig">@L["Restore default configuration"]</MudButton>
+    </MudPaper>
+    @if (feedback is not null) { <p role="status">@feedback</p> }
+}
+@code {
+    private string modsecurity = "", audit = "", clamav = "", scanPath = "", scanConfirmation = "", scanPid = "", pidConfirmation = "", hostname = "", hostConfirmation = "", configJson = "", hostConfig = "";
+    private string? feedback;
+    private bool busy;
+    protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
+    private bool ValidHostname() =>
+        !string.IsNullOrWhiteSpace(hostname) && hostname.Length <= 253 &&
+        hostname.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-');
+    private async Task LoadHostConfig()
+    {
+        if (busy || !ValidHostname()) { feedback = L["Invalid hostname."].Value; return; }
+        busy = true; feedback = null;
+        try
+        {
+            var (status, body) = await ApiClient.GetRawAsync(
+                "api/modsecurity/configs/" + Uri.EscapeDataString(hostname));
+            hostConfig = $"HTTP {status}\\n{body}";
+            if (status == 200)
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("engineEnabled", out var enabled)
+                    && doc.RootElement.TryGetProperty("disabledRules", out var rules))
+                    configJson = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        engineEnabled = enabled.GetBoolean(),
+                        disabledRules = rules.Clone()
+                    }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException)
+        { feedback = ex.Message; }
+        finally { busy = false; }
+    }
+    private async Task SaveHostConfig()
+    {
+        if (busy || !ValidHostname() || hostConfirmation != hostname) return;
+        busy = true; feedback = null;
+        try
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(configJson);
+            if (json.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                !json.RootElement.TryGetProperty("engineEnabled", out var enabled) ||
+                enabled.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False) ||
+                !json.RootElement.TryGetProperty("disabledRules", out var rules) ||
+                rules.ValueKind != System.Text.Json.JsonValueKind.Array)
+            { feedback = L["JSON must contain engineEnabled (bool) and disabledRules (array)."].Value; return; }
+            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Put,
+                "api/modsecurity/configs/" + Uri.EscapeDataString(hostname), configJson);
+            feedback = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException)
+        { feedback = ex.Message; }
+        finally { busy = false; hostConfirmation = ""; }
+    }
+    private async Task ResetHostConfig()
+    {
+        if (busy || !ValidHostname() || hostConfirmation != hostname) return;
+        busy = true; feedback = null;
+        try
+        {
+            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Delete,
+                "api/modsecurity/configs/" + Uri.EscapeDataString(hostname));
+            feedback = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { feedback = ex.Message; }
+        finally { busy = false; hostConfirmation = ""; }
+    }
+    private async Task CancelScan()
+    {
+        if (busy || !Session.Connected || string.IsNullOrWhiteSpace(scanPid) ||
+            !scanPid.All(char.IsAsciiDigit) || scanPid != pidConfirmation) return;
+        busy = true; feedback = null;
+        try
+        {
+            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Delete,
+                "api/clamav/" + Uri.EscapeDataString(scanPid));
+            feedback = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { feedback = ex.Message; }
+        finally { busy = false; scanPid = ""; pidConfirmation = ""; }
+    }
+    private async Task Scan()
+    {
+        if (busy || !Session.Connected || string.IsNullOrWhiteSpace(scanPath) || scanConfirmation != "SCAN") return;
+        busy = true; feedback = null;
+        try
+        {
+            var payload = System.Text.Json.JsonSerializer.Serialize(new { path = scanPath });
+            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Post, "api/clamav", payload);
+            feedback = $"Backend HTTP {status}: {body}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { feedback = ex.Message; }
+        finally { busy = false; scanConfirmation = ""; }
+    }
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; feedback = null;
+        try
+        {
+            var (ms, mb) = await ApiClient.GetRawAsync("api/modsecurity/all-configs");
+            modsecurity = $"HTTP {ms}\n{mb}";
+            var (asCode, ab) = await ApiClient.GetRawAsync("api/modsecurity-audit-log/summary");
+            audit = $"HTTP {asCode}\n{ab}";
+            var (cs, cb) = await ApiClient.GetRawAsync("api/clamav");
+            clamav = $"HTTP {cs}\n{cb}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }
+        finally { busy = false; }
+    }
+}

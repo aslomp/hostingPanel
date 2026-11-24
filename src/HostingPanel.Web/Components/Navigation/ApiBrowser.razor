@@ -1,0 +1,34 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@page "/api-browser"
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
+
+<PageTitle>API — HostingPanel</PageTitle>
+<PanelPageHeader>
+    <Breadcrumb>@L["Integration"]</Breadcrumb>
+    <TitleContent>DirectAdmin API</TitleContent>
+    <Description>@L["View modern DirectAdmin-compatible HostingPanel API responses."]</Description>
+    </PanelPageHeader>
+<MudPaper Class="pa-4 my-3" Elevation="1"><p><a href="@SwaggerUrl" target="_blank" rel="noopener noreferrer">@L["Complete Swagger documentation (274 API paths)"]</a></p><p>@L["The complete pinned DirectAdmin specification; not every operation is implemented in HostingPanel yet."]</p></MudPaper>
+@if (!Session.Connected) { <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper> }
+else
+{
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <label>Endpoint<MudTextField T="string" @bind-Value="endpoint" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" /></label>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Fetch">@L["Retrieve"]</MudButton>
+        <p>@status</p>
+        <JsonOverview Json="@body" />
+    </MudPaper>
+}
+@code {
+    private string SwaggerUrl => "/swagger/index.html";
+    private string endpoint = "api/search/users?limit=1000";
+    private string status = "";
+    private string body = "";
+    private async Task Fetch()
+    {
+        try { var result = await ApiClient.GetRawAsync(endpoint); status = $"HTTP {result.Status}"; body = result.Body; }
+        catch (Exception ex) { status = ex.Message; body = ""; }
+    }
+}

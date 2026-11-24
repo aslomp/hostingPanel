@@ -8,10 +8,12 @@ public static class NavigationParityContractTests
         var root = FindRoot();
         var reference = File.ReadAllText(Path.Combine(root, "index.html"));
         var navigation = File.ReadAllText(Path.Combine(root,
-            "src/HostingPanel.Web/Components/Layout/MainLayout.razor"));
+            "src/HostingPanel.Web/Components/Layout/NavigationCatalog.cs"));
+        var sidebar = File.ReadAllText(Path.Combine(root,
+            "src/HostingPanel.Web/Components/Layout/PanelSidebar.razor"));
         var placeholder = File.ReadAllText(Path.Combine(root,
-            "src/HostingPanel.Web/Components/Pages/NavigationPage.razor"));
-        var pages = Path.Combine(root, "src/HostingPanel.Web/Components/Pages");
+            "src/HostingPanel.Web/Components/Navigation/NavigationPage.razor"));
+        var pages = Path.Combine(root, "src/HostingPanel.Web/Components");
 
         var translations = XDocument.Load(Path.Combine(root, "src/HostingPanel.Web/Resources/Localization.SharedResource.nl-NL.resx"))
             .Root!.Elements("data").ToDictionary(e => (string)e.Attribute("name")!, e => (string?)e.Element("value") ?? "");
@@ -66,14 +68,14 @@ public static class NavigationParityContractTests
         Require(sectionStart >= 0 && sectionEnd > sectionStart,
             "Reference index.html has no recognizable section definition");
         var referenceSectionText = reference[sectionStart..sectionEnd];
-        var paths = Directory.GetFiles(pages, "*.razor")
+        var paths = Directory.GetFiles(pages, "*.razor", SearchOption.AllDirectories)
             .SelectMany(path => Regex.Matches(File.ReadAllText(path),
                 @"@page ""(?<route>/[^""]+)""").Select(x => x.Groups["route"].Value))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // Parameter names are irrelevant for Blazor route matching:
         // /navigation/{Key} and /navigation/{Feature} would be ambiguous.
-        var routeOwners = Directory.GetFiles(pages, "*.razor")
+        var routeOwners = Directory.GetFiles(pages, "*.razor", SearchOption.AllDirectories)
             .SelectMany(file => Regex.Matches(File.ReadAllText(file),
                 @"@page ""(?<route>/[^""]+)""")
                 .Select(match => (File: Path.GetFileName(file),
@@ -108,18 +110,18 @@ public static class NavigationParityContractTests
                     "Unmapped prototype-only menu item: " + destination);
         }
 
-        Require(navigation.Contains("private static readonly NavSection[] AdminSections", StringComparison.Ordinal) &&
-                navigation.Contains("private static readonly NavSection[] UserSections", StringComparison.Ordinal) &&
-                navigation.Contains("NavContext.Mode == \"user\" ? UserSections : AdminSections",
+        Require(navigation.Contains("internal static readonly NavSection[] AdminSections", StringComparison.Ordinal) &&
+                navigation.Contains("internal static readonly NavSection[] UserSections", StringComparison.Ordinal) &&
+                sidebar.Contains("NavContext.Mode == \"user\" ? UserSections : AdminSections",
                     StringComparison.Ordinal),
             "Administrator and user navigation must be separate presentation contexts.");
-        Require(navigation.Contains("SetContext", StringComparison.Ordinal) &&
-                navigation.Contains("aria-pressed", StringComparison.Ordinal),
+        Require(sidebar.Contains("SetContext", StringComparison.Ordinal) &&
+                sidebar.Contains("aria-pressed", StringComparison.Ordinal),
             "Manual navigation context selector is required.");
-        Require(!navigation.Contains("Session.Role", StringComparison.Ordinal) &&
-                !navigation.Contains("isAdmin", StringComparison.Ordinal),
+        Require(!sidebar.Contains("Session.Role", StringComparison.Ordinal) &&
+                !sidebar.Contains("isAdmin", StringComparison.Ordinal),
             "Navigation must not perform local account-role authorization");
-        Require(navigation.Contains("Href=\"/\"", StringComparison.OrdinalIgnoreCase),
+        Require(sidebar.Contains("Href=\"/\"", StringComparison.OrdinalIgnoreCase),
             "Dashboard link missing");
     }
 

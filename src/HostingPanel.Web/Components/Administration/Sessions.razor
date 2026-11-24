@@ -1,0 +1,141 @@
+@using HostingPanel.Web.Localization
+@using System.Text.Json
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@page "/sessions"
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
+@inject IDialogService Dialogs
+
+<PageTitle>@L["Sessions — HostingPanel"]</PageTitle>
+<PanelPageHeader>
+    <Breadcrumb>@L["Account management"]</Breadcrumb>
+    <TitleContent>@L["Sessions"]</TitleContent>
+    <Description>@L["Current session, active sessions and session management from DirectAdmin."]</Description>
+    <Actions>
+        <MudStack Row="true" Spacing="2">
+            <MudButton Color="Color.Error" Variant="Variant.Outlined" Disabled="@(busy || !Session.Connected || sessions?.Any(x => !x.Current) != true)" OnClick="DestroyOthers">@L["Terminate all other sessions"]</MudButton>
+            <MudButton Variant="Variant.Outlined" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton>
+        </MudStack>
+    </Actions>
+</PanelPageHeader>
+@if (!Session.Connected)
+{
+    <PanelEmptyState>@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</PanelEmptyState>
+}
+else
+{
+    @if (feedback is not null) { <MudAlert Severity="@(failed ? Severity.Error : Severity.Success)">@feedback</MudAlert> }
+    @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+    @if (busy) { <PanelLoading>@L["Processing…"]</PanelLoading> }
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <h2>@L["Active sessions"]</h2>
+        <MudTextField T="string" @bind-Value="search" Immediate="true" Label="@L["Search"].Value" />
+        @if (sessions is not null)
+        {
+            <MudTable T="SessionRow" Items="@Visible" Dense="true" Hover="true" RowsPerPage="25">
+                <HeaderContent>
+                    <MudTh><MudTableSortLabel T="SessionRow" SortBy="@(x => x.User)">@L["Account"]</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="SessionRow" SortBy="@(x => x.Ip)">@L["IP address"]</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="SessionRow" SortBy="@(x => x.Created)">@L["Created"]</MudTableSortLabel></MudTh>
+                    <MudTh>@L["Expires"]</MudTh>
+                    <MudTh>@L["Status"]</MudTh>
+                    <MudTh>@L["Actions"]</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd><MudButton Variant="Variant.Text" Disabled="@busy" OnClick="@(() => ShowDetail(context))">@context.User</MudButton></MudTd>
+                    <MudTd>@context.Ip</MudTd>
+                    <MudTd>@context.Created</MudTd>
+                    <MudTd>@context.Expires</MudTd>
+                    <MudTd>@(context.Current ? L["Current session"].Value : context.Valid ? L["Active"].Value : L["Invalid"].Value)</MudTd>
+                    <MudTd>
+                        @if (!context.Current && ValidId(context.PublicId))
+                        {
+                            <CrudDeleteButton Label="@L["Terminate session"].Value" Disabled="@busy" OnClick="@(() => DestroySession(context))" />
+                        }
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent><PanelEmptyState>@L["No sessions found."]</PanelEmptyState></NoRecordsContent>
+                <PagerContent><MudTablePager /></PagerContent>
+            </MudTable>
+        }
+    </MudPaper>
+    @if (selected is not null)
+    {
+        <MudPaper Class="pa-4 my-3" Elevation="1">
+            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                <h2>@L["Session details"]</h2>
+                <MudButton OnClick="@(() => selected = null)">@L["Close"]</MudButton>
+            </MudStack>
+            <JsonOverview Json="@selected.Details" />
+        </MudPaper>
+    }
+    <MudExpansionPanels>
+        <MudExpansionPanel Text="@L["Current session"].Value"><JsonOverview Json="@current" /></MudExpansionPanel>
+    </MudExpansionPanels>
+}
+@code {
+    private sealed record SessionRow(string PublicId, string User, string Ip, string Created, string Expires, bool Current, bool Valid, string Details);
+    private List<SessionRow>? sessions;
+    private SessionRow? selected;
+    private string current = "", search = "";
+    private string? feedback, error;
+    private bool busy, failed;
+    private IEnumerable<SessionRow> Visible => (sessions ?? []).Where(x =>
+        x.User.Contains(search, StringComparison.OrdinalIgnoreCase) || x.Ip.Contains(search, StringComparison.OrdinalIgnoreCase));
+    private static bool ValidId(string id) => id.Length is > 0 and <= 128 && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_');
+    private static string Read(JsonElement row, string key) => row.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : "";
+    private void ShowDetail(SessionRow row) => selected = row;
+    protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
+
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; error = null;
+        try
+        {
+            var (cs, cb) = await ApiClient.GetRawAsync("api/session");
+            current = $"HTTP {cs}\n{cb}";
+            var (ls, lb) = await ApiClient.GetRawAsync("api/sessions");
+            if (ls != 200) { sessions = null; selected = null; error = L["Backend HTTP {0}.", ls].Value; return; }
+            using var doc = JsonDocument.Parse(lb);
+            sessions = doc.RootElement.EnumerateArray().Select(x => new SessionRow(
+                Read(x, "publicID"), Read(x, "loggedInAs"), Read(x, "ip"), Read(x, "created"), Read(x, "expires"),
+                !x.TryGetProperty("current", out var c) || c.ValueKind != JsonValueKind.False,
+                x.TryGetProperty("valid", out var v) && v.ValueKind == JsonValueKind.True,
+                JsonSerializer.Serialize(new { host = Read(x, "host"), loggedInAs = Read(x, "loggedInAs"), ip = Read(x, "ip"), created = Read(x, "created"), expires = Read(x, "expires") }))).ToList();
+            selected = selected is null ? null : sessions.FirstOrDefault(x => x.PublicId == selected.PublicId);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException)
+        { sessions = null; selected = null; error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private Task DestroySession(SessionRow row) =>
+        row.Current || !ValidId(row.PublicId) || sessions?.Contains(row) != true ? Task.CompletedTask :
+        ConfirmAndDestroy(row.PublicId, "api/sessions/destroy/" + Uri.EscapeDataString(row.PublicId), row);
+
+    private Task DestroyOthers() => ConfirmAndDestroy("DESTROY", "api/sessions/destroy-all-other", null);
+
+    private async Task ConfirmAndDestroy(string target, string endpoint, SessionRow? row)
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; feedback = null;
+        var identity = Session.Username;
+        try
+        {
+            var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+                row is null ? L["Terminate all other sessions"].Value : L["Terminate session"].Value,
+                target,
+                row is null ? L["The backend determines which sessions may be terminated. This operation preserves the current session."].Value : L["Terminate this session?"].Value,
+                row is null ? L["Enter DESTROY to confirm"].Value : L["Enter the same ID to confirm"].Value);
+            if (!confirmed || !Session.Connected || identity != Session.Username) return;
+            var (status, _) = await ApiClient.RequestApiAsync(HttpMethod.Post, endpoint);
+            failed = status is < 200 or >= 300;
+            feedback = failed ? L["Backend HTTP {0}.", status].Value : L["Session operation completed."].Value;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { failed = true; feedback = ex.Message; }
+        finally { busy = false; }
+        if (!failed) await Load();
+    }
+}

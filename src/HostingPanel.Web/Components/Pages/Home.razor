@@ -1,120 +1,119 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/"
-@inject DirectAdminSession Session
+@inject PanelSession Session
 @inject NavigationContextState NavContext
 
 <PageTitle>@L["Control panel"] — HostingPanel</PageTitle>
 <PanelPageHeader>
     <Breadcrumb>@L["Hosting administration / Dashboard"]</Breadcrumb>
-    <TitleContent>@L["Control panel"]</TitleContent>
+    <TitleContent>@L["Dashboard"]</TitleContent>
     <Description>@L["Manage domains, users, DNS, databases and server services from one dashboard."]</Description>
-    <Actions>@if (Session.Connected)
-  {
-    <MudChip T="string" Color="Color.Success" Size="Size.Small">@L["Connected"]</MudChip>
-  }</Actions>
+    <Actions>
+        @if (Session.Connected)
+        {
+            <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">@L["Connected"]</MudChip>
+        }
+    </Actions>
 </PanelPageHeader>
 
-<MudPaper Class="pa-5 my-4" Elevation="1">
-  <h2>@L["Welcome to HostingPanel"]</h2>
-  <p>@L["DirectAdmin Evolution-inspired management, with live data from the connected backend."]</p>
-</MudPaper>
+<div class="analytics-dashboard-intro">
+    <div>
+        <MudText Typo="Typo.overline" Color="Color.Secondary">@L["Welcome to HostingPanel"]</MudText>
+        <h2>@Session.Username</h2>
+        <p>@L["Manage domains, users, DNS, databases and server services from one dashboard."]</p>
+    </div>
+    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">@L["Backend connection active"]</MudChip>
+</div>
 
 @if (NavContext.Mode == "user")
 {
-  <MudGrid Spacing="3">
-    <MudItem xs="12" md="8">
-      <MudPaper Class="pa-4 my-3" Elevation="1">
-        <div class="dashboard-section-heading"><h2>@L["My hosting"]</h2><small>@L["User features"]</small></div>
-        <MudGrid Spacing="1">
-          <MudItem xs="12" sm="6"><MudButton Href="/domains" StartIcon="@Icons.Material.Filled.Language" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["Domain management"]</MudButton></MudItem>
-          <MudItem xs="12" sm="6"><MudButton Href="/dns-zones" StartIcon="@Icons.Material.Filled.Dns" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["DNS management"]</MudButton></MudItem>
-          <MudItem xs="12" sm="6"><MudButton Href="/databases" StartIcon="@Icons.Material.Filled.Storage" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["Databases"]</MudButton></MudItem>
-          <MudItem xs="12" sm="6"><MudButton Href="/change-password" StartIcon="@Icons.Material.Filled.Lock" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["Change password"]</MudButton></MudItem>
-        </MudGrid>
-      </MudPaper>
-      <MudPaper Class="pa-4 my-3" Elevation="1">
-        <div class="dashboard-section-heading"><h2>@L["Support and messages"]</h2><small>@L["Live notifications via SignalR"]</small></div>
-        <MudGrid Spacing="1">
-          <MudItem xs="12" sm="6"><MudButton Href="/tickets" StartIcon="@Icons.Material.Filled.SupportAgent" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["My tickets"]</MudButton></MudItem>
-          <MudItem xs="12" sm="6"><MudButton Href="/tickets/new" StartIcon="@Icons.Material.Filled.AddComment" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["Create ticket"]</MudButton></MudItem>
-          <MudItem xs="12" sm="6"><MudButton Href="/messages" StartIcon="@Icons.Material.Filled.Mail" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["Messages"]</MudButton></MudItem>
-        </MudGrid>
-      </MudPaper>
-    </MudItem>
-    <MudItem xs="12" md="4">
-      <MudPaper Class="pa-4 my-3" Elevation="1">
-        <h2>@L["Account"]</h2>
-        <MudChip T="string" Color="Color.Success" Size="Size.Small">@L["Connected to backend"]</MudChip>
-        <h3>@Session.Username</h3>
-        <p>@L["The user navigation is a display mode. The backend determines access."]</p>
-        <form method="post" action="/logout" data-enhance="false"><AntiforgeryToken /><MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined">@L["Disconnect"]</MudButton></form>
-      </MudPaper>
-    </MudItem>
-  </MudGrid>
+    <MudGrid Spacing="3">
+        <MudItem xs="12" lg="8">
+            <MudPaper Class="pa-5" Elevation="0">
+                <div class="dashboard-section-heading"><h2>@L["My hosting"]</h2><MudIcon Icon="@Icons.Material.Filled.Language" Color="Color.Primary" /></div>
+                <div class="analytics-shortcut-grid">
+                    <MudButton Href="/domains" StartIcon="@Icons.Material.Filled.Language" Variant="Variant.Text">@L["Domain management"]</MudButton>
+                    <MudButton Href="/dns-zones" StartIcon="@Icons.Material.Filled.Dns" Variant="Variant.Text">@L["DNS management"]</MudButton>
+                    <MudButton Href="/databases" StartIcon="@Icons.Material.Filled.Storage" Variant="Variant.Text">@L["Databases"]</MudButton>
+                    <MudButton Href="/change-password" StartIcon="@Icons.Material.Filled.Lock" Variant="Variant.Text">@L["Change password"]</MudButton>
+                </div>
+            </MudPaper>
+            <MudPaper Class="pa-5 mt-4" Elevation="0">
+                <div class="dashboard-section-heading"><h2>@L["Support and messages"]</h2><MudIcon Icon="@Icons.Material.Filled.SupportAgent" Color="Color.Primary" /></div>
+                <div class="analytics-shortcut-grid">
+                    <MudButton Href="/tickets" StartIcon="@Icons.Material.Filled.SupportAgent" Variant="Variant.Text">@L["My tickets"]</MudButton>
+                    <MudButton Href="/tickets/new" StartIcon="@Icons.Material.Filled.AddComment" Variant="Variant.Text">@L["Create ticket"]</MudButton>
+                    <MudButton Href="/messages" StartIcon="@Icons.Material.Filled.Mail" Variant="Variant.Text">@L["Messages"]</MudButton>
+                </div>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" lg="4">
+            <MudPaper Class="pa-5" Elevation="0">
+                <div class="dashboard-section-heading"><h2>@L["Account"]</h2><MudIcon Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Primary" /></div>
+                <MudText Typo="Typo.h6">@Session.Username</MudText>
+                <p class="muted">@L["The user navigation is a display mode. The backend determines access."]</p>
+                <form method="post" action="/logout" data-enhance="false">
+                    <AntiforgeryToken />
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Size="Size.Small">@L["Disconnect"]</MudButton>
+                </form>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
 }
 else
 {
-  <MudGrid Spacing="3">
-    <MudItem xs="12" md="8">
-      <MudPaper Class="pa-4 my-3" Elevation="1">
-        <div class="dashboard-section-heading"><h2>@L["Account management"]</h2><small>@L["Users and packages"]</small></div>
-        <MudGrid Spacing="1">
-          <MudItem xs="12" sm="6"><MudButton Href="/users" StartIcon="@Icons.Material.Filled.People" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["All users"]</MudButton></MudItem>
-          <MudItem xs="12" sm="6"><MudButton Href="/resellers" StartIcon="@Icons.Material.Filled.Group" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["Resellers"]</MudButton></MudItem>
-          <MudItem xs="12" sm="6"><MudButton Href="/change-password" StartIcon="@Icons.Material.Filled.Lock" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["Passwords"]</MudButton></MudItem>
-          <MudItem xs="12" sm="6"><MudButton Href="/domains" StartIcon="@Icons.Material.Filled.Language" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["Domains"]</MudButton></MudItem>
-        </MudGrid>
-      </MudPaper>
-      <MudPaper Class="pa-4 my-3" Elevation="1">
-        <div class="dashboard-section-heading"><h2>@L["Website and resource management"]</h2><small>@L["Live resources"]</small></div>
-        <MudGrid Spacing="1">
-          <MudItem xs="12" sm="6"><MudButton Href="/domains" StartIcon="@Icons.Material.Filled.Language" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["Domain management"]</MudButton></MudItem>
-          <MudItem xs="12" sm="6"><MudButton Href="/dns-zones" StartIcon="@Icons.Material.Filled.Dns" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["DNS management"]</MudButton></MudItem>
-          <MudItem xs="12" sm="6"><MudButton Href="/databases" StartIcon="@Icons.Material.Filled.Storage" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["Databases"]</MudButton></MudItem>
-          <MudItem xs="12" sm="6"><MudButton Href="/server-tls" StartIcon="@Icons.Material.Filled.Security" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">Server TLS</MudButton></MudItem>
-        </MudGrid>
-      </MudPaper>
-      <MudPaper Class="pa-4 my-3" Elevation="1">
-        <div class="dashboard-section-heading"><h2>@L["Server management"]</h2><small>@L["Settings and services"]</small></div>
-        <MudGrid Spacing="1">
-          <MudItem xs="12" sm="6"><MudButton Href="/server-settings" StartIcon="@Icons.Material.Filled.Settings" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["Settings"]</MudButton></MudItem>
-          <MudItem xs="12" sm="6"><MudButton Href="/system-services" StartIcon="@Icons.Material.Filled.SettingsApplications" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["System services"]</MudButton></MudItem>
-          <MudItem xs="12" sm="6"><MudButton Href="/system-info" StartIcon="@Icons.Material.Filled.Info" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["System information"]</MudButton></MudItem>
-          <MudItem xs="12" sm="6"><MudButton Href="/system-updates" StartIcon="@Icons.Material.Filled.Update" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["Updates"]</MudButton></MudItem>
-        </MudGrid>
-      </MudPaper>
-      <MudPaper Class="pa-4 my-3" Elevation="1">
-        <div class="dashboard-section-heading"><h2>@L["Admin tools"]</h2><small>@L["Security and API"]</small></div>
-        <MudGrid Spacing="1">
-          <MudItem xs="12" sm="6"><MudButton Href="/security" StartIcon="@Icons.Material.Filled.Security" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["ModSecurity and ClamAV"]</MudButton></MudItem>
-          <MudItem xs="12" sm="6"><MudButton Href="/sessions" StartIcon="@Icons.Material.Filled.History" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["Sessions"]</MudButton></MudItem>
-          <MudItem xs="12" sm="6"><MudButton Href="/api-browser" StartIcon="@Icons.Material.Filled.Code" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["DirectAdmin API"]</MudButton></MudItem>
-          <MudItem xs="12" sm="6"><MudButton Href="/navigation/backup-restore" StartIcon="@Icons.Material.Filled.Backup" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["Backup and restore"]</MudButton></MudItem>
-        </MudGrid>
-      </MudPaper>
-    </MudItem>
-    <MudItem xs="12" md="4">
-      <MudPaper Class="pa-4 my-3" Elevation="1">
-        <div class="dashboard-section-heading"><h2>@L["Connected account"]</h2></div>
-        <MudChip T="string" Color="Color.Success" Size="Size.Small">@L["Backend connection active"]</MudChip>
-        <h3>@Session.Username</h3>
-        <p>@L["The backend determines available data and actions. No account roles are assumed."]</p>
-        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mt-3"><form method="post" action="/logout" data-enhance="false"><AntiforgeryToken /><MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined">@L["Disconnect"]</MudButton></form></MudStack>
-      </MudPaper>
-      <MudPaper Class="pa-4 my-3" Elevation="1">
-        <div class="dashboard-section-heading"><h2>@L["Quick access"]</h2></div>
-        <MudButton Href="/databases" StartIcon="@Icons.Material.Filled.Storage" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["Database management"]</MudButton>
-        <MudButton Href="/dns-zones" StartIcon="@Icons.Material.Filled.Dns" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["Manage DNS"]</MudButton>
-        <MudButton Href="/system-services" StartIcon="@Icons.Material.Filled.SettingsApplications" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["View services"]</MudButton>
-        <MudButton Href="/resellers" StartIcon="@Icons.Material.Filled.Group" Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="justify-start">@L["Manage accounts"]</MudButton>
-      </MudPaper>
-      <MudPaper Class="pa-4 my-3" Elevation="1">
-        <div class="dashboard-section-heading"><h2>@L["Integration"]</h2></div>
-        <p>@L["All displayed resources use the existing HostingPanel API. Unimplemented navigation items are explicitly marked."]</p>
-        <a href="/api-browser">@L["View API documentation and responses"]</a>
-      </MudPaper>
-    </MudItem>
-  </MudGrid>
+    <MudGrid Spacing="3">
+        <MudItem xs="12" lg="8">
+            <MudPaper Class="pa-5" Elevation="0">
+                <div class="dashboard-section-heading"><h2>@L["Account management"]</h2><MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary" /></div>
+                <div class="analytics-shortcut-grid">
+                    <MudButton Href="/users" StartIcon="@Icons.Material.Filled.People" Variant="Variant.Text">@L["All users"]</MudButton>
+                    <MudButton Href="/resellers" StartIcon="@Icons.Material.Filled.Group" Variant="Variant.Text">@L["Resellers"]</MudButton>
+                    <MudButton Href="/domains" StartIcon="@Icons.Material.Filled.Language" Variant="Variant.Text">@L["Domains"]</MudButton>
+                    <MudButton Href="/change-password" StartIcon="@Icons.Material.Filled.Lock" Variant="Variant.Text">@L["Passwords"]</MudButton>
+                </div>
+            </MudPaper>
+            <MudPaper Class="pa-5 mt-4" Elevation="0">
+                <div class="dashboard-section-heading"><h2>@L["Website and resource management"]</h2><MudIcon Icon="@Icons.Material.Filled.Storage" Color="Color.Primary" /></div>
+                <div class="analytics-shortcut-grid">
+                    <MudButton Href="/domains" StartIcon="@Icons.Material.Filled.Language" Variant="Variant.Text">@L["Domain management"]</MudButton>
+                    <MudButton Href="/dns-zones" StartIcon="@Icons.Material.Filled.Dns" Variant="Variant.Text">@L["DNS management"]</MudButton>
+                    <MudButton Href="/databases" StartIcon="@Icons.Material.Filled.Storage" Variant="Variant.Text">@L["Databases"]</MudButton>
+                    <MudButton Href="/server-tls" StartIcon="@Icons.Material.Filled.Security" Variant="Variant.Text">Server TLS</MudButton>
+                </div>
+            </MudPaper>
+            <MudPaper Class="pa-5 mt-4" Elevation="0">
+                <div class="dashboard-section-heading"><h2>@L["Server management"]</h2><MudIcon Icon="@Icons.Material.Filled.Settings" Color="Color.Primary" /></div>
+                <div class="analytics-shortcut-grid">
+                    <MudButton Href="/server-settings" StartIcon="@Icons.Material.Filled.Settings" Variant="Variant.Text">@L["Settings"]</MudButton>
+                    <MudButton Href="/system-services" StartIcon="@Icons.Material.Filled.SettingsApplications" Variant="Variant.Text">@L["System services"]</MudButton>
+                    <MudButton Href="/system-info" StartIcon="@Icons.Material.Filled.Info" Variant="Variant.Text">@L["System information"]</MudButton>
+                    <MudButton Href="/system-updates" StartIcon="@Icons.Material.Filled.Update" Variant="Variant.Text">@L["Updates"]</MudButton>
+                </div>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" lg="4">
+            <MudPaper Class="pa-5" Elevation="0">
+                <div class="dashboard-section-heading"><h2>@L["Connected account"]</h2><MudIcon Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Primary" /></div>
+                <MudText Typo="Typo.h6">@Session.Username</MudText>
+                <p class="muted">@L["The backend determines available data and actions. No account roles are assumed."]</p>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success">@L["Backend connection active"]</MudChip>
+            </MudPaper>
+            <MudPaper Class="pa-5 mt-4" Elevation="0">
+                <div class="dashboard-section-heading"><h2>@L["Admin tools"]</h2><MudIcon Icon="@Icons.Material.Filled.Build" Color="Color.Primary" /></div>
+                <div class="analytics-shortcut-grid analytics-shortcut-list">
+                    <MudButton Href="/security" StartIcon="@Icons.Material.Filled.Security" Variant="Variant.Text">@L["ModSecurity and ClamAV"]</MudButton>
+                    <MudButton Href="/sessions" StartIcon="@Icons.Material.Filled.History" Variant="Variant.Text">@L["Sessions"]</MudButton>
+                    <MudButton Href="/api-browser" StartIcon="@Icons.Material.Filled.Code" Variant="Variant.Text">@L["DirectAdmin API"]</MudButton>
+                    <MudButton Href="/navigation/backup-restore" StartIcon="@Icons.Material.Filled.Backup" Variant="Variant.Text">@L["Backup and restore"]</MudButton>
+                </div>
+            </MudPaper>
+            <MudPaper Class="pa-5 mt-4" Elevation="0">
+                <div class="dashboard-section-heading"><h2>@L["Integration"]</h2><MudIcon Icon="@Icons.Material.Filled.Extension" Color="Color.Primary" /></div>
+                <p class="muted">@L["All displayed resources use the existing HostingPanel API. Unimplemented navigation items are explicitly marked."]</p>
+                <MudButton Href="/api-browser" StartIcon="@Icons.Material.Filled.Code" Variant="Variant.Outlined" Size="Size.Small">@L["DirectAdmin API"]</MudButton>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
 }
-

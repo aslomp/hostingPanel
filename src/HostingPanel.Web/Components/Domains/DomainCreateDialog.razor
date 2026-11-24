@@ -1,0 +1,71 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@implements IDisposable
+@inject DomainOperations DomainOps
+
+<MudDialog>
+    <DialogContent>
+        <p>@L["Create a website for the signed-in account."]</p>
+        <MudForm @ref="createForm">
+        <MudTextField T="string" Disabled="@busy" @bind-Value="testDomain" Label="@L["Domain name"].Value" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="newDomain" Placeholder="example.com" />
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudCheckBox T="bool" Disabled="@busy" @bind-Value="php" Label="PHP" />
+            <MudCheckBox T="bool" Disabled="@busy" @bind-Value="ssl" Label="SSL" />
+            <MudCheckBox T="bool" Disabled="@busy" @bind-Value="cgi" Label="CGI" />
+        </MudStack>
+
+        </MudForm>
+        @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Disabled="@busy" OnClick="Cancel">@L["Cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || string.IsNullOrWhiteSpace(testDomain))" OnClick="Create">@L["Add domain"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    private MudForm createForm = default!;
+    private string testDomain = "";
+    private bool php = true, ssl = true, cgi;
+    private readonly DialogMutation mutation = new();
+    private bool busy => mutation.Busy;
+    private string? error => mutation.Error;
+    private string? openedChannel;
+    protected override void OnInitialized()
+    {
+        openedChannel = Session.TicketChannel;
+        Session.Changed += SessionChanged;
+    }
+
+    private void Cancel() { if (!busy) Dialog.Cancel(); }
+    private bool disposed;
+    private void SessionChanged() => _ = InvokeAsync(() =>
+    {
+        if (!disposed && (!Session.Connected || Session.TicketChannel != openedChannel)) Dialog.Cancel();
+    });
+    public void Dispose()
+    {
+        disposed = true;
+        Session.Changed -= SessionChanged;
+        mutation.Dispose();
+    }
+    private Task Create() => mutation.RunAsync(Session, openedChannel, async current =>
+    {
+        await createForm.ValidateAsync();
+        if (!current() || !createForm.IsValid || string.IsNullOrWhiteSpace(testDomain)) return;
+        var domain = testDomain.Trim().ToLowerInvariant();
+        var (status, errorCode) = await DomainOps.MutateAsync(new DomainMutationRequest(domain, "create", domain, php, ssl, cgi));
+        if (!current()) return;
+        if (errorCode is null && status is >= 200 and < 300) { Dialog.Close(DialogResult.Ok(status)); return; }
+        var message = status switch
+        {
+            409 => L["The backend reported a conflict for this domain operation."].Value,
+            400 => L["Invalid domain or settings."].Value,
+            _ => L["Domain operation failed: HTTP {0}.", status].Value
+        };
+        mutation.SetError(errorCode is null ? message : message + " " + errorCode);
+    });
+}

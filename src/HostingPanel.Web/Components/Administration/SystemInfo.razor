@@ -1,0 +1,68 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@page "/system-info"
+@using System.Text.Json
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
+<PageTitle>@L["System information — HostingPanel"]</PageTitle>
+<PanelPageHeader>
+    <Breadcrumb>@L["Server management"]</Breadcrumb>
+    <TitleContent>@L["System information"]</TitleContent>
+    <Description>@L["Live information from the connected backend."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Refresh">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
+@if (!Session.Connected) { <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper> }
+else
+{
+    @if (busy) { <PanelLoading>@L["Retrieving system information…"]</PanelLoading> }
+    <MudGrid Spacing="3">
+        @foreach (var item in checks)
+        {
+            <MudItem xs="12" md="6"><MudPaper Class="pa-4 my-3" Elevation="1">
+                <h2>@item.Label</h2><p>HTTP @item.Status</p>
+                <JsonOverview Json="@item.Body" />
+            </MudPaper></MudItem>
+        }
+    </MudGrid>
+}
+@code {
+    private sealed record Check(string Label, string Endpoint, int Status, string Body);
+    private (string Label, string Endpoint)[] sources => [
+        (L["General information"].Value, "api/info"),
+        ("Processor", "api/system-info/cpu"),
+        ("Geheugen", "api/system-info/memory"),
+        ("Belasting", "api/system-info/load"),
+        ("Bestandssystemen", "api/system-info/fs"),
+        ("Uptime", "api/system-info/uptime"),
+        ("Services", "api/system-info/services")
+    ];
+    private List<Check> checks = [];
+    private bool busy;
+    protected override async Task OnInitializedAsync() { if (Session.Connected) await Refresh(); }
+    private async Task Refresh()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true;
+        try
+        {
+            var result = new List<Check>();
+            foreach (var source in sources)
+            {
+                try
+                {
+                    var (status, body) = await ApiClient.GetRawAsync(source.Endpoint);
+                    result.Add(new(source.Label, source.Endpoint, status, Pretty(body)));
+                }
+                catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException)
+                { result.Add(new(source.Label, source.Endpoint, 0, ex.Message)); }
+            }
+            checks = result;
+        }
+        finally { busy = false; }
+    }
+    private static string Pretty(string input)
+    {
+        try { using var doc = JsonDocument.Parse(input); return JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true }); }
+        catch (JsonException) { return input; }
+    }
+}

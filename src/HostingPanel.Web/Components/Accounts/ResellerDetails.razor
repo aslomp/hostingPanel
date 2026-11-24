@@ -1,0 +1,69 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@page "/resellers/{Username}"
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
+
+<PageTitle>@Username — HostingPanel</PageTitle>
+<PanelPageHeader>
+    <Breadcrumb><a href="/resellers">@L["Reseller management"]</a> / @Username</Breadcrumb>
+    <TitleContent>@Username</TitleContent>
+    <Description>@L["Reseller details"]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
+@if (!Session.Connected)
+{
+    <MudAlert Severity="Severity.Warning">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudAlert>
+}
+else
+{
+    @if (busy) { <PanelLoading>@L["Loading…"]</PanelLoading> }
+    @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+    @if (configuration is not null)
+    {
+        <MudPaper Class="pa-4 my-3">
+            <h2>@L["Configuration"]</h2>
+            <JsonOverview Json="@configuration" />
+        </MudPaper>
+        <MudPaper Class="pa-4 my-3">
+            <h2>@L["Usage"]</h2>
+            <JsonOverview Json="@usage" />
+        </MudPaper>
+        <UserManagementActions @key="Username" Username="@Username" Kind="reseller" OnChanged="Load" />
+    }
+}
+
+@code {
+    [Parameter] public string Username { get; set; } = "";
+    private string? configuration, usage, error;
+    private bool busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        configuration = null; usage = null;
+        if (Session.Connected) await Load();
+    }
+
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; error = null;
+        try
+        {
+            var path = Uri.EscapeDataString(Username);
+            var (status, body) = await ApiClient.GetRawAsync($"api/resellers/{path}/config");
+            if (status != 200)
+            {
+                configuration = null; usage = null;
+                error = L["DirectAdmin returned HTTP {0}.", status].Value;
+                return;
+            }
+            configuration = body;
+            var (usageStatus, usageBody) = await ApiClient.GetRawAsync($"api/resellers/{path}/usage");
+            usage = usageStatus == 200 ? usageBody : L["DirectAdmin returned HTTP {0}.", usageStatus].Value;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        { error = ex.Message; }
+        finally { busy = false; }
+    }
+}

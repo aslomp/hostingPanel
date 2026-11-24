@@ -1,0 +1,213 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@page "/databases"
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@inject DatabaseOperations DatabaseOps
+@inject IDialogService Dialogs
+@implements IDisposable
+
+<PageTitle>@L["Database management — HostingPanel"]</PageTitle>
+<PanelPageHeader>
+    <Breadcrumb>@L["Account management / Databases"]</Breadcrumb>
+    <TitleContent>@L["Database management"]</TitleContent>
+    <Description>@L["Databases belonging to your account and all subordinate accounts accessible through the backend."]</Description>
+    <Actions><MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+    <CrudAddButton Disabled="@(!Session.Connected || creating || deleting)" OnClick="OpenCreate">@L["Create database"]</CrudAddButton>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(loading || overallLoading)" OnClick="RefreshAll">@L["↻ Refresh"]</MudButton>
+  </MudStack></Actions>
+</PanelPageHeader>
+@if (!Session.Connected)
+{
+  <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper>
+}
+else
+{
+  <MudPaper Class="pa-4 my-3" Elevation="1">
+    <div class="dashboard-section-heading"><h2>@L["All accessible databases"]</h2>
+      @if (overall is not null) { <MudChip T="string" Size="Size.Small" Color="@(overallWarnings.Count == 0 ? Color.Success : Color.Warning)">@L["Found: {0}", overall.Count]</MudChip> }
+    </div>
+    <p>@L["Includes databases of subordinate accounts where DirectAdmin permits access."]</p>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@overallLoading" OnClick="LoadOverall">@L["Refresh overview"]</MudButton>
+    @if (overallLoading) { <PanelLoading>@L["Retrieving databases from accessible accounts…"]</PanelLoading> }
+    @if (overallError is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@overallError</MudAlert> }
+    @if (overall is not null)
+    {
+      <p>@L["Databases found: {0}.", overall.Count] @(overallWarnings.Count == 0 ? L["Complete inventory."].Value : L["Incomplete: {0} accounts could not be read.", overallWarnings.Count].Value)</p>
+      <label for="overallDbFilter">@L["Search databases"]</label>
+      <MudTextField T="string" @bind-Value="overallSearch" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="overallDbFilter" Placeholder="@L["Search database or owner…"].Value" />
+      <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>@L["Owner"]</th><th>Database</th><th>@L["Tables"]</th><th>@L["Users"]</th><th>@L["Size (bytes)"]</th><th>Definer issues</th></tr></thead><tbody>
+        @foreach (var item in overall.Where(x => x.Owner.Contains(overallSearch, StringComparison.OrdinalIgnoreCase) || x.Name.Contains(overallSearch, StringComparison.OrdinalIgnoreCase)))
+        {
+          <tr>
+            <td><a href="@($"/users/{Uri.EscapeDataString(item.Owner)}")">@item.Owner</a></td>
+            <td><strong>@item.Name</strong></td>
+            <td>@item.TableCount.ToString("N0")</td><td>@item.UserCount.ToString("N0")</td>
+            <td>@FormatBytes(item.SizeBytes)</td><td><MudChip T="string" Size="Size.Small" Color="@(item.DefinerIssues == 0 ? Color.Success : Color.Warning)">@item.DefinerIssues</MudChip></td>
+          </tr>
+        }
+      </tbody></MudSimpleTable>
+      @if (overall.Count == 0) { <PanelEmptyState>@L["The backend returned no databases for accessible accounts."]</PanelEmptyState> }
+      @foreach (var warning in overallWarnings)
+      {
+        <p class="error">@warning</p>
+      }
+    }
+  </MudPaper>
+  <MudPaper Class="pa-4 my-3" Elevation="1">
+    <h2>@L["Databases in the current session"]</h2>
+    <p>@L["Manage databases in the current session. For other accounts, use backend-supported session switching."]</p>
+
+    @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
+    @if (loading) { <PanelLoading>@L["Loading databases…"]</PanelLoading> }
+    @if (databases is not null)
+    {
+      <label for="dbFilter">@L["Search databases"] (@databases.Count)</label>
+      <MudTextField T="string" @bind-Value="search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dbFilter" Placeholder="@L["Database name"].Value" />
+      <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>Database</th><th>@L["Actions"]</th></tr></thead><tbody>
+        @foreach(var database in databases.Where(x => x.Contains(search,StringComparison.OrdinalIgnoreCase)).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+        {
+          <tr><td><a href="@($"/databases/{Uri.EscapeDataString(database)}")">@database</a></td>
+            <td><CrudDeleteButton Label="@L["Delete database"].Value" Disabled="@(creating || deleting)" OnClick="() => ConfirmDelete(database)" /></td></tr>
+        }
+      </tbody></MudSimpleTable>
+      @if(databases.Count==0) { <PanelEmptyState>@L["No databases found."]</PanelEmptyState> }
+    }
+  </MudPaper>
+  @if (createMessage is not null) { <MudAlert Severity="@(mutationFailed ? Severity.Error : Severity.Success)" Class="my-2">@createMessage</MudAlert> }
+}
+@code {
+  private List<DatabaseOverviewRow>? overall;
+  private List<string> overallWarnings = [];
+  private string? overallError;
+  private readonly LatestRead overallRead = new();
+  private bool overallLoading => overallRead.Loading;
+  private List<string>? databases;
+  private string search = "", overallSearch = "";
+  private string? error, createMessage;
+  private readonly LatestRead ownRead = new();
+  private bool loading => ownRead.Loading;
+  private bool creating, deleting, mutationFailed, disposed;
+  private async Task OpenCreate()
+  {
+    if (disposed || creating || deleting || !Session.Connected) return;
+    var channel = Session.TicketChannel;
+    creating = true; createMessage = null;
+    try
+    {
+      var dialog = await Dialogs.ShowAsync<DatabaseCreateDialog>(L["Create database with user"].Value,
+        new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = false, BackdropClick = false, CloseOnEscapeKey = false });
+      var result = await dialog.Result;
+      if (result is { Canceled: false } && !disposed && Session.Connected && Session.TicketChannel == channel)
+      {
+        mutationFailed = false;
+        createMessage = L["Database creation request accepted."].Value;
+        await RefreshAll();
+      }
+    }
+    finally { creating = false; }
+  }
+  private async Task ConfirmDelete(string database)
+  {
+    if (disposed || deleting || creating || loading || !Session.Connected || databases?.Contains(database) != true) return;
+    deleting = true;
+    var channel = Session.TicketChannel;
+    var identity = Session.Username;
+    try
+    {
+      var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+        L["Delete database"].Value, database,
+        L["This deletes the database and may cause irreversible data loss. Enter the exact database name to confirm."].Value,
+        L["Enter the exact database name to confirm."].Value);
+      if (!confirmed || disposed || !Session.Connected || Session.TicketChannel != channel || identity != Session.Username || databases?.Contains(database) != true) return;
+      var (status, errorCode) = await DatabaseOps.DeleteAsync(database, database);
+      if (disposed || !Session.Connected || Session.TicketChannel != channel) return;
+      mutationFailed = errorCode is not null || status is < 200 or >= 300;
+      createMessage = mutationFailed ? L["Database deletion not confirmed (HTTP {0}).", status].Value : L["Database deletion request accepted."].Value;
+      if (!mutationFailed) await RefreshAll();
+    }
+    catch (Exception ex) when (ex is HttpRequestException or ArgumentException or InvalidOperationException)
+    { if (!disposed && Session.Connected && Session.TicketChannel == channel) { mutationFailed = true; createMessage = ex.Message; } }
+    finally { deleting = false; }
+  }
+  protected override async Task OnInitializedAsync()
+  {
+    Session.Changed += SessionChanged;
+    await RefreshAll();
+  }
+  private void SessionChanged() => _ = InvokeAsync(async () =>
+  {
+    if (disposed) return;
+    createMessage = null;
+    var task = RefreshAll();
+    StateHasChanged();
+    await task;
+    if (!disposed) StateHasChanged();
+  });
+  public void Dispose()
+  {
+    disposed = true;
+    Session.Changed -= SessionChanged;
+    ownRead.Dispose();
+    overallRead.Dispose();
+  }
+  private Task RefreshAll()
+  {
+    if (disposed) return Task.CompletedTask;
+    return Task.WhenAll(LoadOverall(), Load());
+  }
+  private Task Load()
+  {
+    if (disposed) return Task.CompletedTask;
+    databases = null; error = null;
+    if (!Session.Connected)
+    {
+      ownRead.Cancel();
+      return Task.CompletedTask;
+    }
+    var channel = Session.TicketChannel;
+    return ownRead.RunAsync(ct => DatabaseOps.ListAsync(ct),
+      () => Session.Connected && Session.TicketChannel == channel,
+      result =>
+      {
+        if (result.Status != 200 || result.Databases is null)
+        {
+          error = L["Database overview unavailable (HTTP {0}).", result.Status].Value;
+          return;
+        }
+        databases = result.Databases.ToList();
+      }, ex => error = ex.Message);
+  }
+  private static string FormatBytes(long value)
+  {
+    if (value < 1024) return value.ToString("N0") + " B";
+    var units = new[] { "KB", "MB", "GB", "TB", "PB" };
+    var size = (double)value;
+    var index = -1;
+    do { size /= 1024; index++; } while (size >= 1024 && index < units.Length - 1);
+    return size.ToString("N1") + " " + units[index];
+  }
+  private Task LoadOverall()
+  {
+    if (disposed) return Task.CompletedTask;
+    overall = null; overallError = null; overallWarnings = [];
+    if (!Session.Connected)
+    {
+      overallRead.Cancel();
+      return Task.CompletedTask;
+    }
+    var channel = Session.TicketChannel;
+    return overallRead.RunAsync(ct => DatabaseOps.ListAccessibleAsync(ct),
+      () => Session.Connected && Session.TicketChannel == channel,
+      result =>
+      {
+        if (result.Status != 200 || result.Items is null)
+        {
+          overallError = L["Overall database overview: HTTP {0}.", result.Status].Value;
+          return;
+        }
+        overall = result.Items.ToList();
+        overallWarnings = result.Warnings?.Select(x => $"{x.Account}: {x.Reason} (HTTP {x.Status})").ToList() ?? [];
+      }, ex => overallError = ex.Message);
+  }
+}

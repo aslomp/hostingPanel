@@ -1,0 +1,117 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@page "/system-services"
+@using System.Text.Json
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
+<PageTitle>@L["System services — HostingPanel"]</PageTitle>
+<PanelPageHeader>
+    <Breadcrumb>@L["Server management"]</Breadcrumb>
+    <TitleContent>System Services</TitleContent>
+    <Description>@L["Live service list, details and management actions; the backend determines which operations are permitted."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
+@if (!Session.Connected) { <MudPaper Class="pa-4 my-3" Elevation="1">@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</MudPaper> }
+else
+{
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <h2>Services</h2>
+        @if (busy) { <PanelLoading>@L["Retrieving…"]</PanelLoading> }
+        @if (error is not null) { <MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert> }
+        <JsonOverview Json="@services" />
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <h2>@L["Inspect service"]</h2>
+        <label>@L["Service name"]</label>
+        <MudTextField T="string" @bind-Value="service" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="@L["for example nginx"].Value" />
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Details">@L["Retrieve details and log"]</MudButton>
+        <h3>@L["Service details"]</h3><JsonOverview Json="@details" /><h3>@L["Service log"]</h3><JsonOverview Json="@serviceLog" />
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <h2>@L["Manage service"]</h2>
+        <p>@L["Select a service and an exact management action. No actions are hidden based on a local user role."]</p>
+        <MudSelect T="string" @bind-Value="action" Variant="Variant.Outlined" Margin="Margin.Dense"><MudSelectItem T="string" Value='@("restart")'>Restart</MudSelectItem><MudSelectItem T="string" Value='@("reload")'>Reload</MudSelectItem><MudSelectItem T="string" Value='@("start")'>Start</MudSelectItem><MudSelectItem T="string" Value='@("stop")'>Stop</MudSelectItem></MudSelect>
+        <label>@L["Enter the service name to confirm the action"]</label><MudTextField T="string" @bind-Value="confirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || string.IsNullOrWhiteSpace(service) || confirmation != service)" OnClick="Execute">@L["Execute action"]</MudButton>
+        @if (outcome is not null) { <p role="status">@outcome</p> }
+    </MudPaper>
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <h2>@L["Service watchdog"]</h2>
+        <p>@L["Configure whether DirectAdmin monitors the selected service."]</p>
+        <label>Watchdog</label>
+        <MudSelect T="string" @bind-Value="watchdog" Variant="Variant.Outlined" Margin="Margin.Dense"><MudSelectItem T="string" Value='@("true")'>@L["Enable"]</MudSelectItem><MudSelectItem T="string" Value='@("false")'>@L["Disable"]</MudSelectItem></MudSelect>
+        <label>@L["Enter the service name to confirm"]</label><MudTextField T="string" @bind-Value="watchdogConfirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(busy || !ValidService(service) || watchdogConfirmation != service)" OnClick="SetWatchdog">@L["Update watchdog"]</MudButton>
+    </MudPaper>
+}
+@code {
+    private string service = "", action = "restart", confirmation = "";
+    private string watchdog = "true", watchdogConfirmation = "";
+    private string services = "", details = "", serviceLog = "";
+    private string? error, outcome;
+    private bool busy;
+    protected override async Task OnInitializedAsync() { if (Session.Connected) await Load(); }
+    private static bool ValidService(string value) =>
+        !string.IsNullOrWhiteSpace(value) && value.Length <= 128 &&
+        value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.' or '@');
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; error = null;
+        try
+        {
+            var (status, body) = await ApiClient.GetRawAsync("api/system-services/list");
+            services = $"HTTP {status}\n{body}";
+            if (status is < 200 or >= 300) error = L["Backend did not return the overview (HTTP {0}).", status].Value;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { error = ex.Message; }
+        finally { busy = false; }
+    }
+    private async Task Details()
+    {
+        if (busy || !ValidService(service)) { error = L["Invalid service name."].Value; return; }
+        busy = true; error = null;
+        try
+        {
+            var p = Uri.EscapeDataString(service);
+            var (s, b) = await ApiClient.GetRawAsync($"api/system-services/service/{p}");
+            var (ls, lb) = await ApiClient.GetRawAsync($"api/system-services/service/{p}/log");
+            details = $"HTTP {s}\n{b}";
+            serviceLog = $"HTTP {ls}\n{lb}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { error = ex.Message; }
+        finally { busy = false; }
+    }
+    private async Task SetWatchdog()
+    {
+        if (busy || !ValidService(service) || watchdogConfirmation != service) return;
+        busy = true; outcome = null;
+        try
+        {
+            var payload = watchdog == "true" ? """{"enable":true}""" : """{"enable":false}""";
+            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Put,
+                $"api/system-services-actions/service/{Uri.EscapeDataString(service)}/watchdog", payload);
+            outcome = status == 204 ? L["DirectAdmin confirmed the watchdog change."].Value
+                : L["Watchdog operation: backend HTTP {0}. {1}", status, body].Value;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { outcome = ex.Message; }
+        finally { busy = false; watchdogConfirmation = ""; }
+    }
+    private async Task Execute()
+    {
+        if (busy || !ValidService(service) || confirmation != service || action is not ("restart" or "reload" or "start" or "stop")) return;
+        busy = true; outcome = null;
+        try
+        {
+            var (s, b) = await ApiClient.RequestApiAsync(HttpMethod.Post,
+                $"api/system-services-actions/service/{Uri.EscapeDataString(service)}/{action}");
+            outcome = L["Action {0}: HTTP {1}. {2}", action, s, b].Value;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { outcome = ex.Message; }
+        finally { busy = false; confirmation = ""; }
+    }
+}

@@ -1,0 +1,164 @@
+@using HostingPanel.Web.Localization
+@using System.Text.Json
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
+
+<PageTitle>@L["File management"] — HostingPanel</PageTitle>
+<PanelPageHeader>
+    <Breadcrumb>@L["User"]</Breadcrumb>
+    <TitleContent>@L["File management"]</TitleContent>
+    <Description>@L["Files and directories of the signed-in DirectAdmin identity."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Disabled="@busy" OnClick="Refresh">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
+@if (!Session.Connected)
+{
+    <PanelEmptyState>@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</PanelEmptyState>
+}
+else
+{
+    @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+    @if (busy) { <PanelLoading>@L["Loading…"]</PanelLoading> }
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudButton Disabled="@(busy || directory == ".")" OnClick="GoHome" StartIcon="@Icons.Material.Filled.Home">@L["Home"]</MudButton>
+            <MudButton Disabled="@(busy || directory == ".")" OnClick="GoUp" StartIcon="@Icons.Material.Filled.ArrowUpward">@L["Parent directory"]</MudButton>
+            <MudText Typo="Typo.body1">@directory</MudText>
+        </MudStack>
+        <MudStack Row="true" AlignItems="AlignItems.Center">
+            <MudTextField T="string" @bind-Value="query" Immediate="true" Disabled="@busy" Label="@L["Search"].Value" />
+            <MudButton Disabled="@busy" OnClick="Search">@L["Search"]</MudButton>
+        </MudStack>
+        @if (files is not null)
+        {
+            <MudSimpleTable Dense="true" Hover="true" Striped="true">
+                <thead><tr><th>@L["Name"]</th><th>@L["Type"]</th><th>@L["Size (bytes)"]</th><th>@L["Modified"]</th><th>@L["Permissions"]</th></tr></thead>
+                <tbody>
+                    @foreach (var entry in files)
+                    {
+                        <tr>
+                            <td>
+                                <MudButton Variant="Variant.Text" Disabled="@busy" OnClick="@(() => Open(entry))"
+                                    StartIcon="@(entry.Type == "dir" ? Icons.Material.Filled.Folder : Icons.Material.Filled.InsertDriveFile)">@entry.Name</MudButton>
+                            </td>
+                            <td>@entry.Type</td><td>@entry.SizeBytes.ToString("N0")</td><td>@entry.ModifyTime</td><td>@entry.Mode</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            @if (files.Count == 0) { <PanelEmptyState>@L["No files found."]</PanelEmptyState> }
+            <MudStack Row="true" AlignItems="AlignItems.Center">
+                <MudButton Disabled="@(busy || offset == 0)" OnClick="Previous">@L["Previous page"]</MudButton>
+                <MudText>@L["Found: {0}", matched] — @L["Page"] @(offset / PageSize + 1)</MudText>
+                <MudButton Disabled="@(busy || offset + PageSize >= matched)" OnClick="Next">@L["Next page"]</MudButton>
+            </MudStack>
+        }
+    </MudPaper>
+    @if (selected is not null)
+    {
+        <MudPaper Class="pa-4 my-3" Elevation="1">
+            <MudStack Row="true" Justify="Justify.SpaceBetween">
+                <h2>@selected</h2>
+                <MudButton OnClick="@(() => selected = null)">@L["Close"]</MudButton>
+            </MudStack>
+            <JsonOverview Json="@details" />
+        </MudPaper>
+    }
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <MudStack Row="true" Wrap="Wrap.Wrap">
+            <MudButton Disabled="@busy" OnClick="@(() => LoadSupplement("tree"))">@L["Directory tree"]</MudButton>
+            <MudButton Disabled="@busy" OnClick="@(() => LoadSupplement("disk-usage"))">@L["Disk usage"]</MudButton>
+            <MudButton Disabled="@busy" OnClick="@(() => LoadSupplement("trash"))">@L["Trash"]</MudButton>
+        </MudStack>
+        @if (supplement is not null) { <JsonOverview Json="@supplement" /> }
+    </MudPaper>
+}
+
+@code {
+    private const int PageSize = 100;
+    private sealed record Entry(string Name, string Type, long SizeBytes, string ModifyTime, string Mode);
+    private List<Entry>? files;
+    private string directory = ".", query = "", appliedQuery = "";
+    private string? selected, details, supplement, error;
+    private int offset, matched;
+    private bool busy;
+    protected override async Task OnInitializedAsync() => await Load(".", "", 0);
+
+    private Task Refresh() => Load(directory, appliedQuery, offset);
+    private Task Search() => Load(directory, query, 0);
+    private Task Previous() => Load(directory, appliedQuery, Math.Max(0, offset - PageSize));
+    private Task Next() => Load(directory, appliedQuery, offset + PageSize);
+    private Task GoHome() => Load(".", "", 0);
+    private Task GoUp()
+    {
+        var index = directory.LastIndexOf('/');
+        return Load(index > 0 ? directory[..index] : ".", "", 0);
+    }
+    private static string WithPath(string operation, string path) =>
+        "api/filemanager/" + operation + "?path=" + Uri.EscapeDataString(path);
+
+    private async Task Load(string path, string filter, int start)
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; error = null;
+        try
+        {
+            var endpoint = WithPath("list", path) + "&query=" + Uri.EscapeDataString(filter) + $"&limit={PageSize}&offset={start}";
+            var (status, body) = await ApiClient.GetRawAsync(endpoint);
+            if (status != 200) { error = L["Backend HTTP {0}.", status].Value; return; }
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            var entries = root.GetProperty("files").Deserialize<Entry[]>(new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [];
+            var canonical = root.GetProperty("canonicalPath").GetString();
+            var total = root.GetProperty("filesMatched").GetInt32();
+            files = entries.ToList();
+            directory = string.IsNullOrWhiteSpace(canonical) || canonical == "/" ? "." : canonical;
+            query = appliedQuery = filter;
+            offset = start; matched = total;
+            selected = details = supplement = null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException or KeyNotFoundException)
+        { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task Open(Entry entry)
+    {
+        if (busy || !Session.Connected || files?.Contains(entry) != true ||
+            string.IsNullOrWhiteSpace(entry.Name) || entry.Name is "." or ".." || entry.Name.Contains('/')) return;
+        var path = directory == "." ? entry.Name : directory.TrimEnd('/') + "/" + entry.Name;
+        if (entry.Type == "dir") { await Load(path, "", 0); return; }
+        busy = true; error = null;
+        try
+        {
+            var (status, body) = await ApiClient.GetRawAsync(WithPath("stat", path));
+            if (status == 200) { selected = entry.Name; details = body; }
+            else error = L["Backend HTTP {0}.", status].Value;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task LoadSupplement(string operation)
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; error = null; supplement = null;
+        try
+        {
+            var endpoint = operation switch
+            {
+                "tree" => WithPath("tree", directory),
+                "disk-usage" => WithPath("disk-usage", directory),
+                "trash" => "api/filemanager/trash",
+                _ => throw new ArgumentException(nameof(operation))
+            };
+            var (status, body) = await ApiClient.GetRawAsync(endpoint);
+            if (status == 200) supplement = body;
+            else error = L["Backend HTTP {0}.", status].Value;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { error = ex.Message; }
+        finally { busy = false; }
+    }
+}
