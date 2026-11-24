@@ -32,6 +32,31 @@ jobs:
           pathlib.Path('/tmp/hosting-httpd.conf').write_text(config['data']['httpd.conf'])
           pathlib.Path('/tmp/hosting-apache-image').write_text(apache['image'])
           PY
+      - name: Verify optional shared Apache configuration storage
+        run: |
+          helm template smoke deploy/helm/hostingpanel --namespace hosting --set backend=Kubernetes --set kubernetesHosting.enabled=true --set kubernetesHosting.nfsServer=192.0.2.1 --set kubernetesHosting.nfsPath=/home --set kubernetesHosting.gatewayName=smoke --set kubernetesHosting.apacheConfigClaim=apache-config-test --set powerDns.enabled=false --set certManager.enabled=false > /tmp/apache-storage.yaml
+          python3 - <<'PY'
+          import pathlib, yaml
+          def pods(path):
+              return [d['spec']['template']['spec'] for d in yaml.safe_load_all(pathlib.Path(path).read_text()) if d and d.get('kind') == 'Deployment']
+          for pod in pods('/tmp/hosting-rendered.yaml'):
+              assert not any(v['name'] == 'apache-config' for v in pod.get('volumes', []))
+          seen = set()
+          for pod in pods('/tmp/apache-storage.yaml'):
+              for container in pod['containers']:
+                  mounts = [m for m in container.get('volumeMounts', []) if m['name'] == 'apache-config']
+                  if container['name'] not in ('web', 'apache'):
+                      assert not mounts
+                      continue
+                  assert len(mounts) == 1
+                  assert mounts[0]['mountPath'] == '/storage/apache-config'
+                  assert mounts[0].get('readOnly', False) == (container['name'] == 'apache')
+                  volume = next(v for v in pod['volumes'] if v['name'] == 'apache-config')
+                  assert volume['persistentVolumeClaim']['claimName'] == 'apache-config-test'
+                  assert volume['persistentVolumeClaim'].get('readOnly', False) == (container['name'] == 'apache')
+                  seen.add(container['name'])
+          assert seen == {'web', 'apache'}
+          PY
       - name: Validate Apache configuration and MPM
         run: |
           set -eu
