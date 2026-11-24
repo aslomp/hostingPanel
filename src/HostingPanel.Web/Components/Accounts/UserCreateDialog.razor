@@ -12,7 +12,7 @@
       <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Account name"].Value" @bind-Value="username" Required="true" />
       <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Email address"].Value" @bind-Value="email" Required="true" InputType="InputType.Email" />
       <MudTextField T="string" Disabled="@busy" Immediate="true" Label="@L["Primary domain"].Value" @bind-Value="domain" Required="true" />
-      <MudSelect T="string" data-testid="account-package-select" Disabled="@(busy || loadingPackages || availablePackages.Count == 0)" Label="@L["Package"].Value" @bind-Value="package" Required="true">
+      <MudSelect T="string" Disabled="@(busy || loadingPackages || availablePackages.Count == 0)" Label="@L["Package"].Value" @bind-Value="package" Required="true">
         @foreach (var name in availablePackages)
         {
           <MudSelectItem T="string" Value="@name">@name</MudSelectItem>

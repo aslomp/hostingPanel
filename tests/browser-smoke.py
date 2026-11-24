@@ -138,10 +138,10 @@ def main():
                         dialog.get_by_label("Email address", exact=True).fill(account + "@example.invalid")
                         dialog.get_by_label("Primary domain", exact=True).fill(account + ".invalid")
                         package_name = "browser-plan" if role == "user" else "browser-reseller-plan"
-                        package_select = dialog.get_by_test_id("account-package-select")
+                        package_select = dialog.get_by_role("combobox", name="Package", exact=True)
                         expect(package_select).to_be_visible()
                         package_select.click()
-                        page.get_by_text(package_name, exact=True).last.click()
+                        page.get_by_role("option", name=package_name, exact=True).click()
                         dialog.get_by_label("New password", exact=True).fill("short")
                         dialog.get_by_label("Confirm password", exact=True).fill("short")
                         dialog.get_by_role("button", name="Create account", exact=True).click()
