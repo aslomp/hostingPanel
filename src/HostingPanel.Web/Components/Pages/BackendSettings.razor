@@ -5,10 +5,10 @@
 @using System.Text.Json.Nodes
 @inject DirectAdminSession Session
 
-<PageTitle>@L[IpOnly ? "IP management" : "Backend settings"] — HostingPanel</PageTitle>
+<PageTitle>@L[NameserversOnly ? "Name servers" : IpOnly ? "IP management" : "Backend settings"] — HostingPanel</PageTitle>
 <div class="page-header">
-    <div><div class="eyebrow">@L["Server management"]</div><h1>@L[IpOnly ? "IP management" : "Backend settings"]</h1>
-        <p>@L[IpOnly ? "Public web IP and authoritative DNS defaults." : "Configuration contract of the active backend."]</p></div>
+    <div><div class="eyebrow">@L["Server management"]</div><h1>@L[NameserversOnly ? "Name servers" : IpOnly ? "IP management" : "Backend settings"]</h1>
+        <p>@L[NameserversOnly ? "Default nameservers assigned to new users." : IpOnly ? "Manage hosting IP addresses." : "Configuration contract of the active backend."]</p></div>
     <button disabled="@(busy || !Session.Connected)" @onclick="Load">@L["Refresh"]</button>
 </div>
 @if (!Session.Connected)
@@ -21,12 +21,69 @@ else
     @if (view is not null)
     {
         <section class="card">
-            <h2>@view.Backend</h2>
-            @if (!VisibleFields.Any())
+            @if (IpOnly && view.Fields.Any(f => f.Name == "IpAddresses"))
+            {
+                <div class="form-actions"><button class="primary" @onclick="AddIp" disabled="@busy">+ @L["Add IP"]</button></div>
+                <h2>@L["IP addresses"]</h2>
+                <div class="form-actions">
+                    <button disabled="@busy" @onclick='() => SetSelectedStatus("shared")'>@L["Share"]</button>
+                    <button disabled="@busy" @onclick='() => SetSelectedStatus("available")'>@L["Available"]</button>
+                    <button disabled="@busy" @onclick="ClearSelectedNs">@L["Clear NS"]</button>
+                    <button disabled="@busy" @onclick="ToggleGlobal">@L["Toggle global"]</button>
+                    <button disabled="@busy" @onclick="DeleteSelected">@L["Delete"]</button>
+                </div>
+                <table class="data-table">
+                    <thead><tr><th></th><th>IP</th><th>@L["Status"]</th><th>@L["Device"]</th><th>@L["Resellers"]</th><th>@L["Users"]</th><th>@L["Global"]</th><th>@L["Name server"]</th><th>@L["Netmask"]</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var ip in addresses)
+                    {
+                        <tr><td><input type="checkbox" @bind="ip.Selected" /></td><td><input @bind="ip.Address" /></td>
+                        <td><select @bind="ip.Status"><option value="server">server</option><option value="shared">shared</option><option value="available">available</option><option value="owned">dedicated</option></select></td>
+                        <td><input @bind="ip.Device" /></td>
+                        <td>@foreach (var reseller in inventory?.Resellers ?? [])
+                        { <label><input type="checkbox" checked="@ip.Resellers.Contains(reseller)" @onchange="e => Assign(ip, reseller, e.Value is true)" />@reseller</label> }</td>
+                        <td>@(inventory?.Users.GetValueOrDefault(ip.Address) ?? 0)
+                        @foreach (var user in inventory?.AccountNames ?? [])
+                        { <label><input type="checkbox" checked="@ip.AssignedUsers.Contains(user)" @onchange="e => AssignUser(ip, user, e.Value is true)" />@user</label> }
+                        </td>
+                        <td><input type="checkbox" @bind="ip.Global" /></td><td><input @bind="ip.NameServer" /></td>
+                        <td><input type="number" min="0" max="128" @bind="ip.PrefixLength" /></td>
+                        <td><button disabled="@busy" @onclick="() => RemoveIp(ip)">@L["Delete"]</button></td></tr>
+                    }
+                    </tbody>
+                </table>
+                <h2>@L["Devices"]</h2>
+                @if (inventory?.Warning is { } warning) { <p>@warning</p> }
+                <table class="data-table"><thead><tr><th>IP</th><th>@L["Device"]</th><th></th></tr></thead><tbody>
+                @foreach (var device in inventory?.Devices ?? [])
+                { <tr><td>@device.Address</td><td>@device.Device</td><td><button disabled="@(busy || addresses.Any(x => x.Address == device.Address))" @onclick="() => ImportDevice(device)">@L["Add IP"]</button></td></tr> }
+                </tbody></table>
+                <p>@L["Select the default public web IP for new domains."]</p>
+                <select @bind="draftWebIp"><option value="">@L["Not set"]</option>
+                    @foreach (var ip in addresses.Where(x => x.Status is "server" or "shared"))
+                    { <option value="@ip.Address">@ip.Address</option> }
+                </select>
+                <div class="form-actions"><button class="primary" disabled="@busy" @onclick="Save">@L["Save settings"]</button></div>
+            }
+            @if (NameserversOnly && view.Fields.Any(f => f.Name == "IpAddresses"))
+            {
+                <div class="form-actions"><button class="primary" disabled="@busy" @onclick="() => editingNs = !editingNs">+ @L["Create nameservers"]</button></div>
+                @if (editingNs)
+                {
+                    <select @bind="nsAddress"><option value="">@L["Select IP"]</option>@foreach (var ip in addresses) { <option value="@ip.Address">@ip.Address</option> }</select>
+                    <input @bind="nsName" placeholder="ns1.example.com" />
+                    <button disabled="@busy" @onclick="SetNs">@L["Assign"]</button>
+                }
+                <table class="data-table"><thead><tr><th>IP</th><th>@L["Status"]</th><th>@L["Users"]</th><th>@L["Name server"]</th><th></th></tr></thead>
+                <tbody>@foreach (var ip in addresses.Where(x => x.NameServer.Length > 0))
+                { <tr><td>@ip.Address</td><td>@ip.Status</td><td>@(inventory?.Users.GetValueOrDefault(ip.Address) ?? 0)</td><td>@ip.NameServer</td><td><button disabled="@busy" @onclick="() => ip.NameServer = string.Empty">@L["Delete"]</button></td></tr> }</tbody></table>
+                <h2>@L["Default nameservers assigned to new users"]</h2>
+            }
+            @if (!VisibleFields.Any() && !IpOnly)
             {
                 <p>@L["This backend has no public settings."]</p>
             }
-            else
+            else if (VisibleFields.Any())
             {
                 <div class="form-grid">
                     @foreach (var field in VisibleFields)
@@ -84,7 +141,39 @@ else
 
 @code {
     [Parameter] public bool IpOnly { get; set; }
-    private IEnumerable<SettingField> VisibleFields => (view?.Fields ?? []).Where(f => !IpOnly || f.Name is "DnsWebIp" or "DnsNs1" or "DnsNs2" or "DnsAutoCreateZones");
+    [Parameter] public bool NameserversOnly { get; set; }
+    private IEnumerable<SettingField> VisibleFields => (view?.Fields ?? []).Where(f =>
+        NameserversOnly ? f.Name is "DnsNs1" or "DnsNs2" :
+        IpOnly ? false : f.Name is not ("DnsWebIp" or "DnsNs1" or "DnsNs2" or "IpAddresses"));
+    private sealed class IpRow
+    {
+        public string Address { get; set; } = "";
+        public int PrefixLength { get; set; } = 32;
+        public string Status { get; set; } = "shared";
+        public string Device { get; set; } = "";
+        public string NameServer { get; set; } = "";
+        public bool Global { get; set; }
+        public string[] Resellers { get; set; } = [];
+        public string[] AssignedUsers { get; set; } = [];
+        [System.Text.Json.Serialization.JsonIgnore] public bool Selected { get; set; }
+    }
+    private sealed record DeviceRow(string Address, string Device, int PrefixLength);
+    private sealed record NetworkInventory(Dictionary<string,int> Users, string[] Resellers, DeviceRow[] Devices, string? Warning, string[] AccountNames);
+    private NetworkInventory? inventory;
+    private bool editingNs;
+    private string nsAddress = "", nsName = "";
+    private void SetNs() { var ip = addresses.FirstOrDefault(x => x.Address == nsAddress); if (ip is not null) { ip.NameServer = nsName.Trim(); editingNs = false; } }
+    private void Assign(IpRow ip, string reseller, bool selected) => ip.Resellers = selected ? ip.Resellers.Append(reseller).Distinct().ToArray() : ip.Resellers.Where(x => x != reseller).ToArray();
+    private void AssignUser(IpRow ip, string user, bool selected) => ip.AssignedUsers = selected ? (ip.Status == "owned" ? new[] { user } : ip.AssignedUsers.Append(user).Distinct().ToArray()) : ip.AssignedUsers.Where(x => x != user).ToArray();
+    private void SetSelectedStatus(string status) { foreach (var ip in addresses.Where(x => x.Selected)) ip.Status = status; }
+    private void ClearSelectedNs() { foreach (var ip in addresses.Where(x => x.Selected)) ip.NameServer = ""; }
+    private void ToggleGlobal() { foreach (var ip in addresses.Where(x => x.Selected)) ip.Global = !ip.Global; }
+    private void DeleteSelected() { foreach (var ip in addresses.Where(x => x.Selected).ToArray()) RemoveIp(ip); }
+    private void ImportDevice(DeviceRow device) => addresses.Add(new() { Address = device.Address, Device = device.Device, PrefixLength = device.PrefixLength, Status = "server" });
+    private List<IpRow> addresses = [];
+    private string draftWebIp = "";
+    private void AddIp() => addresses.Add(new());
+    private void RemoveIp(IpRow ip) { addresses.Remove(ip); if (draftWebIp == ip.Address) draftWebIp = ""; }
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private SettingsView? view;
     private readonly Dictionary<string, string?> draft = new(StringComparer.Ordinal);
@@ -107,6 +196,14 @@ else
                 value.ValueKind == JsonValueKind.String ? value.GetString() : value.GetRawText();
         }
         view = next;
+        if (next.Values.TryGetProperty("IpAddresses", out var ips))
+        {
+            addresses = ips.Deserialize<List<IpRow>>() ?? [];
+            foreach (var ip in addresses) { ip.Resellers ??= []; ip.AssignedUsers ??= []; }
+            draftWebIp = draft.GetValueOrDefault("DnsWebIp") ?? "";
+            if (draftWebIp.Length > 0 && !addresses.Any(x => x.Address == draftWebIp))
+                addresses.Add(new() { Address = draftWebIp, Status = "server", PrefixLength = draftWebIp.Contains(':') ? 128 : 32 });
+        }
     }
 
     private async Task Load()
@@ -116,7 +213,15 @@ else
         try
         {
             var (status, body) = await Session.GetBackendSettingsAsync();
-            if (status == 200) Accept(body);
+            if (status == 200)
+            {
+                Accept(body);
+                if (IpOnly || NameserversOnly)
+                {
+                    var (networkStatus, networkBody) = await Session.GetNetworkInventoryAsync();
+                    inventory = networkStatus == 200 ? JsonSerializer.Deserialize<NetworkInventory>(networkBody, JsonOptions) : null;
+                }
+            }
             else message = status switch {
                 501 => L["This backend does not offer a settings contract."].Value,
                 401 or 403 => L["The backend denies access to these settings."].Value,
@@ -134,6 +239,11 @@ else
         busy = true; message = null; errors.Clear();
         try
         {
+            if ((IpOnly || NameserversOnly) && draft.ContainsKey("IpAddresses"))
+            {
+                draft["IpAddresses"] = JsonSerializer.Serialize(addresses);
+                if (IpOnly) draft["DnsWebIp"] = draftWebIp;
+            }
             var values = new JsonObject();
             foreach (var field in view.Fields)
             {
@@ -148,14 +258,22 @@ else
             if (errors.Count > 0) return;
             var (status, body) = await Session.SaveBackendSettingsAsync(
                 JsonSerializer.Serialize(new { revision = view.Revision, values }, JsonOptions));
-            if (status == 200) { Accept(body); message = L["Settings saved."].Value; }
-            else if (status == 409) message = L["Settings have changed in the meantime. Refresh first."].Value;
+            if (status == 200)
+            {
+                var (readStatus, savedBody) = await Session.GetBackendSettingsAsync();
+                if (readStatus != 200) { message = $"Save returned success but readback failed: HTTP {readStatus}."; return; }
+                var saved = JsonSerializer.Deserialize<SettingsView>(savedBody, JsonOptions) ?? throw new JsonException("Settings response is empty.");
+                var expected = JsonSerializer.Deserialize<SettingsView>(body, JsonOptions) ?? throw new JsonException("Save response is empty.");
+                if (saved.Revision != expected.Revision) { message = "Saved settings could not be verified."; return; }
+                Accept(savedBody); message = L["Settings saved."].Value;
+            }
+            else if (status == 409) message = L["Settings conflict."].Value + " " + body;
             else if (status == 400)
             {
                 using var problem = JsonDocument.Parse(body);
                 if (problem.RootElement.TryGetProperty("errors", out var validation))
                     errors = validation.Deserialize<Dictionary<string, string[]>>(JsonOptions) ?? new();
-                message = L["The backend rejected the settings."].Value;
+                message = L["The backend rejected the settings."].Value + " " + string.Join("; ", errors.Select(x => x.Key + ": " + string.Join(", ", x.Value)));
             }
             else message = L["Backend HTTP {0}. Settings not saved.", status].Value;
         }

@@ -6,7 +6,11 @@
 
 @if (Key == "ip-management")
 {
-    <BackendSettings IpOnly="true" />
+    <BackendSettings @key="Key" IpOnly="true" />
+}
+else if (Key == "name-servers")
+{
+    <BackendSettings @key="Key" NameserversOnly="true" />
 }
 else
 {
@@ -88,7 +92,7 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
-        if (Key == "ip-management") return;
+        if (Key is "ip-management" or "name-servers") return;
         selected = Sources.FirstOrDefault()?.Path ?? "";
         response = null;
         statusText = null;

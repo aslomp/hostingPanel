@@ -15,10 +15,10 @@ namespace HostingPanel.Api;
 /// no legacy command calls and no implicit fallback to DirectAdmin.
 /// Reconciliation with the cluster is deliberately a separate responsibility.
 /// </summary>
-public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, PowerDnsClient? powerDns = null) :
+public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, PowerDnsClient? powerDns = null, IConfiguration? configuration = null) :
     IHostingBackend, IAccountCatalog, IAccountMutations, IAccessibleDomains,
     IUserDetails, IAccountOverview, IImpersonation, IDatabases,
-    IAccessibleDatabases, IDomains, IFileAccess, ITickets, IBackendSettingsAccess
+    IAccessibleDatabases, IDomains, IFileAccess, ITickets, IBackendSettingsAccess, IHostingNetworkAccess
 {
     public IBackendSettingsAccess Settings => this;
     private const string SettingsKey = "BackendSettings:Kubernetes";
@@ -34,7 +34,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         // Older persisted settings lack the DNS properties. Fill only new keys from deployment defaults.
         var stored = document.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone(), StringComparer.Ordinal);
         using var defaults = JsonDocument.Parse(BackendSettingsSchema.Serialize(configuredSettings));
-        foreach (var key in new[] { nameof(KubernetesBackendSettings.DnsAutoCreateZones), nameof(KubernetesBackendSettings.DnsWebIp), nameof(KubernetesBackendSettings.DnsNs1), nameof(KubernetesBackendSettings.DnsNs2) })
+        foreach (var key in new[] { nameof(KubernetesBackendSettings.DnsAutoCreateZones), nameof(KubernetesBackendSettings.DnsWebIp), nameof(KubernetesBackendSettings.DnsNs1), nameof(KubernetesBackendSettings.DnsNs2), nameof(KubernetesBackendSettings.IpAddresses) })
             stored.TryAdd(key, defaults.RootElement.GetProperty(key).Clone());
         if (!BackendSettingsSchema.TryRead<KubernetesBackendSettings>(JsonSerializer.SerializeToElement(stored),
             out var settings, out _))
@@ -62,16 +62,35 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         var current = await GetEffectiveSettingsAsync(ct);
         if (update.Revision != BackendSettingsSchema.Revision(current))
             return Results.Conflict(new { type = "SETTINGS_CHANGED" });
-        if (BackendSettingsSchema.Revision(current) != BackendSettingsSchema.Revision(proposed!))
+        var accounts = await db.Accounts.AsNoTracking().Where(x => x.Kind == "reseller" || x.Kind == "admin").Select(x => x.Username).ToListAsync(ct);
+        if (proposed!.IpAddresses.Any(x => (x.Resellers ?? []).Any(r => !accounts.Contains(r))))
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["IpAddresses"] = ["Unknown reseller."] });
+        var users = await db.Accounts.AsNoTracking().Where(x => x.Kind == "user" || x.Kind == "reseller" || x.Kind == "admin").Select(x => new { x.Id, x.Username }).ToListAsync(ct);
+        if (proposed.IpAddresses.Any(x => (x.AssignedUsers ?? []).Any(u => !users.Any(a => a.Username == u))))
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["IpAddresses"] = ["Unknown assigned user."] });
+        var existingUses = await (from r in db.DnsRecords.AsNoTracking()
+            join z in db.DnsZones.AsNoTracking() on r.ZoneId equals z.Id
+            where (r.Type == "A" || r.Type == "AAAA") && (r.Name == "@" || r.Name == z.Name || r.Name == z.Name + ".")
+            select new { r.Value, z.OwnerId }).ToListAsync(ct);
+        foreach (var dedicated in proposed.IpAddresses.Where(x => x.Status == "owned"))
+        {
+            var ownerId = users.Single(x => x.Username == dedicated.AssignedUsers![0]).Id;
+            if (existingUses.Any(x => System.Net.IPAddress.TryParse(x.Value, out var address) && address.ToString() == dedicated.Address && x.OwnerId != ownerId))
+                return Results.Conflict(new { type = "IP_IN_USE_BY_OTHER_USER", address = dedicated.Address });
+        }
+        var used = await UsedIpsAsync(ct);
+        foreach (var old in current.IpAddresses.Where(x => used.ContainsKey(x.Address)))
+            if (!proposed.IpAddresses.Any(x => x.Address == old.Address && x.Status != "available"))
+                return Results.Conflict(new { type = "IP_IN_USE", address = old.Address });
         {
             var row = await db.Configuration.SingleOrDefaultAsync(x => x.Key == SettingsKey, ct);
             if (row is null) { row = new PanelConfiguration { Key = SettingsKey }; db.Configuration.Add(row); }
             row.ValueJson = BackendSettingsSchema.Serialize(proposed!);
-            Schedule("backend-settings", Guid.Empty, "update", JsonSerializer.Deserialize<JsonElement>(row.ValueJson));
+
             await db.SaveChangesAsync(ct);
         }
         await tx.CommitAsync(ct);
-        return Results.Ok(BackendSettingsSchema.Describe("Kubernetes", proposed!));
+        return Results.Ok(BackendSettingsSchema.Describe("Kubernetes", await GetEffectiveSettingsAsync(ct)));
     }
 
     public IAccountCatalog AccountCatalog => this;
@@ -115,21 +134,89 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
             existing.DomainId = domain.Id;
             return null;
         }
-        var ipText = dnsSettings.DnsWebIp;
+        var owner = db.Accounts.Local.FirstOrDefault(x => x.Id == domain.OwnerId)
+            ?? await db.Accounts.AsNoTracking().SingleAsync(x => x.Id == domain.OwnerId, ct);
+        var parent = owner.CreatorId is { } creator
+            ? db.Accounts.Local.FirstOrDefault(x => x.Id == creator) ?? await db.Accounts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == creator, ct) : null;
+        var direct = dnsSettings.IpAddresses.Where(x => x.Status is "server" or "shared" or "owned" &&
+            (x.AssignedUsers ?? []).Contains(owner.Username)).ToArray();
+        var reseller = dnsSettings.IpAddresses.Where(x => x.Status == "shared" &&
+            ((x.Resellers ?? []).Contains(owner.Username) || (parent is not null && (x.Resellers ?? []).Contains(parent.Username)))).ToArray();
+        var global = dnsSettings.IpAddresses.Where(x => x.Status == "shared" && x.Global).ToArray();
+        var server = dnsSettings.IpAddresses.Where(x => x.Status == "server").ToArray();
+        var eligible = direct.Length > 0 ? direct : reseller.Length > 0 ? reseller : global.Length > 0 ? global : server;
+        var selected = dnsSettings.IpAddresses.Length == 0 ? new[] { dnsSettings.DnsWebIp } :
+            direct.Length > 0 ? direct.Select(x => x.Address).ToArray() :
+            eligible.OrderByDescending(x => x.Address == dnsSettings.DnsWebIp).ThenBy(x => x.Address, StringComparer.Ordinal)
+                .Take(1).Select(x => x.Address).ToArray();
+        if (selected.Length == 0) return "NO_ASSIGNED_IP";
         var ns1 = dnsSettings.DnsNs1.TrimEnd('.');
         var ns2 = dnsSettings.DnsNs2.TrimEnd('.');
-        if (!System.Net.IPAddress.TryParse(ipText, out var ip) ||
-            ip.AddressFamily is not (System.Net.Sockets.AddressFamily.InterNetwork or System.Net.Sockets.AddressFamily.InterNetworkV6) ||
+        if (selected.Any(x => !System.Net.IPAddress.TryParse(x, out _)) ||
             !ValidDomain(ns1) || !ValidDomain(ns2) || string.Equals(ns1, ns2, StringComparison.OrdinalIgnoreCase))
             return "DNS_DEFAULTS_NOT_CONFIGURED";
         var zone = new DnsZone { Name = domain.Name, DomainId = domain.Id, OwnerId = domain.OwnerId };
         db.DnsZones.Add(zone);
-        db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "@", Type = ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? "A" : "AAAA", Value = ip.ToString() });
+        foreach (var address in selected.Select(System.Net.IPAddress.Parse).Distinct())
+            db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "@", Type = address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? "A" : "AAAA", Value = address.ToString() });
         db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "www", Type = "CNAME", Value = domain.Name + "." });
         foreach (var ns in new[] { ns1!, ns2! })
             db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "@", Type = "NS", Value = ns.ToLowerInvariant() + "." });
         Schedule("dns-zone", zone.Id, "create", new { zone.Name });
         return null;
+    }
+
+    private async Task<Dictionary<string,int>> UsedIpsAsync(CancellationToken ct)
+    {
+        var rows = await (from r in db.DnsRecords.AsNoTracking()
+            join z in db.DnsZones.AsNoTracking() on r.ZoneId equals z.Id
+            where (r.Type == "A" || r.Type == "AAAA") && (r.Name == "@" || r.Name == z.Name || r.Name == z.Name + ".")
+            select new { r.Value, z.OwnerId }).Distinct().ToListAsync(ct);
+        return rows.Where(x => System.Net.IPAddress.TryParse(x.Value, out _))
+            .GroupBy(x => System.Net.IPAddress.Parse(x.Value).ToString()).ToDictionary(g => g.Key, g => g.Select(x => x.OwnerId).Distinct().Count());
+    }
+
+    public async Task<IResult> NetworkInventoryAsync(AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        var principal = await AuthenticateAsync(auth, ct);
+        if (principal is null) return Results.Unauthorized();
+        if (principal.Kind != "admin") return Results.StatusCode(403);
+        var used = await UsedIpsAsync(ct);
+        var resellers = await db.Accounts.AsNoTracking().Where(x => x.Kind == "reseller" || x.Kind == "admin")
+            .OrderBy(x => x.Username).Select(x => x.Username).ToListAsync(ct);
+        var devices = new List<NetworkDeviceAddress>();
+        string? warning = null;
+        if (configuration?.GetValue<bool>("KubernetesHosting:Enabled") == true)
+        {
+            try
+            {
+                var ns = configuration["KubernetesHosting:GatewayNamespace"] ?? "envoy-gateway-system";
+                var gateway = configuration["KubernetesHosting:GatewayName"] ?? throw new InvalidOperationException("Gateway not configured");
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeout.CancelAfter(TimeSpan.FromSeconds(10));
+                var start = new System.Diagnostics.ProcessStartInfo(configuration["KubernetesHosting:KubectlPath"] ?? "kubectl")
+                { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+                foreach (var arg in new[] { "-n", ns, "get", "gateway", gateway, "-o", "json" }) start.ArgumentList.Add(arg);
+                using var process = System.Diagnostics.Process.Start(start) ?? throw new InvalidOperationException("Cannot start kubectl");
+                try
+                {
+                    var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
+                    var error = process.StandardError.ReadToEndAsync(timeout.Token);
+                    await process.WaitForExitAsync(timeout.Token);
+                    await error;
+                    if (process.ExitCode != 0) throw new InvalidOperationException("Gateway read failed");
+                    using var json = JsonDocument.Parse(await output);
+                    if (json.RootElement.TryGetProperty("status", out var status) && status.TryGetProperty("addresses", out var addresses))
+                        foreach (var address in addresses.EnumerateArray())
+                            if (System.Net.IPAddress.TryParse(address.GetProperty("value").GetString(), out var ip))
+                                devices.Add(new(ip.ToString(), "Gateway/" + ns + "/" + gateway, ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128));
+                }
+                finally { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+            }
+            catch (Exception) when (!ct.IsCancellationRequested) { warning = "Gateway address discovery unavailable."; }
+        }
+        var accountNames = await db.Accounts.AsNoTracking().OrderBy(x => x.Username).Select(x => x.Username).ToListAsync(ct);
+        return Results.Ok(new { users = used, resellers, devices, warning, accountNames });
     }
 
     private void Schedule(string type, Guid id, string operation, object? payload = null)

@@ -72,6 +72,9 @@ public sealed class DirectAdminSession(IHttpClientFactory clients, TicketChannel
     public Task<(int Status, string Body)> AuthenticateBackendAsync(CancellationToken ct = default) =>
         SendAsync(HttpMethod.Get, "hosting/session", null, ct);
 
+    public Task<(int Status, string Body)> GetNetworkInventoryAsync(CancellationToken ct = default) =>
+        SendAsync(HttpMethod.Get, "hosting/network/inventory", null, ct);
+
     public Task<(int Status, string Body)> GetBackendSettingsAsync(CancellationToken ct = default) =>
         SendAsync(HttpMethod.Get, "hosting/backend-settings", null, ct);
 
