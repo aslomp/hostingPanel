@@ -1,0 +1,80 @@
+@using HostingPanel.Web.Localization
+@using System.Text.Json
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject DirectAdminSession Session
+
+<PageTitle>@L["Domain SSL"] — HostingPanel</PageTitle>
+<PanelPageHeader>
+    <Breadcrumb>@L["User"]</Breadcrumb>
+    <TitleContent>@L["Domain SSL"]</TitleContent>
+    <Description>@L["Certificates, ACME configuration and available domains."]</Description>
+    <Actions><MudButton Variant="Variant.Outlined" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
+@if (!Session.Connected)
+{
+    <PanelEmptyState>@L["Sign in first using the"] <a href="/">@L["dashboard"]</a>.</PanelEmptyState>
+}
+else
+{
+    @if (busy) { <PanelLoading>@L["Loading…"]</PanelLoading> }
+    @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <MudTextField T="string" @bind-Value="search" Immediate="true" Label="@L["Search"].Value" />
+        @if (domains is not null)
+        {
+            <MudTable T="DomainRow" Items="@Visible" Dense="true" Hover="true" RowsPerPage="25">
+                <HeaderContent>
+                    <MudTh><MudTableSortLabel T="DomainRow" SortBy="@(x => x.Domain)">@L["Domain"]</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="DomainRow" SortBy="@(x => x.Owner)">@L["Owner"]</MudTableSortLabel></MudTh>
+                    <MudTh>@L["Automatic renewal"]</MudTh>
+                    <MudTh>@L["ACME provider"]</MudTh>
+                    <MudTh><MudTableSortLabel T="DomainRow" SortBy="@(x => x.Valid)">@L["Valid certificates"]</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="DomainRow" SortBy="@(x => x.Invalid)">@L["Invalid certificates"]</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel T="DomainRow" SortBy="@(x => x.Missing)">@L["Missing DNS names"]</MudTableSortLabel></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd><a href="@($"/domains/{Uri.EscapeDataString(context.Domain)}/ssl")">@context.Domain</a></MudTd>
+                    <MudTd>@context.Owner</MudTd>
+                    <MudTd>@(context.Enabled ? L["Enabled"].Value : L["Disabled"].Value)</MudTd>
+                    <MudTd>@(string.IsNullOrEmpty(context.Provider) ? L["Default (inherited)"].Value : context.Provider)</MudTd>
+                    <MudTd>@context.Valid</MudTd><MudTd>@context.Invalid</MudTd><MudTd>@context.Missing</MudTd>
+                </RowTemplate>
+                <NoRecordsContent><PanelEmptyState>@L["No domains found for this account."]</PanelEmptyState></NoRecordsContent>
+                <PagerContent><MudTablePager /></PagerContent>
+            </MudTable>
+        }
+    </MudPaper>
+}
+@code {
+    private sealed record DomainRow(string Domain, string Owner, bool Enabled, string Provider, int Valid, int Invalid, int Missing);
+    private List<DomainRow>? domains;
+    private string search = "";
+    private string? error;
+    private bool busy;
+    private IEnumerable<DomainRow> Visible => (domains ?? []).Where(x => x.Domain.Contains(search, StringComparison.OrdinalIgnoreCase) || x.Owner.Contains(search, StringComparison.OrdinalIgnoreCase));
+    protected override async Task OnInitializedAsync() => await Load();
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; error = null;
+        try
+        {
+            var (status, body) = await Session.GetRawAsync("api/domain-tls/domains");
+            if (status != 200) { domains = null; error = L["Backend HTTP {0}.", status].Value; return; }
+            using var doc = JsonDocument.Parse(body);
+            domains = doc.RootElement.EnumerateArray().Select(x =>
+            {
+                var acme = x.GetProperty("acmeSettings");
+                var certs = x.GetProperty("certs");
+                return new DomainRow(x.GetProperty("domain").GetString() ?? "", x.GetProperty("username").GetString() ?? "",
+                    acme.GetProperty("enabled").GetBoolean(), acme.GetProperty("provider").GetString() ?? "",
+                    certs.GetProperty("validAuto").GetInt32() + certs.GetProperty("validManual").GetInt32(),
+                    certs.GetProperty("invalidAuto").GetInt32() + certs.GetProperty("invalidManual").GetInt32(),
+                    x.GetProperty("dnsNames").GetProperty("missing").GetInt32());
+            }).OrderBy(x => x.Domain, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException or KeyNotFoundException or FormatException)
+        { domains = null; error = ex.Message; }
+        finally { busy = false; }
+    }
+}

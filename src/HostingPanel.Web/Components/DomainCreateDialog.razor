@@ -1,0 +1,64 @@
+@using HostingPanel.Web.Localization
+@using System.Text.Json
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject DirectAdminSession Session
+
+<MudDialog>
+    <DialogContent>
+        <p>@L["Create a website for the signed-in account."]</p>
+        <MudForm @ref="createForm">
+        <MudTextField T="string" Disabled="@busy" @bind-Value="testDomain" Label="@L["Domain name"].Value" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="newDomain" Placeholder="example.com" />
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudCheckBox T="bool" Disabled="@busy" @bind-Value="php" Label="PHP" />
+            <MudCheckBox T="bool" Disabled="@busy" @bind-Value="ssl" Label="SSL" />
+            <MudCheckBox T="bool" Disabled="@busy" @bind-Value="cgi" Label="CGI" />
+        </MudStack>
+
+        </MudForm>
+        @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Disabled="@busy" OnClick="Cancel">@L["Cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || string.IsNullOrWhiteSpace(testDomain))" OnClick="Create">@L["Add domain"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    private MudForm createForm = default!;
+    private string testDomain = "";
+    private bool php = true, ssl = true, cgi, busy;
+    private string? error;
+
+    private void Cancel() { if (!busy) Dialog.Cancel(); }
+    private async Task Create()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; error = null;
+        try
+        {
+            await createForm.ValidateAsync();
+            if (!createForm.IsValid || !Session.Connected || string.IsNullOrWhiteSpace(testDomain)) return;
+            var domain = testDomain.Trim().ToLowerInvariant();
+            var (status, body) = await Session.ExecuteTestDomainAsync(domain, "create", domain, php, ssl, cgi);
+            if (status is >= 200 and < 300) { Dialog.Close(DialogResult.Ok(status)); return; }
+            error = status switch
+            {
+                409 => L["The backend reported a conflict for this domain operation."].Value,
+                400 => L["Invalid domain or settings."].Value,
+                _ => L["Domain operation failed: HTTP {0}.", status].Value
+            };
+            try
+            {
+                using var problem = JsonDocument.Parse(body);
+                if (problem.RootElement.ValueKind == JsonValueKind.Object &&
+                    problem.RootElement.TryGetProperty("type", out var code) && code.ValueKind == JsonValueKind.String)
+                    error += " " + code.GetString();
+            }
+            catch (JsonException) { }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or InvalidOperationException)
+        { error = ex.Message; }
+        finally { busy = false; }
+    }
+}

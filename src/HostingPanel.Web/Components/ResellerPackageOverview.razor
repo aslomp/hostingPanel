@@ -1,0 +1,104 @@
+@using HostingPanel.Web.Localization
+@using System.Text.Json
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject DirectAdminSession Session
+@inject IDialogService Dialogs
+
+<MudPaper Class="pa-4 my-3" Elevation="1">
+    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <h2>@L["Reseller packages"]</h2>
+        <MudButton Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton>
+    </MudStack>
+    @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+    @if (feedback is not null) { <MudAlert Severity="@(failed ? Severity.Error : Severity.Success)">@feedback</MudAlert> }
+    @if (busy) { <PanelLoading>@L["Processing…"]</PanelLoading> }
+    <MudTextField T="string" @bind-Value="search" Immediate="true" Label="@L["Search"].Value" />
+    @if (packages is not null)
+    {
+        <MudTable T="string" Items="@Visible" RowsPerPage="25" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh><MudTableSortLabel T="string" SortBy="@(x => x)">@L["Package"]</MudTableSortLabel></MudTh>
+                <MudTh>@L["Actions"]</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd><MudButton Variant="Variant.Text" Disabled="@busy" OnClick="@(() => ShowDetails(context))">@context</MudButton></MudTd>
+                <MudTd><CrudDeleteButton Label="@L["Delete package"].Value" Disabled="@busy" OnClick="@(() => Delete(context))" /></MudTd>
+            </RowTemplate>
+            <NoRecordsContent><PanelEmptyState>@L["No packages found."]</PanelEmptyState></NoRecordsContent>
+            <PagerContent><MudTablePager /></PagerContent>
+        </MudTable>
+    }
+    @if (details is not null)
+    {
+        <MudStack Row="true" Justify="Justify.SpaceBetween">
+            <h3>@selected</h3>
+            <MudButton OnClick="@(() => details = null)">@L["Close"]</MudButton>
+        </MudStack>
+        <JsonOverview Json="@details" />
+    }
+</MudPaper>
+
+@code {
+    private List<string>? packages;
+    private string search = "";
+    private string? error, feedback, selected, details;
+    private bool busy, failed;
+    private IEnumerable<string> Visible => (packages ?? []).Where(x => x.Contains(search, StringComparison.OrdinalIgnoreCase));
+    protected override async Task OnInitializedAsync() => await Load();
+    private static string Endpoint(string name) => "api/reseller-packages/" + Uri.EscapeDataString(name);
+
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; error = null;
+        try
+        {
+            var (status, body) = await Session.GetRawAsync("api/reseller-packages");
+            if (status != 200) { packages = null; details = null; error = L["Backend HTTP {0}.", status].Value; return; }
+            using var doc = JsonDocument.Parse(body);
+            packages = doc.RootElement.EnumerateArray().Select(x => x.GetProperty("name").GetString() ?? "")
+                .Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+            if (selected is not null && !packages.Contains(selected)) { selected = null; details = null; }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException or KeyNotFoundException)
+        { packages = null; details = null; error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task ShowDetails(string name)
+    {
+        if (busy || !Session.Connected || packages?.Contains(name) != true) return;
+        busy = true; error = null; details = null; selected = name;
+        try
+        {
+            var (status, body) = await Session.GetRawAsync(Endpoint(name));
+            if (status == 200) details = body;
+            else error = L["Backend HTTP {0}.", status].Value;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task Delete(string name)
+    {
+        if (busy || !Session.Connected || packages?.Contains(name) != true) return;
+        busy = true; feedback = null;
+        var identity = Session.Username;
+        var succeeded = false;
+        try
+        {
+            var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+                L["Delete package"].Value, name, L["Permanently delete this package?"].Value, L["Enter the exact package name to confirm."].Value);
+            if (!confirmed || !Session.Connected || identity != Session.Username || packages?.Contains(name) != true) return;
+            var (status, _) = await Session.RequestApiAsync(HttpMethod.Delete, Endpoint(name));
+            succeeded = status is >= 200 and < 300;
+            failed = !succeeded;
+            feedback = succeeded ? L["Package deleted."].Value : L["Deletion not confirmed: backend HTTP {0}.", status].Value;
+            if (succeeded && selected == name) { selected = null; details = null; }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        { failed = true; feedback = ex.Message; }
+        finally { busy = false; }
+        if (succeeded) await Load();
+    }
+}

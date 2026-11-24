@@ -3,6 +3,9 @@
 @using System.Text.Json
 @using System.Text.Json.Nodes
 @inject DirectAdminSession Session
+@inject IDialogService Dialogs
+@if (message is not null) { <MudAlert Severity="@(failed ? Severity.Error : Severity.Success)">@message</MudAlert> }
+@if (busy) { <PanelLoading>@L["Loading…"]</PanelLoading> }
 @if (config is not null)
 {
     <MudPaper Class="pa-4 my-3" Elevation="1">
@@ -16,13 +19,35 @@
         <MudSelect T="string" @bind-Value="keyType" Variant="Variant.Outlined" Margin="Margin.Dense"><MudSelectItem T="string" Value='@("ec256")'>ec256</MudSelectItem><MudSelectItem T="string" Value='@("ec384")'>ec384</MudSelectItem><MudSelectItem T="string" Value='@("rsa2048")'>rsa2048</MudSelectItem><MudSelectItem T="string" Value='@("rsa3072")'>rsa3072</MudSelectItem><MudSelectItem T="string" Value='@("rsa4096")'>rsa4096</MudSelectItem><MudSelectItem T="string" Value='@("rsa8192")'>rsa8192</MudSelectItem></MudSelect>
         <MudCheckBox T="bool" @bind-Value="wildcard" Label="@L["Prefer wildcard"].Value" />
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Save">@L["Save ACME settings"]</MudButton>
-        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Provision">@L["Request certificate"]</MudButton>
-        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="LoadStatus">@L["Refresh certificate information"]</MudButton>
+        <CrudAddButton Disabled="@busy" OnClick="Provision">@L["Request certificate"]</CrudAddButton>
+    </MudPaper>
+}
+@if (Session.Connected)
+{
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <h2>@L["Certificate information"]</h2>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="RefreshStatus">@L["Refresh certificate information"]</MudButton>
         @if (certificateStatus is not null) { <p role="status">@certificateStatus</p> }
-        @foreach (var cert in certificates)
+        <MudSimpleTable Dense="true" Hover="true" Striped="true">
+            <thead><tr><th>@L["Subject"]</th><th>@L["Issuer"]</th><th>@L["Expires"]</th><th>@L["Status"]</th><th>@L["Actions"]</th></tr></thead>
+            <tbody>
+            @foreach (var cert in certificates.OrderBy(x => x.Certificate?.Subject ?? x.Id, StringComparer.OrdinalIgnoreCase))
+            {
+                <tr>
+                    <td><MudButton Variant="Variant.Text" Disabled="@busy" OnClick="@(() => selected = cert)">@((cert.Certificate?.Subject ?? cert.Id) ?? "—")</MudButton></td>
+                    <td>@(cert.Certificate?.Issuer ?? "—")</td>
+                    <td>@cert.Certificate?.NotAfter.ToLocalTime()</td>
+                    <td>@(string.IsNullOrEmpty(cert.Error) ? L["Issued"].Value : cert.Error)</td>
+                    <td>@if (!string.IsNullOrWhiteSpace(cert.Id)) { <CrudDeleteButton Label="@L["Delete certificate"].Value" Disabled="@busy" OnClick="@(() => Delete(cert))" /> }</td>
+                </tr>
+            }
+            </tbody>
+        </MudSimpleTable>
+        @if (selected is { } cert)
         {
+            <MudButton OnClick="@(() => selected = null)">@L["Close"]</MudButton>
             <MudSimpleTable Dense="true" Hover="true" Striped="true"><tbody>
-                <tr><th>@L["Status"]</th><td>@(cert.Error.Length == 0 ? L["Issued"].Value : cert.Error)</td></tr>
+                <tr><th>@L["Status"]</th><td>@(string.IsNullOrEmpty(cert.Error) ? L["Issued"].Value : cert.Error)</td></tr>
                 <tr><th>@L["Automatic renewal"]</th><td>@cert.AutorenewEnabled</td></tr>
                 @if (cert.Certificate is not null)
                 {
@@ -43,7 +68,6 @@
             @foreach(var log in logs) { <tr><td>@log.CreateTime</td><td>@log.ChallengeType</td><td>@log.Status</td></tr> }
             </tbody></MudSimpleTable>
         }
-        @if (message is not null) { <p role="status">@message</p> }
     </MudPaper>
 }
 @code {
@@ -51,7 +75,9 @@
     private sealed record Provider(string Id, string Name);
     private Provider[] providers = [];
     private sealed record PublicCert(string Subject,string Issuer,string[] DnsNames,DateTimeOffset NotBefore,DateTimeOffset NotAfter,string PrettyType,string SerialNumber);
-    private sealed record Cert(string Error,bool AutorenewEnabled,PublicCert? Certificate);
+    private sealed record Cert(string Id,string Error,bool AutorenewEnabled,PublicCert? Certificate);
+    private Cert? selected;
+    private bool failed;
     private sealed record CertResponse(Cert[] Certs);
     private sealed record AcmeLog(string CreateTime,string ChallengeType,string Status);
     private Cert[] certificates = [];
@@ -60,6 +86,7 @@
     private async Task LoadStatus()
     {
         certificates = []; logs = []; certificateStatus = null;
+        selected = null;
         try {
             var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
             var (status, body) = await Session.GetRawAsync(Endpoint + "/certs");
@@ -69,6 +96,37 @@
             if(ls==200) logs=JsonSerializer.Deserialize<AcmeLog[]>(lb,options) ?? [];
         } catch(Exception ex) when(ex is JsonException or HttpRequestException or InvalidOperationException) { certificateStatus=L["Certificate information unavailable."].Value; }
     }
+    private async Task RefreshStatus()
+    {
+        if (busy || !Session.Connected) return;
+        busy = true;
+        try { await LoadStatus(); }
+        finally { busy = false; }
+    }
+
+    private async Task Delete(Cert cert)
+    {
+        if (busy || !Session.Connected || string.IsNullOrWhiteSpace(cert.Id) || !certificates.Contains(cert)) return;
+        busy = true; message = null;
+        var domain = Domain;
+        var identity = Session.Username;
+        try
+        {
+            var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+                L["Delete certificate"].Value, cert.Id,
+                L["Deleting this certificate may interrupt HTTPS service for its DNS names."].Value,
+                L["Enter the exact certificate ID to confirm."].Value,
+                $"{domain} — {cert.Certificate?.Subject ?? cert.Id}");
+            if (!confirmed || !Session.Connected || identity != Session.Username || domain != Domain || !certificates.Contains(cert)) return;
+            var (status, _) = await Session.RequestApiAsync(HttpMethod.Delete, Endpoint + "/certs/" + Uri.EscapeDataString(cert.Id));
+            failed = status != 204;
+            message = failed ? L["Backend HTTP {0}.", status].Value : L["Certificate deleted."].Value;
+            if (!failed) await LoadStatus();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        { failed = true; message = ex.Message; }
+        finally { busy = false; }
+    }
     private JsonObject? config;
     private string provider = "", keyType = "ec256";
     private bool enabled, wildcard, busy;
@@ -76,12 +134,12 @@
     private string Endpoint => "api/domain-tls/domains/" + Uri.EscapeDataString(Domain);
     protected override async Task OnParametersSetAsync()
     {
-        config = null;
+        config = null; message = null; busy = true;
         try {
             var (status, body) = await Session.GetRawAsync(Endpoint + "/acme-config");
-            if (status != 200) return;
+            if (status != 200) { failed = true; message = L["Backend HTTP {0}.", status].Value; return; }
             var (ps, pb) = await Session.GetRawAsync("api/session/acme-data");
-            if (ps != 200) return;
+            if (ps != 200) { failed = true; message = L["Backend HTTP {0}.", ps].Value; return; }
             using var doc = JsonDocument.Parse(pb);
             providers = doc.RootElement.GetProperty("certProviders").Deserialize<Provider[]>(new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [];
             config = JsonNode.Parse(body)?.AsObject();
@@ -90,8 +148,8 @@
             provider = config["provider"]?.GetValue<string>() ?? "";
             keyType = config["keyType"]?.GetValue<string>() ?? "ec256";
             wildcard = config["preferWildcard"]?.GetValue<bool>() ?? false;
-            await LoadStatus();
-        } catch (Exception ex) when (ex is JsonException or HttpRequestException or InvalidOperationException) { message = ex.Message; }
+        } catch (Exception ex) when (ex is JsonException or HttpRequestException or InvalidOperationException or KeyNotFoundException) { failed = true; message = ex.Message; }
+        finally { try { await LoadStatus(); } finally { busy = false; } }
     }
     private async Task Save()
     {
@@ -100,16 +158,17 @@
         try {
             config["enabled"] = enabled; config["provider"] = provider; config["keyType"] = keyType; config["preferWildcard"] = wildcard;
             var (status, body) = await Session.RequestApiAsync(HttpMethod.Put, Endpoint + "/acme-config", config.ToJsonString());
-            message = status == 204 ? L["ACME settings saved."].Value : $"HTTP {status}: {body}";
-        } catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { message = ex.Message; }
+            failed = status != 204;
+            message = !failed ? L["ACME settings saved."].Value : L["Backend HTTP {0}.", status].Value;
+        } catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { failed = true; message = ex.Message; }
         finally { busy = false; }
     }
     private async Task Provision()
     {
         if (busy) return;
         busy = true;
-        try { var (status, body) = await Session.RequestApiAsync(HttpMethod.Post, Endpoint + "/provision-certs?nonblock=true"); message = status == 200 ? L["Certificate request submitted."].Value : $"HTTP {status}: {body}"; }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { message = ex.Message; }
+        try { var (status, body) = await Session.RequestApiAsync(HttpMethod.Post, Endpoint + "/provision-certs?nonblock=true"); failed = status is < 200 or >= 300; message = !failed ? L["Certificate request submitted."].Value : L["Backend HTTP {0}.", status].Value; if (!failed) await LoadStatus(); }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { failed = true; message = ex.Message; }
         finally { busy = false; }
     }
 }
