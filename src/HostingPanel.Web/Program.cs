@@ -19,7 +19,6 @@ else if (provider.Equals("DirectAdmin", StringComparison.OrdinalIgnoreCase))
     builder.Services.AddDirectAdminBackend(builder.Configuration);
 else
     throw new InvalidOperationException($"Unknown HostingPanel backend '{provider}'.");
-builder.Services.AddScoped<IAuthenticationProvider>(sp => sp.GetRequiredService<IHostingBackend>());
 builder.Services.AddLocalization(options => options.ResourcesPath = "Resources");
 builder.Services.Configure<RequestLocalizationOptions>(options =>
 {

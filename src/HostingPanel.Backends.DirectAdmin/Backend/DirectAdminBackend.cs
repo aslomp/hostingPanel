@@ -19,7 +19,7 @@ public sealed class DirectAdminBackend(
     DnsZoneService dns,
     FileAccessService fileAccess,
     TicketService tickets,
-    IHttpClientFactory clients) : IHostingBackend
+    IHttpClientFactory clients) : IAuthenticationProvider, IWebHosting, IDNSProvider, ICertificateProvider, IApiCompatibilityHandler, IDomainPreview
 {
     public IAccountCatalog AccountCatalog => accountCatalog;
     public IAccountMutations AccountMutations => accountMutations;
@@ -81,6 +81,7 @@ public sealed class DirectAdminBackend(
         catch (HttpRequestException) { return 502; }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return 504; }
     }
+    public Task HandleCertificateRequestAsync(HttpContext context) => ForwardAsync(context);
     public Task ForwardAsync(HttpContext context) => DirectAdminTransport.ForwardAsync(context, clients);
 }
 

@@ -4,7 +4,7 @@ namespace HostingPanel.Api.Controllers;
 
 /// <summary>Exact DirectAdmin Swagger routes. Backend determines authorization and support.</summary>
 [ApiController]
-public sealed class SystemInfoController(IHostingBackend backend) : BackendController
+public sealed class SystemInfoController(IApiCompatibilityHandler compatibility) : BackendController
 {
     [HttpGet("/api/info")]
     [HttpGet("/api/system-info/cpu")]
@@ -13,5 +13,5 @@ public sealed class SystemInfoController(IHostingBackend backend) : BackendContr
     [HttpGet("/api/system-info/memory")]
     [HttpGet("/api/system-info/services")]
     [HttpGet("/api/system-info/uptime")]
-    public Task ForwardAsync() => backend.ForwardAsync(HttpContext);
+    public Task ForwardAsync() => compatibility.ForwardAsync(HttpContext);
 }

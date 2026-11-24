@@ -5,14 +5,14 @@ namespace HostingPanel.Api.Controllers;
 
 /// <summary>HostingPanel ticket resource. Official Swagger paths stay with the generic proxy.</summary>
 [ApiController]
-public sealed class TicketController(IHostingBackend backend) : BackendController
+public sealed class TicketController(ITickets tickets) : BackendController
 {
     [HttpGet("/hosting/tickets/inbox")]
     public async Task<IResult> Inbox(CancellationToken ct)
     {
         if (!TryGetBasic(HttpContext, out var auth))
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-        var (status, inbox, error) = await backend.Tickets.GetInboxAsync(auth, ct);
+        var (status, inbox, error) = await tickets.GetInboxAsync(auth, ct);
         return inbox is null ? Results.Json(new { type = error ?? "UPSTREAM_ERROR" }, statusCode: status)
             : Results.Json(inbox);
     }
@@ -24,7 +24,7 @@ public sealed class TicketController(IHostingBackend backend) : BackendControlle
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
         if (id < 0 || source is not ("received" or "request"))
             return Results.Json(new { type = "INVALID_TICKET" }, statusCode: 400);
-        var (status, inbox, error) = await backend.Tickets.GetInboxAsync(auth, ct);
+        var (status, inbox, error) = await tickets.GetInboxAsync(auth, ct);
         if (inbox is null)
             return Results.Json(new { type = error ?? "UPSTREAM_ERROR" }, statusCode: status);
         var ticket = inbox.Tickets.FirstOrDefault(t => t.Id == id && t.Source == source);
@@ -38,7 +38,7 @@ public sealed class TicketController(IHostingBackend backend) : BackendControlle
     {
         if (!TryGetBasic(HttpContext, out var auth))
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-        var result = await backend.Tickets.CreateAsync(request, auth, ct);
+        var result = await tickets.CreateAsync(request, auth, ct);
         return Respond(result);
     }
 
@@ -47,7 +47,7 @@ public sealed class TicketController(IHostingBackend backend) : BackendControlle
     {
         if (!TryGetBasic(HttpContext, out var auth))
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-        return Respond(await backend.Tickets.ReplyAsync(legacyId, request, auth, ct));
+        return Respond(await tickets.ReplyAsync(legacyId, request, auth, ct));
     }
 
     [HttpPut("/hosting/tickets/{legacyId}/status")]
@@ -55,7 +55,7 @@ public sealed class TicketController(IHostingBackend backend) : BackendControlle
     {
         if (!TryGetBasic(HttpContext, out var auth))
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-        return Respond(await backend.Tickets.SetStatusAsync(legacyId, request, auth, ct));
+        return Respond(await tickets.SetStatusAsync(legacyId, request, auth, ct));
     }
 
     private static IResult Respond(TicketActionResult outcome) =>

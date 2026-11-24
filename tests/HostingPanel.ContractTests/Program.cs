@@ -9,12 +9,9 @@ var checks = new List<(string Description, Action Test)>
     ("DNS capability is implemented by both providers", () =>
     {
         Require(typeof(HostingPanel.Api.IDNSProvider).IsAssignableFrom(typeof(DnsZoneService)));
-        Require(typeof(HostingPanel.Api.IDNSProvider).IsAssignableFrom(typeof(HostingPanel.Api.IHostingBackend)));
-        Require(typeof(HostingPanel.Api.IWebHosting).IsAssignableFrom(typeof(HostingPanel.Api.IHostingBackend)));
         Require(typeof(HostingPanel.Api.IDNSProvider).IsAssignableFrom(typeof(HostingPanel.Api.DirectAdminBackend)));
         Require(typeof(HostingPanel.Api.IWebHosting).IsAssignableFrom(typeof(HostingPanel.Api.DirectAdminBackend)));
         Require(typeof(HostingPanel.Api.IDNSProvider).IsAssignableFrom(typeof(HostingPanel.Api.KubernetesBackend)));
-        Require(typeof(HostingPanel.Api.IHostingBackend).GetProperty("Dns")?.PropertyType == typeof(HostingPanel.Api.IDNSProvider));
         Require(new DnsChangeResult(202, null).ProvisioningPending);
         Require(!new DnsChangeResult(202, null).Executed);
         Require(new DnsChangeResult(200, null).Executed);
@@ -23,16 +20,21 @@ var checks = new List<(string Description, Action Test)>
     {
         Require(typeof(HostingPanel.Api.IWebHosting).IsAssignableFrom(typeof(DomainManagementService)));
         Require(typeof(HostingPanel.Api.IWebHosting).IsAssignableFrom(typeof(HostingPanel.Api.KubernetesBackend)));
-        Require(typeof(HostingPanel.Api.IHostingBackend).GetProperty("WebHosting")?.PropertyType == typeof(HostingPanel.Api.IWebHosting));
         var accepted = new HostingPanel.Api.WebsiteMutationResult(202, null);
         Require(accepted.ProvisioningPending && !accepted.Executed);
         var confirmed = new HostingPanel.Api.WebsiteMutationResult(200, null);
         Require(confirmed.Executed && !confirmed.ProvisioningPending);
         Require(!new HostingPanel.Api.WebsiteMutationResult(403, "ACCESS_DENIED").Executed);
     }),
+    ("Controllers use focused provider contracts", () =>
+    {
+        Require(typeof(HostingPanel.Api.Controllers.DnsController).GetConstructors().Single().GetParameters().Single().ParameterType == typeof(HostingPanel.Api.IDNSProvider));
+        Require(typeof(HostingPanel.Api.Controllers.WebHostingController).GetConstructors().Single().GetParameters().Single().ParameterType == typeof(HostingPanel.Api.IWebHosting));
+        Require(typeof(HostingPanel.Api.IDNSProvider).Assembly.GetType("HostingPanel.Api.IHostingBackend") is null);
+    }),
     ("Provider assemblies do not reference each other or API", () =>
     {
-        var contract = typeof(HostingPanel.Api.IHostingBackend).Assembly;
+        var contract = typeof(HostingPanel.Api.IDNSProvider).Assembly;
         var direct = typeof(HostingPanel.Api.DirectAdminBackend).Assembly;
         var kube = typeof(HostingPanel.Api.KubernetesBackend).Assembly;
         Require(contract != direct && contract != kube && direct != kube);

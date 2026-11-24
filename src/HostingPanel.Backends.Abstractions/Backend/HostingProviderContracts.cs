@@ -5,27 +5,6 @@ using HostingPanel.Api.Services;
 
 namespace HostingPanel.Api;
 
-/// <summary>No provider-specific implementations appear in this contract.</summary>
-public interface IHostingBackend : IAuthenticationProvider, IWebHosting, IDNSProvider, ICertificateProvider
-{
-    IBackendSettingsAccess? Settings => null;
-    IAccountCatalog AccountCatalog { get; }
-    IAccountMutations AccountMutations { get; }
-    IAccessibleDomains AccessibleDomains { get; }
-    IUserDetails UserDetails { get; }
-    IAccountOverview AccountOverview { get; }
-    IImpersonation Impersonation { get; }
-    IDatabases Databases { get; }
-    IAccessibleDatabases AccessibleDatabases { get; }
-    IDomains Domains { get; }
-    IWebHosting WebHosting { get; }
-    IDNSProvider Dns { get; }
-    IFileAccess FileAccess { get; }
-    ITickets Tickets { get; }
-    Task ForwardAsync(HttpContext context);
-    IResult PreviewDomain(DomainCreatePreview input);
-}
-
 public interface IAccountCatalog {
     Task<AccountCatalogResult> ListAsync(AuthenticationHeaderValue auth, CancellationToken ct);
 }
@@ -77,4 +56,9 @@ public interface ITickets
     Task<TicketActionResult> CreateAsync(TicketCreateRequest input, AuthenticationHeaderValue auth, CancellationToken ct);
     Task<TicketActionResult> ReplyAsync(string legacyId, TicketReplyRequest input, AuthenticationHeaderValue auth, CancellationToken ct);
     Task<TicketActionResult> SetStatusAsync(string legacyId, TicketStatusChange input, AuthenticationHeaderValue auth, CancellationToken ct);
+}
+
+public interface IDomainPreview
+{
+    IResult PreviewDomain(DomainCreatePreview input);
 }

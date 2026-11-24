@@ -8,13 +8,13 @@ using Microsoft.AspNetCore.Mvc;
 namespace HostingPanel.Api.Controllers;
 
 [ApiController]
-public sealed class DomainController(IHostingBackend backend) : BackendController
+public sealed class DomainController(IAccessibleDomains accessibleDomains, IDomains domains, IDomainPreview domainPreview, ICertificateProvider certificates) : BackendController
 {
     [HttpGet("/hosting/domains/accessible")]
     public async Task<IResult> hosting_domains_accessible_Get_5()
     {
         var context = HttpContext;
-        var service = backend.AccessibleDomains;
+        var service = accessibleDomains;
         if (!TryGetBasic(context, out var auth))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var result = await service.ListAsync(auth, context.RequestAborted);
@@ -30,7 +30,7 @@ public sealed class DomainController(IHostingBackend backend) : BackendControlle
     public async Task<IResult> hosting_domains_Get_14()
     {
         var context = HttpContext;
-        var service = backend.Domains;
+        var service = domains;
         if (!TryGetBasic(context, out var auth))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var owner = context.Request.Query["user"].ToString();
@@ -50,14 +50,14 @@ public sealed class DomainController(IHostingBackend backend) : BackendControlle
         var context = HttpContext;
         if (!TryGetBasic(context, out _))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-            return backend.PreviewDomain(input);
+            return domainPreview.PreviewDomain(input);
     }
 
     [HttpPost("/hosting/domains/execute")]
     public async Task<IResult> hosting_domains_execute_Post_16([FromBody] DomainMutationRequest input)
     {
         var context = HttpContext;
-        var service = backend.Domains;
+        var service = domains;
         if (!TryGetBasic(context, out var auth))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var result = await service.MutateAsync(input, auth, context.RequestAborted);
@@ -70,7 +70,7 @@ public sealed class DomainController(IHostingBackend backend) : BackendControlle
     public async Task<IResult> hosting_domains_domain_Get_17([FromRoute] string domain)
     {
         var context = HttpContext;
-        var service = backend.Domains;
+        var service = domains;
         if (!TryGetBasic(context, out var auth))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var result = await service.GetDetailsAsync(domain, auth, context.RequestAborted);
@@ -83,7 +83,7 @@ public sealed class DomainController(IHostingBackend backend) : BackendControlle
     public async Task<IResult> hosting_domains_domain_settings_Put_18([FromRoute] string domain, [FromBody] DomainSettingRequest input)
     {
         var context = HttpContext;
-        var service = backend.Domains;
+        var service = domains;
         if (!TryGetBasic(context, out var auth))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var result = await service.UpdateSettingAsync(domain, input.Setting, input.Value,
@@ -106,7 +106,7 @@ public sealed class DomainController(IHostingBackend backend) : BackendControlle
     [HttpPost("/api/domain-tls/domains/{domain}/certs/{id}/install-self-signed")]
     [HttpPost("/api/domain-tls/domains/{domain}/provision-certs")]
     [HttpPost("/api/domain-tls/domains/{domain}/provision-certs-dry-run")]
-    public Task ForwardDomainAsync() => backend.HandleCertificateRequestAsync(HttpContext);
+    public Task ForwardDomainAsync() => certificates.HandleCertificateRequestAsync(HttpContext);
 
 
 }

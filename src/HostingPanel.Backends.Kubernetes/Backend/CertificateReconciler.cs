@@ -24,7 +24,7 @@ public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfigur
     {
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
-        var backend = (KubernetesBackend)scope.ServiceProvider.GetRequiredService<IHostingBackend>();
+        var backend = scope.ServiceProvider.GetRequiredService<IKubernetesSettingsReader>();
         var settings = await backend.GetEffectiveSettingsAsync(ct);
         var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
         var owners = await db.Accounts.AsNoTracking().ToDictionaryAsync(x => x.Id, ct);

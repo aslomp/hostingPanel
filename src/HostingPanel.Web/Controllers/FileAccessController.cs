@@ -9,13 +9,13 @@ namespace HostingPanel.Api.Controllers;
 /// SFTP is an SSH capability, not an additional FTP-account type.
 /// </summary>
 [ApiController]
-public sealed class FileAccessController(IHostingBackend backend) : BackendController
+public sealed class FileAccessController(IFileAccess fileAccess) : BackendController
 {
     [HttpGet("/hosting/file-access/ftp")]
     public async Task<IResult> ListFtp([FromQuery] string domain, CancellationToken ct)
     {
         if (!TryGetBasic(HttpContext, out var auth)) return UnauthorizedResult();
-        return Forward(await backend.FileAccess.ListFtpAsync(domain, auth, ct));
+        return Forward(await fileAccess.ListFtpAsync(domain, auth, ct));
     }
 
     [HttpGet("/hosting/file-access/ftp/{user}")]
@@ -23,14 +23,14 @@ public sealed class FileAccessController(IHostingBackend backend) : BackendContr
         CancellationToken ct)
     {
         if (!TryGetBasic(HttpContext, out var auth)) return UnauthorizedResult();
-        return Forward(await backend.FileAccess.GetFtpAsync(domain, user, auth, ct));
+        return Forward(await fileAccess.GetFtpAsync(domain, user, auth, ct));
     }
 
     [HttpPost("/hosting/file-access/ftp")]
     public async Task<IResult> CreateFtp([FromBody] FtpAccountRequest input, CancellationToken ct)
     {
         if (!TryGetBasic(HttpContext, out var auth)) return UnauthorizedResult();
-        return Forward(await backend.FileAccess.CreateFtpAsync(input, auth, ct));
+        return Forward(await fileAccess.CreateFtpAsync(input, auth, ct));
     }
 
     [HttpPut("/hosting/file-access/ftp/{user}")]
@@ -38,7 +38,7 @@ public sealed class FileAccessController(IHostingBackend backend) : BackendContr
         [FromBody] FtpAccountRequest input, CancellationToken ct)
     {
         if (!TryGetBasic(HttpContext, out var auth)) return UnauthorizedResult();
-        return Forward(await backend.FileAccess.UpdateFtpAsync(user, input, auth, ct));
+        return Forward(await fileAccess.UpdateFtpAsync(user, input, auth, ct));
     }
 
     [HttpDelete("/hosting/file-access/ftp/{user}")]
@@ -46,7 +46,7 @@ public sealed class FileAccessController(IHostingBackend backend) : BackendContr
         CancellationToken ct)
     {
         if (!TryGetBasic(HttpContext, out var auth)) return UnauthorizedResult();
-        return Forward(await backend.FileAccess.DeleteFtpAsync(domain, user, auth, ct));
+        return Forward(await fileAccess.DeleteFtpAsync(domain, user, auth, ct));
     }
 
     private static IResult UnauthorizedResult() =>

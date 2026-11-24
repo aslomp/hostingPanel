@@ -16,9 +16,10 @@ namespace HostingPanel.Api;
 /// Reconciliation with the cluster is deliberately a separate responsibility.
 /// </summary>
 public sealed partial class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, PowerDnsClient? powerDns = null, IConfiguration? configuration = null) :
-    IHostingBackend, IAccountCatalog, IAccountMutations, IAccessibleDomains,
+    IAuthenticationProvider, IWebHosting, IDNSProvider, ICertificateProvider, IApiCompatibilityHandler, IDomainPreview,
+    IAccountCatalog, IAccountMutations, IAccessibleDomains,
     IUserDetails, IAccountOverview, IImpersonation, IDatabases,
-    IAccessibleDatabases, IDomains, IFileAccess, ITickets, IBackendSettingsAccess, IHostingNetworkAccess
+    IAccessibleDatabases, IDomains, IFileAccess, ITickets, IBackendSettingsAccess, IHostingNetworkAccess, IKubernetesSettingsReader, IDomainDnsStaging
 {
     public IBackendSettingsAccess Settings => this;
     private const string SettingsKey = "BackendSettings:Kubernetes";
@@ -123,7 +124,7 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
     }
 
     // Stage DNS and website desired state in the same SaveChanges transaction.
-    internal async Task<string?> StageDomainDnsAsync(HostedDomain domain, CancellationToken ct, bool retry = false)
+    public async Task<string?> StageDomainDnsAsync(HostedDomain domain, CancellationToken ct, bool retry = false)
     {
         if (powerDns is null) return null;
         var dnsSettings = await GetEffectiveSettingsAsync(ct);

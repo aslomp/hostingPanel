@@ -4,9 +4,7 @@ namespace HostingPanel.Api;
 // Internal dispatch contract; the public routes remain the pinned DirectAdmin API.
 public interface ICertificateProvider
 {
-    Task HandleCertificateRequestAsync(HttpContext context) => ForwardCertificateRequestAsync(context);
-    private Task ForwardCertificateRequestAsync(HttpContext context) =>
-        this is IHostingBackend backend ? backend.ForwardAsync(context) : Results.StatusCode(501).ExecuteAsync(context);
+    Task HandleCertificateRequestAsync(HttpContext context);
 }
 public sealed record DomainAcmeConfiguration(
     Dictionary<string,string> DnsEnvironment, string DnsProvider, bool Enabled,

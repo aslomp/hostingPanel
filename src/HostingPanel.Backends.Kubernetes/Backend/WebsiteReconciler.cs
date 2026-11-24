@@ -39,7 +39,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var rows = await db.ReconciliationOperations.Where(x => x.ResourceType == "website"
             && x.Status == "pending").ToListAsync(ct);
         var shared = configuration.GetValue<bool>("KubernetesHosting:AllowSharedPhpRuntime");
-        var settings = await ((KubernetesBackend)scope.ServiceProvider.GetRequiredService<IHostingBackend>()).GetEffectiveSettingsAsync(ct);
+        var settings = await scope.ServiceProvider.GetRequiredService<IKubernetesSettingsReader>().GetEffectiveSettingsAsync(ct);
         var listenerSet = settings.TlsListenerSetName;
         var listenerChanged = appliedListenerSet != listenerSet;
         var cleanupPending = await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "domain-cleanup" && x.Status == "pending", ct);
