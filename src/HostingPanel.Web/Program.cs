@@ -48,7 +48,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     });
 builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
-builder.Services.AddAntiforgery(options => options.Cookie.SecurePolicy = CookieSecurePolicy.Always);
+// HTTPS deployments issue secure antiforgery cookies; permit loopback HTTP smoke tests.
+builder.Services.AddAntiforgery(options => options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = 429;
