@@ -4,11 +4,11 @@
 
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/aslomp)
 
-Een zelfstandige, responsive hostingbeheerinterface geïnspireerd op het dashboard en de navigatiestructuur van DirectAdmin Evolution.
+A standalone, responsive hosting management interface inspired by the DirectAdmin Evolution dashboard and navigation structure.
 
-## Installatie / Installation
+## Installation
 
-HostingPanel includes an ASP.NET Core API and a Blazor Server UI. The DirectAdmin provider is the default; the Kubernetes/SQLite provider is an experimental desired-state foundation, not a production hosting controller.
+HostingPanel includes an ASP.NET Core API and a Blazor Server UI. The DirectAdmin provider is the default; the Kubernetes/SQLite provider is experimental and is not yet a production-ready hosting controller.
 
 - [Installation guide — Docker Compose, Helm, native .NET](docs/installation.md)
 - [Docker Compose configuration](deploy/compose/compose.yaml)
@@ -17,50 +17,50 @@ HostingPanel includes an ASP.NET Core API and a Blazor Server UI. The DirectAdmi
 
 The original static UI prototype remains available via `index.html` and GitHub Pages. The following historical prototype notes refer to that static demo, not the .NET application.
 
-## Schermdekking
+## Page coverage
 
-Alle 49 zichtbare navigatie-items in de bekeken DirectAdmin Evolution Admin-/Gebruiker-navigatie hebben een afzonderlijke UI-definitie in `pages.js`. Elke pagina toont relevante formulieren, tabellen of tabbladen op basis van het type scherm. Dit is een **functionele UI-schets**, geen pixel-perfecte reconstructie van elk intern DirectAdmin-scherm: alleen de dashboardnavigatie was direct geïnspecteerd, en de gedetailleerde velden zijn daarom op basis van hun functie gereconstrueerd.
+All 49 visible navigation items in the inspected DirectAdmin Evolution administrator and user menus have individual UI definitions in `pages.js`. Each page displays relevant forms, tables, or tabs according to its purpose. This is a **functional UI prototype**, not a pixel-perfect reconstruction of every internal DirectAdmin page: only the dashboard navigation was directly inspected, so detailed fields were reconstructed based on their intended functionality.
 
-De pagina-opmaak staat in `pages.css`. Zowel `pages.js` als `pages.css` worden vanuit `index.html` geladen.
+Page styling is defined in `pages.css`. Both `pages.js` and `pages.css` are loaded from `index.html`.
 
-## Verfijnde workflows
+## Refined workflows
 
-De vier prioriteitsgebieden hebben nu eigen schermstromen in plaats van uitsluitend generieke formulieren:
+The four priority areas have dedicated workflows rather than relying exclusively on generic forms:
 
-- **Gebruikersbeheer:** gebruikersoverzicht, accountdetails, rollen, hostinglimieten, beveiliging, nieuwe accounts en pakketten.
-- **Domeinbeheer:** overzicht, toevoegen, document root, PHP, HTTPS/SSL en subdomeinen.
-- **DNS:** zones, records (A, AAAA, CNAME, MX, TXT en NS), records toevoegen/bewerken, SOA en nameservers.
-- **Serverbeheer:** IP-beheer, HTTPD-configuraties, multi-server, services en configuratietabbladen voor PHP, TLS en andere serverinstellingen.
+- **User management:** user lists, account details, roles, hosting limits, security, account creation, and packages.
+- **Domain management:** domain lists, domain creation, document roots, PHP, HTTPS/SSL, and subdomains.
+- **DNS:** zones, records (A, AAAA, CNAME, MX, TXT, and NS), record creation and editing, SOA, and nameservers.
+- **Server management:** IP management, HTTPD configuration, multi-server management, services, and configuration tabs for PHP, TLS, and other server settings.
 
-Alle weergegeven records zijn synthetisch. Formulieren en serviceacties hebben bewust **geen** opslag, backendconnectie of productie-effect. Dit zijn inhoudelijke UI-reconstructies; nog geen pixel-perfecte kopieën van alle oorspronkelijke DirectAdmin-pagina's.
+All records displayed in the static prototype are synthetic. Forms and service actions intentionally have **no** persistence, backend connection, or production impact. These are functional UI reconstructions, not pixel-perfect copies of the original DirectAdmin pages.
 
-## Functies
+## Features of the static prototype
 
-- Nederlandstalig dashboard, adminnavigatie en gebruikerweergave
-- Adminsecties: Accountbeheer, Server Beheer, Admin Gereedschap, Systeem Info & Bestanden, Extra Programma's, Support
-- Zoeken naar pagina's met Ctrl/Cmd + K
-- Lijst- en filterweergaven voor gebruikers, domeinen, DNS, e-mail, databases, bestandsbeheer en services
-- Widgets voor voorbeeldstatistieken, gebruik en activiteiten
-- Mobiele navigatie en toetsenbordbediening
-- Interactieve demo-modal voor nieuwe invoer
+- Dutch-language dashboard, administrator navigation, and user view
+- Administrator sections: Account Manager, Server Manager, Admin Tools, System Info & Files, Extra Features, and Support
+- Page search using Ctrl/Cmd + K
+- List and filter views for users, domains, DNS, email, databases, file management, and services
+- Widgets displaying sample statistics, usage, and activity
+- Mobile navigation and keyboard controls
+- Interactive demo modal for creating entries
 
-## Status
+## Prototype status
 
-**Frontendprototype.** Alle statistieken en records zijn voorbeeldgegevens. De afzonderlijke paginaformulieren hebben geen persistentie; de rollenwissel is slechts een UI-weergave en **geen autorisatie**. Er worden geen requests naar de DirectAdmin-server gestuurd.
+**Frontend prototype.** All statistics and records in the static demo are sample data. Individual page forms have no persistence; switching roles changes only the UI presentation and does **not** constitute authorization. The static prototype does not send requests to a DirectAdmin server.
 
-## Architectuur naar productie
+## Architecture towards production
 
-Voor koppeling aan de eigen hostingcontroller:
+For integration with a dedicated hosting controller, the original prototype roadmap outlined the following steps:
 
-1. Vervang `sampleRows` en de statische dashboardstatistieken door geautoriseerde API-aanroepen.
-2. Laat een backend sessies, authenticatie en RBAC afdwingen. Vertrouw nooit op de rol in de frontend.
-3. Definieer afzonderlijke API-contracten voor gebruikers, domeinen, DNS, webhosting, certificaten, services en back-ups.
-4. Laat configuratiewijzigingen via een gecontroleerde reconciliation-loop verlopen in plaats van direct shellcommando's vanuit de UI.
-5. Voeg validatie, auditlogs, CSRF-bescherming waar van toepassing en tests toe voordat schrijfoperaties live gaan.
+1. Replace `sampleRows` and static dashboard statistics with authorized API calls.
+2. Enforce sessions, authentication, and RBAC in the backend. Never trust the role displayed in the frontend.
+3. Define separate API contracts for users, domains, DNS, web hosting, certificates, services, and backups.
+4. Process configuration changes through a controlled reconciliation loop rather than executing shell commands directly from the UI.
+5. Add validation, audit logs, CSRF protection where applicable, and tests before enabling live write operations.
 
-## Herkomst
+## Origins
 
-De labels en informatiearchitectuur zijn gebaseerd op de op 23 november 2026 bekeken DirectAdmin Evolution-dashboardweergave. De implementatie bevat eigen HTML, CSS en JavaScript zonder DirectAdmin-assets of externe afhankelijkheden.
+The labels and information architecture are based on the DirectAdmin Evolution dashboard inspected on November 23, 2026. The original implementation uses its own HTML, CSS, and JavaScript without DirectAdmin assets or external dependencies.
 
 ## License and support
 
