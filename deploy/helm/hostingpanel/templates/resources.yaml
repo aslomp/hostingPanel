@@ -125,6 +125,17 @@ spec:
             - name: KubernetesHosting__AllowSharedPhpRuntime
               value: {{ .Values.kubernetesHosting.allowSharedPhpRuntime | quote }}
             {{- end }}
+            {{- if and (eq .Values.backend "Kubernetes") .Values.powerDns.enabled }}
+            - name: PowerDns__Enabled
+              value: "true"
+            - name: PowerDns__BaseUrl
+              value: {{ printf "http://%s-powerdns-api:8081" $name | quote }}
+            - name: PowerDns__ApiKey
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-powerdns" $name) .Values.powerDns.existingSecret | quote }}
+                  key: api-key
+            {{- end }}
             - name: ConnectionStrings__HostingPanel
               value: "Data Source=/data/hostingpanel.db;Foreign Keys=True;Default Timeout=5"
             {{- if and (eq .Values.backend "Kubernetes") .Values.bootstrap.existingSecret }}
