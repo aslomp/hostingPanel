@@ -35,8 +35,10 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         if (principal.Kind is not ("admin" or "reseller")) return new(403, "ACCESS_DENIED");
         if (principal.Kind == "reseller" && input.Kind != "user") return new(403, "ACCESS_DENIED");
         if (await db.Accounts.AnyAsync(a => a.Username == input.Username, ct)) return new(409, "ACCOUNT_EXISTS");
-        var package = await db.Packages.FirstOrDefaultAsync(p => p.Name == input.Package
-            && (p.OwnerId == principal.Id || p.OwnerId == null), ct);
+        var candidates = await db.Packages.Where(p => p.Name == input.Package
+            && (p.OwnerId == principal.Id || p.OwnerId == null)).ToListAsync(ct);
+        var package = candidates.Where(p => KubernetesPackageManagement.Matches(p, input.Kind))
+            .OrderByDescending(p => p.OwnerId == principal.Id).FirstOrDefault();
         if (package is null) return new(404, "PACKAGE_NOT_FOUND");
         if (await db.Configuration.AnyAsync(x => x.Key == "DeletingDomain:" + input.Domain.ToLowerInvariant(), ct)) return new(409, "DOMAIN_DELETION_PENDING");
         if (await db.Domains.AnyAsync(d => d.Name == input.Domain.ToLowerInvariant(), ct))
@@ -94,8 +96,10 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         var account = await db.Accounts.FirstOrDefaultAsync(x => x.Username == username, ct);
         if (account is null) return new(404, "ACCOUNT_NOT_FOUND");
         if (!ids.Contains(account.Id) || account.Id == principal.Id) return new(403, "ACCESS_DENIED");
-        var assigned = await db.Packages.FirstOrDefaultAsync(x => x.Name == package
-            && (x.OwnerId == principal.Id || x.OwnerId == null), ct);
+        var candidates = await db.Packages.Where(x => x.Name == package
+            && (x.OwnerId == principal.Id || x.OwnerId == null)).ToListAsync(ct);
+        var assigned = candidates.Where(p => KubernetesPackageManagement.Matches(p, account.Kind))
+            .OrderByDescending(p => p.OwnerId == principal.Id).FirstOrDefault();
         if (assigned is null) return new(404, "PACKAGE_NOT_FOUND");
         account.PackageId = assigned.Id;
         operations.Schedule("account", account.Id, "update", new { account.Username, package });

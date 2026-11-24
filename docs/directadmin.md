@@ -101,3 +101,7 @@ When changing an operation, verify the upstream API semantics and real permissio
 See also [authentication](authentication.md), [support and realtime](support.md) and [certificates](certificates.md) for shared workflows and backend distinctions.
 
 For future changes follow [AGENTS.md](../AGENTS.md), the [architecture](architecture.md) and [capability inventory](capabilities.md).
+
+## Package management
+
+Dedicated package screens use the caller's credentials and CMD_API_PACKAGES_USER / CMD_API_PACKAGES_RESELLER for list and detail. CMD_API_MANAGE_USER_PACKAGES / CMD_API_MANAGE_RESELLER_PACKAGES accept legacy save/delete forms. Changes require authoritative read-back. Unknown settings on existing packages block editing rather than silently resetting upstream configuration. The pinned modern Swagger is unchanged.

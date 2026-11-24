@@ -92,6 +92,7 @@ builder.Services.AddSingleton<TicketChannelRegistry>();
 builder.Services.AddScoped<PanelSession>();
 builder.Services.AddScoped<BackendOperationScope>();
 builder.Services.AddScoped<AccountOperations>();
+builder.Services.AddScoped<PackageOperations>();
 builder.Services.AddScoped<DomainOperations>();
 builder.Services.AddScoped<DnsOperations>();
 builder.Services.AddScoped<DatabaseOperations>();

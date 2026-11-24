@@ -5,7 +5,7 @@ Source-reviewed against main at 510684cd. "Implemented" means code exists, not t
 | Capability | DirectAdmin | Kubernetes |
 | --- | --- | --- |
 | Authentication and account hierarchy | Upstream session and permissions | SQLite accounts, password verification and visibility |
-| Account create/delete, package, limits, suspension | Legacy adapters | Desired-state service; deletion blocked while dependent resources exist |
+| Account create/delete, package, limits, suspension | Legacy adapters; package choices read from DirectAdmin | Desired-state service; package choices read from authorized SQLite inventory; deletion blocked while dependent resources exist |
 | User overview | Legacy account/config/usage adapters | Local account/package overview; strict modern user schema not implemented |
 | Impersonation | Backend-verified delegation | Not implemented |
 | Domain and website CRUD | Upstream domain lifecycle | SQLite intent, website reconciliation |
@@ -35,5 +35,11 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 - The account inventory and migrated detail pages use cancellable component-owned reads; this is a UI lifecycle improvement, not an expansion of backend capabilities.
 
 - Database overview reads have component-owned cancellation and session guards; this does not extend backend database mutation support.
+
+- Ticket overview refreshes coalesce inbox invalidations and cancel obsolete session reads; backend ticket scope and support-routing limitations remain unchanged.
+
+- Account creation uses only backend-authoritative package choices; Kubernetes matches package names, not numeric IDs. An unavailable package results in a descriptive error rather than accepting arbitrary free-text input.
+
+- Dedicated user and reseller package management uses DirectAdmin legacy package endpoints and Kubernetes SQLite package settings. Kubernetes stores limits but does not yet enforce all of them. Existing untyped packages are user packages; reseller packages must be created explicitly. Package names are unique per owner across kinds in the existing SQLite schema.
 
 - DNS zone inventory reads use component-owned cancellation and session guards, without changing provider authorization or DNS provisioning capabilities.
