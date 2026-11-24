@@ -727,7 +727,6 @@
   <data name="Passwords do not match." xml:space="preserve"><value>De wachtwoorden komen niet overeen.</value></data>
   <data name="No DNS zones match this filter." xml:space="preserve"><value>Geen DNS-zones komen overeen met dit filter.</value></data>
   <data name="No DNS records found." xml:space="preserve"><value>Geen DNS-records gevonden.</value></data>
-  <data name="dashboard" xml:space="preserve"><value>dashboard</value></data>
   <data name="Creating…" xml:space="preserve"><value>Aanmaken…</value></data>
   <data name="Sending…" xml:space="preserve"><value>Verzenden…</value></data>
   <data name="Not all account data is available: {0}" xml:space="preserve"><value>Niet alle accountgegevens zijn beschikbaar: {0}</value></data>
@@ -806,10 +805,52 @@
   <data name="Certificate deleted." xml:space="preserve"><value>Certificaat verwijderd.</value></data>
   <data name="Account created." xml:space="preserve"><value>Account aangemaakt.</value></data>
   <data name="Deleting this account is irreversible. All associated data will be removed." xml:space="preserve"><value>Het verwijderen van dit account is onherstelbaar. Alle bijbehorende gegevens worden verwijderd.</value></data>
-  
   <data name="DNS zone unavailable: HTTP {0}." xml:space="preserve"><value>DNS-zone niet beschikbaar: HTTP {0}.</value></data>
   <data name="Permanently delete this domain? This cannot be undone." xml:space="preserve"><value>Dit domein definitief verwijderen? Dit kan niet ongedaan worden gemaakt.</value></data>
   <data name="All domain website files, DNS records, routes and certificates will be removed." xml:space="preserve"><value>Alle websitebestanden, DNS-records, routes en certificaten van het domein worden verwijderd.</value></data>
   <data name="Enter the exact database name to confirm." xml:space="preserve"><value>Voer de exacte databasenaam in ter bevestiging.</value></data>
   <data name="Database deleted." xml:space="preserve"><value>Database verwijderd.</value></data>
+  <data name="DNS change request accepted." xml:space="preserve"><value>DNS-wijzigingsverzoek geaccepteerd.</value></data>
+  <data name="DNS zone creation request accepted." xml:space="preserve"><value>Verzoek om DNS-zone aan te maken geaccepteerd.</value></data>
+  <data name="DNS zone deletion request accepted." xml:space="preserve"><value>Verzoek om DNS-zone te verwijderen geaccepteerd.</value></data>
+  <data name="The backend reported a conflict for this DNS change." xml:space="preserve"><value>De backend meldt een conflict bij deze DNS-wijziging.</value></data>
+  <data name="The backend denied the server-wide DNS zone overview." xml:space="preserve"><value>De backend weigert toegang tot het serverbrede DNS-zoneoverzicht.</value></data>
+  <data name="Account creation request accepted." xml:space="preserve"><value>Verzoek om account aan te maken geaccepteerd.</value></data>
+  <data name="Deletion request accepted for '{0}'." xml:space="preserve"><value>Verwijderingsverzoek voor '{0}' geaccepteerd.</value></data>
+  <data name="Account creation request accepted for '{0}'." xml:space="preserve"><value>Aanmaakverzoek voor '{0}' geaccepteerd.</value></data>
+  <data name="Package change request accepted." xml:space="preserve"><value>Pakketwijzigingsverzoek geaccepteerd.</value></data>
+  <data name="Limit change request accepted." xml:space="preserve"><value>Limietwijzigingsverzoek geaccepteerd.</value></data>
+  <data name="Account status change request accepted." xml:space="preserve"><value>Verzoek om accountstatus te wijzigen geaccepteerd.</value></data>
+  <data name="Account suspension request accepted." xml:space="preserve"><value>Verzoek om account te blokkeren geaccepteerd.</value></data>
+  <data name="Account activation request accepted." xml:space="preserve"><value>Verzoek om account te activeren geaccepteerd.</value></data>
+  <data name="Accounts accessible to the current identity." xml:space="preserve"><value>Accounts toegankelijk voor de huidige identiteit.</value></data>
+  <data name="All accessible accounts, including resellers and their users." xml:space="preserve"><value>Alle toegankelijke accounts, inclusief resellers en hun gebruikers.</value></data>
+  <data name="No accessible accounts." xml:space="preserve"><value>Geen toegankelijke accounts.</value></data>
+  <data name="Database deletion request accepted." xml:space="preserve"><value>Verzoek om database te verwijderen geaccepteerd.</value></data>
+  <data name="Database creation request accepted." xml:space="preserve"><value>Verzoek om database aan te maken geaccepteerd.</value></data>
+  <data name="The backend denied deletion." xml:space="preserve"><value>De backend weigert verwijdering.</value></data>
+  <data name="The backend denied this database operation." xml:space="preserve"><value>De backend weigert deze databasebewerking.</value></data>
+  <data name="The backend did not confirm creation (HTTP {0})." xml:space="preserve"><value>De backend bevestigde de aanmaak niet (HTTP {0}).</value></data>
+  <data name="Password must contain at least 12 characters." xml:space="preserve"><value>Het wachtwoord moet minimaal 12 tekens bevatten.</value></data>
+  <data name="The selected hosting package does not exist or is not available to your account." xml:space="preserve"><value>Het gekozen hostingpakket bestaat niet of is niet beschikbaar voor uw account.</value></data>
+  <data name="An account with this name already exists." xml:space="preserve"><value>Er bestaat al een account met deze naam.</value></data>
+  <data name="This domain is already in use." xml:space="preserve"><value>Dit domein is al in gebruik.</value></data>
+  <data name="Check the account name, email address, domain, package and password." xml:space="preserve"><value>Controleer de accountnaam, het e-mailadres, domein, pakket en wachtwoord.</value></data>
+  <data name="You are not authorized to create this account." xml:space="preserve"><value>U bent niet bevoegd om dit account aan te maken.</value></data>
+  <data name="Add package" xml:space="preserve"><value>Pakket toevoegen</value></data>
+  <data name="Edit package" xml:space="preserve"><value>Pakket wijzigen</value></data>
+  <data name="Package name" xml:space="preserve"><value>Pakketnaam</value></data>
+  <data name="Domain pointers" xml:space="preserve"><value>Domeinverwijzingen</value></data>
+  <data name="Email forwarders" xml:space="preserve"><value>E-maildoorsturingen</value></data>
+  <data name="Mailing lists" xml:space="preserve"><value>Mailinglijsten</value></data>
+  <data name="Autoresponders" xml:space="preserve"><value>Automatische antwoorden</value></data>
+  <data name="FTP accounts" xml:space="preserve"><value>FTP-accounts</value></data>
+  <data name="Anonymous FTP" xml:space="preserve"><value>Anonieme FTP</value></data>
+  <data name="Suspend at limit" xml:space="preserve"><value>Opschorten bij limiet</value></data>
+  <data name="User SSH" xml:space="preserve"><value>SSH voor gebruikers</value></data>
+  <data name="Server IP" xml:space="preserve"><value>Server-IP</value></data>
+  <data name="IP addresses" xml:space="preserve"><value>IP-adressen</value></data>
+  <data name="Unlimited" xml:space="preserve"><value>Onbeperkt</value></data>
+  <data name="Kubernetes package settings are stored; enforcement is not yet complete." xml:space="preserve"><value>Kubernetes slaat pakketinstellingen op; afdwinging is nog niet volledig.</value></data>
+  <data name="dashboard" xml:space="preserve"><value>dashboard</value></data>
 </root>
