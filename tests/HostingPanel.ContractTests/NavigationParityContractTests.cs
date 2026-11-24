@@ -15,7 +15,31 @@ public static class NavigationParityContractTests
 
         var translations = XDocument.Load(Path.Combine(root, "src/HostingPanel.Web/Resources/Localization.SharedResource.nl-NL.resx"))
             .Root!.Elements("data").ToDictionary(e => (string)e.Attribute("name")!, e => (string?)e.Element("value") ?? "");
-        string Dutch(string key) => translations.TryGetValue(key, out var value) ? value : key;
+        // The prototype labels are historical identifiers, not required translations.
+        var prototypeAliases = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Server management"] = "Server Beheer",
+            ["Admin tools"] = "Admin Gereedschap",
+            ["Extra programs"] = "Extra Programma's",
+            ["Create reseller"] = "Reseller Aanmaken",
+            ["Create administrator"] = "Admin Aanmaken",
+            ["Custom HTTPD configurations"] = "Aangepaste HTTPD configuraties",
+            ["DNS management"] = "DNS Beheer",
+            ["IP management"] = "IP Beheer",
+            ["Name servers"] = "Naam Servers",
+            ["PHP settings"] = "PHP Instellingen",
+            ["Process monitor"] = "Proces Monitor",
+            ["System backup"] = "Systeem Backup",
+            ["Message all users"] = "Bericht aan Alle Gebruikers",
+            ["Themes"] = "Thema’s",
+            ["All users' cron jobs"] = "Cron Taken van alle Gebruikers",
+            ["System file editor"] = "Systeem bestand editor",
+            ["Plugin management"] = "Plugin Beheer",
+            ["System information"] = "Systeeminformatie",
+            ["Cron jobs"] = "Cron Taken"
+        };
+        string Dutch(string key) => prototypeAliases.TryGetValue(key, out var original) ? original :
+            translations.TryGetValue(key, out var value) ? value : key;
 
         // Exact reference sections, in reference order; no user-role inference.
         string[] headings = [
@@ -25,7 +49,7 @@ public static class NavigationParityContractTests
         var last = -1;
         foreach (var title in headings)
         {
-            var token = "new(\"" + (translations.FirstOrDefault(x => x.Value == title && navigation.Contains("new(\"" + x.Key + "\"", StringComparison.Ordinal)).Key ?? title) + "\"";
+            var token = "new(\"" + (translations.FirstOrDefault(x => Dutch(x.Key) == title && navigation.Contains("new(\"" + x.Key + "\"", StringComparison.Ordinal)).Key ?? title) + "\"";
             var next = navigation.IndexOf(token, StringComparison.Ordinal);
             Require(next > last, "Missing or reordered reference group: " + title);
             last = next;

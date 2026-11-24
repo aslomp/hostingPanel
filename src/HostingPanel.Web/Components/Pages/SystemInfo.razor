@@ -21,7 +21,7 @@ else
 }
 @code {
     private sealed record Check(string Label, string Endpoint, int Status, string Body);
-    private readonly (string Label, string Endpoint)[] sources = [
+    private (string Label, string Endpoint)[] sources => [
         (L["General information"].Value, "api/info"),
         ("Processor", "api/system-info/cpu"),
         ("Geheugen", "api/system-info/memory"),

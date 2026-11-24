@@ -31,7 +31,7 @@ else
     @if (overallError is not null) { <p class="error" role="alert">@overallError</p> }
     @if (overall is not null)
     {
-      <p>@overall.Count databases gevonden. @(overallWarnings.Count == 0 ? L["Complete inventory."].Value : $L["Incomplete: {overallWarnings.Count} accounts could not be read."].Value)</p>
+      <p>@overall.Count databases gevonden. @(overallWarnings.Count == 0 ? L["Complete inventory."].Value : L["Incomplete: {0} accounts could not be read.", overallWarnings.Count].Value)</p>
       <label for="overallDbFilter">@L["Search databases"]</label>
       <input id="overallDbFilter" type="search" @bind="overallSearch" @bind:event="oninput" placeholder="@L["Search database or owner…"]" />
       <table><thead><tr><th>@L["Owner"]</th><th>Database</th><th>@L["Tables"]</th><th>@L["Users"]</th><th>@L["Size (bytes)"]</th><th>Definer issues</th></tr></thead><tbody>
