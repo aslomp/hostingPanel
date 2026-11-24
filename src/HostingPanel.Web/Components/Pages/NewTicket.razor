@@ -14,9 +14,10 @@
 else
 {
     <section class="card">
+        <MudForm @ref="form">
         <div class="form-grid">
             <div><label for="ticketRecipient">@L["Recipient"]</label>
-                <MudTextField T="string" @bind-Value="recipient" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketRecipient" Placeholder="creator" />
+                <MudTextField T="string" @bind-Value="recipient" Required="true" RequiredError="@L["Recipient"].Value" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketRecipient" Placeholder="creator" />
                 <p>Gebruik <code>creator</code> of een gebruikersnaam die DirectAdmin accepteert.</p>
             </div>
             <div><label for="ticketPriority">@L["Priority"]</label>
@@ -25,23 +26,27 @@ else
                 </MudSelect></div>
         </div>
         <label for="ticketSubject">@L["Subject"]</label>
-        <MudTextField T="string" @bind-Value="subject" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketSubject" Placeholder="@L["Briefly describe the request"].Value" MaxLength="200" />
+        <MudTextField T="string" @bind-Value="subject" Required="true" RequiredError="@L["Subject"].Value" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketSubject" Placeholder="@L["Briefly describe the request"].Value" MaxLength="200" />
         <label for="ticketBody">@L["Message"]</label>
-        <MudTextField T="string" @bind-Value="body" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketBody" Placeholder="@L["Write the message…"].Value" Lines="10" MaxLength="65536" />
+        <MudTextField T="string" @bind-Value="body" Required="true" RequiredError="@L["Message"].Value" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="ticketBody" Placeholder="@L["Write the message…"].Value" Lines="10" MaxLength="65536" />
         <div class="form-actions">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(sending || string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(body) || string.IsNullOrWhiteSpace(recipient))" OnClick="Send">@(sending ? "Verzenden…" : L["Send ticket"].Value)</MudButton>
             <a href="/tickets">@L["Cancel"]</a>
         </div>
         @if (feedback is not null) { <p role="status">@feedback</p> }
+        </MudForm>
     </section>
 }
 @code {
+    private MudForm form = default!;
     private string recipient = "creator", subject = "", body = "", priority = "20";
     private string? feedback;
     private bool sending;
     private async Task Send()
     {
-        if (sending || !Session.Connected) return;
+        if (sending || !Session.Connected || string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(body) || string.IsNullOrWhiteSpace(recipient)) return;
+        await form.ValidateAsync();
+        if (!form.IsValid || sending || !Session.Connected || string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(body) || string.IsNullOrWhiteSpace(recipient)) return;
         sending = true; feedback = null;
         try
         {
