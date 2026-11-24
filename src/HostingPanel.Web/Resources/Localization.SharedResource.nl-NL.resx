@@ -807,4 +807,9 @@
   <data name="Account created." xml:space="preserve"><value>Account aangemaakt.</value></data>
   <data name="Deleting this account is irreversible. All associated data will be removed." xml:space="preserve"><value>Het verwijderen van dit account is onherstelbaar. Alle bijbehorende gegevens worden verwijderd.</value></data>
   <data name="DirectAdmin confirmed deletion of '{0}'." xml:space="preserve"><value>DirectAdmin heeft de verwijdering van '{0}' bevestigd.</value></data>
+  <data name="DNS zone unavailable: HTTP {0}." xml:space="preserve"><value>DNS-zone niet beschikbaar: HTTP {0}.</value></data>
+  <data name="Permanently delete this domain? This cannot be undone." xml:space="preserve"><value>Dit domein definitief verwijderen? Dit kan niet ongedaan worden gemaakt.</value></data>
+  <data name="All domain website files, DNS records, routes and certificates will be removed." xml:space="preserve"><value>Alle websitebestanden, DNS-records, routes en certificaten van het domein worden verwijderd.</value></data>
+  <data name="Enter the exact database name to confirm." xml:space="preserve"><value>Voer de exacte databasenaam in ter bevestiging.</value></data>
+  <data name="Database deleted." xml:space="preserve"><value>Database verwijderd.</value></data>
 </root>
