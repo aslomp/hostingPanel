@@ -137,6 +137,7 @@ else
     {
         if (busy || editorOpen || deleteDialogOpen || !Session.Connected || records?.Contains(r) != true) return;
         var domain = Domain;
+        var channel = Session.TicketChannel;
         var identity = Session.Username;
         deleteDialogOpen = true;
         try
@@ -158,7 +159,7 @@ else
                 var status = result.Status;
                 failed = !result.Executed && !result.ProvisioningPending;
                 message = failed ? L["DNS change not confirmed (HTTP {0}).", status].Value
-                    : L["DirectAdmin confirmed the DNS change."].Value;
+                    : L["DNS change request accepted."].Value;
             }
             catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
             { if (!disposed && Session.Connected && Session.TicketChannel == channel && Domain == domain) { failed = true; message = ex.Message; } }
