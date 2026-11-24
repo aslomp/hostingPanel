@@ -1,0 +1,32 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@using System.Globalization
+@inject PanelSession Session
+@inject NavigationManager Navigation
+@implements IDisposable
+    <MudAppBar Elevation="1" Color="Color.Primary">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" aria-label="@L["Toggle navigation"].Value" aria-expanded="@(DrawerOpen ? "true" : "false")" OnClick="ToggleDrawer" />
+        <MudText Typo="Typo.h6">HostingPanel</MudText>
+        <MudSpacer />
+        <TicketNotifications @key="Session.TicketChannel" />
+        <form method="get" action="/culture/set" class="culture-picker">
+            <select name="culture" aria-label="@L["Language"]" onchange="this.form.submit()">
+                <option value="nl-NL" selected="@(CultureInfo.CurrentUICulture.Name == "nl-NL")">Nederlands</option>
+                <option value="en-US" selected="@(CultureInfo.CurrentUICulture.Name == "en-US")">English</option>
+            </select>
+            <input type="hidden" name="returnUrl" value="@(new Uri(Navigation.Uri).PathAndQuery)" />
+        </form>
+        <MudText Typo="Typo.body2">@Session.Username</MudText>
+        <form method="post" action="/logout" data-enhance="false">
+            <AntiforgeryToken />
+            <MudButton ButtonType="ButtonType.Submit" Color="Color.Inherit">@L["Disconnect"]</MudButton>
+        </form>
+    </MudAppBar>
+
+@code {
+    [Parameter] public bool DrawerOpen { get; set; }
+    [Parameter] public EventCallback ToggleDrawer { get; set; }
+    protected override void OnInitialized() => Session.Changed += OnSessionChanged;
+    private void OnSessionChanged() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => Session.Changed -= OnSessionChanged;
+}
