@@ -799,19 +799,21 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
     {
         var principal = await AuthenticateAsync(auth, ct);
         if (principal is null) return (401, null, "UNAUTHORIZED");
-        var tickets = await db.Tickets.AsNoTracking()
-            .Where(x => x.OwnerId == principal.Id).OrderByDescending(x => x.CreatedAt).ToListAsync(ct);
+        var tickets = (await db.Tickets.AsNoTracking()
+            .Where(x => x.OwnerId == principal.Id).ToListAsync(ct))
+            .OrderByDescending(x => x.CreatedAt).ToArray();
         var ids = tickets.Select(x => x.Id).ToArray();
-        var replies = await db.TicketReplies.AsNoTracking()
-            .Where(x => ids.Contains(x.TicketId)).OrderBy(x => x.CreatedAt).ToListAsync(ct);
+        var replies = (await db.TicketReplies.AsNoTracking()
+            .Where(x => ids.Contains(x.TicketId)).ToListAsync(ct))
+            .OrderBy(x => x.CreatedAt);
         var byTicket = replies.GroupBy(x => x.TicketId).ToDictionary(g => g.Key,
             g => g.Select(x => JsonSerializer.SerializeToElement(new {
                 message = x.Text, timestamp = x.CreatedAt
             })).ToArray());
-        var messages = await db.Messages.AsNoTracking()
-            .Where(x => x.RecipientId == principal.Id).OrderByDescending(x => x.CreatedAt)
-            .Select(x => new MessageEntry(x.Id, x.Subject, x.From, x.From, x.Unread, x.CreatedAt))
-            .ToListAsync(ct);
+        var messages = (await db.Messages.AsNoTracking()
+            .Where(x => x.RecipientId == principal.Id).ToListAsync(ct))
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(x => new MessageEntry(x.Id, x.Subject, x.From, x.From, x.Unread, x.CreatedAt)).ToArray();
         return (200, new TicketInbox(
             tickets.Select(x => new TicketEntry(x.Id, x.Id.ToString("D9"), "request",
                 x.Subject, principal.Username, principal.Username, x.Text, x.Open, x.Unread,

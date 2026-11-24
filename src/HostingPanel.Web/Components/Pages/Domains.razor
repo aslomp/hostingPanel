@@ -13,7 +13,7 @@
     <Breadcrumb>@L["Account management / Domains"]</Breadcrumb>
     <TitleContent>@L["Domain management"]</TitleContent>
     <Description>@L["Manage domains and website configuration through the selected hosting backend."]</Description>
-    <Actions><MudStack Row="true" Spacing="2"><CrudAddButton Disabled="@(!Session.Connected || mutationBusy)" OnClick="OpenCreate">@L["Add domain"]</CrudAddButton><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Refresh" Disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton></MudStack></Actions>
+    <Actions><MudStack Row="true" Spacing="2"><CrudAddButton Disabled="@(!Session.Connected || mutationBusy || deleteDialogOpen)" OnClick="OpenCreate">@L["Add domain"]</CrudAddButton><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Refresh" Disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton></MudStack></Actions>
 </PanelPageHeader>
 
 @if (!Session.Connected)
@@ -49,28 +49,10 @@ else
         }
     </MudPaper>
 
-    @if (createOpen)
-    {
-    <MudPaper Class="pa-4 my-3" Elevation="1">
-        <h2>@L["Add domain"]</h2>
-        <p>@L["Create a website for the signed-in account."]</p>
-        <MudForm @ref="createForm">
-        <MudTextField T="string" @bind-Value="testDomain" Label="@L["Domain name"].Value" Required="true" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="newDomain" Placeholder="example.com" />
-        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-            <MudCheckBox T="bool" @bind-Value="php" Label="PHP" />
-            <MudCheckBox T="bool" @bind-Value="ssl" Label="SSL" />
-            <MudCheckBox T="bool" @bind-Value="cgi" Label="CGI" />
-        </MudStack>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(mutationBusy || string.IsNullOrWhiteSpace(testDomain))" OnClick="CreateDomain">@L["Add domain"]</MudButton>
-        <MudButton Disabled="@mutationBusy" OnClick="CloseCreate">@L["Cancel"]</MudButton>
-        </MudForm>
-    </MudPaper>
-    }
     @if (mutationStatus is not null) { <MudAlert Severity="@(mutationFailed ? Severity.Error : Severity.Success)" Class="my-2">@mutationStatus</MudAlert> }
 
 }
 @code {
-    private MudForm createForm = default!;
     [SupplyParameterFromQuery(Name = "user")]
     [Parameter] public string? User { get; set; }
     private string owner = "";
@@ -82,15 +64,29 @@ else
     private string? warning;
     private string? error;
     private bool loading;
-    private string testDomain = "";
-    private bool php = true;
-    private bool ssl = true;
-    private bool cgi;
     private bool mutationBusy;
     private string? mutationStatus;
-    private bool createOpen, mutationFailed;
-    private void OpenCreate() { createOpen = true; mutationStatus = null; }
-    private void CloseCreate() { createOpen = false; mutationStatus = null; }
+    private bool mutationFailed;
+    private async Task OpenCreate()
+    {
+        if (mutationBusy || deleteDialogOpen || !Session.Connected) return;
+        mutationBusy = true; mutationStatus = null;
+        try
+        {
+            var dialog = await Dialogs.ShowAsync<DomainCreateDialog>(L["Add domain"].Value,
+                new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = false, BackdropClick = false, CloseOnEscapeKey = false });
+            var result = await dialog.Result;
+            if (result is { Canceled: false })
+            {
+                mutationFailed = false;
+                mutationStatus = result.Data is int status && status == 202
+                    ? L["Domain operation accepted. Provisioning is pending."].Value
+                    : L["Domain operation completed."].Value;
+                await Refresh();
+            }
+        }
+        finally { mutationBusy = false; }
+    }
 
     private bool disposed;
     protected override void OnInitialized() => Operations.Changed += OperationChanged;
@@ -187,14 +183,6 @@ else
         }
         finally { deleteDialogOpen = false; }
     }
-    private async Task CreateDomain()
-    {
-        if (mutationBusy || !Session.Connected) return;
-        await createForm.ValidateAsync();
-        if (!createForm.IsValid || mutationBusy || !Session.Connected || string.IsNullOrWhiteSpace(testDomain)) return;
-        await ExecuteMutation(testDomain.Trim().ToLowerInvariant(), "create");
-    }
-
     private async Task ExecuteMutation(string domain, string action)
     {
         if (mutationBusy || !Session.Connected || string.IsNullOrWhiteSpace(domain)) return;
@@ -202,7 +190,7 @@ else
         mutationStatus = null;
         try
         {
-            var (status, body) = await Session.ExecuteTestDomainAsync(domain, action, domain, php, ssl, cgi);
+            var (status, body) = await Session.ExecuteTestDomainAsync(domain, action, domain, true, true, false);
             mutationFailed = status is < 200 or >= 300;
             mutationStatus = status switch
             {
@@ -225,7 +213,6 @@ else
             }
             if (status is >= 200 and < 300)
             {
-                if (action == "create") { testDomain = ""; createOpen = false; }
                 await Refresh();
             }
         }
