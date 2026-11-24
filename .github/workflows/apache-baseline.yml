@@ -53,6 +53,34 @@ jobs:
           done
           curl -fsS http://127.0.0.1:18081/ >/dev/null
           test "$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: unknown.invalid' http://127.0.0.1:18080/)" = 403
+      - name: Smoke test static virtualhost
+        run: |
+          set -eu
+          image="$(cat /tmp/hosting-apache-image)"
+          trap 'docker rm -f hosting-apache-vhost >/dev/null 2>&1 || true' EXIT
+          mkdir -p /tmp/hosting-static/public_html /tmp/hosting-vhosts
+          printf '%s\n' 'hostingpanel-static-smoke' > /tmp/hosting-static/public_html/index.html
+          chmod -R a+rX /tmp/hosting-static /tmp/hosting-vhosts
+          cat > /tmp/hosting-vhosts/site.conf <<'CONF'
+          <VirtualHost *:8080>
+            ServerName smoke.invalid
+            DocumentRoot "/home/smoke/public_html"
+            <Directory "/home/smoke/public_html">
+              Options -Indexes -ExecCGI -Includes -FollowSymLinks -SymLinksIfOwnerMatch
+              AllowOverride None
+              Require all granted
+              DirectoryIndex index.html
+            </Directory>
+          </VirtualHost>
+          CONF
+          docker run --rm --user 1001:1001 --cap-drop ALL --security-opt no-new-privileges -v /tmp/hosting-httpd.conf:/etc/hostingpanel/httpd.conf:ro -v /tmp/hosting-vhosts:/runtime/current:ro "$image" httpd -t -f /etc/hostingpanel/httpd.conf
+          docker run -d --name hosting-apache-vhost --user 1001:1001 --cap-drop ALL --security-opt no-new-privileges -p 127.0.0.1:18080:8080 -p 127.0.0.1:18081:8081 -v /tmp/hosting-httpd.conf:/etc/hostingpanel/httpd.conf:ro -v /tmp/hosting-vhosts:/runtime/current:ro -v /tmp/hosting-static:/home/smoke:ro "$image" httpd -DFOREGROUND -f /etc/hostingpanel/httpd.conf
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18081/ >/dev/null; then break; fi
+            sleep 1
+          done
+          test "$(curl -fsS -H 'Host: smoke.invalid' http://127.0.0.1:18080/)" = hostingpanel-static-smoke
+          test "$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: unknown.invalid' http://127.0.0.1:18080/)" = 403
       - name: Show Apache logs
         if: failure()
         run: docker logs hosting-apache-smoke || true
