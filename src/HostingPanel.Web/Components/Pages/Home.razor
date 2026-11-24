@@ -5,17 +5,15 @@
 @inject NavigationContextState NavContext
 
 <PageTitle>@L["Control panel"] — HostingPanel</PageTitle>
-<div class="page-header">
-  <div>
-    <div class="eyebrow">@L["Hosting administration / Dashboard"]</div>
-    <h1>@L["Control panel"]</h1>
-    <p>@L["Manage domains, users, DNS, databases and server services from one dashboard."]</p>
-  </div>
-  @if (Session.Connected)
+<PanelPageHeader>
+    <Breadcrumb>@L["Hosting administration / Dashboard"]</Breadcrumb>
+    <TitleContent>@L["Control panel"]</TitleContent>
+    <Description>@L["Manage domains, users, DNS, databases and server services from one dashboard."]</Description>
+    <Actions>@if (Session.Connected)
   {
     <span class="status-pill good">● @L["Connected"]</span>
-  }
-</div>
+  }</Actions>
+</PanelPageHeader>
 
 <MudPaper Class="pa-5 my-4" Elevation="1">
   <h2>@L["Welcome to HostingPanel"]</h2>

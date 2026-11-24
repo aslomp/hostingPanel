@@ -5,23 +5,24 @@
 @inject DirectAdminSession Session
 
 <PageTitle>@L["Account tree — HostingPanel"]</PageTitle>
-<div class="page-header">
-    <div><div class="eyebrow">@L["Account management"]</div><h1>@L["User management"]</h1>
-        <p>@L["All accounts exposed by DirectAdmin to the current session, including resellers and their users."]</p></div>
-    <div class="form-actions"><a class="btn" href="#account-create">@L["＋ Add user"]</a>
-    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@loading">@(loading ? "Laden…" : L["↻ Refresh"].Value)</MudButton></div>
-</div>
+<PanelPageHeader>
+    <Breadcrumb>@L["Account management"]</Breadcrumb>
+    <TitleContent>@L["User management"]</TitleContent>
+    <Description>@L["All accounts exposed by DirectAdmin to the current session, including resellers and their users."]</Description>
+    <Actions><div class="form-actions"><a class="btn" href="#account-create">@L["＋ Add user"]</a>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@loading">@(loading ? "Laden…" : L["↻ Refresh"].Value)</MudButton></div></Actions>
+</PanelPageHeader>
 @if (!Session.Connected)
 {
     <div class="card">Verbind eerst via het <a href="/">dashboard</a> met DirectAdmin.</div>
 }
 else if (error is not null)
 {
-    <div class="card error" role="alert">@error <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load">@L["Try again"]</MudButton></div>
+    <MudAlert Severity="Severity.Error" Class="my-2">@error <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load">@L["Try again"]</MudButton></MudAlert>
 }
 else if (loading)
 {
-    <div class="card" role="status">@L["Loading account tree…"]</div>
+    <PanelLoading>@L["Loading account tree…"]</PanelLoading>
 }
 else if (accounts is not null)
 {

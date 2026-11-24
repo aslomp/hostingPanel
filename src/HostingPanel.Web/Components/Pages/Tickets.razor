@@ -6,14 +6,15 @@
 @implements IDisposable
 <PageTitle>Tickets — HostingPanel</PageTitle>
 
-<div class="page-header">
-    <div><div class="eyebrow">@L["Support / Tickets"]</div><h1>@L["Ticket management"]</h1>
-        <p>@L["Received tickets and own requests. DirectAdmin determines which tickets you can view."]</p></div>
-    <div class="form-actions">
+<PanelPageHeader>
+    <Breadcrumb>@L["Support / Tickets"]</Breadcrumb>
+    <TitleContent>@L["Ticket management"]</TitleContent>
+    <Description>@L["Received tickets and own requests. DirectAdmin determines which tickets you can view."]</Description>
+    <Actions><div class="form-actions">
         <a class="btn primary" href="/tickets/new">@L["＋ New ticket"]</a>
         <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@loading" OnClick="Load">@L["↻ Refresh"]</MudButton>
-    </div>
-</div>
+    </div></Actions>
+</PanelPageHeader>
 @if (!Session.Connected)
 {
     <section class="card">Maak verbinding via het <a href="/">dashboard</a>.</section>

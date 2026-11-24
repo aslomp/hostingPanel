@@ -6,13 +6,11 @@
 @inject NavigationManager Navigation
 
 <PageTitle>@Username — Accountbeheer</PageTitle>
-<div class="page-header">
-    <div>
-        <div class="eyebrow"><a href="/users">@L["Account management"]</a> / Gebruikersdetails</div>
-        <h1>@Username</h1>
-        <p>@L["Account settings, assigned hosting package and package limits available in DirectAdmin."]</p>
-    </div>
-    <div>
+<PanelPageHeader>
+    <Breadcrumb><a href="/users">@L["Account management"]</a> / Gebruikersdetails</Breadcrumb>
+    <TitleContent>@Username</TitleContent>
+    <Description>@L["Account settings, assigned hosting package and package limits available in DirectAdmin."]</Description>
+    <Actions><div>
         <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@loading">@(loading ? "Laden…" : L["Refresh"].Value)</MudButton>
         @if (Session.Connected && !Session.IsImpersonating &&
             !Username.Equals(Session.OriginalUsername, StringComparison.OrdinalIgnoreCase))
@@ -21,11 +19,11 @@
                 @(switching ? L["Checking permission…"].Value : L["Sign in as this user"].Value)
             </MudButton>
         }
-    </div>
-</div>
+    </div></Actions>
+</PanelPageHeader>
 @if (impersonationError is not null)
 {
-    <div class="card error" role="alert">@impersonationError</div>
+    <MudAlert Severity="Severity.Error" Class="my-2">@impersonationError</MudAlert>
 }
 @if (!Session.Connected)
 {
@@ -33,11 +31,11 @@
 }
 else if (loading)
 {
-    <div class="card" role="status">@L["Retrieving account and package information…"]</div>
+    <PanelLoading>@L["Retrieving account and package information…"]</PanelLoading>
 }
 else if (error is not null)
 {
-    <div class="card"><p class="error" role="alert">@error</p></div>
+    <div class="card"><MudAlert Severity="Severity.Error" Class="my-2">@error</MudAlert></div>
 }
 else if (settings is not null)
 {
