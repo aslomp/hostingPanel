@@ -1,6 +1,7 @@
 using HostingPanel.Api;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
+builder.Services.AddHostingPanelPersistence(builder.Configuration);
 var provider = builder.Configuration["HostingPanel:Backend"] ?? "DirectAdmin";
 if (provider.Equals("Kubernetes", StringComparison.OrdinalIgnoreCase))
     builder.Services.AddKubernetesBackend(builder.Configuration);
@@ -9,6 +10,7 @@ else if (provider.Equals("DirectAdmin", StringComparison.OrdinalIgnoreCase))
 else
     throw new InvalidOperationException($"Unknown HostingPanel backend '{provider}'.");
 var app = builder.Build();
+await app.Services.InitializeHostingPanelPersistenceAsync();
 if (provider.Equals("Kubernetes", StringComparison.OrdinalIgnoreCase))
     await app.Services.InitializeKubernetesBackendAsync(app.Configuration);
 
