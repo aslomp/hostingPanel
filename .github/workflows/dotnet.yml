@@ -12,7 +12,8 @@ on:
       - feature/backend-settings
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Playwright 1.56 supports Ubuntu 24.04; keep the runner reproducible.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
