@@ -33,7 +33,7 @@ public sealed class FileManagementController(IHostingBackend backend) : BackendC
     [HttpGet("/api/filemanager/stat")]
     [HttpGet("/api/filemanager/trash")]
     [HttpGet("/api/filemanager/tree")]
-    public Task ForwardFileManagementAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+    public Task ForwardFileManagementAsync() => backend.ForwardAsync(HttpContext);
 
 
 }

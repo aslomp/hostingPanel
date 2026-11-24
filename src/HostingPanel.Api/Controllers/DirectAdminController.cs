@@ -188,5 +188,5 @@ public sealed class DirectAdminController(IHostingBackend backend) : BackendCont
     [HttpPost("/api/wordpress/locations/{location_id}/users/{user_id}/change-password")]
     [HttpPost("/api/wordpress/locations/{location_id}/users/{user_id}/sso-login")]
     [HttpGet("/api/wordpress/locations/{location_id}/wordpress")]
-    public Task ForwardDirectAdminAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+    public Task ForwardDirectAdminAsync() => backend.ForwardAsync(HttpContext);
 }

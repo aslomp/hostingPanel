@@ -9,5 +9,5 @@ public sealed class PackageController(IHostingBackend backend) : BackendControll
     [HttpGet("/api/reseller-packages")]
     [HttpGet("/api/reseller-packages/{id}")]
     [HttpDelete("/api/reseller-packages/{id}")]
-    public Task ForwardAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+    public Task ForwardAsync() => backend.ForwardAsync(HttpContext);
 }

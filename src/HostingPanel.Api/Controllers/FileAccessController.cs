@@ -52,6 +52,6 @@ public sealed class FileAccessController(IHostingBackend backend) : BackendContr
     private static IResult UnauthorizedResult() =>
         Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
 
-    private static IResult Forward(FileAccessService.UpstreamResult result) =>
+    private static IResult Forward(FileAccessResult result) =>
         Results.Text(result.Body, "text/plain", statusCode: result.Status);
 }
