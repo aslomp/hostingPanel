@@ -64,6 +64,25 @@ if (provider.Equals("Kubernetes", StringComparison.OrdinalIgnoreCase))
     await db.Database.EnsureCreatedAsync();
     await db.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;");
     await db.Database.ExecuteSqlRawAsync("PRAGMA busy_timeout=5000;");
+    // Explicit one-time bootstrap; never create a default or blank administrator.
+    // Configure through environment variables or another protected secret source.
+    var bootstrapUser = builder.Configuration["HostingPanel:Bootstrap:Username"];
+    var bootstrapPassword = builder.Configuration["HostingPanel:Bootstrap:Password"];
+    if (!await db.Accounts.AnyAsync())
+    {
+        if (bootstrapUser is not null || bootstrapPassword is not null)
+        {
+            if (string.IsNullOrWhiteSpace(bootstrapUser) || bootstrapUser.Length > 64
+                || !bootstrapUser.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-')
+                || string.IsNullOrEmpty(bootstrapPassword) || bootstrapPassword.Length < 12)
+                throw new InvalidOperationException("Kubernetes bootstrap requires a valid username and a password of at least 12 characters.");
+            db.Accounts.Add(new HostingAccount {
+                Username = bootstrapUser, Kind = "admin",
+                PasswordHash = PasswordVerifier.Hash(bootstrapPassword)
+            });
+            await db.SaveChangesAsync();
+        }
+    }
 }
 
 app.UseSwaggerUI(options =>

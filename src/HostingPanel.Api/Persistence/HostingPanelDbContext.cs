@@ -85,6 +85,7 @@ public sealed class HostingAccount {
     public string Username { get; set; } = "";
     public string Kind { get; set; } = "user";
     public string Email { get; set; } = "";
+    public string? PasswordHash { get; set; }
     public Guid? CreatorId { get; set; }
     public Guid? PackageId { get; set; }
     public bool Suspended { get; set; }
