@@ -1,8 +1,10 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/dns-zones"
-@using System.Text.Json
-@inject DirectAdminSession Session
+@using HostingPanel.Api.Services
+@using HostingPanel.Api.Adapters
+@inject PanelSession Session
+@inject DnsOperations Dns
 @inject IDialogService Dialogs
 
 <PageTitle>@L["DNS management — HostingPanel"]</PageTitle>
@@ -71,9 +73,8 @@ else
     @if (zoneMessage is not null) { <MudAlert Severity="@(failed ? Severity.Error : Severity.Success)">@zoneMessage</MudAlert> }
 }
 @code {
-    private sealed record Zone(string Domain, string? Owner, bool? LocalData, bool? LocalMail);
     private const int PageSize = 50;
-    private List<Zone>? zones;
+    private List<AccessibleDnsZone>? zones;
     private string search = "", localDataFilter = "all", localMailFilter = "all";
     private string? error, warning;
     private int currentPage = 1;
@@ -81,7 +82,7 @@ else
     private bool failed;
     private string? zoneMessage;
 
-    private IReadOnlyList<Zone> Visible => (zones ?? [])
+    private IReadOnlyList<AccessibleDnsZone> Visible => (zones ?? [])
         .Where(z => z.Domain.Contains(search, StringComparison.OrdinalIgnoreCase) &&
             Matches(z.LocalData, localDataFilter) && Matches(z.LocalMail, localMailFilter))
         .OrderBy(z => z.Domain, StringComparer.OrdinalIgnoreCase).ToArray();
@@ -107,24 +108,19 @@ else
         error = null;
         try
         {
-            var (status, body) = await Session.GetAccessibleDnsZonesAsync();
-            if (status != 200)
+            var result = await Dns.ListAsync();
+            if (result.Status != 200 || result.Zones is null)
             {
-                error = status == 403 ? L["DirectAdmin denied the server-wide DNS zone overview."].Value
-                    : L["DNS zones unavailable (HTTP {0}).", status].Value;
+                error = result.Status == 403 ? L["The backend denied the server-wide DNS zone overview."].Value
+                    : L["DNS zones unavailable (HTTP {0}).", result.Status].Value;
                 zones = null;
                 return;
             }
-            using var doc = JsonDocument.Parse(body);
-            zones = doc.RootElement.GetProperty("zones").EnumerateArray()
-                .Select(x => new Zone(x.GetProperty("domain").GetString() ?? "",
-                    x.TryGetProperty("owner", out var o) && o.ValueKind == JsonValueKind.String ? o.GetString() : null,
-                    ReadFlag(x, "localData"), ReadFlag(x, "localMail"))).ToList();
-            warning = doc.RootElement.TryGetProperty("warning", out var w)
-                && w.ValueKind == JsonValueKind.String ? w.GetString() : null;
+            zones = result.Zones.ToList();
+            warning = result.Warning;
             currentPage = 1;
         }
-        catch (Exception e) when (e is HttpRequestException or JsonException or InvalidOperationException)
+        catch (Exception e) when (e is HttpRequestException or InvalidOperationException)
         { error = e.Message; zones = null; }
         finally { loading = false; }
     }
@@ -139,14 +135,14 @@ else
             var result = await dialog.Result;
             if (result is { Canceled: false })
             {
-                failed = false; zoneMessage = L["DirectAdmin created the DNS zone."].Value;
+                failed = false; zoneMessage = L["DNS zone creation request accepted."].Value;
                 await Reload();
             }
         }
         finally { changing = false; }
     }
 
-    private async Task ConfirmDeletion(Zone zone)
+    private async Task ConfirmDeletion(AccessibleDnsZone zone)
     {
         if (changing || loading || !Session.Connected || zones?.Contains(zone) != true) return;
         var identity = Session.Username;
@@ -158,10 +154,11 @@ else
                 L["Delete only the specified DNS zone; this is not the same as deleting a hosting domain."].Value,
                 L["Enter the exact domain name to confirm"].Value);
             if (!confirmed || !Session.Connected || identity != Session.Username || zones?.Contains(zone) != true) return;
-            var (status, _) = await Session.DeleteDnsZoneAsync(zone.Domain, zone.Domain);
-            failed = status is < 200 or >= 300;
+            var result = await Dns.DeleteAsync(zone.Domain, zone.Domain);
+            var status = result.Status;
+            failed = !result.Executed && !result.ProvisioningPending;
             zoneMessage = failed ? L["Deletion not confirmed: backend HTTP {0}.", status].Value
-                : L["DirectAdmin deleted the DNS zone."].Value;
+                : L["DNS zone deletion request accepted."].Value;
             if (!failed) await Reload();
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
@@ -169,14 +166,4 @@ else
         finally { changing = false; }
     }
 
-    private static bool? ReadFlag(JsonElement element, string key)
-    {
-        if (!element.TryGetProperty(key, out var prop)) return null;
-        return prop.ValueKind switch
-        {
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            _ => null
-        };
-    }
 }

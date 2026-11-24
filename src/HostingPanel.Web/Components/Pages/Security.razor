@@ -1,7 +1,8 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/security"
-@inject DirectAdminSession Session
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
 <PageTitle>@L["Security — HostingPanel"]</PageTitle>
 <PanelPageHeader>
     <Breadcrumb>@L["Server management"]</Breadcrumb>
@@ -58,7 +59,7 @@ else
         busy = true; feedback = null;
         try
         {
-            var (status, body) = await Session.GetRawAsync(
+            var (status, body) = await ApiClient.GetRawAsync(
                 "api/modsecurity/configs/" + Uri.EscapeDataString(hostname));
             hostConfig = $"HTTP {status}\\n{body}";
             if (status == 200)
@@ -90,7 +91,7 @@ else
                 !json.RootElement.TryGetProperty("disabledRules", out var rules) ||
                 rules.ValueKind != System.Text.Json.JsonValueKind.Array)
             { feedback = L["JSON must contain engineEnabled (bool) and disabledRules (array)."].Value; return; }
-            var (status, body) = await Session.RequestApiAsync(HttpMethod.Put,
+            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Put,
                 "api/modsecurity/configs/" + Uri.EscapeDataString(hostname), configJson);
             feedback = $"Backend HTTP {status}: {body}";
         }
@@ -104,7 +105,7 @@ else
         busy = true; feedback = null;
         try
         {
-            var (status, body) = await Session.RequestApiAsync(HttpMethod.Delete,
+            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Delete,
                 "api/modsecurity/configs/" + Uri.EscapeDataString(hostname));
             feedback = $"Backend HTTP {status}: {body}";
         }
@@ -119,7 +120,7 @@ else
         busy = true; feedback = null;
         try
         {
-            var (status, body) = await Session.RequestApiAsync(HttpMethod.Delete,
+            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Delete,
                 "api/clamav/" + Uri.EscapeDataString(scanPid));
             feedback = $"Backend HTTP {status}: {body}";
         }
@@ -134,7 +135,7 @@ else
         try
         {
             var payload = System.Text.Json.JsonSerializer.Serialize(new { path = scanPath });
-            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post, "api/clamav", payload);
+            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Post, "api/clamav", payload);
             feedback = $"Backend HTTP {status}: {body}";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
@@ -147,11 +148,11 @@ else
         busy = true; feedback = null;
         try
         {
-            var (ms, mb) = await Session.GetRawAsync("api/modsecurity/all-configs");
+            var (ms, mb) = await ApiClient.GetRawAsync("api/modsecurity/all-configs");
             modsecurity = $"HTTP {ms}\n{mb}";
-            var (asCode, ab) = await Session.GetRawAsync("api/modsecurity-audit-log/summary");
+            var (asCode, ab) = await ApiClient.GetRawAsync("api/modsecurity-audit-log/summary");
             audit = $"HTTP {asCode}\n{ab}";
-            var (cs, cb) = await Session.GetRawAsync("api/clamav");
+            var (cs, cb) = await ApiClient.GetRawAsync("api/clamav");
             clamav = $"HTTP {cs}\n{cb}";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }

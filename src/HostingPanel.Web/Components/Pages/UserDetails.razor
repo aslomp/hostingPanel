@@ -1,8 +1,9 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/users/{Username}"
-@using System.Text.Json
-@inject DirectAdminSession Session
+@inject PanelSession Session
+@inject AccountOperations Accounts
+@inject ImpersonationOperations Impersonation
 @inject NavigationManager Navigation
 
 <PageTitle>@Username — Accountbeheer</PageTitle>
@@ -139,28 +140,21 @@ else if (settings is not null)
         settings = null; packageSettings = null; usage = null; package = null;
         try
         {
-            var (status, body) = await Session.GetAccountOverviewAsync(Username);
-            if (status != 200)
+            var result = await Accounts.OverviewAsync(Username);
+            if (result.Status != 200 || result.Config is null)
             {
-                error = L["Failed to retrieve user data (HTTP {0}). Check DirectAdmin permissions.", status].Value;
+                error = L["Failed to retrieve user data (HTTP {0}).", result.Status].Value;
                 return;
             }
-            using var doc = JsonDocument.Parse(body);
-            var root = doc.RootElement;
-            settings = ToFields(root.GetProperty("config"));
-            if (root.TryGetProperty("package", out var p) && p.ValueKind == JsonValueKind.String)
-                package = p.GetString();
-            if (root.TryGetProperty("packageSettings", out var ps) && ps.ValueKind == JsonValueKind.Object)
-                packageSettings = ToFields(ps);
-            if (root.TryGetProperty("packageError", out var pe) && pe.ValueKind == JsonValueKind.String)
-                packageError = pe.GetString();
-            if (root.TryGetProperty("usage", out var u) && u.ValueKind == JsonValueKind.Object)
-                usage = ToFields(u);
-            if (root.TryGetProperty("usageError", out var ue) && ue.ValueKind == JsonValueKind.String)
-                usageError = ue.GetString();
+            settings = Copy(result.Config);
+            package = result.Package;
+            packageSettings = Copy(result.PackageSettings);
+            packageError = result.Error;
+            usage = Copy(result.Usage);
+            usageError = result.UsageError;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
-            or ArgumentException or FormatException or JsonException)
+            or ArgumentException or FormatException)
         {
             error = ex.Message;
         }
@@ -174,18 +168,17 @@ else if (settings is not null)
         impersonationError = null;
         try
         {
-            await Session.StartImpersonationAsync(Username);
+            await Impersonation.StartAsync(Username);
             Navigation.NavigateTo("/domains");
         }
         catch (Exception error) when (error is UnauthorizedAccessException or InvalidOperationException
-            or ArgumentException or HttpRequestException or JsonException)
+            or ArgumentException or HttpRequestException)
         {
             impersonationError = error.Message;
         }
         finally { switching = false; }
     }
 
-    private static Dictionary<string,string> ToFields(JsonElement element) =>
-        element.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.ToString(),
-            StringComparer.OrdinalIgnoreCase);
+    private static Dictionary<string,string>? Copy(IReadOnlyDictionary<string,string>? fields) =>
+        fields?.ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
 }

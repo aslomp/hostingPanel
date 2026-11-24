@@ -2,7 +2,8 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/system-updates"
 @using System.Text.Json
-@inject DirectAdminSession Session
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
 <PageTitle>@L["System updates — HostingPanel"]</PageTitle>
 <PanelPageHeader>
     <Breadcrumb>@L["Server management"]</Breadcrumb>
@@ -46,9 +47,9 @@ else
         busy = true;
         try
         {
-            var (us, ub) = await Session.GetRawAsync("api/system-packages/updates");
+            var (us, ub) = await ApiClient.GetRawAsync("api/system-packages/updates");
             updates = $"HTTP {us}\n{ub}";
-            var (hs, hb) = await Session.GetRawAsync("api/system-packages/history");
+            var (hs, hb) = await ApiClient.GetRawAsync("api/system-packages/history");
             history = $"HTTP {hs}\n{hb}";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }
@@ -63,7 +64,7 @@ else
         busy = true; feedback = null;
         try
         {
-            var (status, body) = await Session.GetRawAsync(
+            var (status, body) = await ApiClient.GetRawAsync(
                 "api/system-packages/history/" + Uri.EscapeDataString(transactionId) + "/log");
             transactionLog = $"HTTP {status}\n{body}";
         }
@@ -84,7 +85,7 @@ else
                 p.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.' or '+'))))
             { feedback = L["Invalid package name."].Value; return; }
             var payload = JsonSerializer.Serialize(new { packages });
-            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post, endpoint, payload);
+            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Post, endpoint, payload);
             feedback = $"Backend HTTP {status}: {body}";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { feedback = ex.Message; }

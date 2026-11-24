@@ -253,7 +253,7 @@ var checks = new List<(string Description, Action Test)>
     }),
     ("Impersonation client refuses malformed account names", () =>
     {
-        var session = new DirectAdminSession(null!, new HostingPanel.Web.Realtime.TicketChannelRegistry());
+        var session = new PanelSession(new HostingPanel.Web.Realtime.TicketChannelRegistry());
         Throws<ArgumentException>(() => session.SetCredentials("admin|victim", "secret"));
         session.SetCredentials("admin", "secret");
         Require(session.Username == "admin" && !session.IsImpersonating);
@@ -332,15 +332,15 @@ var checks = new List<(string Description, Action Test)>
     ("Wrong JSON structure is rejected", () => Throws<FormatException>(() => DirectAdminUsersParser.Parse("\"admin\""))),
     ("Only modern API endpoints are accepted", () =>
     {
-        Require(!DirectAdminSession.IsAllowedEndpoint("CMD_API_SHOW_ALL_USERS?json=yes"));
-        Require(DirectAdminSession.IsAllowedEndpoint("api/db-show/databases"));
+        Require(!CompatibilityApiClient.IsAllowedEndpoint("CMD_API_SHOW_ALL_USERS?json=yes"));
+        Require(CompatibilityApiClient.IsAllowedEndpoint("api/db-show/databases"));
     }),
     ("Unsafe and non-API paths are rejected", () =>
     {
         foreach (var path in new[] { "/CMD_API_SHOW_ALL_USERS", "https://evil.example/a",
             "../CMD_API_SHOW_ALL_USERS", "api/../../secret", "api/x#fragment",
             "not-an-api", "api/\\foo" })
-            Require(!DirectAdminSession.IsAllowedEndpoint(path));
+            Require(!CompatibilityApiClient.IsAllowedEndpoint(path));
     })
 };
 

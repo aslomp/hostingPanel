@@ -2,7 +2,8 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/messages"
 @using System.Text.Json
-@inject DirectAdminSession Session
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
 @implements IDisposable
 <PageTitle>@L["Messages — HostingPanel"]</PageTitle>
 
@@ -73,7 +74,7 @@ else
         loading = true; error = null;
         try
         {
-            var (status, body) = await Session.GetRawAsync("api/messages?limit=500");
+            var (status, body) = await ApiClient.GetRawAsync("api/messages?limit=500");
             if (status != 200) { error = L["Messages unavailable (HTTP {0}).", status].Value; return; }
             using var doc = JsonDocument.Parse(body);
             if (doc.RootElement.ValueKind != JsonValueKind.Array)
@@ -91,7 +92,7 @@ else
         loading = true; error = null;
         try
         {
-            var (status, body) = await Session.GetRawAsync($"api/messages/id/{id}");
+            var (status, body) = await ApiClient.GetRawAsync($"api/messages/id/{id}");
             if (status != 200) { error = L["Message unavailable (HTTP {0}).", status].Value; return; }
             using var doc = JsonDocument.Parse(body);
             selected = doc.RootElement.Clone();

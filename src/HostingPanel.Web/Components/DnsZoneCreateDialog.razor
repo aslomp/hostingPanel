@@ -1,6 +1,9 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
-@inject DirectAdminSession Session
+@using HostingPanel.Api.Services
+@using HostingPanel.Api.Adapters
+@inject PanelSession Session
+@inject DnsOperations Dns
 <MudDialog>
     <DialogContent>
         <p>@L["Use the documented DirectAdmin DNS admin API. The backend checks permissions."]</p>
@@ -30,8 +33,9 @@
         busy = true; error = null;
         try
         {
-            var (status, _) = await Session.CreateDnsZoneAsync(zoneDomain.Trim(), zoneIp.Trim(), zoneNs1.Trim(), zoneNs2.Trim());
-            if (status is >= 200 and < 300) { Dialog.Close(DialogResult.Ok(true)); return; }
+            var result = await Dns.CreateAsync(new DnsZoneCreate(zoneDomain.Trim(), zoneIp.Trim(), zoneNs1.Trim(), zoneNs2.Trim()));
+            var status = result.Status;
+            if (result.Executed || result.ProvisioningPending) { Dialog.Close(DialogResult.Ok(true)); return; }
             error = L["Creation not confirmed: backend HTTP {0}.", status].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)

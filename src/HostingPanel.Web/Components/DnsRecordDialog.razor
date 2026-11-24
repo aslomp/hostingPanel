@@ -1,6 +1,9 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
-@inject DirectAdminSession Session
+@using HostingPanel.Api.Services
+@using HostingPanel.Api.Adapters
+@inject PanelSession Session
+@inject DnsOperations Dns
 
 <MudDialog>
     <DialogContent>
@@ -50,13 +53,14 @@
         busy = true; error = null;
         try
         {
-            var (status, _) = await Session.ChangeDnsRecordAsync(Domain, OriginalType is null ? "add" : "edit",
-                type, name, value, string.IsNullOrWhiteSpace(ttl) ? null : ttl,
-                OriginalType, OriginalName, OriginalValue);
-            if (status == 200) { Dialog.Close(DialogResult.Ok(true)); return; }
+            var record = new DnsRecord(type, name, value, string.IsNullOrWhiteSpace(ttl) ? null : ttl);
+            var previous = OriginalType is null ? null : new DnsRecord(OriginalType, OriginalName ?? "", OriginalValue ?? "", OriginalTtl);
+            var result = await Dns.ChangeAsync(Domain, new DnsChange(previous is null ? "add" : "edit", record, previous));
+            var status = result.Status;
+            if (result.Executed || result.ProvisioningPending) { Dialog.Close(DialogResult.Ok(status)); return; }
             error = status switch
             {
-                409 => L["DirectAdmin reported a conflict for this DNS change."].Value,
+                409 => L["The backend reported a conflict for this DNS change."].Value,
                 400 => L["Invalid DNS record data."].Value,
                 403 => L["Permission to modify the DNS zone denied."].Value,
                 _ => L["DNS change not confirmed (HTTP {0}).", status].Value

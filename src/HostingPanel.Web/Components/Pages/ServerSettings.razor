@@ -2,7 +2,8 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/server-settings"
 @using System.Text.Json
-@inject DirectAdminSession Session
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
 <PageTitle>@L["Server settings — HostingPanel"]</PageTitle>
 <PanelPageHeader>
     <Breadcrumb>@L["Server management"]</Breadcrumb>
@@ -74,7 +75,7 @@ else
         busy = true; message = null;
         try
         {
-            var (status, body) = await Session.GetRawAsync(endpoint);
+            var (status, body) = await ApiClient.GetRawAsync(endpoint);
             message = $"HTTP {status}";
             result = body;
             if (endpoint == "api/server-settings/db-config" && status == 200) dbConfigJson = body;
@@ -100,7 +101,7 @@ else
         {
             if (!ValidDatabaseConfig())
             { mutation = L["The database configuration contract is incomplete."].Value; return; }
-            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post,
+            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Post,
                 "api/server-settings/db-config-test", dbConfigJson);
             mutation = $"Test: backend HTTP {status}. {body}";
         }
@@ -117,7 +118,7 @@ else
         {
             if (!ValidDatabaseConfig())
             { mutation = L["The database configuration contract is incomplete."].Value; return; }
-            var (status, body) = await Session.RequestApiAsync(HttpMethod.Put,
+            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Put,
                 "api/server-settings/db-config", dbConfigJson);
             mutation = L["Save: backend HTTP {0}. {1}", status, body].Value;
         }
@@ -132,7 +133,7 @@ else
         busy = true; mutation = null;
         try
         {
-            var (status, body) = await Session.GetRawAsync("api/server-settings/timezone/list");
+            var (status, body) = await ApiClient.GetRawAsync("api/server-settings/timezone/list");
             timezones = $"HTTP {status}\n{body}";
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { mutation = ex.Message; }
@@ -145,7 +146,7 @@ else
         try
         {
             var json = JsonSerializer.Serialize(new { hostname });
-            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post,
+            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Post,
                 "api/server-settings/change-hostname", json);
             mutation = $"Backend HTTP {status}: {body}";
         }
@@ -159,7 +160,7 @@ else
         try
         {
             var json = JsonSerializer.Serialize(new { tz = timezone });
-            var (status, body) = await Session.RequestApiAsync(HttpMethod.Post,
+            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Post,
                 "api/server-settings/timezone/set", json);
             mutation = $"Backend HTTP {status}: {body}";
         }
@@ -175,7 +176,7 @@ else
             using var json = JsonDocument.Parse(patch);
             if (json.RootElement.ValueKind != JsonValueKind.Object)
             { mutation = L["The patch must be a JSON object."].Value; return; }
-            var (status, body) = await Session.RequestApiAsync(HttpMethod.Patch,
+            var (status, body) = await ApiClient.RequestApiAsync(HttpMethod.Patch,
                 "api/server-settings/directadmin-conf/local", patch);
             mutation = $"Backend HTTP {status}: {body}";
         }

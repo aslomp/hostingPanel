@@ -1,7 +1,8 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/resellers/{Username}"
-@inject DirectAdminSession Session
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
 
 <PageTitle>@Username — HostingPanel</PageTitle>
 <PanelPageHeader>
@@ -50,7 +51,7 @@ else
         try
         {
             var path = Uri.EscapeDataString(Username);
-            var (status, body) = await Session.GetRawAsync($"api/resellers/{path}/config");
+            var (status, body) = await ApiClient.GetRawAsync($"api/resellers/{path}/config");
             if (status != 200)
             {
                 configuration = null; usage = null;
@@ -58,7 +59,7 @@ else
                 return;
             }
             configuration = body;
-            var (usageStatus, usageBody) = await Session.GetRawAsync($"api/resellers/{path}/usage");
+            var (usageStatus, usageBody) = await ApiClient.GetRawAsync($"api/resellers/{path}/usage");
             usage = usageStatus == 200 ? usageBody : L["DirectAdmin returned HTTP {0}.", usageStatus].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)

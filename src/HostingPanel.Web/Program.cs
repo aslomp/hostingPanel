@@ -93,7 +93,12 @@ builder.Services.AddScoped<PanelSession>();
 builder.Services.AddScoped<BackendOperationScope>();
 builder.Services.AddScoped<AccountOperations>();
 builder.Services.AddScoped<DomainOperations>();
-builder.Services.AddScoped<DirectAdminSession>();
+builder.Services.AddScoped<DnsOperations>();
+builder.Services.AddScoped<DatabaseOperations>();
+builder.Services.AddScoped<TicketOperations>();
+builder.Services.AddScoped<ImpersonationOperations>();
+builder.Services.AddScoped<CompatibilityApiClient>();
+builder.Services.AddScoped<SettingsOperations>();
 builder.Services.AddScoped<NavigationContextState>();
 builder.Services.AddScoped<TicketLiveMonitor>();
 

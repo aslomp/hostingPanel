@@ -2,7 +2,8 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/system-info"
 @using System.Text.Json
-@inject DirectAdminSession Session
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
 <PageTitle>@L["System information — HostingPanel"]</PageTitle>
 <PanelPageHeader>
     <Breadcrumb>@L["Server management"]</Breadcrumb>
@@ -49,7 +50,7 @@ else
             {
                 try
                 {
-                    var (status, body) = await Session.GetRawAsync(source.Endpoint);
+                    var (status, body) = await ApiClient.GetRawAsync(source.Endpoint);
                     result.Add(new(source.Label, source.Endpoint, status, Pretty(body)));
                 }
                 catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException)

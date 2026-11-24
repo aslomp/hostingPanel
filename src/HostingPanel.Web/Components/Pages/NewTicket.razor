@@ -1,8 +1,9 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/tickets/new"
-@using System.Text.Json
-@inject DirectAdminSession Session
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@inject TicketOperations TicketOps
 @inject NavigationManager Navigation
 <PageTitle>@L["Create ticket — HostingPanel"]</PageTitle>
 <PanelPageHeader>
@@ -53,18 +54,15 @@ else
         sending = true; feedback = null;
         try
         {
-            var payload = JsonSerializer.Serialize(new {
-                subject, message = body, recipient, priority = int.Parse(priority)
-            });
-            var (status, result) = await Session.RequestApiAsync(HttpMethod.Post, "hosting/tickets", payload);
-            if (status is >= 200 and < 300)
+            var (status, result) = await TicketOps.CreateAsync(new TicketCreateRequest(subject, body, recipient, int.Parse(priority)));
+            if (result is null && status is >= 200 and < 300)
             {
                 Navigation.NavigateTo("/tickets");
                 return;
             }
-            feedback = L["Ticket not confirmed by DirectAdmin (HTTP {0}): {1}", status, result].Value;
+            feedback = L["Ticket not confirmed by the backend (HTTP {0}): {1}", status, result].Value;
         }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException or ArgumentException)
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
         { feedback = ex.Message; }
         finally { sending = false; }
     }

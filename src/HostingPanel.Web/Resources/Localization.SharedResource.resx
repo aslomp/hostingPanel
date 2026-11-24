@@ -726,4 +726,25 @@
   <data name="All domain website files, DNS records, routes and certificates will be removed." xml:space="preserve"><value>All domain website files, DNS records, routes and certificates will be removed.</value></data>
   <data name="Enter the exact database name to confirm." xml:space="preserve"><value>Enter the exact database name to confirm.</value></data>
   <data name="Database deleted." xml:space="preserve"><value>Database deleted.</value></data>
+  <data name="DNS change request accepted." xml:space="preserve"><value>DNS change request accepted.</value></data>
+  <data name="DNS zone creation request accepted." xml:space="preserve"><value>DNS zone creation request accepted.</value></data>
+  <data name="DNS zone deletion request accepted." xml:space="preserve"><value>DNS zone deletion request accepted.</value></data>
+  <data name="The backend reported a conflict for this DNS change." xml:space="preserve"><value>The backend reported a conflict for this DNS change.</value></data>
+  <data name="The backend denied the server-wide DNS zone overview." xml:space="preserve"><value>The backend denied the server-wide DNS zone overview.</value></data>
+  <data name="Account creation request accepted." xml:space="preserve"><value>Account creation request accepted.</value></data>
+  <data name="Deletion request accepted for '{0}'." xml:space="preserve"><value>Deletion request accepted for '{0}'.</value></data>
+  <data name="Account creation request accepted for '{0}'." xml:space="preserve"><value>Account creation request accepted for '{0}'.</value></data>
+  <data name="Package change request accepted." xml:space="preserve"><value>Package change request accepted.</value></data>
+  <data name="Limit change request accepted." xml:space="preserve"><value>Limit change request accepted.</value></data>
+  <data name="Account status change request accepted." xml:space="preserve"><value>Account status change request accepted.</value></data>
+  <data name="Account suspension request accepted." xml:space="preserve"><value>Account suspension request accepted.</value></data>
+  <data name="Account activation request accepted." xml:space="preserve"><value>Account activation request accepted.</value></data>
+  <data name="Accounts accessible to the current identity." xml:space="preserve"><value>Accounts accessible to the current identity.</value></data>
+  <data name="All accessible accounts, including resellers and their users." xml:space="preserve"><value>All accessible accounts, including resellers and their users.</value></data>
+  <data name="No accessible accounts." xml:space="preserve"><value>No accessible accounts.</value></data>
+  <data name="Database deletion request accepted." xml:space="preserve"><value>Database deletion request accepted.</value></data>
+  <data name="Database creation request accepted." xml:space="preserve"><value>Database creation request accepted.</value></data>
+  <data name="The backend denied deletion." xml:space="preserve"><value>The backend denied deletion.</value></data>
+  <data name="The backend denied this database operation." xml:space="preserve"><value>The backend denied this database operation.</value></data>
+  <data name="The backend did not confirm creation (HTTP {0})." xml:space="preserve"><value>The backend did not confirm creation (HTTP {0}).</value></data>
 </root>

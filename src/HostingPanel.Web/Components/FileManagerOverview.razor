@@ -1,7 +1,8 @@
 @using HostingPanel.Web.Localization
 @using System.Text.Json
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
-@inject DirectAdminSession Session
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
 
 <PageTitle>@L["File management"] — HostingPanel</PageTitle>
 <PanelPageHeader>
@@ -103,7 +104,7 @@ else
         try
         {
             var endpoint = WithPath("list", path) + "&query=" + Uri.EscapeDataString(filter) + $"&limit={PageSize}&offset={start}";
-            var (status, body) = await Session.GetRawAsync(endpoint);
+            var (status, body) = await ApiClient.GetRawAsync(endpoint);
             if (status != 200) { error = L["Backend HTTP {0}.", status].Value; return; }
             using var doc = JsonDocument.Parse(body);
             var root = doc.RootElement;
@@ -130,7 +131,7 @@ else
         busy = true; error = null;
         try
         {
-            var (status, body) = await Session.GetRawAsync(WithPath("stat", path));
+            var (status, body) = await ApiClient.GetRawAsync(WithPath("stat", path));
             if (status == 200) { selected = entry.Name; details = body; }
             else error = L["Backend HTTP {0}.", status].Value;
         }
@@ -152,7 +153,7 @@ else
                 "trash" => "api/filemanager/trash",
                 _ => throw new ArgumentException(nameof(operation))
             };
-            var (status, body) = await Session.GetRawAsync(endpoint);
+            var (status, body) = await ApiClient.GetRawAsync(endpoint);
             if (status == 200) supplement = body;
             else error = L["Backend HTTP {0}.", status].Value;
         }

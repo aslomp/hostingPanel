@@ -1,6 +1,8 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
-@inject DirectAdminSession Session
+@using HostingPanel.Api.Services
+@inject PanelSession Session
+@inject DatabaseOperations DatabaseOps
 
 <MudDialog>
   <DialogContent>
@@ -39,14 +41,14 @@
     {
       await form.ValidateAsync();
       if (!form.IsValid || !Session.Connected) return;
-      var (status, _) = await Session.CreateDatabaseAsync(newDatabase.Trim(), newUser.Trim(), newPassword);
-      if (status == 200) { Dialog.Close(DialogResult.Ok(true)); return; }
+      var (status, errorCode) = await DatabaseOps.CreateAsync(new DatabaseCreateRequest(newDatabase.Trim(), newUser.Trim(), newPassword));
+      if (errorCode is null && status is >= 200 and < 300) { Dialog.Close(DialogResult.Ok(true)); return; }
       error = status switch
       {
         409 => L["Mutations are disabled or the change could not be confirmed."].Value,
         400 => L["Check the database name, username and password."].Value,
-        403 => L["DirectAdmin denied this database operation."].Value,
-        _ => L["DirectAdmin did not confirm creation (HTTP {0}).", status].Value
+        403 => L["The backend denied this database operation."].Value,
+        _ => L["The backend did not confirm creation (HTTP {0}).", status].Value
       };
     }
     catch (Exception ex) when (ex is HttpRequestException or ArgumentException or InvalidOperationException)

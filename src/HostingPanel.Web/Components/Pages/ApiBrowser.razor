@@ -1,7 +1,8 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/api-browser"
-@inject DirectAdminSession Session
+@inject PanelSession Session
+@inject CompatibilityApiClient ApiClient
 
 <PageTitle>API — HostingPanel</PageTitle>
 <PanelPageHeader>
@@ -27,7 +28,7 @@ else
     private string body = "";
     private async Task Fetch()
     {
-        try { var result = await Session.GetRawAsync(endpoint); status = $"HTTP {result.Status}"; body = result.Body; }
+        try { var result = await ApiClient.GetRawAsync(endpoint); status = $"HTTP {result.Status}"; body = result.Body; }
         catch (Exception ex) { status = ex.Message; body = ""; }
     }
 }
