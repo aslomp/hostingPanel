@@ -36,18 +36,18 @@ public sealed class ServerSettingsOperations(CompatibilityApiClient client)
         return json.RootElement.ValueKind == JsonValueKind.Object;
     }
 
-    public Task<(int Status, string Body)> TestDatabaseAsync(string json) =>
-        client.RequestApiAsync(HttpMethod.Post, "api/server-settings/db-config-test", json);
+    public Task<(int Status, string Body)> TestDatabaseAsync(string json, CancellationToken ct = default) =>
+        client.RequestApiAsync(HttpMethod.Post, "api/server-settings/db-config-test", json, ct);
 
-    public Task<(int Status, string Body)> SaveDatabaseAsync(string json) =>
-        client.RequestApiAsync(HttpMethod.Put, "api/server-settings/db-config", json);
+    public Task<(int Status, string Body)> SaveDatabaseAsync(string json, CancellationToken ct = default) =>
+        client.RequestApiAsync(HttpMethod.Put, "api/server-settings/db-config", json, ct);
 
-    public Task<(int Status, string Body)> ChangeHostnameAsync(string hostname) =>
-        client.RequestApiAsync(HttpMethod.Post, "api/server-settings/change-hostname", JsonSerializer.Serialize(new { hostname }));
+    public Task<(int Status, string Body)> ChangeHostnameAsync(string hostname, CancellationToken ct = default) =>
+        client.RequestApiAsync(HttpMethod.Post, "api/server-settings/change-hostname", JsonSerializer.Serialize(new { hostname }), ct);
 
-    public Task<(int Status, string Body)> ChangeTimezoneAsync(string timezone) =>
-        client.RequestApiAsync(HttpMethod.Post, "api/server-settings/timezone/set", JsonSerializer.Serialize(new { tz = timezone }));
+    public Task<(int Status, string Body)> ChangeTimezoneAsync(string timezone, CancellationToken ct = default) =>
+        client.RequestApiAsync(HttpMethod.Post, "api/server-settings/timezone/set", JsonSerializer.Serialize(new { tz = timezone }), ct);
 
-    public Task<(int Status, string Body)> PatchAsync(string json) =>
-        client.RequestApiAsync(HttpMethod.Patch, "api/server-settings/directadmin-conf/local", json);
+    public Task<(int Status, string Body)> PatchAsync(string json, CancellationToken ct = default) =>
+        client.RequestApiAsync(HttpMethod.Patch, "api/server-settings/directadmin-conf/local", json, ct);
 }

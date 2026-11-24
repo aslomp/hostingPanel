@@ -24,15 +24,15 @@ public sealed class SystemUpdateOperations(CompatibilityApiClient client)
         packages.All(p => p.Length is >= 1 and <= 128 &&
             p.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.' or '+'));
 
-    public Task<(int Status, string Body)> CheckAsync(string[] packages) =>
-        SubmitAsync("api/system-packages/update-test", packages);
+    public Task<(int Status, string Body)> CheckAsync(string[] packages, CancellationToken ct = default) =>
+        SubmitAsync("api/system-packages/update-test", packages, ct);
 
-    public Task<(int Status, string Body)> RunAsync(string[] packages) =>
-        SubmitAsync("api/system-packages/update-run", packages);
+    public Task<(int Status, string Body)> RunAsync(string[] packages, CancellationToken ct = default) =>
+        SubmitAsync("api/system-packages/update-run", packages, ct);
 
-    private Task<(int Status, string Body)> SubmitAsync(string endpoint, string[] packages)
+    private Task<(int Status, string Body)> SubmitAsync(string endpoint, string[] packages, CancellationToken ct)
     {
         if (!ValidPackages(packages)) throw new ArgumentException("Invalid package name.", nameof(packages));
-        return client.RequestApiAsync(HttpMethod.Post, endpoint, JsonSerializer.Serialize(new { packages }));
+        return client.RequestApiAsync(HttpMethod.Post, endpoint, JsonSerializer.Serialize(new { packages }), ct);
     }
 }
