@@ -29,54 +29,15 @@ The provider uses modern API forwarding and legacy adapters where required. No l
 
 ### Kubernetes
 
-The Kubernetes backend manages hosting desired state in SQLite and reconciles website resources through the Kubernetes API.
+Kubernetes manages desired state in SQLite and reconciles websites through the Kubernetes .NET SDK, DNS through PowerDNS and certificates through an existing cert-manager installation when configured. Hosting uses a shared Apache service with per-domain virtualhost ConfigMaps, Gateway API routes and shared PHP-FPM runtimes with account pools. Existing DirectAdmin NFS paths are preserved.
 
-- Local account authentication, account hierarchy and backend settings.
-- Account, domain and DNS records stored in the control-plane database.
-- One Apache Deployment, Service and ConfigMap per hosted website. Updating one virtual host does not regenerate every other site's configuration.
-- Gateway API HTTPRoutes attached to an existing Envoy Gateway.
-- Shared PHP-FPM Deployments and internal Services by PHP version, with separate on-demand pools, persistent Unix identities and TCP listeners per hosting account. PHP 8.6 is the default; legacy PHP 7 is optional.
-- NFS-backed website data, separate from Kubernetes-managed web server configuration.
-- Directory provisioning with ownership and permission validation, when the storage-side provisioning environment has the necessary authority.
-- Persistent reconciliation operations and retry handling for website changes.
-
-The Kubernetes backend is experimental. Website reconciliation is implemented, but full cluster validation, production-grade tenant isolation, DNS server integration, database provisioning, certificate automation and SSH/SFTP management are not complete. Shared PHP requires explicit opt-in and should currently be used only for mutually trusted applications. An accepted desired-state operation does not guarantee a ready website.
-
-See [Kubernetes website hosting](docs/kubernetes-hosting.md) for configuration and operational requirements.
+The backend is experimental; production tenant isolation, runtime readiness and full capability parity are not established. Shared PHP is trusted-only opt-in. An accepted operation does not prove a resource is serving traffic.
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    UI[Blazor Server UI] --> API[ASP.NET Core controllers]
-    API --> B[IHostingBackend]
-    B --> DA[DirectAdmin provider]
-    B --> K[Kubernetes provider]
-    DA --> DAS[DirectAdmin server]
-    K --> DB[(SQLite desired state)]
-    K --> R[Website reconciliation]
-    R --> KA[Kubernetes API]
-    KA --> A[Apache per website]
-    KA --> P[Shared PHP-FPM runtimes]
-    KA --> G[Envoy HTTPRoutes]
-    A -->|FastCGI TCP| P
-    A --> N[(NFS website data)]
-    P --> N
-```
+The UI and API run in one ASP.NET Core host, HostingPanel.Web. Controllers and operation services use independent backend capabilities registered via DI. DirectAdmin remains authoritative for its resources; Kubernetes uses the common SQLite persistence model and asynchronous reconciliation.
 
-The UI and API run in a single ASP.NET Core application. Provider-specific behavior is implemented in separate assemblies behind shared contracts.
-
-| Project | Responsibility |
-| --- | --- |
-| `HostingPanel.Web` | Blazor Server UI, HTTP controllers, authentication sessions and application composition |
-| `HostingPanel.Backends.Abstractions` | Provider interfaces, DTOs and shared contracts |
-| `HostingPanel.Backends.DirectAdmin` | DirectAdmin transport, adapters and hosting operations |
-| `HostingPanel.Backends.Kubernetes` | Kubernetes desired state, account authentication, website reconciliation and infrastructure provisioning |
-| `HostingPanel.Persistence` | Shared SQLite database, EF Core model and provider-specific schema extension points |
-
-`IHostingBackend` includes `IAuthenticationProvider`, `IWebHosting` and `IDNSProvider`, alongside contracts for account management, databases, file access and tickets.
-
-Resource-level authorization is the responsibility of the selected backend. The UI and controllers do not maintain an independent hosting permission hierarchy.
+See [current architecture](docs/architecture.md), [capabilities](docs/capabilities.md) and [configuration ownership](docs/configuration.md).
 
 ## Getting started
 
@@ -148,12 +109,7 @@ GitHub Actions builds the providers independently and runs contract, API integra
 
 ## Documentation
 
-- [Kubernetes website hosting and deployment](docs/kubernetes-hosting.md)
-- [Helm chart configuration](deploy/helm/hostingpanel/values.yaml)
-- [Web hosting contract](docs/web-hosting.md)
-- [DNS provider contract](docs/dns-provider.md)
-- [Shared SQLite persistence](docs/shared-sqlite-persistence.md)
-- [Localization](docs/localization.md)
+Start with the [documentation index](docs/README.md). Contributors and coding agents must follow [AGENTS.md](AGENTS.md). Current architecture, configuration and capability pages are distinct from plans and historical snapshots.
 
 ## License and support
 

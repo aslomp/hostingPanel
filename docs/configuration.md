@@ -1,0 +1,28 @@
+# Configuration ownership
+
+| State | Authoritative source | Access / notes |
+| --- | --- | --- |
+| Active backend | HostingPanel:Backend | Startup composition |
+| DirectAdmin hosting resources | DirectAdmin server | Caller credentials, upstream permissions; no local mirror |
+| Kubernetes public backend settings | SQLite Configuration, key BackendSettings:Kubernetes | Administrator-only IBackendSettingsAccess |
+| Kubernetes accounts, domains, DNS zones/records | Common SQLite model | Backend-owned authorization |
+| Runtime website configuration | Domain settings + effective backend settings | Reconciled to Kubernetes |
+| PowerDNS and cert-manager connectivity | Deployment configuration and secrets | Never expose credentials through public settings |
+| Kubernetes resource identity / status | Actual Kubernetes API and reconciliation records | Distinguish observed state from desired state |
+| Panel session | Server-side PanelSessionStore and cookie | Not a resource permission hierarchy |
+
+KubernetesSettingsService.GetEffectiveSettingsAsync reads the saved JSON, filling supported missing keys from deployment defaults. Startup configuration is authoritative only when no persisted value exists (or for missing keys). GET /hosting/backend-settings returns schema, values and revision; PUT validates the complete replacement and checks revision, permissions and IP constraints. Unsupported providers may return 501.
+
+## DNS and IP settings
+
+DnsAutoCreateZones, DnsWebIp, DnsNs1, DnsNs2 and IpAddresses live in KubernetesBackendSettings. Each HostingIpAddress carries Address, PrefixLength, Status, Device, NameServer, Global, Resellers and AssignedUsers. Server administration manages IPs and nameservers through existing BackendSettings screens. Nameserver resolution consumes these existing relationships; they also participate in hosting-IP allocation, so changes cannot be treated as independent nameserver assignments. See [DNS](dns.md).
+
+Do not duplicate nameserver settings in separate configuration rows or account maps. If a new requirement cannot be represented without changing hosting-IP entitlement, document the conflict and agree on the model before implementation.
+
+## Certificates and runtime
+
+AcmeProviders maps logical IDs to existing cert-manager issuers; AcmeDefaultProvider, AcmeUserProviders and AcmePackageProviders provide selection defaults. Domain ACME intent is resolved by KubernetesCertificateProvider. TlsListenerSetName must agree with the Helm-authorized existing ListenerSet. Infrastructure settings (NFS, Gateway, namespace, runtime images, capacity and permissions) are deployment configuration; consult the chart and [hosting guide](kubernetes-hosting.md).
+
+## Secrets and persistence
+
+Use secret references and protected deployment settings for API keys, passwords and TLS private material. Do not add secret fields to IBackendSettings, including nested objects. Local account password hashes are not plaintext passwords. See [persistence](shared-sqlite-persistence.md).
