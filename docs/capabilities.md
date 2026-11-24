@@ -45,3 +45,5 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 - DNS zone inventory reads use component-owned cancellation and session guards, without changing provider authorization or DNS provisioning capabilities.
 
 - Account, database, domain and DNS-zone creation dialogs and DNS record editing share mutation lifecycle state; no additional backend mutation capabilities are implied.
+
+- System information has a dedicated UI operation service; upstream compatibility routes and support limits remain unchanged.
