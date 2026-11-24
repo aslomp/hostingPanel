@@ -173,17 +173,11 @@ else
       deleteDialogOpen = true;
       try
       {
-          var parameters = new DialogParameters<DestructiveResourceDialog>
-          {
-              { x => x.ResourceName, target },
-              { x => x.Warning, L["Delete only the specified DNS zone; this is not the same as deleting a hosting domain."].Value },
-              { x => x.Prompt, L["Enter the exact domain name to confirm"].Value }
-          };
-          var reference = await Dialogs.ShowAsync<DestructiveResourceDialog>(
-              $"{L["Delete standalone DNS zone"]}: {target}", parameters,
-              new DialogOptions { CloseOnEscapeKey = true, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
-          var result = await reference.Result;
-          if (result is { Canceled: false, Data: true } && Session.Connected &&
+          var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+              $"{L["Delete standalone DNS zone"]}: {target}", target,
+              L["Delete only the specified DNS zone; this is not the same as deleting a hosting domain."].Value,
+              L["Enter the exact domain name to confirm"].Value);
+          if (confirmed && Session.Connected &&
               string.Equals(identity, Session.Username, StringComparison.Ordinal) &&
               string.Equals(target, deleteDomain, StringComparison.Ordinal))
           {

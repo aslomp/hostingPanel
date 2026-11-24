@@ -144,17 +144,11 @@
       deleteDialogOpen = true;
       try
       {
-          var parameters = new DialogParameters<DestructiveResourceDialog>
-          {
-              { x => x.ResourceName, target },
-              { x => x.Warning, L["This deletes an account through DirectAdmin. Enter the exact account name to confirm."].Value },
-              { x => x.Prompt, L["Confirm account name"].Value }
-          };
-          var reference = await Dialogs.ShowAsync<DestructiveResourceDialog>(
-              $"{L["Delete account"]}: {target}", parameters,
-              new DialogOptions { CloseOnEscapeKey = true, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
-          var result = await reference.Result;
-          if (result is { Canceled: false, Data: true } && Session.Connected &&
+          var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+              $"{L["Delete account"]}: {target}", target,
+              L["This deletes an account through DirectAdmin. Enter the exact account name to confirm."].Value,
+              L["Confirm account name"].Value);
+          if (confirmed && Session.Connected &&
               string.Equals(identity, Session.Username, StringComparison.Ordinal) &&
               string.Equals(target, deleteUsername, StringComparison.Ordinal) && kind == Kind)
           {

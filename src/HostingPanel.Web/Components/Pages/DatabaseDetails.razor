@@ -78,17 +78,11 @@ else
       deleteDialogOpen = true;
       try
       {
-          var parameters = new DialogParameters<DestructiveResourceDialog>
-          {
-              { x => x.ResourceName, target },
-              { x => x.Warning, L["This deletes the database and may cause irreversible data loss. Enter the exact database name to confirm."].Value },
-              { x => x.Prompt, L["Enter the exact database name to confirm."].Value }
-          };
-          var reference = await Dialogs.ShowAsync<DestructiveResourceDialog>(
-              $"{L["Delete database"]}: {target}", parameters,
-              new DialogOptions { CloseOnEscapeKey = true, BackdropClick = false, MaxWidth = MaxWidth.Small, FullWidth = true });
-          var result = await reference.Result;
-          if (result is { Canceled: false, Data: true } && Session.Connected &&
+          var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+              $"{L["Delete database"]}: {target}", target,
+              L["This deletes the database and may cause irreversible data loss. Enter the exact database name to confirm."].Value,
+              L["Enter the exact database name to confirm."].Value);
+          if (confirmed && Session.Connected &&
               string.Equals(identity, Session.Username, StringComparison.Ordinal) &&
               string.Equals(target, Database, StringComparison.Ordinal))
           {

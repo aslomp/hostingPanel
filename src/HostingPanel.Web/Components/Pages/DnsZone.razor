@@ -3,6 +3,7 @@
 @page "/domains/{Domain}/dns"
 @using System.Text.Json
 @inject DirectAdminSession Session
+@inject IDialogService Dialogs
 
 <PageTitle>DNS — @Domain</PageTitle>
 <div class="page-header">
@@ -44,7 +45,7 @@ else
         }
     </section>
     <section class="card">
-        <h2>@(action == "add" ? L["Add DNS record"].Value : action == "edit" ? L["Edit DNS record"].Value : L["Delete DNS record"].Value)</h2>
+        <h2>@(action == "add" ? L["Add DNS record"].Value : L["Edit DNS record"].Value)</h2>
         <p>@L["DirectAdmin determines whether the change is permitted."]</p>
         <label for="dnsType">Type</label>
         <MudSelect T="string" @bind-Value="type" Variant="Variant.Outlined" Margin="Margin.Dense" InputId="dnsType" Disabled="@(action == "delete")">
@@ -57,15 +58,10 @@ else
         <MudTextField T="string" @bind-Value="value" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dnsValue" Disabled="@(action == "delete")" Lines="3" />
         <label for="dnsTtl">@L["TTL (optional, 60–604800 seconds)"]</label>
         <MudTextField T="string" @bind-Value="ttl" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="dnsTtl" Disabled="@(action == "delete")" />
-        @if (action == "delete")
-        {
-            <p>Bevestig het verwijderen van uitsluitend dit record door de naam exact te typen: <strong>@original?.Name</strong></p>
-            <MudTextField T="string" @bind-Value="confirmation" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Placeholder="@L["Exact record name"].Value" autocomplete="off" />
-        }
         <div class="domain-options">
-            <button class="primary" disabled="@(busy || action == "delete" && confirmation != original?.Name)" @onclick="Save">
-                @(busy ? "Bezig…" : action == "add" ? "Toevoegen" : action == "edit" ? L["Save change"].Value : L["Confirm deletion"].Value)
-            </button>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(busy || deleteDialogOpen || action == "delete")" OnClick="Save">
+                @(busy ? "Bezig…" : action == "add" ? "Toevoegen" : L["Save change"].Value)
+            </MudButton>
             <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Reset">@L["New record"]</MudButton>
         </div>
         @if (message is not null) { <p role="status">@message</p> }
@@ -128,10 +124,34 @@ else
         original = r; action = "edit"; type = r.Type; name = r.Name; value = r.Value;
         ttl = r.Ttl ?? ""; confirmation = ""; message = null;
     }
-    private void Remove(ZoneRecord r)
+    private bool deleteDialogOpen;
+    private async Task Remove(ZoneRecord r)
     {
-        original = r; action = "delete"; type = r.Type; name = r.Name;
-        value = r.Value; ttl = r.Ttl ?? ""; confirmation = ""; message = null;
+        if (busy || deleteDialogOpen || !Session.Connected || records?.Contains(r) != true) return;
+        var domain = Domain;
+        var identity = Session.Username;
+        deleteDialogOpen = true;
+        try
+        {
+            var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+                $"{L["Delete DNS record"]}: {r.Name}", r.Name,
+                L["Permanently delete this DNS record?"].Value,
+                L["Exact record name"].Value,
+                $"{domain} — {r.Type} {r.Name} {r.Value}");
+            if (!confirmed || busy || !Session.Connected ||
+                !string.Equals(identity, Session.Username, StringComparison.Ordinal) ||
+                !string.Equals(domain, Domain, StringComparison.Ordinal) ||
+                records?.Contains(r) != true) return;
+            original = r; action = "delete"; type = r.Type; name = r.Name;
+            value = r.Value; ttl = r.Ttl ?? ""; confirmation = r.Name;
+            try { await Save(); }
+            finally
+            {
+                confirmation = "";
+                if (action == "delete") { action = "edit"; }
+            }
+        }
+        finally { deleteDialogOpen = false; }
     }
     private void Reset()
     {
@@ -140,7 +160,7 @@ else
     }
     private async Task Save()
     {
-        if (busy || (action == "delete" && confirmation != original?.Name)) return;
+        if (busy || !Session.Connected || (action == "delete" && (original is null || confirmation != original.Name))) return;
         busy = true;
         message = null;
         try
