@@ -12,6 +12,7 @@ namespace HostingPanel.Api.Services;
 /// DirectAdmin remains the authority for delegated access.
 /// </summary>
 public sealed class ImpersonationService(IHttpClientFactory clients)
+: IImpersonation
 {
     public async Task<ImpersonationCheck> CheckAsync(
         AuthenticationHeaderValue authorization, string target, CancellationToken ct)
