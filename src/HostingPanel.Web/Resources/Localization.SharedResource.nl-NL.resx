@@ -779,4 +779,32 @@
   <data name="PHP version" xml:space="preserve"><value>PHP-versie</value></data>
   <data name="PHP handler" xml:space="preserve"><value>PHP-handler</value></data>
   <data name="Toggle navigation" xml:space="preserve"><value>Navigatie in- of uitklappen</value></data>
+  <data name="Valid certificates" xml:space="preserve"><value>Geldige certificaten</value></data>
+  <data name="Invalid certificates" xml:space="preserve"><value>Ongeldige certificaten</value></data>
+  <data name="Missing DNS names" xml:space="preserve"><value>Ontbrekende DNS-namen</value></data>
+  <data name="Home" xml:space="preserve"><value>Startmap</value></data>
+  <data name="Parent directory" xml:space="preserve"><value>Bovenliggende map</value></data>
+  <data name="Type" xml:space="preserve"><value>Type</value></data>
+  <data name="Modified" xml:space="preserve"><value>Gewijzigd</value></data>
+  <data name="Permissions" xml:space="preserve"><value>Machtigingen</value></data>
+  <data name="No files found." xml:space="preserve"><value>Geen bestanden gevonden.</value></data>
+  <data name="Page" xml:space="preserve"><value>Pagina</value></data>
+  <data name="Delete package" xml:space="preserve"><value>Pakket verwijderen</value></data>
+  <data name="No packages found." xml:space="preserve"><value>Geen pakketten gevonden.</value></data>
+  <data name="Permanently delete this package?" xml:space="preserve"><value>Dit pakket definitief verwijderen?</value></data>
+  <data name="Enter the exact package name to confirm." xml:space="preserve"><value>Voer de exacte pakketnaam in ter bevestiging.</value></data>
+  <data name="Package deleted." xml:space="preserve"><value>Pakket verwijderd.</value></data>
+  <data name="Active" xml:space="preserve"><value>Actief</value></data>
+  <data name="Invalid" xml:space="preserve"><value>Ongeldig</value></data>
+  <data name="No sessions found." xml:space="preserve"><value>Geen sessies gevonden.</value></data>
+  <data name="Session details" xml:space="preserve"><value>Sessiedetails</value></data>
+  <data name="Terminate this session?" xml:space="preserve"><value>Deze sessie beëindigen?</value></data>
+  <data name="Session operation completed." xml:space="preserve"><value>Sessieoperatie voltooid.</value></data>
+  <data name="Delete certificate" xml:space="preserve"><value>Certificaat verwijderen</value></data>
+  <data name="Deleting this certificate may interrupt HTTPS service for its DNS names." xml:space="preserve"><value>Het verwijderen van dit certificaat kan HTTPS voor de bijbehorende DNS-namen onderbreken.</value></data>
+  <data name="Enter the exact certificate ID to confirm." xml:space="preserve"><value>Voer de exacte certificaat-ID in ter bevestiging.</value></data>
+  <data name="Certificate deleted." xml:space="preserve"><value>Certificaat verwijderd.</value></data>
+  <data name="Account created." xml:space="preserve"><value>Account aangemaakt.</value></data>
+  <data name="Deleting this account is irreversible. All associated data will be removed." xml:space="preserve"><value>Het verwijderen van dit account is onherstelbaar. Alle bijbehorende gegevens worden verwijderd.</value></data>
+  <data name="DirectAdmin confirmed deletion of '{0}'." xml:space="preserve"><value>DirectAdmin heeft de verwijdering van '{0}' bevestigd.</value></data>
 </root>
