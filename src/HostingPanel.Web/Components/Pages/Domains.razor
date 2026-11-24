@@ -188,7 +188,7 @@ else
         mutationStatus = null;
         try
         {
-            var (status, _) = await Session.ExecuteTestDomainAsync(domain, action, domain, php, ssl, cgi);
+            var (status, body) = await Session.ExecuteTestDomainAsync(domain, action, domain, php, ssl, cgi);
             mutationStatus = status switch
             {
                 200 or 201 or 204 => L["Domain operation completed."].Value,
@@ -198,6 +198,16 @@ else
                 400 => L["Invalid domain or settings."].Value,
                 _ => L["Domain operation failed: HTTP {0}.", status].Value
             };
+            if (status >= 400)
+            {
+                try
+                {
+                    using var problem = JsonDocument.Parse(body);
+                    if (problem.RootElement.TryGetProperty("type", out var code) && code.ValueKind == JsonValueKind.String)
+                        mutationStatus += " " + code.GetString();
+                }
+                catch (JsonException) { }
+            }
             if (status is >= 200 and < 300)
             {
                 if (action == "create") { testDomain = ""; owner = ""; }

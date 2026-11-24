@@ -27,6 +27,39 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
         var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
         var backend = scope.ServiceProvider.GetRequiredService<IHostingBackend>();
         var provider = new PowerDnsProvider(backend, scope.ServiceProvider.GetRequiredService<PowerDnsClient>());
+        // Stage deferred zone creation from durable domain requests. A new scope
+        // per request prevents failed work from leaking tracked changes into other domains.
+        var deferred = await db.ReconciliationOperations.AsNoTracking().Where(x => x.ResourceType == "domain-dns" && x.Status == "pending").Select(x => x.Id).ToListAsync(ct);
+        foreach (var id in deferred)
+        {
+            try
+            {
+                using var retryScope = scopes.CreateScope();
+                var retryDb = retryScope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
+                var retryBackend = (KubernetesBackend)retryScope.ServiceProvider.GetRequiredService<IHostingBackend>();
+                await using var tx = await retryDb.Database.BeginTransactionAsync(ct);
+                var operation = await retryDb.ReconciliationOperations.SingleOrDefaultAsync(x => x.Id == id && x.Status == "pending", ct);
+                if (operation is null) continue;
+                var domain = await retryDb.Domains.SingleOrDefaultAsync(x => x.Id == operation.ResourceId, ct);
+                var error = domain is null ? null : await retryBackend.StageDomainDnsAsync(domain, ct, retry: true);
+                var changed = operation.LastError != error;
+                if (error is null)
+                {
+                    operation.Status = "completed";
+                    operation.CompletedAt = DateTimeOffset.UtcNow;
+                }
+                else if (changed) operation.Attempts++;
+                operation.LastError = error;
+                if (changed || error is null)
+                {
+                    await retryDb.SaveChangesAsync(ct);
+                    await tx.CommitAsync(ct);
+                    notifications.Publish();
+                }
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            { logger.LogWarning(ex, "Deferred DNS provisioning failed for operation {Id}", id); }
+        }
         var pending = await db.ReconciliationOperations.Where(x => x.ResourceType == "dns-zone" && x.Status == "pending").ToListAsync(ct);
         foreach (var group in pending.GroupBy(x => x.ResourceId))
         {

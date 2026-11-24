@@ -121,17 +121,18 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
     }
 
     // Stage DNS and website desired state in the same SaveChanges transaction.
-    private async Task<string?> StageDomainDnsAsync(HostedDomain domain, CancellationToken ct)
+    internal async Task<string?> StageDomainDnsAsync(HostedDomain domain, CancellationToken ct, bool retry = false)
     {
         if (powerDns is null) return null;
         var dnsSettings = await GetEffectiveSettingsAsync(ct);
-        if (!dnsSettings.DnsAutoCreateZones) return null;
+        if (!dnsSettings.DnsAutoCreateZones && !retry) return null;
         var existing = await db.DnsZones.SingleOrDefaultAsync(z => z.Name == domain.Name, ct);
         if (existing is not null)
         {
-            if (existing.OwnerId != domain.OwnerId || existing.DomainId is not null)
+            if (existing.OwnerId != domain.OwnerId || (existing.DomainId is not null && existing.DomainId != domain.Id))
                 return "DNS_ZONE_EXISTS";
             existing.DomainId = domain.Id;
+            Schedule("dns-zone", existing.Id, "update", new { existing.Name });
             return null;
         }
         var owner = db.Accounts.Local.FirstOrDefault(x => x.Id == domain.OwnerId)
@@ -311,7 +312,10 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
         var domain = new HostedDomain { Name = input.Domain.ToLowerInvariant(), OwnerId = account.Id };
         db.Domains.Add(domain);
         if (await StageDomainDnsAsync(domain, ct) is { } dnsError)
-            return new(dnsError == "DNS_ZONE_EXISTS" ? 409 : 503, dnsError);
+        {
+                if (dnsError == "DNS_ZONE_EXISTS") return new(409, dnsError);
+                db.ReconciliationOperations.Add(new ReconciliationOperation { ResourceType = "domain-dns", ResourceId = domain.Id, Action = "create", LastError = dnsError });
+            }
         Schedule("account", account.Id, "create", new { account.Username });
         Schedule("domain", domain.Id, "create", new { domain.Name });
         await ScheduleWebsiteAsync(domain, "create", ct);
@@ -470,7 +474,10 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
                 SettingsJson = JsonSerializer.Serialize(new { php = input.Php, ssl = input.Ssl, cgi = input.Cgi }) };
             db.Domains.Add(created);
             if (await StageDomainDnsAsync(created, ct) is { } dnsError)
-                return new(dnsError == "DNS_ZONE_EXISTS" ? 409 : 503, dnsError);
+            {
+                if (dnsError == "DNS_ZONE_EXISTS") return new(409, dnsError);
+                db.ReconciliationOperations.Add(new ReconciliationOperation { ResourceType = "domain-dns", ResourceId = created.Id, Action = "create", LastError = dnsError });
+            }
             Schedule("domain", created.Id, "create", new { name });
             await ScheduleWebsiteAsync(created, "create", ct);
         }
@@ -514,7 +521,14 @@ public sealed partial class KubernetesBackend(HostingPanelDbContext db, Kubernet
         settings["domain"] = row.Name;
         settings["username"] = await db.Accounts.Where(x => x.Id == row.OwnerId).Select(x => x.Username).SingleAsync(ct);
         var operations = await db.ReconciliationOperations.AsNoTracking().Where(x => x.ResourceType == "website" && x.ResourceId == row.Id).ToListAsync(ct);
-        settings["provisioning"] = operations.Any(x => x.Status == "pending" && x.Attempts > 0) ? "Retrying" : operations.Any(x => x.Status == "pending") ? "Pending" : operations.Any(x => x.Status == "completed") ? "Configuration applied" : "Unknown";
+        var dnsStage = await db.ReconciliationOperations.AsNoTracking().Where(x => x.ResourceType == "domain-dns" && x.ResourceId == row.Id && x.Status == "pending").ToListAsync(ct);
+        var zoneIds = await db.DnsZones.Where(x => x.DomainId == row.Id).Select(x => x.Id).ToListAsync(ct);
+        var dnsOps = await db.ReconciliationOperations.AsNoTracking().Where(x => x.ResourceType == "dns-zone" && zoneIds.Contains(x.ResourceId)).ToListAsync(ct);
+        var pending = operations.Concat(dnsOps).Where(x => x.Status == "pending").ToArray();
+        var blocked = dnsStage.FirstOrDefault();
+        settings["provisioning"] = blocked is not null ? "DNS provisioning blocked: " + blocked.LastError :
+            pending.Any(x => x.Attempts > 0) ? "Retrying" : pending.Length > 0 ? "Pending" :
+            operations.Any(x => x.Status == "completed") ? "Configuration applied" : "Unknown";
         return new(200, settings, null);
     }
 
