@@ -6,6 +6,17 @@ using System.Text;
 
 var checks = new List<(string Description, Action Test)>
 {
+    ("Web hosting capability is implemented by both providers", () =>
+    {
+        Require(typeof(HostingPanel.Api.IWebHosting).IsAssignableFrom(typeof(DomainManagementService)));
+        Require(typeof(HostingPanel.Api.IWebHosting).IsAssignableFrom(typeof(HostingPanel.Api.KubernetesBackend)));
+        Require(typeof(HostingPanel.Api.IHostingBackend).GetProperty("WebHosting")?.PropertyType == typeof(HostingPanel.Api.IWebHosting));
+        var accepted = new HostingPanel.Api.WebsiteMutationResult(202, null);
+        Require(accepted.ProvisioningPending && !accepted.Executed);
+        var confirmed = new HostingPanel.Api.WebsiteMutationResult(200, null);
+        Require(confirmed.Executed && !confirmed.ProvisioningPending);
+        Require(!new HostingPanel.Api.WebsiteMutationResult(403, "ACCESS_DENIED").Executed);
+    }),
     ("Provider assemblies do not reference each other or API", () =>
     {
         var contract = typeof(HostingPanel.Api.IHostingBackend).Assembly;

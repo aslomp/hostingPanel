@@ -18,6 +18,7 @@ public interface IHostingBackend : IAuthenticationProvider
     IDatabases Databases { get; }
     IAccessibleDatabases AccessibleDatabases { get; }
     IDomains Domains { get; }
+    IWebHosting WebHosting { get; }
     IDns Dns { get; }
     IFileAccess FileAccess { get; }
     ITickets Tickets { get; }

@@ -17,7 +17,7 @@ namespace HostingPanel.Api;
 public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings) :
     IHostingBackend, IAccountCatalog, IAccountMutations, IAccessibleDomains,
     IUserDetails, IAccountOverview, IImpersonation, IDatabases,
-    IAccessibleDatabases, IDomains, IDns, IFileAccess, ITickets, IBackendSettingsAccess
+    IAccessibleDatabases, IDomains, IDns, IFileAccess, ITickets, IBackendSettingsAccess, IWebHosting
 {
     public IBackendSettingsAccess Settings => this;
     private const string SettingsKey = "BackendSettings:Kubernetes";
@@ -77,9 +77,23 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
     public IDatabases Databases => this;
     public IAccessibleDatabases AccessibleDatabases => this;
     public IDomains Domains => this;
+    public IWebHosting WebHosting => this;
     public IDns Dns => this;
     public IFileAccess FileAccess => this;
     public ITickets Tickets => this;
+
+    private async Task ScheduleWebsiteAsync(HostedDomain domain, string action, CancellationToken ct)
+    {
+        var settings = await GetEffectiveSettingsAsync(ct);
+        using var config = JsonDocument.Parse(domain.SettingsJson);
+        Schedule("website", domain.Id, action, new
+        {
+            domain = domain.Name,
+            ownerId = domain.OwnerId,
+            configuration = config.RootElement.Clone(),
+            ingressProvider = settings.IngressProvider.ToString()
+        });
+    }
 
     private void Schedule(string type, Guid id, string operation, object? payload = null)
     {
@@ -174,6 +188,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         db.Domains.Add(domain);
         Schedule("account", account.Id, "create", new { account.Username });
         Schedule("domain", domain.Id, "create", new { domain.Name });
+        await ScheduleWebsiteAsync(domain, "create", ct);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return new(202, null);
@@ -278,6 +293,41 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         return new(200, await query.OrderBy(x => x).ToListAsync(ct), null);
     }
 
+    public async Task<WebsiteListResult> ListWebsitesAsync(string? owner, AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        var result = await ListAsync(owner, auth, ct);
+        return new(result.Status, result.Domains, result.Error);
+    }
+
+    public async Task<WebsiteResult> GetWebsiteAsync(string domain, AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        var result = await GetDetailsAsync(domain, auth, ct);
+        if (result.Settings is null) return new(result.Status, null, result.Error);
+        var name = domain.ToLowerInvariant();
+        var id = await db.Domains.AsNoTracking().Where(x => x.Name == name).Select(x => x.Id).SingleOrDefaultAsync(ct);
+        var pending = await db.ReconciliationOperations.AsNoTracking().AnyAsync(x =>
+            x.ResourceType == "website" && x.ResourceId == id && x.Status == "pending", ct);
+        return new(result.Status, new WebsiteInfo(name, result.Settings,
+            pending ? WebsiteProvisioningState.Pending : WebsiteProvisioningState.Unknown), result.Error);
+    }
+
+    public Task<WebsiteMutationResult> CreateWebsiteAsync(WebsiteConfiguration website, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        ApplyWebsiteAsync(website, "create", website.Domain, auth, ct);
+
+    public Task<WebsiteMutationResult> UpdateWebsiteAsync(WebsiteConfiguration website, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        ApplyWebsiteAsync(website, "modify", website.Domain, auth, ct);
+
+    public Task<WebsiteMutationResult> DeleteWebsiteAsync(string domain, string confirmation, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        ApplyWebsiteAsync(new WebsiteConfiguration(domain), "delete", confirmation, auth, ct);
+
+    private async Task<WebsiteMutationResult> ApplyWebsiteAsync(WebsiteConfiguration website, string action, string confirmation,
+        AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        var result = await MutateAsync(new DomainMutationRequest(website.Domain, action, confirmation,
+            website.Php, website.Tls, website.Cgi), auth, ct);
+        return new(result.Status, result.Error);
+    }
+
     public async Task<DomainMutationResult> MutateAsync(DomainMutationRequest input, AuthenticationHeaderValue auth, CancellationToken ct)
     {
         var principal = await AuthenticateAsync(auth, ct);
@@ -292,6 +342,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
                 SettingsJson = JsonSerializer.Serialize(new { php = input.Php, ssl = input.Ssl, cgi = input.Cgi }) };
             db.Domains.Add(created);
             Schedule("domain", created.Id, "create", new { name });
+            await ScheduleWebsiteAsync(created, "create", ct);
         }
         else
         {
@@ -306,11 +357,13 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
                     return new(409, "DOMAIN_HAS_RESOURCES");
                 db.Domains.Remove(existing);
                 Schedule("domain", existing.Id, "delete", new { name });
+                await ScheduleWebsiteAsync(existing, "delete", ct);
             }
             else if (input.Action == "modify")
             {
                 existing.SettingsJson = JsonSerializer.Serialize(new { php = input.Php, ssl = input.Ssl, cgi = input.Cgi });
                 Schedule("domain", existing.Id, "update", new { name });
+                await ScheduleWebsiteAsync(existing, "update", ct);
             }
             else return new(400, "INVALID_OPERATION");
         }
@@ -348,6 +401,7 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         plain[setting] = value;
         row.SettingsJson = JsonSerializer.Serialize(plain);
         Schedule("domain", row.Id, "update", new { row.Name, setting });
+        await ScheduleWebsiteAsync(row, "update", ct);
         await db.SaveChangesAsync(ct);
         return new(202, null);
     }
