@@ -35,3 +35,5 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 - The account inventory and migrated detail pages use cancellable component-owned reads; this is a UI lifecycle improvement, not an expansion of backend capabilities.
 
 - Database overview reads have component-owned cancellation and session guards; this does not extend backend database mutation support.
+
+- Ticket overview refreshes coalesce inbox invalidations and cancel obsolete session reads; backend ticket scope and support-routing limitations remain unchanged.

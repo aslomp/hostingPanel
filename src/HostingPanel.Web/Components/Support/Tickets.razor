@@ -78,7 +78,10 @@ else
     private string search = "", filter = "all";
     private string? error, warning;
     private int messageCount;
-    private bool loading;
+    private readonly LatestRead read = new();
+    private bool loading => read.Loading;
+    private bool disposed;
+    private bool refreshPending;
 
     private IReadOnlyList<TicketEntry> Visible => (tickets ?? []).Where(t =>
         (filter switch {
@@ -90,30 +93,88 @@ else
 
     private void OnTicketChanged() => _ = InvokeAsync(async () =>
     {
+        if (disposed || !Session.Connected) return;
+        if (loading)
+        {
+            refreshPending = true;
+            return;
+        }
         await Load();
-        StateHasChanged();
+        if (!disposed) StateHasChanged();
     });
-    public void Dispose() => Session.TicketInboxChanged -= OnTicketChanged;
+
+    private void OnSessionChanged() => _ = InvokeAsync(async () =>
+    {
+        if (disposed) return;
+        read.Cancel();
+        refreshPending = false;
+        tickets = null;
+        messageCount = 0;
+        warning = error = null;
+        var task = Load();
+        StateHasChanged();
+        await task;
+        if (!disposed) StateHasChanged();
+    });
+
+    public void Dispose()
+    {
+        disposed = true;
+        refreshPending = false;
+        Session.TicketInboxChanged -= OnTicketChanged;
+        Session.Changed -= OnSessionChanged;
+        read.Dispose();
+    }
+
     protected override async Task OnInitializedAsync()
     {
         Session.TicketInboxChanged += OnTicketChanged;
-        if (Session.Connected) await Load();
+        Session.Changed += OnSessionChanged;
+        await Load();
     }
 
     private async Task Load()
     {
-        if (loading || !Session.Connected) return;
-        loading = true; error = null; warning = null;
-        try
+        if (disposed || !Session.Connected) return;
+        if (loading)
         {
-            var (status, inbox, _) = await TicketOps.InboxAsync();
-            if (status != 200 || inbox is null) { error = L["The backend did not return the ticket list (HTTP {0}).", status].Value; tickets = null; return; }
-            tickets = inbox.Tickets.ToList();
-            messageCount = inbox.Messages.Count;
-            if (inbox.Warnings.Count > 0) warning = string.Join(", ", inbox.Warnings);
+            refreshPending = true;
+            return;
         }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
-        { error = ex.Message; tickets = null; }
-        finally { loading = false; }
+        var channel = Session.TicketChannel;
+        bool Current() => !disposed && Session.Connected && Session.TicketChannel == channel;
+        do
+        {
+            refreshPending = false;
+            error = null;
+            await read.RunAsync(ct => TicketOps.InboxAsync(ct), Current,
+                result =>
+                {
+                    var (status, inbox, _) = result;
+                    if (status != 200 || inbox is null)
+                    {
+                        ClearInventory();
+                        error = L["The backend did not return the ticket list (HTTP {0}).", status].Value;
+                        return;
+                    }
+                    tickets = inbox.Tickets.ToList();
+                    messageCount = inbox.Messages.Count;
+                    warning = inbox.Warnings.Count > 0 ? string.Join(", ", inbox.Warnings) : null;
+                },
+                ex =>
+                {
+                    ClearInventory();
+                    error = ex.Message;
+                });
+            if (!Current()) return;
+            StateHasChanged();
+        } while (refreshPending && !loading);
+    }
+
+    private void ClearInventory()
+    {
+        tickets = null;
+        messageCount = 0;
+        warning = null;
     }
 }
