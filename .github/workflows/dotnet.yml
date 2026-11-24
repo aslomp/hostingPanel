@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/blazor-directadmin-api
+      - feature/kubernetes-sqlite-foundation
 jobs:
   build:
     runs-on: ubuntu-latest

@@ -13,5 +13,5 @@ public sealed class SystemInfoController(IHostingBackend backend) : BackendContr
     [HttpGet("/api/system-info/memory")]
     [HttpGet("/api/system-info/services")]
     [HttpGet("/api/system-info/uptime")]
-    public Task ForwardAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+    public Task ForwardAsync() => backend.ForwardAsync(HttpContext);
 }

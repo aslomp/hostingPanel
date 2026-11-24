@@ -106,7 +106,7 @@ public sealed class DatabaseController(IHostingBackend backend) : BackendControl
     [HttpGet("/api/db-show/users")]
     [HttpGet("/api/db-show/users/{dbuser}")]
     [HttpGet("/api/db-show/users/{dbuser}/databases")]
-    public Task ForwardDatabaseAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+    public Task ForwardDatabaseAsync() => backend.ForwardAsync(HttpContext);
 
 
 }

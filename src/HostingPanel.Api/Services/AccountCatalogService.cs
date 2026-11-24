@@ -13,6 +13,7 @@ public sealed record AccountCatalogResult(int Status, IReadOnlyList<VisibleAccou
 /// No independent user tree authorization or inferred permission inheritance.
 /// </summary>
 public sealed class AccountCatalogService(IHttpClientFactory clients)
+: IAccountCatalog
 {
     private sealed record ListResult(int Status, IReadOnlyList<string>? Names);
     private async Task<ListResult> FetchListAsync(string path, AuthenticationHeaderValue auth, CancellationToken ct)

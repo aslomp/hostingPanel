@@ -12,10 +12,11 @@ namespace HostingPanel.Api.Services;
 /// DirectAdmin remains the authority for delegated access.
 /// </summary>
 public sealed class ImpersonationService(IHttpClientFactory clients)
+: IImpersonation
 {
     public async Task<ImpersonationCheck> CheckAsync(
         AuthenticationHeaderValue authorization, string target, CancellationToken ct)
-    {
+{
         if (!LegacyAccountOverviewService.ValidUsername(target))
             return new(400, "INVALID_TARGET");
         if (!TryDecode(authorization, out var admin, out var key))

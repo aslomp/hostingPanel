@@ -14,5 +14,5 @@ public sealed class TlsController(IHostingBackend backend) : BackendController
     [HttpPut("/api/server-tls/files")]
     [HttpPost("/api/server-tls/obtain")]
     [HttpGet("/api/server-tls/status")]
-    public Task ForwardAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+    public Task ForwardAsync() => backend.ForwardAsync(HttpContext);
 }

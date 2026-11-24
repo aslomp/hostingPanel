@@ -6,13 +6,14 @@ using HostingPanel.Api.Adapters;
 namespace HostingPanel.Api.Services;
 
 public sealed class LegacyAccountOverviewService(IHttpClientFactory clients)
+: IAccountOverview
 {
     private static readonly string[] Sensitive =
         ["password", "passwd", "secret", "token", "key", "private", "credential", "hash", "salt", "session", "auth"];
 
     public async Task<AccountOverviewResult> GetAsync(string username,
         AuthenticationHeaderValue authentication, CancellationToken ct)
-    {
+{
         if (!ValidUsername(username)) return new(400, null, null, null, "INVALID_USERNAME");
         var client = clients.CreateClient("legacy-directadmin");
 

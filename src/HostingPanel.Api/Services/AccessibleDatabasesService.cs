@@ -15,10 +15,11 @@ public sealed class AccessibleDatabasesService(
     AccountCatalogService accounts,
     ImpersonationService impersonation,
     IHttpClientFactory clients)
+: IAccessibleDatabases
 {
     public async Task<AccessibleDatabaseInventory> ListAsync(
         AuthenticationHeaderValue auth, CancellationToken ct)
-    {
+{
         var listed = await accounts.ListAsync(auth, ct);
         if (listed.Accounts is null)
             return new(listed.Status, null, null, listed.Error);

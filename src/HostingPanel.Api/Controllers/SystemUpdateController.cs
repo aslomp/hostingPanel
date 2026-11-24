@@ -12,5 +12,5 @@ public sealed class SystemUpdateController(IHostingBackend backend) : BackendCon
     [HttpPost("/api/system-packages/update-run")]
     [HttpPost("/api/system-packages/update-test")]
     [HttpGet("/api/system-packages/updates")]
-    public Task ForwardAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+    public Task ForwardAsync() => backend.ForwardAsync(HttpContext);
 }

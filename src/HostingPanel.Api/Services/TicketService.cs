@@ -30,7 +30,7 @@ public sealed record TicketActionResult(int Status, string? Error);
 /// Resource-owned ticket and messaging operations. No local role hierarchy or
 /// permission decisions: all requests use the caller's effective DirectAdmin identity.
 /// </summary>
-public sealed class TicketService(IHttpClientFactory clients)
+public sealed class TicketService(IHttpClientFactory clients) : ITickets
 {
     public async Task<(int Status, TicketInbox? Inbox, string? Error)> GetInboxAsync(
         AuthenticationHeaderValue auth, CancellationToken ct)

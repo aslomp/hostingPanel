@@ -35,7 +35,7 @@ public sealed class DomainController(IHostingBackend backend) : BackendControlle
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var owner = context.Request.Query["user"].ToString();
             var selected = string.IsNullOrWhiteSpace(owner) ? null : owner;
-            if (!DomainManagementService.ValidOwner(selected))
+            if (!HostingInputValidation.ValidOwner(selected))
                 return Results.Json(new { type = "BAD_REQUEST" }, statusCode: 400);
         
             var response = await service.ListAsync(selected, auth, context.RequestAborted);
@@ -50,16 +50,7 @@ public sealed class DomainController(IHostingBackend backend) : BackendControlle
         var context = HttpContext;
         if (!TryGetBasic(context, out _))
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
-            if (!LegacyDomainsAdapter.IsValidDomain(input.Domain))
-                return Results.Json(new { type = "INVALID_DOMAIN" }, statusCode: 400);
-            return Results.Json(new {
-                domain = input.Domain.ToLowerInvariant(),
-                dryRun = true,
-                legacyEndpoint = "CMD_API_DOMAIN",
-                method = "POST",
-                form = LegacyDomainsAdapter.EncodeCreateForm(input.Domain.ToLowerInvariant(), input.Php, input.Ssl, input.Cgi),
-                executed = false
-            });
+            return backend.PreviewDomain(input);
     }
 
     [HttpPost("/hosting/domains/execute")]
@@ -71,7 +62,7 @@ public sealed class DomainController(IHostingBackend backend) : BackendControlle
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var result = await service.MutateAsync(input, auth, context.RequestAborted);
             return result.Error is null
-                ? Results.Json(new { domain = input.Domain.ToLowerInvariant(), action = input.Action, executed = true })
+                ? Results.Json(new { domain = input.Domain.ToLowerInvariant(), action = input.Action, executed = result.Status == 200, provisioningPending = result.Status == 202 }, statusCode: result.Status)
                 : Results.Json(new { type = result.Error }, statusCode: result.Status);
     }
 
@@ -98,7 +89,7 @@ public sealed class DomainController(IHostingBackend backend) : BackendControlle
             var result = await service.UpdateSettingAsync(domain, input.Setting, input.Value,
                 auth, context.RequestAborted);
             return result.Error is null
-                ? Results.Json(new { domain, setting = input.Setting, updated = true })
+                ? Results.Json(new { domain, setting = input.Setting, updated = true }, statusCode: result.Status)
                 : Results.Json(new { type = result.Error }, statusCode: result.Status);
     }
 
@@ -115,7 +106,7 @@ public sealed class DomainController(IHostingBackend backend) : BackendControlle
     [HttpPost("/api/domain-tls/domains/{domain}/certs/{id}/install-self-signed")]
     [HttpPost("/api/domain-tls/domains/{domain}/provision-certs")]
     [HttpPost("/api/domain-tls/domains/{domain}/provision-certs-dry-run")]
-    public Task ForwardDomainAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+    public Task ForwardDomainAsync() => backend.ForwardAsync(HttpContext);
 
 
 }

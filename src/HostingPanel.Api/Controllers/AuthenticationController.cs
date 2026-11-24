@@ -10,5 +10,5 @@ public sealed class AuthenticationController(IHostingBackend backend) : BackendC
     [HttpPost("/api/login")]
     [HttpPost("/api/login/url")]
     [HttpPost("/api/logout")]
-    public Task ForwardAsync() => ForwardToBackendAsync(HttpContext, backend.Clients);
+    public Task ForwardAsync() => backend.ForwardAsync(HttpContext);
 }

@@ -17,13 +17,14 @@ public sealed record AccountOperationResult(int Status, string? Error);
 /// scope, resource permissions and command validation.
 /// </summary>
 public sealed class AccountMutationService(IHttpClientFactory clients)
+: IAccountMutations
 {
     private static bool ValidUsername(string? value) =>
         !string.IsNullOrWhiteSpace(value) && value.Length <= 64 &&
         value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
 
     public static IReadOnlyDictionary<string, string> CreateForm(CreateHostingAccount input)
-    {
+{
         if (input.Kind is not ("user" or "reseller") ||
             !ValidUsername(input.Username) ||
             !LegacyDomainsAdapter.IsValidDomain(input.Domain) ||
