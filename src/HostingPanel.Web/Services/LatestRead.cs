@@ -22,7 +22,7 @@ public sealed class LatestRead : IDisposable
             if (Current()) accept(result);
         }
         catch (OperationCanceledException) when (request.IsCancellationRequested) { }
-        catch (Exception error) when (error is HttpRequestException or ArgumentException or InvalidOperationException or FormatException or OperationCanceledException)
+        catch (Exception error) when (error is HttpRequestException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or FormatException or OperationCanceledException)
         {
             if (Current()) fail(error);
         }

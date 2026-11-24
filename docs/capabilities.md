@@ -31,3 +31,5 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 - No claim that every Swagger operation has a dedicated UI or Kubernetes implementation.
 - Plans are tracked under [plans](plans/README.md); open PRs are not included in current main capabilities.
 - Contract tests, fake upstream integration and browser smoke coverage are in tests/ and CI. Live production verification is separate.
+
+- The account inventory and migrated detail pages use cancellable component-owned reads; this is a UI lifecycle improvement, not an expansion of backend capabilities.
