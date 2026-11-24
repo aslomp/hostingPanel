@@ -48,7 +48,9 @@ public sealed record TicketSignal(string Kind, long Id, string Subject, DateTime
 /// push endpoint, so bounded server-side polling is the source of detection.
 /// </summary>
 public sealed class TicketLiveMonitor(
-    DirectAdminSession session,
+    PanelSession session,
+    TicketOperations tickets,
+    TicketChannelRegistry channels,
     IHubContext<TicketHub> hub,
     ILogger<TicketLiveMonitor> logger) : IAsyncDisposable
 {
@@ -91,28 +93,19 @@ public sealed class TicketLiveMonitor(
     {
         try
         {
-            var (status, body) = await session.GetRawAsync("hosting/tickets/inbox", ct);
-            if (status != 200) return baselineReady; // Backend retains scope and denial semantics.
-            using var json = JsonDocument.Parse(body);
-            var root = json.RootElement;
+            var (status, inbox, _) = await tickets.InboxAsync(ct);
+            if (status != 200 || inbox is null || !session.Connected ||
+                session.TicketChannel != channel || !channels.IsActive(channel)) return baselineReady;
             var observed = new Dictionary<string, (string Signature, string Kind, long Id, string Subject)>();
-            foreach (var ticket in root.GetProperty("tickets").EnumerateArray())
+            foreach (var ticket in inbox.Tickets)
             {
-                var id = ticket.GetProperty("id").GetInt64();
-                var source = ticket.GetProperty("source").GetString() ?? "request";
-                var replies = ticket.GetProperty("replies");
-                var signature = replies.GetArrayLength().ToString() + ":" +
-                    (replies.GetArrayLength() == 0 ? "" :
-                    replies[replies.GetArrayLength() - 1].GetProperty("timestamp").GetString());
-                observed[source + ":" + id] = (signature, "ticket", id,
-                    ticket.GetProperty("subject").GetString() ?? "Ticket");
+                var replies = ticket.Replies;
+                var signature = replies.Length.ToString() + ":" +
+                    (replies.Length == 0 ? "" : ReplyTimestamp(replies[^1]));
+                observed[ticket.Source + ":" + ticket.Id] = (signature, "ticket", ticket.Id, ticket.Subject);
             }
-            foreach (var message in root.GetProperty("messages").EnumerateArray())
-            {
-                var id = message.GetProperty("id").GetInt64();
-                observed["message:" + id] = ("present", "message", id,
-                    message.GetProperty("subject").GetString() ?? "Nieuw bericht");
-            }
+            foreach (var message in inbox.Messages)
+                observed["message:" + message.Id] = ("present", "message", message.Id, message.Subject);
 
             // Initial snapshot must not announce historical messages as new.
             if (baselineReady)
@@ -120,6 +113,8 @@ public sealed class TicketLiveMonitor(
                 foreach (var (key, value) in observed)
                     if (!known.TryGetValue(key, out var before) || before != value.Signature)
                     {
+                        if (!session.Connected || session.TicketChannel != channel || !channels.IsActive(channel))
+                            return baselineReady;
                         await hub.Clients.Group(channel).SendAsync("InboxChanged",
                             new TicketSignal(value.Kind, value.Id, value.Subject,
                                 DateTimeOffset.UtcNow), ct);
@@ -136,6 +131,10 @@ public sealed class TicketLiveMonitor(
         }
         return baselineReady;
     }
+
+    private static string ReplyTimestamp(JsonElement reply) =>
+        reply.ValueKind == JsonValueKind.Object && reply.TryGetProperty("timestamp", out var value)
+            ? value.ToString() : "";
 
     public async ValueTask DisposeAsync()
     {

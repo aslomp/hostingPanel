@@ -1,10 +1,9 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/users/{Username}"
-@using System.Text.Json
 @inject PanelSession Session
 @inject AccountOperations Accounts
-@inject DirectAdminSession LegacySession
+@inject ImpersonationOperations Impersonation
 @inject NavigationManager Navigation
 
 <PageTitle>@Username — Accountbeheer</PageTitle>
@@ -155,7 +154,7 @@ else if (settings is not null)
             usageError = result.UsageError;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException
-            or ArgumentException or FormatException or JsonException)
+            or ArgumentException or FormatException)
         {
             error = ex.Message;
         }
@@ -169,11 +168,11 @@ else if (settings is not null)
         impersonationError = null;
         try
         {
-            await LegacySession.StartImpersonationAsync(Username);
+            await Impersonation.StartAsync(Username);
             Navigation.NavigateTo("/domains");
         }
         catch (Exception error) when (error is UnauthorizedAccessException or InvalidOperationException
-            or ArgumentException or HttpRequestException or JsonException)
+            or ArgumentException or HttpRequestException)
         {
             impersonationError = error.Message;
         }
