@@ -14,7 +14,7 @@
         <h1>@L["Domain management"]</h1>
         <p>@L["Manage domains and website configuration through the selected hosting backend."]</p>
     </div>
-    <button @onclick="Refresh" disabled="@loading">@(loading ? "Laden…" : L["Refresh"].Value)</button>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Refresh" Disabled="@loading">@(loading ? "Laden…" : L["Refresh"].Value)</MudButton>
 </div>
 
 @if (!Session.Connected)
@@ -28,7 +28,7 @@ else
         <p>@L["Leave blank to list all accessible domains, or enter an account to filter."]</p>
         <label for="owner">@L["Username (optional)"]</label>
         <input id="owner" @bind="owner" placeholder="@L["For example, an existing user"]" />
-        <button class="primary" @onclick="Refresh" disabled="@loading">@L["Retrieve"]</button>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Refresh" Disabled="@loading">@L["Retrieve"]</MudButton>
         @if (error is not null) { <p class="error" role="alert">@error</p> }
         @if (warning is not null) { <p role="status">Niet alle accountgegevens zijn beschikbaar: @warning</p> }
         else if (loading) { <p role="status">@L["Retrieving domains…"]</p> }
@@ -37,7 +37,7 @@ else
             <p>@domains.Count domein(en) gevonden.</p>
             <label for="domainFilter">@L["Filter domains"]</label>
             <input id="domainFilter" @bind="filter" @bind:event="oninput" placeholder="@L["Search domain name"]" />
-            <table>
+            <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true">
                 <thead><tr><th>@L["Domain"]</th><th>Account</th><th>@L["Provisioning"]</th><th>@L["Actions"]</th></tr></thead>
                 <tbody>
                 @foreach (var domain in domains.Where(d => d.Contains(filter, StringComparison.OrdinalIgnoreCase)))
@@ -45,7 +45,7 @@ else
                     <tr><td><a href="@($"/domains/{Uri.EscapeDataString(domain)}")">@domain</a> — <a href="@($"/domains/{Uri.EscapeDataString(domain)}/dns")">DNS</a></td><td>@(ownership.TryGetValue(domain, out var domainOwner) ? domainOwner : (string.IsNullOrWhiteSpace(owner) ? "—" : owner))</td><td>@L[provisioning.GetValueOrDefault(domain) ?? "Unknown"]</td><td><button @onclick="() => SelectDelete(domain)" disabled="@mutationBusy">@L["Delete"]</button></td></tr>
                 }
                 </tbody>
-            </table>
+            </MudSimpleTable>
             @if (domains.Count == 0) { <p>@L["No domains found for this account."]</p> }
         }
     </div>
@@ -60,7 +60,7 @@ else
             <label><input type="checkbox" @bind="ssl" /> SSL</label>
             <label><input type="checkbox" @bind="cgi" /> CGI</label>
         </div>
-        <button class="primary" disabled="@(mutationBusy || string.IsNullOrWhiteSpace(testDomain))" @onclick="CreateDomain">@L["Add domain"]</button>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(mutationBusy || string.IsNullOrWhiteSpace(testDomain))" OnClick="CreateDomain">@L["Add domain"]</MudButton>
         @if (mutationStatus is not null)
         {
             <p role="status">@mutationStatus</p>
@@ -73,8 +73,8 @@ else
             <p class="error" role="alert"><strong>@L["Permanently delete this domain? This cannot be undone."]</strong> @L["All domain website files, DNS records, routes and certificates will be removed."]</p>
             <label for="confirmDomain">@L["Enter the exact domain name to confirm."]</label>
             <input id="confirmDomain" @bind="confirmation" autocomplete="off" />
-            <button disabled="@(mutationBusy || confirmation != deleteDomain)" @onclick="DeleteDomain">@L["Permanently delete"]</button>
-            <button disabled="@mutationBusy" @onclick="CancelDelete">@L["Cancel"]</button>
+            <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@(mutationBusy || confirmation != deleteDomain)" OnClick="DeleteDomain">@L["Permanently delete"]</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@mutationBusy" OnClick="CancelDelete">@L["Cancel"]</MudButton>
         </section>
     }
 }

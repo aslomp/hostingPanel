@@ -12,7 +12,7 @@
   </div>
   <div class="form-actions">
     <a class="btn" href="#database-create">@L["＋ Create database"]</a>
-    <button disabled="@(loading || overallLoading)" @onclick="RefreshAll">@L["↻ Refresh"]</button>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@(loading || overallLoading)" OnClick="RefreshAll">@L["↻ Refresh"]</MudButton>
   </div>
 </div>
 @if (!Session.Connected)
@@ -26,7 +26,7 @@ else
       @if (overall is not null) { <span class="status-pill @(overallWarnings.Count == 0 ? "good" : "warning")">@overall.Count gevonden</span> }
     </div>
     <p>@L["Includes databases of subordinate accounts where DirectAdmin permits access."]</p>
-    <button disabled="@overallLoading" @onclick="LoadOverall">@L["Refresh overview"]</button>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@overallLoading" OnClick="LoadOverall">@L["Refresh overview"]</MudButton>
     @if (overallLoading) { <p role="status">@L["Retrieving databases from accessible accounts…"]</p> }
     @if (overallError is not null) { <p class="error" role="alert">@overallError</p> }
     @if (overall is not null)
@@ -34,7 +34,7 @@ else
       <p>@overall.Count databases gevonden. @(overallWarnings.Count == 0 ? L["Complete inventory."].Value : L["Incomplete: {0} accounts could not be read.", overallWarnings.Count].Value)</p>
       <label for="overallDbFilter">@L["Search databases"]</label>
       <input id="overallDbFilter" type="search" @bind="overallSearch" @bind:event="oninput" placeholder="@L["Search database or owner…"]" />
-      <table><thead><tr><th>@L["Owner"]</th><th>Database</th><th>@L["Tables"]</th><th>@L["Users"]</th><th>@L["Size (bytes)"]</th><th>Definer issues</th></tr></thead><tbody>
+      <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>@L["Owner"]</th><th>Database</th><th>@L["Tables"]</th><th>@L["Users"]</th><th>@L["Size (bytes)"]</th><th>Definer issues</th></tr></thead><tbody>
         @foreach (var item in overall.Where(x => x.Owner.Contains(overallSearch, StringComparison.OrdinalIgnoreCase) || x.Name.Contains(overallSearch, StringComparison.OrdinalIgnoreCase)))
         {
           <tr>
@@ -44,7 +44,7 @@ else
             <td>@FormatBytes(item.SizeBytes)</td><td><span class="status-pill @(item.DefinerIssues == 0 ? "good" : "warning")">@item.DefinerIssues</span></td>
           </tr>
         }
-      </tbody></table>
+      </tbody></MudSimpleTable>
       @if (overall.Count == 0) { <p>@L["The backend returned no databases for accessible accounts."]</p> }
       @foreach (var warning in overallWarnings)
       {
@@ -62,13 +62,13 @@ else
     {
       <label for="dbFilter">Zoek database (@databases.Count)</label>
       <input id="dbFilter" @bind="search" @bind:event="oninput" placeholder="@L["Database name"]" />
-      <table><thead><tr><th>Database</th><th>@L["Actions"]</th></tr></thead><tbody>
+      <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>Database</th><th>@L["Actions"]</th></tr></thead><tbody>
         @foreach(var database in databases.Where(x => x.Contains(search,StringComparison.OrdinalIgnoreCase)))
         {
           <tr><td><a href="@($"/databases/{Uri.EscapeDataString(database)}")">@database</a></td>
             <td><a href="@($"/databases/{Uri.EscapeDataString(database)}")">@L["View users / delete"]</a></td></tr>
         }
-      </tbody></table>
+      </tbody></MudSimpleTable>
       @if(databases.Count==0) { <p>@L["No databases found."]</p> }
     }
   </section>
@@ -83,9 +83,9 @@ else
       <div><label for="dbPassword">@L["Password"]</label>
         <input id="dbPassword" type="password" @bind="newPassword" autocomplete="new-password" /></div>
     </div>
-    <div class="form-actions"><button class="primary" disabled="@creating" @onclick="Create">
+    <div class="form-actions"><MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@creating" OnClick="Create">
       @(creating ? "Aanmaken…" : L["Create database"].Value)
-    </button>
+    </MudButton>
     </div>
     @if (createMessage is not null) { <p role="status">@createMessage</p> }
   </section>

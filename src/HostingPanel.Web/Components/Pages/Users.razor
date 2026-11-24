@@ -9,7 +9,7 @@
     <div><div class="eyebrow">@L["Account management"]</div><h1>@L["User management"]</h1>
         <p>@L["All accounts exposed by DirectAdmin to the current session, including resellers and their users."]</p></div>
     <div class="form-actions"><a class="btn" href="#account-create">@L["＋ Add user"]</a>
-    <button @onclick="Load" disabled="@loading">@(loading ? "Laden…" : L["↻ Refresh"].Value)</button></div>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load" Disabled="@loading">@(loading ? "Laden…" : L["↻ Refresh"].Value)</MudButton></div>
 </div>
 @if (!Session.Connected)
 {
@@ -17,7 +17,7 @@
 }
 else if (error is not null)
 {
-    <div class="card error" role="alert">@error <button @onclick="Load">@L["Try again"]</button></div>
+    <div class="card error" role="alert">@error <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Load">@L["Try again"]</MudButton></div>
 }
 else if (loading)
 {
@@ -29,7 +29,7 @@ else if (accounts is not null)
         <div class="dashboard-section-heading"><h2>@L["All accessible accounts"]</h2><span class="status-pill good">@accounts.Count accounts</span></div>
         <label for="userFilter">@L["Search users"]</label>
         <input id="userFilter" type="search" @bind="search" @bind:event="oninput" placeholder="@L["Search username or owner…"]" />
-        <table><thead><tr><th>Account</th><th>@L["Role"]</th><th>@L["Created by"]</th><th>@L["Domains"]</th></tr></thead>
+        <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>Account</th><th>@L["Role"]</th><th>@L["Created by"]</th><th>@L["Domains"]</th></tr></thead>
         <tbody>
         @foreach (var item in Visible)
         {
@@ -40,7 +40,7 @@ else if (accounts is not null)
                 <td><a href="@($"/domains?user={Uri.EscapeDataString(item.Account.Username)}")">@L["View domains"]</a></td>
             </tr>
         }
-        </tbody></table>
+        </tbody></MudSimpleTable>
         @if (accounts.Count == 0) { <p>@L["No accounts returned by DirectAdmin."]</p> }
     </div>
     <div id="account-create"><AccountActions Kind="user" /></div>

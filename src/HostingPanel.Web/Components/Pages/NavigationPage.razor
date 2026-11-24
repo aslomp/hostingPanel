@@ -21,7 +21,7 @@ else
         <h1>@Title</h1>
         <p>@Description</p>
     </div>
-    <button disabled="@busy" @onclick="Load">@L["Refresh"]</button>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@busy" OnClick="Load">@L["Refresh"]</MudButton>
 </div>
 
 @if (!Session.Connected)
@@ -61,7 +61,7 @@ else
                 <label for="file-path">Directory</label>
                 <input id="file-path" @bind="directory" placeholder="." />
             }
-            <button class="primary" disabled="@busy" @onclick="Load">@L["Retrieve"]</button>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@busy" OnClick="Load">@L["Retrieve"]</MudButton>
             @if (!string.IsNullOrEmpty(statusText))
             {
                 <p role="status">@statusText</p>

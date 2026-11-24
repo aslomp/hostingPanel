@@ -13,7 +13,7 @@
         <h1>@Domain</h1>
         <p>@L["Domain configuration and settings."] <a href="@($"/domains/{Uri.EscapeDataString(Domain)}/dns")">@L["Manage DNS records"]</a></p>
     </div>
-    <button @onclick="Refresh" disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</button>
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Refresh" Disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton>
 </div>
 
 @if (!Session.Connected)
@@ -37,7 +37,7 @@ else
     <div class="tiles">
         <section class="card">
             <h2>@L["General"]</h2>
-            <table><tbody>
+            <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><tbody>
                 @foreach (var item in new (string Label, string Key)[] {
                     ("Domein", "domain"), ("Gebruiker", "username"), ("IP-adres", "ip"),
                     ("Standaarddomein", "defaultdomain"), ("Opgeschort", "suspended"),
@@ -49,26 +49,26 @@ else
                         <tr><th>@L[item.Label]</th><td>@(item.Key == "provisioning" ? L[value].Value : value)</td></tr>
                     }
                 }
-            </tbody></table>
+            </tbody></MudSimpleTable>
         </section>
         <section class="card">
             <h2>@L["Change domain settings"]</h2>
             <p>@L["Each setting is saved separately."]</p>
             <label for="domainPhp">PHP</label>
             <select id="domainPhp" @bind="php"><option value="ON">@L["Enabled"]</option><option value="OFF">@L["Disabled"]</option></select>
-            <button disabled="@saving" @onclick="SavePhp">@L["Save PHP"]</button>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SavePhp">@L["Save PHP"]</MudButton>
             <label for="domainSsl">SSL / HTTPS</label>
             <select id="domainSsl" @bind="ssl"><option value="ON">@L["Enabled"]</option><option value="OFF">@L["Disabled"]</option></select>
-            <button disabled="@saving" @onclick="SaveSsl">@L["Save SSL"]</button>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SaveSsl">@L["Save SSL"]</MudButton>
             <label for="domainCgi">CGI</label>
             <select id="domainCgi" @bind="cgi"><option value="ON">@L["Enabled"]</option><option value="OFF">@L["Disabled"]</option></select>
-            <button disabled="@saving" @onclick="SaveCgi">@L["Save CGI"]</button>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SaveCgi">@L["Save CGI"]</MudButton>
             <label for="domainBandwidth">@L["Bandwidth (MiB or unlimited)"]</label>
             <input id="domainBandwidth" @bind="bandwidth" />
-            <button disabled="@saving" @onclick="SaveBandwidth">@L["Save bandwidth"]</button>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SaveBandwidth">@L["Save bandwidth"]</MudButton>
             <label for="domainQuota">@L["Disk space (MiB or unlimited)"]</label>
             <input id="domainQuota" @bind="quota" />
-            <button disabled="@saving" @onclick="SaveQuota">@L["Save quota"]</button>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SaveQuota">@L["Save quota"]</MudButton>
             @if (saving) { <p role="status">@L["Saving change…"]</p> }
             @if (saveMessage is not null) { <p role="status">@saveMessage</p> }
         </section>
@@ -77,12 +77,12 @@ else
     <section class="card">
         <h2>@L["Additional domain settings"]</h2>
         <p>@L["Additional settings reported by the backend."]</p>
-        <table><thead><tr><th>@L["Setting"]</th><th>@L["Value"]</th></tr></thead><tbody>
+        <MudSimpleTable Dense="true" Hover="true" Bordered="false" Striped="true"><thead><tr><th>@L["Setting"]</th><th>@L["Value"]</th></tr></thead><tbody>
             @foreach (var item in (fields ?? new Dictionary<string,string>()).OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
             {
                 <tr><th>@item.Key</th><td>@item.Value</td></tr>
             }
-        </tbody></table>
+        </tbody></MudSimpleTable>
     </section>
 }
 @code {
