@@ -42,11 +42,11 @@ else
                     ("Domein", "domain"), ("Gebruiker", "username"), ("IP-adres", "ip"),
                     ("Standaarddomein", "defaultdomain"), ("Opgeschort", "suspended"),
                     ("Subdomeinen", "subdomain"), ("Documentroot", "private_html"),
-                    ("PHP-versie", "php1_ver"), ("PHP-handler", "php1_info"), ("Provisioning", "provisioning") })
+                    ("PHP-versie", "php1_ver"), ("PHP-handler", "php1_info"), ("Provisioning", "provisioning"), ("Apache", "apache_readiness"), ("PHP-FPM", "php_readiness"), ("HTTPRoute", "route_readiness") })
                 {
                     @if (fields is not null && fields.TryGetValue(item.Key, out var value))
                     {
-                        <tr><th>@L[item.Label]</th><td>@(item.Key == "provisioning" ? L[value].Value : value)</td></tr>
+                        <tr><th>@L[item.Label]</th><td>@(item.Key == "provisioning" || item.Key.EndsWith("_readiness", StringComparison.Ordinal) ? L[value].Value : value)</td></tr>
                     }
                 }
             </tbody></table>
@@ -110,14 +110,20 @@ else
         var domain = Domain;
         try
         {
-            var state = await Session.GetProvisioningStatusAsync(domain);
-            if (!disposed && domain == Domain && fields is not null && state is not null)
+            var (status, body) = await Session.GetDomainDetailsAsync(domain);
+            if (!disposed && domain == Domain && fields is not null && status == 200)
             {
-                fields["provisioning"] = state;
+                using var doc = JsonDocument.Parse(body);
+                var settings = doc.RootElement.GetProperty("settings");
+                foreach (var key in new[] { "provisioning", "apache_readiness", "php_readiness", "route_readiness" })
+                {
+                    if (settings.TryGetProperty(key, out var value)) fields[key] = value.ToString();
+                    else fields.Remove(key);
+                }
                 StateHasChanged();
             }
         }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or OperationCanceledException) { }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or OperationCanceledException or JsonException) { }
     }
 
     private async Task Refresh()
