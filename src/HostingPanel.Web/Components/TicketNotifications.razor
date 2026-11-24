@@ -1,3 +1,5 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @using HostingPanel.Web.Realtime
 @using Microsoft.AspNetCore.SignalR.Client
 @inject DirectAdminSession Session
@@ -8,7 +10,7 @@
 <div class="ticket-notifications" aria-live="polite">
     @if (Session.Connected)
     {
-        <a href="/tickets" class="notification-link" title="Tickets en berichten">
+        <a href="/tickets" class="notification-link" title="@L["Tickets and messages"]">
             <span class="notification-icon" aria-hidden="true">✉</span>
             @if (newCount > 0) { <span class="notification-count">@newCount</span> }
             <span>Tickets</span>
@@ -19,7 +21,7 @@
                 <strong>Nieuw @(lastNotice.Kind == "message" ? "bericht" : "ticketantwoord")</strong>
                 <span>@lastNotice.Subject</span>
                 <a href="/tickets" @onclick="Clear">Open tickets</a>
-                <button type="button" aria-label="Melding sluiten" @onclick="Clear">×</button>
+                <button type="button" aria-label="@L["Dismiss notification"]" @onclick="Clear">×</button>
             </div>
         }
     }

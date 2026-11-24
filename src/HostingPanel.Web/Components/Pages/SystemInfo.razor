@@ -1,12 +1,14 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/system-info"
 @using System.Text.Json
 @inject DirectAdminSession Session
-<PageTitle>Systeeminformatie — HostingPanel</PageTitle>
-<div class="page-header"><div><div class="eyebrow">Serverbeheer</div><h1>Systeeminformatie</h1><p>Live informatie van de aangesloten backend.</p></div><button disabled="@busy" @onclick="Refresh">Vernieuwen</button></div>
+<PageTitle>@L["System information — HostingPanel"]</PageTitle>
+<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>@L["System information"]</h1><p>@L["Live information from the connected backend."]</p></div><button disabled="@busy" @onclick="Refresh">@L["Refresh"]</button></div>
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {
-    @if (busy) { <p role="status">Systeeminformatie ophalen…</p> }
+    @if (busy) { <p role="status">@L["Retrieving system information…"]</p> }
     <div class="tiles">
         @foreach (var item in checks)
         {
@@ -20,7 +22,7 @@ else
 @code {
     private sealed record Check(string Label, string Endpoint, int Status, string Body);
     private readonly (string Label, string Endpoint)[] sources = [
-        ("Algemene informatie", "api/info"),
+        (L["General information"].Value, "api/info"),
         ("Processor", "api/system-info/cpu"),
         ("Geheugen", "api/system-info/memory"),
         ("Belasting", "api/system-info/load"),

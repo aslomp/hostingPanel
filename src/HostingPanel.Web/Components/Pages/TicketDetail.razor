@@ -1,13 +1,15 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/tickets/{Id:long}"
 @using System.Text.Json
 @inject DirectAdminSession Session
 @implements IDisposable
 @inject NavigationManager Navigation
 <PageTitle>Ticket #@Id — HostingPanel</PageTitle>
-<div class="page-header"><div><div class="eyebrow"><a href="/tickets">Ticketbeheer</a> / Ticket #@Id</div>
+<div class="page-header"><div><div class="eyebrow"><a href="/tickets">@L["Ticket management"]</a> / Ticket #@Id</div>
     <h1>@(ticket is null ? $"Ticket #{Id}" : Text(ticket.Value, "subject"))</h1>
-    <p>Berichten en antwoorden uit DirectAdmin.</p></div>
-    <button disabled="@loading" @onclick="Load">↻ Vernieuwen</button></div>
+    <p>@L["Messages and replies from DirectAdmin."]</p></div>
+    <button disabled="@loading" @onclick="Load">@L["↻ Refresh"]</button></div>
 @if (!Session.Connected)
 {
     <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section>
@@ -15,16 +17,16 @@
 else
 {
     @if (error is not null) { <section class="card"><p class="error" role="alert">@error</p></section> }
-    @if (loading) { <p role="status">Ticket ophalen…</p> }
+    @if (loading) { <p role="status">@L["Retrieving ticket…"]</p> }
     @if (ticket is not null)
     {
         <section class="card">
-            <div class="dashboard-section-heading"><h2>Ticketgegevens</h2>
-                <span class="status-pill @(IsOpen ? "good" : "muted")">@(IsOpen ? "Open" : "Gesloten")</span></div>
+            <div class="dashboard-section-heading"><h2>@L["Ticket details"]</h2>
+                <span class="status-pill @(IsOpen ? "good" : "muted")">@(IsOpen ? "Open" : L["Closed"].Value)</span></div>
             <div class="form-grid">
-                <div><label>Afzender</label><p>@Text(ticket.Value, "fromName") (@Text(ticket.Value, "from"))</p></div>
-                <div><label>Datum</label><p>@Text(ticket.Value, "timestamp")</p></div>
-                <div><label>Ticketnummer</label><p>@Text(ticket.Value, "legacyId")</p></div>
+                <div><label>@L["Sender"]</label><p>@Text(ticket.Value, "fromName") (@Text(ticket.Value, "from"))</p></div>
+                <div><label>@L["Date"]</label><p>@Text(ticket.Value, "timestamp")</p></div>
+                <div><label>@L["Ticket number"]</label><p>@Text(ticket.Value, "legacyId")</p></div>
             </div>
             <hr class="section-divider" />
             <p class="ticket-message">@Text(ticket.Value, "message")</p>
@@ -44,18 +46,18 @@ else
             </section>
         }
         <section class="card">
-            <h2>Antwoorden</h2>
-            <p>Een antwoord wordt via DirectAdmin opgeslagen. Alleen een backendbevestiging geldt als succes.</p>
-            <label for="ticketReply">Bericht</label>
+            <h2>@L["Replies"]</h2>
+            <p>@L["Replies are saved through DirectAdmin. Only backend confirmation is considered successful."]</p>
+            <label for="ticketReply">@L["Message"]</label>
             <textarea id="ticketReply" rows="8" @bind="replyMessage" maxlength="65536"></textarea>
-            <label for="ticketTo">Ontvanger</label>
+            <label for="ticketTo">@L["Recipient"]</label>
             <input id="ticketTo" @bind="recipient" />
             <div class="form-actions">
                 <button class="primary" disabled="@(sending || string.IsNullOrWhiteSpace(replyMessage) || string.IsNullOrWhiteSpace(recipient))"
-                    @onclick="SendReply">Antwoord verzenden</button>
+                    @onclick="SendReply">@L["Send reply"]</button>
                 @if (Source == "received")
                 {
-                    <button disabled="@sending" @onclick="ToggleStatus">@(IsOpen ? "Ticket sluiten" : "Ticket heropenen")</button>
+                    <button disabled="@sending" @onclick="ToggleStatus">@(IsOpen ? L["Close ticket"].Value : L["Reopen ticket"].Value)</button>
                 }
             </div>
             @if (feedback is not null) { <p role="status">@feedback</p> }
@@ -89,7 +91,7 @@ else
         {
             var (status, body) = await Session.GetRawAsync(
                 $"hosting/tickets/{Id}?source={Uri.EscapeDataString(Source)}");
-            if (status != 200) { error = $"Ticket niet beschikbaar (HTTP {status})."; ticket = null; return; }
+            if (status != 200) { error = L["Ticket unavailable (HTTP {0}).", status].Value; ticket = null; return; }
             using var json = JsonDocument.Parse(body);
             ticket = json.RootElement.Clone();
             recipient = Source == "received" ? Text(ticket.Value, "from") : "creator";
@@ -111,7 +113,7 @@ else
             var (status, body) = await Session.RequestApiAsync(HttpMethod.Post,
                 $"hosting/tickets/{Uri.EscapeDataString(legacyId)}/replies", data);
             if (status == 200) { replyMessage = ""; await Load(); }
-            else feedback = $"DirectAdmin heeft het antwoord niet bevestigd (HTTP {status}): {body}";
+            else feedback = L["DirectAdmin did not confirm the reply (HTTP {0}): {1}", status, body].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException)
         { feedback = ex.Message; }
@@ -127,7 +129,7 @@ else
             var (status, body) = await Session.RequestApiAsync(HttpMethod.Put,
                 "hosting/tickets/" + Uri.EscapeDataString(Text(ticket.Value, "legacyId")) + "/status", payload);
             if (status == 200) await Load();
-            else feedback = $"Statuswijziging niet bevestigd (HTTP {status}): {body}";
+            else feedback = L["Status change not confirmed (HTTP {0}): {1}", status, body].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         { feedback = ex.Message; }

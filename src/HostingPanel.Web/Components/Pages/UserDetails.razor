@@ -1,3 +1,5 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/users/{Username}"
 @using System.Text.Json
 @inject DirectAdminSession Session
@@ -6,17 +8,17 @@
 <PageTitle>@Username — Accountbeheer</PageTitle>
 <div class="page-header">
     <div>
-        <div class="eyebrow"><a href="/users">Accountbeheer</a> / Gebruikersdetails</div>
+        <div class="eyebrow"><a href="/users">@L["Account management"]</a> / Gebruikersdetails</div>
         <h1>@Username</h1>
-        <p>Accountinstellingen, toegewezen hostingpakket en pakketlimieten zoals beschikbaar in DirectAdmin.</p>
+        <p>@L["Account settings, assigned hosting package and package limits available in DirectAdmin."]</p>
     </div>
     <div>
-        <button @onclick="Load" disabled="@loading">@(loading ? "Laden…" : "Vernieuwen")</button>
+        <button @onclick="Load" disabled="@loading">@(loading ? "Laden…" : L["Refresh"].Value)</button>
         @if (Session.Connected && !Session.IsImpersonating &&
             !Username.Equals(Session.OriginalUsername, StringComparison.OrdinalIgnoreCase))
         {
             <button class="primary" @onclick="Impersonate" disabled="@switching">
-                @(switching ? "Bevoegdheid controleren…" : "Inloggen als deze gebruiker")
+                @(switching ? L["Checking permission…"].Value : L["Sign in as this user"].Value)
             </button>
         }
     </div>
@@ -31,7 +33,7 @@
 }
 else if (loading)
 {
-    <div class="card" role="status">Account en pakketgegevens ophalen…</div>
+    <div class="card" role="status">@L["Retrieving account and package information…"]</div>
 }
 else if (error is not null)
 {
@@ -42,7 +44,7 @@ else if (settings is not null)
     <div class="tiles">
         <section class="card">
             <h2>Account</h2>
-            <p>Live accountgegevens van de legacy DirectAdmin-server.</p>
+            <p>@L["Live account information from the legacy DirectAdmin server."]</p>
             <table><tbody>
                 @foreach (var entry in new (string Label,string Key)[] {
                     ("Gebruikersnaam","username"), ("Naam","name"), ("E-mailadres","email"),
@@ -56,17 +58,17 @@ else if (settings is not null)
                     }
                 }
             </tbody></table>
-            <p><a href="@($"/domains?user={Uri.EscapeDataString(Username)}")">Domeinen van deze gebruiker bekijken</a></p>
+            <p><a href="@($"/domains?user={Uri.EscapeDataString(Username)}")">@L["View this user's domains"]</a></p>
         </section>
         <section class="card">
-            <h2>Hostingpakket</h2>
+            <h2>@L["Hosting package"]</h2>
             @if (package is not null)
             {
                 <p>Toegewezen pakket: <strong>@package</strong></p>
             }
             else
             {
-                <p>Geen pakketnaam gevonden in de accountconfiguratie.</p>
+                <p>@L["No package name found in account configuration."]</p>
             }
             @if (packageError is not null)
             {
@@ -83,14 +85,14 @@ else if (settings is not null)
             }
             else if (packageError is null)
             {
-                <p>Het pakket heeft geen aanvullende configuratievelden teruggegeven.</p>
+                <p>@L["The package returned no additional configuration fields."]</p>
             }
         </section>
     </div>
     <section class="card">
-        <h2>Alle beschikbare gebruikersinstellingen</h2>
-        <p>De oorspronkelijke DirectAdmin-veldnamen, met vertrouwelijke waarden gefilterd.</p>
-        <table><thead><tr><th>Instelling</th><th>Waarde</th></tr></thead><tbody>
+        <h2>@L["All available user settings"]</h2>
+        <p>@L["Original DirectAdmin field names, with confidential values filtered."]</p>
+        <table><thead><tr><th>@L["Setting"]</th><th>@L["Value"]</th></tr></thead><tbody>
             @foreach (var field in settings.OrderBy(f => f.Key, StringComparer.OrdinalIgnoreCase))
             {
                 <tr><th>@field.Key</th><td>@field.Value</td></tr>
@@ -98,8 +100,8 @@ else if (settings is not null)
         </tbody></table>
     </section>
     <section class="card">
-        <h2>Resourceverbruik</h2>
-        <p>Verbruik zoals DirectAdmin dit voor deze gebruiker retourneert.</p>
+        <h2>@L["Resource usage"]</h2>
+        <p>@L["Usage returned by DirectAdmin for this user."]</p>
         @if (usageError is not null) { <p class="error" role="status">@usageError</p> }
         else if (usage is not null)
         {
@@ -141,7 +143,7 @@ else if (settings is not null)
             var (status, body) = await Session.GetAccountOverviewAsync(Username);
             if (status != 200)
             {
-                error = $"Gebruikersgegevens ophalen mislukt (HTTP {status}). Controleer de DirectAdmin-rechten.";
+                error = L["Failed to retrieve user data (HTTP {0}). Check DirectAdmin permissions.", status].Value;
                 return;
             }
             using var doc = JsonDocument.Parse(body);

@@ -1,3 +1,5 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/tickets"
 @using System.Text.Json
 @inject DirectAdminSession Session
@@ -5,11 +7,11 @@
 <PageTitle>Tickets — HostingPanel</PageTitle>
 
 <div class="page-header">
-    <div><div class="eyebrow">Ondersteuning / Tickets</div><h1>Ticketbeheer</h1>
-        <p>Ontvangen tickets en eigen aanvragen. DirectAdmin bepaalt welke tickets je mag zien.</p></div>
+    <div><div class="eyebrow">@L["Support / Tickets"]</div><h1>@L["Ticket management"]</h1>
+        <p>@L["Received tickets and own requests. DirectAdmin determines which tickets you can view."]</p></div>
     <div class="form-actions">
-        <a class="btn primary" href="/tickets/new">＋ Nieuw ticket</a>
-        <button disabled="@loading" @onclick="Load">↻ Vernieuwen</button>
+        <a class="btn primary" href="/tickets/new">@L["＋ New ticket"]</a>
+        <button disabled="@loading" @onclick="Load">@L["↻ Refresh"]</button>
     </div>
 </div>
 @if (!Session.Connected)
@@ -19,36 +21,36 @@
 else
 {
     <section class="card">
-        <div class="dashboard-section-heading"><h2>Ticketoverzicht</h2>
+        <div class="dashboard-section-heading"><h2>@L["Ticket overview"]</h2>
             @if (tickets is not null) { <span class="status-pill">@tickets.Count tickets</span> }
         </div>
         <div class="form-grid">
-            <div><label for="ticketSearch">Zoeken</label>
-                <input id="ticketSearch" type="search" @bind="search" @bind:event="oninput" placeholder="Onderwerp, afzender…" /></div>
-            <div><label for="ticketFilter">Weergave</label>
+            <div><label for="ticketSearch">@L["Search"]</label>
+                <input id="ticketSearch" type="search" @bind="search" @bind:event="oninput" placeholder="@L["Subject, sender…"]" /></div>
+            <div><label for="ticketFilter">@L["View"]</label>
                 <select id="ticketFilter" @bind="filter">
-                    <option value="all">Alle tickets</option><option value="received">Ontvangen</option>
-                    <option value="request">Mijn aanvragen</option><option value="unread">Ongelezen</option>
-                    <option value="open">Open</option><option value="closed">Gesloten</option>
+                    <option value="all">@L["All tickets"]</option><option value="received">@L["Received"]</option>
+                    <option value="request">@L["My requests"]</option><option value="unread">@L["Unread"]</option>
+                    <option value="open">Open</option><option value="closed">@L["Closed"]</option>
                 </select></div>
         </div>
-        @if (loading) { <p role="status">Tickets ophalen…</p> }
+        @if (loading) { <p role="status">@L["Retrieving tickets…"]</p> }
         @if (error is not null) { <p class="error" role="alert">@error</p> }
         @if (warning is not null) { <p class="error" role="status">Het overzicht kan onvolledig zijn: @warning</p> }
         @if (tickets is not null)
         {
             <div class="overview-scroll">
                 <table class="overview-table">
-                    <thead><tr><th>Status</th><th>Onderwerp</th><th>Van</th><th>Herkomst</th><th>Prioriteit</th><th>Datum</th></tr></thead>
+                    <thead><tr><th>Status</th><th>@L["Subject"]</th><th>@L["From"]</th><th>@L["Origin"]</th><th>@L["Priority"]</th><th>@L["Date"]</th></tr></thead>
                     <tbody>
                         @foreach (var ticket in Visible)
                         {
                             <tr>
-                                <td><span class="status-pill @(ticket.Open ? "good" : "muted")">@(ticket.Open ? "Open" : "Gesloten")</span></td>
+                                <td><span class="status-pill @(ticket.Open ? "good" : "muted")">@(ticket.Open ? "Open" : L["Closed"].Value)</span></td>
                                 <td><a href="@($"/tickets/{ticket.Id}?source={ticket.Source}")">@ticket.Subject</a>
-                                    @if (ticket.Unread) { <span class="status-pill warning">Nieuw</span> }</td>
+                                    @if (ticket.Unread) { <span class="status-pill warning">@L["New"]</span> }</td>
                                 <td>@(string.IsNullOrWhiteSpace(ticket.FromName) ? ticket.From : ticket.FromName)</td>
-                                <td>@(ticket.Source == "received" ? "Ontvangen" : "Verzonden")</td>
+                                <td>@(ticket.Source == "received" ? L["Received"].Value : "Verzonden")</td>
                                 <td>@ticket.Priority</td>
                                 <td>@ticket.Timestamp</td>
                             </tr>
@@ -56,16 +58,16 @@ else
                     </tbody>
                 </table>
             </div>
-            @if (Visible.Count == 0) { <p>Er zijn geen tickets die aan dit filter voldoen.</p> }
+            @if (Visible.Count == 0) { <p>@L["No tickets match this filter."]</p> }
         }
     </section>
     <section class="card">
-        <div class="dashboard-section-heading"><h2>Berichten</h2><a href="/messages">Alle berichten bekijken</a></div>
+        <div class="dashboard-section-heading"><h2>@L["Messages"]</h2><a href="/messages">@L["View all messages"]</a></div>
         @if (messageCount > 0)
         {
             <p><span class="status-pill warning">@messageCount berichten</span> Nieuwe berichten verschijnen ook via SignalR bovenin de interface.</p>
         }
-        else { <p>Geen berichten in het huidige backendresultaat.</p> }
+        else { <p>@L["No messages in the current backend result."]</p> }
     </section>
 }
 
@@ -105,7 +107,7 @@ else
         try
         {
             var (status, body) = await Session.GetRawAsync("hosting/tickets/inbox");
-            if (status != 200) { error = $"De backend heeft de ticketlijst niet geleverd (HTTP {status})."; tickets = null; return; }
+            if (status != 200) { error = L["The backend did not return the ticket list (HTTP {0}).", status].Value; tickets = null; return; }
             using var json = JsonDocument.Parse(body);
             var root = json.RootElement;
             tickets = root.GetProperty("tickets").EnumerateArray()

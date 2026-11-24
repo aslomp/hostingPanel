@@ -1,31 +1,33 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/system-updates"
 @using System.Text.Json
 @inject DirectAdminSession Session
-<PageTitle>Systeemupdates — HostingPanel</PageTitle>
-<div class="page-header"><div><div class="eyebrow">Serverbeheer</div><h1>Systeempakketten</h1><p>Beschikbare updates en updatehistorie rechtstreeks uit de backend.</p></div><button disabled="@busy" @onclick="Load">Vernieuwen</button></div>
+<PageTitle>@L["System updates — HostingPanel"]</PageTitle>
+<div class="page-header"><div><div class="eyebrow">@L["Server management"]</div><h1>@L["System packages"]</h1><p>@L["Available updates and update history directly from the backend."]</p></div><button disabled="@busy" @onclick="Load">@L["Refresh"]</button></div>
 @if (!Session.Connected) { <section class="card">Verbind eerst via het <a href="/">dashboard</a>.</section> }
 else
 {
-    <section class="card"><h2>Beschikbare upgrades</h2><JsonOverview Json="@updates" /></section>
-    <section class="card"><h2>Updatehistorie</h2><JsonOverview Json="@history" /></section>
+    <section class="card"><h2>@L["Available upgrades"]</h2><JsonOverview Json="@updates" /></section>
+    <section class="card"><h2>@L["Update history"]</h2><JsonOverview Json="@history" /></section>
     <section class="card">
-        <h2>Updates controleren</h2><p>Laat DirectAdmin zijn updatecontrole uitvoeren zonder pakketten te installeren.</p>
-        <label>Pakketten (komma-gescheiden, leeg betekent alle updates)</label>
+        <h2>@L["Check updates"]</h2><p>@L["Run the DirectAdmin update check without installing packages."]</p>
+        <label>@L["Packages (comma-separated, blank means all updates)"]</label>
         <input @bind="selectedPackages" placeholder="openssl, nginx" />
-        <button disabled="@busy" @onclick="Check">Update-test starten</button>
-        <h2>Update uitvoeren</h2>
-        <p>Dit kan systeemsoftware daadwerkelijk veranderen. Bevestig expliciet.</p>
-        <label>Typ UPDATE om te bevestigen</label><input @bind="confirmation" />
-        <button class="primary" disabled="@(busy || confirmation != "UPDATE")" @onclick="Run">Updates starten</button>
+        <button disabled="@busy" @onclick="Check">@L["Start update test"]</button>
+        <h2>@L["Run update"]</h2>
+        <p>@L["This can change system software. Explicit confirmation is required."]</p>
+        <label>@L["Enter UPDATE to confirm"]</label><input @bind="confirmation" />
+        <button class="primary" disabled="@(busy || confirmation != "UPDATE")" @onclick="Run">@L["Start updates"]</button>
         @if (feedback is not null) { <p role="status">@feedback</p> }
     </section>
     <section class="card">
-        <h2>Update-transactielog</h2>
-        <label>Transactie-ID uit de updatehistorie</label><input @bind="transactionId" />
-        <button disabled="@(busy || string.IsNullOrWhiteSpace(transactionId))" @onclick="FetchLog">Log ophalen</button>
+        <h2>@L["Update transaction log"]</h2>
+        <label>@L["Transaction ID from update history"]</label><input @bind="transactionId" />
+        <button disabled="@(busy || string.IsNullOrWhiteSpace(transactionId))" @onclick="FetchLog">@L["Retrieve log"]</button>
         <JsonOverview Json="@transactionLog" />
     </section>
-    @if (busy) { <p role="status">Verwerken…</p> }
+    @if (busy) { <p role="status">@L["Processing…"]</p> }
 }
 @code {
     private string updates = "", history = "", confirmation = "";
@@ -52,7 +54,7 @@ else
         if (busy || !Session.Connected || string.IsNullOrWhiteSpace(transactionId) ||
             transactionId.Length > 128 ||
             transactionId.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_')))
-        { feedback = "Ongeldige transactie-ID."; return; }
+        { feedback = L["Invalid transaction ID."].Value; return; }
         busy = true; feedback = null;
         try
         {
@@ -75,7 +77,7 @@ else
             var packages = selectedPackages.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (packages.Any(p => p.Length is < 1 or > 128 ||
                 p.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.' or '+'))))
-            { feedback = "Ongeldige pakketnaam."; return; }
+            { feedback = L["Invalid package name."].Value; return; }
             var payload = JsonSerializer.Serialize(new { packages });
             var (status, body) = await Session.RequestApiAsync(HttpMethod.Post, endpoint, payload);
             feedback = $"Backend HTTP {status}: {body}";
