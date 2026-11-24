@@ -97,9 +97,21 @@ def main():
                         page.goto(base + package_route)
                         add_package = page.get_by_role("button", name="Add package", exact=True)
                         expect(add_package).to_be_enabled(timeout=20000)
-                        add_package.click()
+                        # A full navigation initially renders static HTML. Wait for a
+                        # real component event, rather than assuming enabled means interactive.
                         dialog = page.get_by_role("dialog")
-                        expect(dialog).to_be_visible()
+                        for _ in range(20):
+                            if dialog.is_visible():
+                                break
+                            if add_package.is_enabled():
+                                add_package.click(timeout=2000)
+                            try:
+                                expect(dialog).to_be_visible(timeout=1000)
+                                break
+                            except AssertionError:
+                                pass
+                        else:
+                            raise AssertionError(f"Package creation dialog did not open: {package_route}")
                         dialog.get_by_label("Package name", exact=True).fill(package_name)
                         dialog.get_by_role("button", name="Save", exact=True).click()
                         expect(dialog).to_have_count(0, timeout=20000)
@@ -126,8 +138,10 @@ def main():
                         dialog.get_by_label("Email address", exact=True).fill(account + "@example.invalid")
                         dialog.get_by_label("Primary domain", exact=True).fill(account + ".invalid")
                         package_name = "browser-plan" if role == "user" else "browser-reseller-plan"
-                        dialog.get_by_label("Package", exact=True).click()
-                        page.get_by_text(package_name, exact=True).last.click()
+                        package_select = dialog.get_by_role("combobox", name="Package", exact=True)
+                        expect(package_select).to_be_visible()
+                        package_select.click()
+                        page.get_by_role("option", name=package_name, exact=True).click()
                         dialog.get_by_label("New password", exact=True).fill("short")
                         dialog.get_by_label("Confirm password", exact=True).fill("short")
                         dialog.get_by_role("button", name="Create account", exact=True).click()
