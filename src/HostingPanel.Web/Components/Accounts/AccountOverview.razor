@@ -133,6 +133,7 @@ else if (accounts is not null)
         if (account.Role.Equals("admin", StringComparison.OrdinalIgnoreCase) ||
             account.Username.Equals(Session.Username, StringComparison.OrdinalIgnoreCase)) return;
         var identity = Session.Username;
+        var channel = Session.TicketChannel;
         mutating = true;
         operationMessage = null;
         try
