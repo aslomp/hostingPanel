@@ -1,5 +1,8 @@
 # HostingPanel
 
+[![License: AGPL-3.0-only](https://img.shields.io/badge/License-AGPL--3.0--only-blue.svg)](LICENSE)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://www.buymeacoffee.com/aslomp)
+
 Een zelfstandige, responsive hostingbeheerinterface geïnspireerd op het dashboard en de navigatiestructuur van DirectAdmin Evolution.
 
 ## Direct starten
@@ -52,3 +55,9 @@ Voor koppeling aan de eigen hostingcontroller:
 ## Herkomst
 
 De labels en informatiearchitectuur zijn gebaseerd op de op 23 november 2026 bekeken DirectAdmin Evolution-dashboardweergave. De implementatie bevat eigen HTML, CSS en JavaScript zonder DirectAdmin-assets of externe afhankelijkheden.
+
+## License and support
+
+HostingPanel is licensed under the GNU Affero General Public License, version 3 only (`AGPL-3.0-only`). See [LICENSE](LICENSE). This applies to original HostingPanel code unless explicitly stated otherwise; third-party components retain their own licenses.
+
+The project is provided without commercial support, SLAs, or guaranteed maintenance. Donations are entirely voluntary and do not create support obligations.
