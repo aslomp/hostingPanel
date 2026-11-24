@@ -315,3 +315,31 @@ spec:
           port: 8080
 {{- end }}
 {{- end }}
+
+{{- if and (eq .Values.backend "Kubernetes") .Values.kubernetesHosting.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "hostingpanel.name" . }}-gateway-reader
+  namespace: {{ .Values.kubernetesHosting.gatewayNamespace | quote }}
+rules:
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gateways"]
+    resourceNames: [{{ .Values.kubernetesHosting.gatewayName | quote }}]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "hostingpanel.name" . }}-gateway-reader
+  namespace: {{ .Values.kubernetesHosting.gatewayNamespace | quote }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "hostingpanel.name" . }}-controller
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "hostingpanel.name" . }}-gateway-reader
+{{- end }}

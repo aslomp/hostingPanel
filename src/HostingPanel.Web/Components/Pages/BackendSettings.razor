@@ -7,7 +7,7 @@
 
 <PageTitle>@L[NameserversOnly ? "Name servers" : IpOnly ? "IP management" : "Backend settings"] — HostingPanel</PageTitle>
 <div class="page-header">
-    <div><div class="eyebrow">@L["Server management"]</div><h1>@L[IpOnly ? "IP management" : "Backend settings"]</h1>
+    <div><div class="eyebrow">@L["Server management"]</div><h1>@L[NameserversOnly ? "Name servers" : IpOnly ? "IP management" : "Backend settings"]</h1>
         <p>@L[NameserversOnly ? "Default nameservers assigned to new users." : IpOnly ? "Manage hosting IP addresses." : "Configuration contract of the active backend."]</p></div>
     <button disabled="@(busy || !Session.Connected)" @onclick="Load">@L["Refresh"]</button>
 </div>
@@ -25,19 +25,36 @@ else
             {
                 <div class="form-actions"><button class="primary" @onclick="AddIp" disabled="@busy">+ @L["Add IP"]</button></div>
                 <h2>@L["IP addresses"]</h2>
+                <div class="form-actions">
+                    <button disabled="@busy" @onclick='() => SetSelectedStatus("shared")'>@L["Share"]</button>
+                    <button disabled="@busy" @onclick='() => SetSelectedStatus("available")'>@L["Available"]</button>
+                    <button disabled="@busy" @onclick="ClearSelectedNs">@L["Clear NS"]</button>
+                    <button disabled="@busy" @onclick="ToggleGlobal">@L["Toggle global"]</button>
+                    <button disabled="@busy" @onclick="DeleteSelected">@L["Delete"]</button>
+                </div>
                 <table class="data-table">
-                    <thead><tr><th>IP</th><th>@L["Status"]</th><th>@L["Device"]</th><th>@L["Name server"]</th><th>@L["Netmask"]</th><th></th></tr></thead>
+                    <thead><tr><th></th><th>IP</th><th>@L["Status"]</th><th>@L["Device"]</th><th>@L["Resellers"]</th><th>@L["Users"]</th><th>@L["Global"]</th><th>@L["Name server"]</th><th>@L["Netmask"]</th><th></th></tr></thead>
                     <tbody>
                     @foreach (var ip in addresses)
                     {
-                        <tr><td><input @bind="ip.Address" /></td>
+                        <tr><td><input type="checkbox" @bind="ip.Selected" /></td><td><input @bind="ip.Address" /></td>
                         <td><select @bind="ip.Status"><option value="server">server</option><option value="shared">shared</option><option value="available">available</option></select></td>
-                        <td><input @bind="ip.Device" /></td><td><input @bind="ip.NameServer" /></td>
+                        <td><input @bind="ip.Device" /></td>
+                        <td>@foreach (var reseller in inventory?.Resellers ?? [])
+                        { <label><input type="checkbox" checked="@ip.Resellers.Contains(reseller)" @onchange="e => Assign(ip, reseller, e.Value is true)" />@reseller</label> }</td>
+                        <td>@(inventory?.Users.GetValueOrDefault(ip.Address) ?? 0)</td>
+                        <td><input type="checkbox" @bind="ip.Global" /></td><td><input @bind="ip.NameServer" /></td>
                         <td><input type="number" min="0" max="128" @bind="ip.PrefixLength" /></td>
                         <td><button disabled="@busy" @onclick="() => RemoveIp(ip)">@L["Delete"]</button></td></tr>
                     }
                     </tbody>
                 </table>
+                <h2>@L["Devices"]</h2>
+                @if (inventory?.Warning is { } warning) { <p>@warning</p> }
+                <table class="data-table"><thead><tr><th>IP</th><th>@L["Device"]</th><th></th></tr></thead><tbody>
+                @foreach (var device in inventory?.Devices ?? [])
+                { <tr><td>@device.Address</td><td>@device.Device</td><td><button disabled="@(busy || addresses.Any(x => x.Address == device.Address))" @onclick="() => ImportDevice(device)">@L["Add IP"]</button></td></tr> }
+                </tbody></table>
                 <p>@L["Select the default public web IP for new domains."]</p>
                 <select @bind="draftWebIp"><option value="">@L["Not set"]</option>
                     @foreach (var ip in addresses.Where(x => x.Status is "server" or "shared"))
@@ -47,9 +64,16 @@ else
             }
             @if (NameserversOnly && view.Fields.Any(f => f.Name == "IpAddresses"))
             {
-                <table class="data-table"><thead><tr><th>IP</th><th>@L["Status"]</th><th>@L["Name server"]</th></tr></thead>
+                <div class="form-actions"><button class="primary" disabled="@busy" @onclick="() => editingNs = !editingNs">+ @L["Create nameservers"]</button></div>
+                @if (editingNs)
+                {
+                    <select @bind="nsAddress"><option value="">@L["Select IP"]</option>@foreach (var ip in addresses) { <option value="@ip.Address">@ip.Address</option> }</select>
+                    <input @bind="nsName" placeholder="ns1.example.com" />
+                    <button disabled="@busy" @onclick="SetNs">@L["Assign"]</button>
+                }
+                <table class="data-table"><thead><tr><th>IP</th><th>@L["Status"]</th><th>@L["Users"]</th><th>@L["Name server"]</th><th></th></tr></thead>
                 <tbody>@foreach (var ip in addresses.Where(x => x.NameServer.Length > 0))
-                { <tr><td>@ip.Address</td><td>@ip.Status</td><td>@ip.NameServer</td></tr> }</tbody></table>
+                { <tr><td>@ip.Address</td><td>@ip.Status</td><td>@(inventory?.Users.GetValueOrDefault(ip.Address) ?? 0)</td><td>@ip.NameServer</td><td><button disabled="@busy" @onclick="() => ip.NameServer = string.Empty">@L["Delete"]</button></td></tr> }</tbody></table>
                 <h2>@L["Default nameservers assigned to new users"]</h2>
             }
             @if (!VisibleFields.Any() && !IpOnly)
@@ -125,7 +149,22 @@ else
         public string Status { get; set; } = "shared";
         public string Device { get; set; } = "";
         public string NameServer { get; set; } = "";
+        public bool Global { get; set; }
+        public string[] Resellers { get; set; } = [];
+        [System.Text.Json.Serialization.JsonIgnore] public bool Selected { get; set; }
     }
+    private sealed record DeviceRow(string Address, string Device, int PrefixLength);
+    private sealed record NetworkInventory(Dictionary<string,int> Users, string[] Resellers, DeviceRow[] Devices, string? Warning);
+    private NetworkInventory? inventory;
+    private bool editingNs;
+    private string nsAddress = "", nsName = "";
+    private void SetNs() { var ip = addresses.FirstOrDefault(x => x.Address == nsAddress); if (ip is not null) { ip.NameServer = nsName.Trim(); editingNs = false; } }
+    private void Assign(IpRow ip, string reseller, bool selected) => ip.Resellers = selected ? ip.Resellers.Append(reseller).Distinct().ToArray() : ip.Resellers.Where(x => x != reseller).ToArray();
+    private void SetSelectedStatus(string status) { foreach (var ip in addresses.Where(x => x.Selected)) ip.Status = status; }
+    private void ClearSelectedNs() { foreach (var ip in addresses.Where(x => x.Selected)) ip.NameServer = ""; }
+    private void ToggleGlobal() { foreach (var ip in addresses.Where(x => x.Selected)) ip.Global = !ip.Global; }
+    private void DeleteSelected() { foreach (var ip in addresses.Where(x => x.Selected).ToArray()) RemoveIp(ip); }
+    private void ImportDevice(DeviceRow device) => addresses.Add(new() { Address = device.Address, Device = device.Device, PrefixLength = device.PrefixLength, Status = "server" });
     private List<IpRow> addresses = [];
     private string draftWebIp = "";
     private void AddIp() => addresses.Add(new());
@@ -155,6 +194,7 @@ else
         if (next.Values.TryGetProperty("IpAddresses", out var ips))
         {
             addresses = ips.Deserialize<List<IpRow>>() ?? [];
+            foreach (var ip in addresses) ip.Resellers ??= [];
             draftWebIp = draft.GetValueOrDefault("DnsWebIp") ?? "";
             if (draftWebIp.Length > 0 && !addresses.Any(x => x.Address == draftWebIp))
                 addresses.Add(new() { Address = draftWebIp, Status = "server", PrefixLength = draftWebIp.Contains(':') ? 128 : 32 });
@@ -168,7 +208,15 @@ else
         try
         {
             var (status, body) = await Session.GetBackendSettingsAsync();
-            if (status == 200) Accept(body);
+            if (status == 200)
+            {
+                Accept(body);
+                if (IpOnly || NameserversOnly)
+                {
+                    var (networkStatus, networkBody) = await Session.GetNetworkInventoryAsync();
+                    inventory = networkStatus == 200 ? JsonSerializer.Deserialize<NetworkInventory>(networkBody, JsonOptions) : null;
+                }
+            }
             else message = status switch {
                 501 => L["This backend does not offer a settings contract."].Value,
                 401 or 403 => L["The backend denies access to these settings."].Value,
@@ -186,10 +234,10 @@ else
         busy = true; message = null; errors.Clear();
         try
         {
-            if (IpOnly && draft.ContainsKey("IpAddresses"))
+            if ((IpOnly || NameserversOnly) && draft.ContainsKey("IpAddresses"))
             {
                 draft["IpAddresses"] = JsonSerializer.Serialize(addresses);
-                draft["DnsWebIp"] = draftWebIp;
+                if (IpOnly) draft["DnsWebIp"] = draftWebIp;
             }
             var values = new JsonObject();
             foreach (var field in view.Fields)

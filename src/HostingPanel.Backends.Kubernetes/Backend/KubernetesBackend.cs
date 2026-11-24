@@ -15,10 +15,10 @@ namespace HostingPanel.Api;
 /// no legacy command calls and no implicit fallback to DirectAdmin.
 /// Reconciliation with the cluster is deliberately a separate responsibility.
 /// </summary>
-public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, PowerDnsClient? powerDns = null) :
+public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, PowerDnsClient? powerDns = null, IConfiguration? configuration = null) :
     IHostingBackend, IAccountCatalog, IAccountMutations, IAccessibleDomains,
     IUserDetails, IAccountOverview, IImpersonation, IDatabases,
-    IAccessibleDatabases, IDomains, IFileAccess, ITickets, IBackendSettingsAccess
+    IAccessibleDatabases, IDomains, IFileAccess, ITickets, IBackendSettingsAccess, IHostingNetworkAccess
 {
     public IBackendSettingsAccess Settings => this;
     private const string SettingsKey = "BackendSettings:Kubernetes";
@@ -62,6 +62,13 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
         var current = await GetEffectiveSettingsAsync(ct);
         if (update.Revision != BackendSettingsSchema.Revision(current))
             return Results.Conflict(new { type = "SETTINGS_CHANGED" });
+        var accounts = await db.Accounts.AsNoTracking().Where(x => x.Kind == "reseller" || x.Kind == "admin").Select(x => x.Username).ToListAsync(ct);
+        if (proposed!.IpAddresses.Any(x => (x.Resellers ?? []).Any(r => !accounts.Contains(r))))
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["IpAddresses"] = ["Unknown reseller."] });
+        var used = await UsedIpsAsync(ct);
+        foreach (var old in current.IpAddresses.Where(x => used.ContainsKey(x.Address)))
+            if (!proposed.IpAddresses.Any(x => x.Address == old.Address && x.Status != "available"))
+                return Results.Conflict(new { type = "IP_IN_USE", address = old.Address });
         {
             var row = await db.Configuration.SingleOrDefaultAsync(x => x.Key == SettingsKey, ct);
             if (row is null) { row = new PanelConfiguration { Key = SettingsKey }; db.Configuration.Add(row); }
@@ -114,7 +121,17 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
             existing.DomainId = domain.Id;
             return null;
         }
-        var ipText = dnsSettings.DnsWebIp;
+        var owner = db.Accounts.Local.FirstOrDefault(x => x.Id == domain.OwnerId)
+            ?? await db.Accounts.AsNoTracking().SingleAsync(x => x.Id == domain.OwnerId, ct);
+        var parent = owner.CreatorId is { } creator
+            ? db.Accounts.Local.FirstOrDefault(x => x.Id == creator) ?? await db.Accounts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == creator, ct) : null;
+        var eligible = dnsSettings.IpAddresses.Where(x => x.Status is "server" or "shared" &&
+            (x.Global || x.Status == "server" || (x.Resellers ?? []).Contains(owner.Username) ||
+             (parent is not null && (x.Resellers ?? []).Contains(parent.Username)))).ToArray();
+        var ipText = dnsSettings.IpAddresses.Length == 0 ? dnsSettings.DnsWebIp :
+            eligible.FirstOrDefault(x => x.Address == dnsSettings.DnsWebIp)?.Address ??
+            eligible.OrderBy(x => x.Address, StringComparer.Ordinal).FirstOrDefault()?.Address;
+        if (ipText is null) return "NO_ASSIGNED_IP";
         var ns1 = dnsSettings.DnsNs1.TrimEnd('.');
         var ns2 = dnsSettings.DnsNs2.TrimEnd('.');
         if (!System.Net.IPAddress.TryParse(ipText, out var ip) ||
@@ -129,6 +146,58 @@ public sealed class KubernetesBackend(HostingPanelDbContext db, KubernetesBacken
             db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "@", Type = "NS", Value = ns.ToLowerInvariant() + "." });
         Schedule("dns-zone", zone.Id, "create", new { zone.Name });
         return null;
+    }
+
+    private async Task<Dictionary<string,int>> UsedIpsAsync(CancellationToken ct)
+    {
+        var rows = await (from r in db.DnsRecords.AsNoTracking()
+            join z in db.DnsZones.AsNoTracking() on r.ZoneId equals z.Id
+            where (r.Type == "A" || r.Type == "AAAA") && (r.Name == "@" || r.Name == z.Name || r.Name == z.Name + ".")
+            select new { r.Value, z.OwnerId }).Distinct().ToListAsync(ct);
+        return rows.Where(x => System.Net.IPAddress.TryParse(x.Value, out _))
+            .GroupBy(x => System.Net.IPAddress.Parse(x.Value).ToString()).ToDictionary(g => g.Key, g => g.Select(x => x.OwnerId).Distinct().Count());
+    }
+
+    public async Task<IResult> NetworkInventoryAsync(AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        var principal = await AuthenticateAsync(auth, ct);
+        if (principal is null) return Results.Unauthorized();
+        if (principal.Kind != "admin") return Results.StatusCode(403);
+        var used = await UsedIpsAsync(ct);
+        var resellers = await db.Accounts.AsNoTracking().Where(x => x.Kind == "reseller" || x.Kind == "admin")
+            .OrderBy(x => x.Username).Select(x => x.Username).ToListAsync(ct);
+        var devices = new List<NetworkDeviceAddress>();
+        string? warning = null;
+        if (configuration?.GetValue<bool>("KubernetesHosting:Enabled") == true)
+        {
+            try
+            {
+                var ns = configuration["KubernetesHosting:GatewayNamespace"] ?? "envoy-gateway-system";
+                var gateway = configuration["KubernetesHosting:GatewayName"] ?? throw new InvalidOperationException("Gateway not configured");
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeout.CancelAfter(TimeSpan.FromSeconds(10));
+                var start = new System.Diagnostics.ProcessStartInfo(configuration["KubernetesHosting:KubectlPath"] ?? "kubectl")
+                { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+                foreach (var arg in new[] { "-n", ns, "get", "gateway", gateway, "-o", "json" }) start.ArgumentList.Add(arg);
+                using var process = System.Diagnostics.Process.Start(start) ?? throw new InvalidOperationException("Cannot start kubectl");
+                try
+                {
+                    var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
+                    var error = process.StandardError.ReadToEndAsync(timeout.Token);
+                    await process.WaitForExitAsync(timeout.Token);
+                    await error;
+                    if (process.ExitCode != 0) throw new InvalidOperationException("Gateway read failed");
+                    using var json = JsonDocument.Parse(await output);
+                    if (json.RootElement.TryGetProperty("status", out var status) && status.TryGetProperty("addresses", out var addresses))
+                        foreach (var address in addresses.EnumerateArray())
+                            if (System.Net.IPAddress.TryParse(address.GetProperty("value").GetString(), out var ip))
+                                devices.Add(new(ip.ToString(), "Gateway/" + ns + "/" + gateway, ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128));
+                }
+                finally { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+            }
+            catch (Exception) when (!ct.IsCancellationRequested) { warning = "Gateway address discovery unavailable."; }
+        }
+        return Results.Ok(new { users = used, resellers, devices, warning });
     }
 
     private void Schedule(string type, Guid id, string operation, object? payload = null)
