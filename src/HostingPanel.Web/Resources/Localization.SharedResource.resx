@@ -721,7 +721,7 @@
   <data name="Certificate deleted." xml:space="preserve"><value>Certificate deleted.</value></data>
   <data name="Account created." xml:space="preserve"><value>Account created.</value></data>
   <data name="Deleting this account is irreversible. All associated data will be removed." xml:space="preserve"><value>Deleting this account is irreversible. All associated data will be removed.</value></data>
-  <data name="DirectAdmin confirmed deletion of '{0}'." xml:space="preserve"><value>DirectAdmin confirmed deletion of '{0}'.</value></data>
+  
   <data name="DNS zone unavailable: HTTP {0}." xml:space="preserve"><value>DNS zone unavailable: HTTP {0}.</value></data>
   <data name="Permanently delete this domain? This cannot be undone." xml:space="preserve"><value>Permanently delete this domain? This cannot be undone.</value></data>
   <data name="All domain website files, DNS records, routes and certificates will be removed." xml:space="preserve"><value>All domain website files, DNS records, routes and certificates will be removed.</value></data>
