@@ -27,7 +27,7 @@ public sealed class ResellerController(IHostingBackend backend) : BackendControl
         var result = await backend.AccountMutations.SetLimitAsync(
             "reseller", username, input, auth, ct);
         return result.Error is null
-            ? Results.Json(new { username, field = input.Field, updated = true })
+            ? Results.Json(new { username, field = input.Field, updated = true }, statusCode: result.Status)
             : Results.Json(new { type = result.Error }, statusCode: result.Status);
     }
 
@@ -40,7 +40,7 @@ public sealed class ResellerController(IHostingBackend backend) : BackendControl
             return Results.Json(new { type = "INVALID_ACCOUNT_KIND" }, statusCode: 400);
         var result = await backend.AccountMutations.CreateAsync(input, auth, ct);
         return result.Error is null
-            ? Results.Json(new { username = input.Username, created = true })
+            ? Results.Json(new { username = input.Username, created = true }, statusCode: result.Status)
             : Results.Json(new { type = result.Error }, statusCode: result.Status);
     }
 
@@ -52,7 +52,7 @@ public sealed class ResellerController(IHostingBackend backend) : BackendControl
             return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
         var result = await backend.AccountMutations.DeleteAsync(username, input.Confirmation, auth, ct);
         return result.Error is null
-            ? Results.Json(new { username, deleted = true })
+            ? Results.Json(new { username, deleted = true }, statusCode: result.Status)
             : Results.Json(new { type = result.Error }, statusCode: result.Status);
     }
 

@@ -62,7 +62,7 @@ public sealed class DomainController(IHostingBackend backend) : BackendControlle
                 return Results.Json(new { type = "UNAUTHORIZED" }, statusCode: 401);
             var result = await service.MutateAsync(input, auth, context.RequestAborted);
             return result.Error is null
-                ? Results.Json(new { domain = input.Domain.ToLowerInvariant(), action = input.Action, executed = true })
+                ? Results.Json(new { domain = input.Domain.ToLowerInvariant(), action = input.Action, executed = result.Status == 200, provisioningPending = result.Status == 202 }, statusCode: result.Status)
                 : Results.Json(new { type = result.Error }, statusCode: result.Status);
     }
 
@@ -89,7 +89,7 @@ public sealed class DomainController(IHostingBackend backend) : BackendControlle
             var result = await service.UpdateSettingAsync(domain, input.Setting, input.Value,
                 auth, context.RequestAborted);
             return result.Error is null
-                ? Results.Json(new { domain, setting = input.Setting, updated = true })
+                ? Results.Json(new { domain, setting = input.Setting, updated = true }, statusCode: result.Status)
                 : Results.Json(new { type = result.Error }, statusCode: result.Status);
     }
 
