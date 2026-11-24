@@ -13,6 +13,7 @@ public static class KubernetesRegistration
         throw new InvalidOperationException("Invalid BackendSettings: " + string.Join("; ", errors.Select(x => x.Key + ": " + string.Join(", ", x.Value))));
     services.AddSingleton(settings);
     services.AddScoped<IHostingBackend, KubernetesBackend>();
+    services.AddHostedService<WebsiteReconciler>();
 
         return services;
     }
