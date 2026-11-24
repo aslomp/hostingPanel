@@ -1,12 +1,14 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/messages"
 @using System.Text.Json
 @inject DirectAdminSession Session
 @implements IDisposable
-<PageTitle>Berichten — HostingPanel</PageTitle>
+<PageTitle>@L["Messages — HostingPanel"]</PageTitle>
 
-<div class="page-header"><div><div class="eyebrow">Ondersteuning / Berichten</div><h1>Berichten</h1>
-    <p>Berichten van DirectAdmin. Nieuwe items verschijnen via de SignalR-melding in de navigatiebalk.</p></div>
-    <button disabled="@loading" @onclick="Load">↻ Vernieuwen</button></div>
+<div class="page-header"><div><div class="eyebrow">@L["Support / Messages"]</div><h1>@L["Messages"]</h1>
+    <p>@L["Messages from DirectAdmin. New items appear through the SignalR notification in the navigation bar."]</p></div>
+    <button disabled="@loading" @onclick="Load">@L["↻ Refresh"]</button></div>
 @if (!Session.Connected)
 {
     <section class="card">Maak verbinding via het <a href="/">dashboard</a>.</section>
@@ -14,13 +16,13 @@
 else
 {
     <section class="card">
-        <label for="messageSearch">Zoek in berichten</label>
+        <label for="messageSearch">@L["Search messages"]</label>
         <input id="messageSearch" type="search" @bind="search" @bind:event="oninput" />
-        @if (loading) { <p role="status">Berichten ophalen…</p> }
+        @if (loading) { <p role="status">@L["Retrieving messages…"]</p> }
         @if (error is not null) { <p class="error" role="alert">@error</p> }
         @if (messages is not null)
         {
-            <table><thead><tr><th>Onderwerp</th><th>Afzender</th><th>Ontvangen</th><th>Status</th></tr></thead>
+            <table><thead><tr><th>@L["Subject"]</th><th>@L["Sender"]</th><th>@L["Received"]</th><th>Status</th></tr></thead>
             <tbody>
                 @foreach (var item in messages.Value.EnumerateArray().Where(x =>
                     Text(x, "subject").Contains(search, StringComparison.OrdinalIgnoreCase) ||
@@ -40,7 +42,7 @@ else
             <h2>@Text(selected.Value, "subject")</h2>
             <p>Van @Text(selected.Value, "fromName") · @Text(selected.Value, "timestamp")</p>
             <p class="ticket-message">@Text(selected.Value, "message")</p>
-            <div class="form-actions"><button @onclick="Close">Sluiten</button></div>
+            <div class="form-actions"><button @onclick="Close">@L["Close"]</button></div>
         </section>
     }
 }
@@ -68,7 +70,7 @@ else
         try
         {
             var (status, body) = await Session.GetRawAsync("api/messages?limit=500");
-            if (status != 200) { error = $"Berichten niet beschikbaar (HTTP {status})."; return; }
+            if (status != 200) { error = L["Messages unavailable (HTTP {0}).", status].Value; return; }
             using var doc = JsonDocument.Parse(body);
             if (doc.RootElement.ValueKind != JsonValueKind.Array)
                 throw new JsonException("DirectAdmin returned unexpected message list.");
@@ -86,7 +88,7 @@ else
         try
         {
             var (status, body) = await Session.GetRawAsync($"api/messages/id/{id}");
-            if (status != 200) { error = $"Bericht niet beschikbaar (HTTP {status})."; return; }
+            if (status != 200) { error = L["Message unavailable (HTTP {0}).", status].Value; return; }
             using var doc = JsonDocument.Parse(body);
             selected = doc.RootElement.Clone();
         }

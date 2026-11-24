@@ -1,10 +1,12 @@
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/tickets/new"
 @using System.Text.Json
 @inject DirectAdminSession Session
 @inject NavigationManager Navigation
-<PageTitle>Ticket aanmaken — HostingPanel</PageTitle>
+<PageTitle>@L["Create ticket — HostingPanel"]</PageTitle>
 <div class="page-header"><div><div class="eyebrow"><a href="/tickets">Tickets</a> / Nieuw ticket</div>
-    <h1>Ticket aanmaken</h1><p>Stuur een nieuwe aanvraag naar de DirectAdmin-backend.</p></div></div>
+    <h1>Ticket aanmaken</h1><p>@L["Send a new request to the DirectAdmin backend."]</p></div></div>
 @if (!Session.Connected)
 {
     <section class="card">Maak eerst verbinding via het <a href="/">dashboard</a>.</section>
@@ -13,23 +15,23 @@ else
 {
     <section class="card">
         <div class="form-grid">
-            <div><label for="ticketRecipient">Ontvanger</label>
+            <div><label for="ticketRecipient">@L["Recipient"]</label>
                 <input id="ticketRecipient" @bind="recipient" placeholder="creator" />
                 <p>Gebruik <code>creator</code> of een gebruikersnaam die DirectAdmin accepteert.</p>
             </div>
-            <div><label for="ticketPriority">Prioriteit</label>
+            <div><label for="ticketPriority">@L["Priority"]</label>
                 <select id="ticketPriority" @bind="priority">
-                    <option value="10">Laag</option><option value="20">Normaal</option><option value="30">Hoog</option>
+                    <option value="10">@L["Low"]</option><option value="20">@L["Normal"]</option><option value="30">@L["High"]</option>
                 </select></div>
         </div>
-        <label for="ticketSubject">Onderwerp</label>
-        <input id="ticketSubject" @bind="subject" maxlength="200" placeholder="Beschrijf de vraag kort" />
-        <label for="ticketBody">Bericht</label>
-        <textarea id="ticketBody" rows="10" @bind="body" placeholder="Schrijf het bericht…" maxlength="65536"></textarea>
+        <label for="ticketSubject">@L["Subject"]</label>
+        <input id="ticketSubject" @bind="subject" maxlength="200" placeholder="@L["Briefly describe the request"]" />
+        <label for="ticketBody">@L["Message"]</label>
+        <textarea id="ticketBody" rows="10" @bind="body" placeholder="@L["Write the message…"]" maxlength="65536"></textarea>
         <div class="form-actions">
             <button class="primary" disabled="@(sending || string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(body) || string.IsNullOrWhiteSpace(recipient))"
-                    @onclick="Send">@(sending ? "Verzenden…" : "Ticket verzenden")</button>
-            <a href="/tickets">Annuleren</a>
+                    @onclick="Send">@(sending ? "Verzenden…" : L["Send ticket"].Value)</button>
+            <a href="/tickets">@L["Cancel"]</a>
         </div>
         @if (feedback is not null) { <p role="status">@feedback</p> }
     </section>
@@ -53,7 +55,7 @@ else
                 Navigation.NavigateTo("/tickets");
                 return;
             }
-            feedback = $"Ticket niet bevestigd door DirectAdmin (HTTP {status}): {result}";
+            feedback = L["Ticket not confirmed by DirectAdmin (HTTP {0}): {1}", status, result].Value;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException or ArgumentException)
         { feedback = ex.Message; }
