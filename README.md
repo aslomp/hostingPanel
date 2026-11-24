@@ -6,11 +6,16 @@
 
 Een zelfstandige, responsive hostingbeheerinterface geïnspireerd op het dashboard en de navigatiestructuur van DirectAdmin Evolution.
 
-## Direct starten
+## Installatie / Installation
 
-De eerste versie is dependency-free: open `index.html` in een moderne browser. Er is geen buildstap of webserver nodig.
+HostingPanel includes an ASP.NET Core API and a Blazor Server UI. The DirectAdmin provider is the default; the Kubernetes/SQLite provider is an experimental desired-state foundation, not a production hosting controller.
 
-Je kunt ook GitHub Pages inschakelen voor de `main`-branch, map `/`, om de interface te publiceren.
+- [Installation guide — Docker Compose, Helm, native .NET](docs/installation.md)
+- [Docker Compose configuration](deploy/compose/compose.yaml)
+- [Helm configuration](deploy/helm/hostingpanel/values.yaml)
+- [Kubernetes backend architecture and limitations](docs/kubernetes-sqlite-backend.md)
+
+The original static UI prototype remains available via `index.html` and GitHub Pages. The following historical prototype notes refer to that static demo, not the .NET application.
 
 ## Schermdekking
 
