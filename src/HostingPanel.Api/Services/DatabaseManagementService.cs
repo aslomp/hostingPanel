@@ -18,7 +18,6 @@ public sealed class DatabaseManagementService(IHttpClientFactory clients)
     private async Task<(int Status,string Body)> SendAsync(
         HttpMethod method, string path, AuthenticationHeaderValue auth,
         HttpContent? content, CancellationToken ct)
-    : IDatabases
 {
         using var request=new HttpRequestMessage(method,path){Content=content};
         request.Headers.Authorization=auth;

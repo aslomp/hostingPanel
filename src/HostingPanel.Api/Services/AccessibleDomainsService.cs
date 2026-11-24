@@ -9,7 +9,6 @@ public sealed class AccessibleDomainsService(
 : IAccessibleDomains
 {
     private static string EffectiveAccount(AuthenticationHeaderValue authorization)
-    : IAccessibleDomains
 {
         if (!authorization.Scheme.Equals("Basic", StringComparison.OrdinalIgnoreCase) ||
             string.IsNullOrEmpty(authorization.Parameter)) return "";

@@ -13,7 +13,6 @@ public sealed class LegacyAccountOverviewService(IHttpClientFactory clients)
 
     public async Task<AccountOverviewResult> GetAsync(string username,
         AuthenticationHeaderValue authentication, CancellationToken ct)
-    : IAccountOverview
 {
         if (!ValidUsername(username)) return new(400, null, null, null, "INVALID_USERNAME");
         var client = clients.CreateClient("legacy-directadmin");

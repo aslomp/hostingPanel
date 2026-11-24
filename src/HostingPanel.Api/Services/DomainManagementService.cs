@@ -10,7 +10,6 @@ public sealed class DomainManagementService(IHttpClientFactory clients)
 {
     public async Task<DomainListResult> ListAsync(string? owner,
         AuthenticationHeaderValue credentials, CancellationToken cancellationToken)
-    : IDomains
 {
         var endpoint = owner is null
             ? "CMD_API_SHOW_DOMAINS"

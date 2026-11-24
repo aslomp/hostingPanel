@@ -19,7 +19,6 @@ public sealed class AccessibleDatabasesService(
 {
     public async Task<AccessibleDatabaseInventory> ListAsync(
         AuthenticationHeaderValue auth, CancellationToken ct)
-    : IAccessibleDatabases
 {
         var listed = await accounts.ListAsync(auth, ct);
         if (listed.Accounts is null)
