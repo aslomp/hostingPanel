@@ -694,4 +694,32 @@
   <data name="Remember me" xml:space="preserve"><value>Remember me</value></data>
   <data name="Sign in to your hosting account." xml:space="preserve"><value>Sign in to your hosting account.</value></data>
   <data name="Sign-in service unavailable. Try again later." xml:space="preserve"><value>Sign-in service unavailable. Try again later.</value></data>
+  <data name="Valid certificates" xml:space="preserve"><value>Valid certificates</value></data>
+  <data name="Invalid certificates" xml:space="preserve"><value>Invalid certificates</value></data>
+  <data name="Missing DNS names" xml:space="preserve"><value>Missing DNS names</value></data>
+  <data name="Home" xml:space="preserve"><value>Home</value></data>
+  <data name="Parent directory" xml:space="preserve"><value>Parent directory</value></data>
+  <data name="Type" xml:space="preserve"><value>Type</value></data>
+  <data name="Modified" xml:space="preserve"><value>Modified</value></data>
+  <data name="Permissions" xml:space="preserve"><value>Permissions</value></data>
+  <data name="No files found." xml:space="preserve"><value>No files found.</value></data>
+  <data name="Page" xml:space="preserve"><value>Page</value></data>
+  <data name="Delete package" xml:space="preserve"><value>Delete package</value></data>
+  <data name="No packages found." xml:space="preserve"><value>No packages found.</value></data>
+  <data name="Permanently delete this package?" xml:space="preserve"><value>Permanently delete this package?</value></data>
+  <data name="Enter the exact package name to confirm." xml:space="preserve"><value>Enter the exact package name to confirm.</value></data>
+  <data name="Package deleted." xml:space="preserve"><value>Package deleted.</value></data>
+  <data name="Active" xml:space="preserve"><value>Active</value></data>
+  <data name="Invalid" xml:space="preserve"><value>Invalid</value></data>
+  <data name="No sessions found." xml:space="preserve"><value>No sessions found.</value></data>
+  <data name="Session details" xml:space="preserve"><value>Session details</value></data>
+  <data name="Terminate this session?" xml:space="preserve"><value>Terminate this session?</value></data>
+  <data name="Session operation completed." xml:space="preserve"><value>Session operation completed.</value></data>
+  <data name="Delete certificate" xml:space="preserve"><value>Delete certificate</value></data>
+  <data name="Deleting this certificate may interrupt HTTPS service for its DNS names." xml:space="preserve"><value>Deleting this certificate may interrupt HTTPS service for its DNS names.</value></data>
+  <data name="Enter the exact certificate ID to confirm." xml:space="preserve"><value>Enter the exact certificate ID to confirm.</value></data>
+  <data name="Certificate deleted." xml:space="preserve"><value>Certificate deleted.</value></data>
+  <data name="Account created." xml:space="preserve"><value>Account created.</value></data>
+  <data name="Deleting this account is irreversible. All associated data will be removed." xml:space="preserve"><value>Deleting this account is irreversible. All associated data will be removed.</value></data>
+  <data name="DirectAdmin confirmed deletion of '{0}'." xml:space="preserve"><value>DirectAdmin confirmed deletion of '{0}'.</value></data>
 </root>
