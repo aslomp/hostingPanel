@@ -18,7 +18,7 @@ public static class LegacyDnsAdapter
         if (root.ValueKind != JsonValueKind.Object)
             throw new FormatException("DNS response must be an object.");
         if (root.TryGetProperty("error", out var error) && error.ToString() is "1" or "true")
-            throw new InvalidOperationException("DirectAdmin rejected the DNS zone request.");
+            throw new LegacyDnsReadRejectedException();
         if (!root.TryGetProperty("records", out var records) || records.ValueKind != JsonValueKind.Array)
             throw new FormatException("DirectAdmin did not return the DNS records array.");
         var result = new List<DnsRecord>();
@@ -26,16 +26,24 @@ public static class LegacyDnsAdapter
         {
             if (item.ValueKind != JsonValueKind.Object)
                 throw new FormatException("Invalid DNS record.");
-            var type = item.GetProperty("type").GetString() ?? "";
-            var name = item.TryGetProperty("index", out var index) ? index.GetString() ?? "" :
-                item.GetProperty("name").GetString() ?? "";
-            var value = item.GetProperty("value").GetString() ?? "";
-            string? ttl = item.TryGetProperty("ttl", out var t) ? t.ToString() : null;
-            if (!Types.Contains(type, StringComparer.Ordinal) || string.IsNullOrEmpty(name))
-                throw new FormatException("Unsupported DNS record returned by DirectAdmin.");
+            var type = ReadString(item, "type");
+            var name = ReadString(item, item.TryGetProperty("index", out _) ? "index" : "name");
+            var value = ReadString(item, "value");
+            string? ttl = item.TryGetProperty("ttl", out var t) && t.ValueKind != JsonValueKind.Null ? t.ToString() : null;
+            // Reading a zone must not depend on the set of record types supported
+            // for mutations. Preserve additional types returned by DirectAdmin.
+            if (string.IsNullOrWhiteSpace(type) || string.IsNullOrEmpty(name))
+                throw new FormatException("Invalid DNS record type or name.");
             result.Add(new DnsRecord(type, name, value, ttl));
         }
         return result;
+    }
+
+    private static string ReadString(JsonElement item, string field)
+    {
+        if (!item.TryGetProperty(field, out var property) || property.ValueKind != JsonValueKind.String)
+            throw new FormatException($"DirectAdmin DNS record has a missing or invalid '{field}' field.");
+        return property.GetString()!;
     }
 
     public static bool Valid(DnsRecord r) => DnsRecordValidation.Valid(r);
@@ -97,4 +105,9 @@ public static class LegacyDnsAdapter
             _ => false
         };
     }
+}
+
+public sealed class LegacyDnsReadRejectedException : InvalidOperationException
+{
+    public LegacyDnsReadRejectedException() : base("DirectAdmin rejected the DNS zone request.") { }
 }
