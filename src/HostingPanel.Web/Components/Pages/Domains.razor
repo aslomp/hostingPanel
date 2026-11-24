@@ -3,6 +3,8 @@
 @page "/domains"
 @using System.Text.Json
 @inject DirectAdminSession Session
+@inject HostingPanel.Api.HostingOperationNotifications Operations
+@implements IDisposable
 @inject NavigationManager Navigation
 
 <PageTitle>@L["Domain management — HostingPanel"]</PageTitle>
@@ -36,11 +38,11 @@ else
             <label for="domainFilter">@L["Filter domains"]</label>
             <input id="domainFilter" @bind="filter" @bind:event="oninput" placeholder="@L["Search domain name"]" />
             <table>
-                <thead><tr><th>@L["Domain"]</th><th>Account</th><th>@L["Actions"]</th></tr></thead>
+                <thead><tr><th>@L["Domain"]</th><th>Account</th><th>@L["Provisioning"]</th><th>@L["Actions"]</th></tr></thead>
                 <tbody>
                 @foreach (var domain in domains.Where(d => d.Contains(filter, StringComparison.OrdinalIgnoreCase)))
                 {
-                    <tr><td><a href="@($"/domains/{Uri.EscapeDataString(domain)}")">@domain</a> — <a href="@($"/domains/{Uri.EscapeDataString(domain)}/dns")">DNS</a></td><td>@(ownership.TryGetValue(domain, out var domainOwner) ? domainOwner : (string.IsNullOrWhiteSpace(owner) ? "—" : owner))</td><td><button @onclick="() => SelectDelete(domain)" disabled="@mutationBusy">@L["Delete"]</button></td></tr>
+                    <tr><td><a href="@($"/domains/{Uri.EscapeDataString(domain)}")">@domain</a> — <a href="@($"/domains/{Uri.EscapeDataString(domain)}/dns")">DNS</a></td><td>@(ownership.TryGetValue(domain, out var domainOwner) ? domainOwner : (string.IsNullOrWhiteSpace(owner) ? "—" : owner))</td><td>@L[provisioning.GetValueOrDefault(domain) ?? "Unknown"]</td><td><button @onclick="() => SelectDelete(domain)" disabled="@mutationBusy">@L["Delete"]</button></td></tr>
                 }
                 </tbody>
             </table>
@@ -83,6 +85,8 @@ else
     private string filter = "";
     private IReadOnlyList<string>? domains;
     private Dictionary<string,string> ownership = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string,string> provisioning = new(StringComparer.OrdinalIgnoreCase);
+    private bool refreshingStatus;
     private string? warning;
     private string? error;
     private bool loading;
@@ -95,10 +99,34 @@ else
     private bool mutationBusy;
     private string? mutationStatus;
 
+    private bool disposed;
+    protected override void OnInitialized() => Operations.Changed += OperationChanged;
+    private void OperationChanged() { if (!disposed) _ = InvokeAsync(RefreshOperationState); }
+    public void Dispose() { disposed = true; Operations.Changed -= OperationChanged; }
+
     protected override async Task OnParametersSetAsync()
     {
         owner = User ?? "";
         if (Session.Connected) await Refresh();
+    }
+
+    private async Task RefreshOperationState()
+    {
+        if (disposed || refreshingStatus || !Session.Connected || domains is null) return;
+        refreshingStatus = true;
+        try
+        {
+            var current = new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var domain in domains.ToArray())
+            {
+                if (disposed || !Session.Connected) return;
+                var state = await Session.GetProvisioningStatusAsync(domain);
+                if (state is not null) current[domain] = state;
+            }
+            if (!disposed) { provisioning = current; StateHasChanged(); }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or OperationCanceledException) { }
+        finally { refreshingStatus = false; }
     }
 
     private async Task Refresh()
@@ -144,6 +172,7 @@ else
             error = exception.Message;
         }
         finally { loading = false; }
+        await RefreshOperationState();
     }
 
     private void SelectDelete(string domain) { deleteDomain = domain; confirmation = ""; mutationStatus = null; }
