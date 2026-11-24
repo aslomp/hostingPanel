@@ -44,11 +44,30 @@ var checks = new List<(string Description, Action Test)>
     {
         var settings = new HostingPanel.Api.KubernetesBackendSettings();
         var schema = HostingPanel.Api.BackendSettingsSchema.Describe("Kubernetes", settings);
-        Require(schema.Fields.Count == 1 && schema.Fields[0].Type == "enum" && schema.Fields[0].Options.Count == 2);
+        var ingress = schema.Fields.Single(x => x.Name == "IngressProvider");
+        Require(ingress.Type == "enum" && ingress.Options.Count == 2);
+        Require(schema.Fields.Any(x => x.Name == "IpAddresses" && x.Type == "json"));
+        Require(schema.Fields.Any(x => x.Name == "DnsAutoCreateZones" && x.Type == "boolean"));
         Require(schema.Values.GetProperty("IngressProvider").GetString() == "NginxIngress");
-        using var good = System.Text.Json.JsonDocument.Parse("""{"IngressProvider":"EnvoyProxy"}""");
+        var payload = System.Text.Json.Nodes.JsonNode.Parse(schema.Values.GetRawText())!.AsObject();
+        payload["IngressProvider"] = "EnvoyProxy";
+        payload["DnsWebIp"] = "192.0.2.10";
+        payload["DnsNs1"] = "ns1.example.com";
+        payload["DnsNs2"] = "ns2.example.com";
+        payload["IpAddresses"] = System.Text.Json.Nodes.JsonNode.Parse("""[{"Address":"192.0.2.10","PrefixLength":24,"Status":"server","Device":"","NameServer":"","Global":false,"Resellers":[],"AssignedUsers":[]}]""");
+        using var good = System.Text.Json.JsonDocument.Parse(payload.ToJsonString());
         Require(HostingPanel.Api.BackendSettingsSchema.TryRead<HostingPanel.Api.KubernetesBackendSettings>(good.RootElement, out var proposed, out _));
         Require(proposed!.IngressProvider == HostingPanel.Api.KubernetesIngressProvider.EnvoyProxy);
+        Require(proposed.DnsWebIp == "192.0.2.10" && proposed.IpAddresses.Length == 1);
+        var roundtrip = HostingPanel.Api.BackendSettingsSchema.Describe("Kubernetes", proposed);
+        Require(HostingPanel.Api.BackendSettingsSchema.TryRead<HostingPanel.Api.KubernetesBackendSettings>(roundtrip.Values, out _, out _));
+        payload["Validator"] = new System.Text.Json.Nodes.JsonObject();
+        using var hidden = System.Text.Json.JsonDocument.Parse(payload.ToJsonString());
+        Require(!HostingPanel.Api.BackendSettingsSchema.TryRead<HostingPanel.Api.KubernetesBackendSettings>(hidden.RootElement, out _, out _));
+        payload.Remove("Validator");
+        payload["DnsWebIp"] = "not-an-ip";
+        using var badIp = System.Text.Json.JsonDocument.Parse(payload.ToJsonString());
+        Require(!HostingPanel.Api.BackendSettingsSchema.TryRead<HostingPanel.Api.KubernetesBackendSettings>(badIp.RootElement, out _, out _));
         Require(HostingPanel.Api.BackendSettingsSchema.Revision(settings) != HostingPanel.Api.BackendSettingsSchema.Revision(proposed));
         foreach (var invalid in new[] { """{"IngressProvider":1}""", """{"IngressProvider":"invalid"}""", """{"IngressProvider":"EnvoyProxy","Validator":{}}""", """{}""", """{"IngressProvider":"EnvoyProxy","IngressProvider":"NginxIngress"}""" })
         {
