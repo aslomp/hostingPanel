@@ -11,6 +11,9 @@ internal static class ApacheConfigurationRevisionTests
         var reordered = new ApacheConfigurationRevision(input.Reverse());
         Require(first.Id == reordered.Id);
         Require(first.Id.Length == 64);
+        Require(first.Id.All(c => char.IsAsciiHexDigitLower(c)));
+        Require(first.Id != new ApacheConfigurationRevision(new Dictionary<Guid, string> { [a] = "site b", [b] = "site a" }).Id);
+        Require(first.Id != new ApacheConfigurationRevision(new Dictionary<Guid, string> { [a] = "site a\n", [b] = "site b" }).Id);
         input[a] = "changed";
         Require(first.VirtualHosts[a] == "site a");
         Require(first.Id != new ApacheConfigurationRevision(input).Id);
@@ -23,6 +26,7 @@ internal static class ApacheConfigurationRevisionTests
             throw new Exception("Duplicate domain accepted.");
         }
         catch (ArgumentException) { }
+        VerifyInvalidEntries();
         VerifyStorageAsync(first).GetAwaiter().GetResult();
         VerifyUnavailableStorageAsync(first).GetAwaiter().GetResult();
     }
@@ -101,6 +105,24 @@ internal static class ApacheConfigurationRevisionTests
             }
         }
         finally { Directory.Delete(root, recursive: true); }
+    }
+
+    private static void VerifyInvalidEntries()
+    {
+        foreach (var entry in new[]
+        {
+            KeyValuePair.Create(Guid.Empty, "site"),
+            KeyValuePair.Create(Guid.NewGuid(), ""),
+            KeyValuePair.Create(Guid.NewGuid(), "  ")
+        })
+        {
+            try
+            {
+                _ = new ApacheConfigurationRevision(new[] { entry });
+                throw new Exception("Invalid virtualhost entry accepted.");
+            }
+            catch (ArgumentException) { }
+        }
     }
 
     private static void Require(bool condition)
