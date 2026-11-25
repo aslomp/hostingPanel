@@ -30,6 +30,23 @@ public static class PanelHttpTransportTests
             handler.Authorization != Basic("alice", "secret"))
             throw new Exception("Settings operation lost its route, body or caller credentials");
 
+        result = await settings.GetNetworkInventoryAsync();
+        if (result.Status != 200 || handler.Path != "/hosting/network/inventory" ||
+            handler.Method != HttpMethod.Get || handler.Content is not null)
+            throw new Exception("Network inventory request changed");
+
+        result = await settings.GetProfileNameserversAsync();
+        if (result.Status != 200 || handler.Path != "/hosting/profile/nameservers" ||
+            handler.Method != HttpMethod.Get || handler.Content is not null)
+            throw new Exception("Profile nameserver read changed");
+
+        result = await settings.SaveProfileNameserversAsync("""{"ns1":"ns1.example.com"}""");
+        if (result.Status != 200 || handler.Path != "/hosting/profile/nameservers" ||
+            handler.Method != HttpMethod.Put || handler.ContentType != "application/json" ||
+            handler.Content != """{"ns1":"ns1.example.com"}""" ||
+            handler.Authorization != Basic("alice", "secret"))
+            throw new Exception("Profile nameserver write changed");
+
         result = await compatibility.GetRawAsync("api/info");
         if (result.Status != 200 || handler.Path != "/api/info" ||
             handler.Method != HttpMethod.Get || handler.Authorization != Basic("alice", "secret"))

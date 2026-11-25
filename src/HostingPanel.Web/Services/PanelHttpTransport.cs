@@ -1,4 +1,4 @@
-using System.Net.Http.Headers;
+using System.Text;
 
 namespace HostingPanel.Web.Services;
 
@@ -6,6 +6,13 @@ namespace HostingPanel.Web.Services;
 // Authorization is always derived from the active server-side session, never from caller input.
 public sealed class PanelHttpTransport(IHttpClientFactory clients, PanelSession session)
 {
+    public async Task<(int Status, string Body)> SendJsonAsync(
+        HttpMethod method, string endpoint, string json, CancellationToken cancellationToken = default)
+    {
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        return await SendAsync(method, endpoint, content, cancellationToken);
+    }
+
     public async Task<(int Status, string Body)> SendAsync(
         HttpMethod method, string endpoint, HttpContent? content = null,
         CancellationToken cancellationToken = default)
