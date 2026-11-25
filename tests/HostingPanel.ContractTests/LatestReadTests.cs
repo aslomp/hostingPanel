@@ -40,6 +40,24 @@ public static class LatestReadTests
             {
                 if (result.First != 6 || result.Second != 7) throw new Exception("Pair result changed");
             }, Fail);
+        var errors = new List<Exception>();
+        var jsonError = new System.Text.Json.JsonException("invalid response");
+        await read.RunAsync<int>(_ => Task.FromException<int>(jsonError), () => true,
+            _ => throw new Exception("Failed read accepted"), errors.Add);
+        if (errors.Count != 1 || !ReferenceEquals(errors[0], jsonError) || read.Loading)
+            throw new Exception("Current JSON failure was not reported");
+        var staleJson = new TaskCompletionSource<int>();
+        var staleRead = read.RunAsync(_ => staleJson.Task, () => true,
+            _ => throw new Exception("Stale read accepted"), errors.Add);
+        await read.RunAsync(_ => Task.FromResult(8), () => true, _ => { }, Fail);
+        staleJson.SetException(new System.Text.Json.JsonException("obsolete response"));
+        await staleRead;
+        if (errors.Count != 1 || read.Loading)
+            throw new Exception("Superseded JSON failure leaked into current state");
+        await read.RunAsync<int>(_ => Task.FromException<int>(jsonError), () => false,
+            _ => throw new Exception("Obsolete context accepted"), errors.Add);
+        if (errors.Count != 1 || read.Loading)
+            throw new Exception("Obsolete context reported a JSON failure");
         var last = new TaskCompletionSource<int>();
         CancellationToken lastToken = default;
         var pending = read.RunAsync(ct => { lastToken = ct; return last.Task; }, () => true, seen.Add, Fail);

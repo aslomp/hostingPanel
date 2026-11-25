@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace HostingPanel.Web.Services;
 
 // Owned by a component on its renderer synchronization context.
@@ -22,7 +24,7 @@ public sealed class LatestRead : IDisposable
             if (Current()) accept(result);
         }
         catch (OperationCanceledException) when (request.IsCancellationRequested) { }
-        catch (Exception error) when (error is HttpRequestException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or FormatException or OperationCanceledException)
+        catch (Exception error) when (error is HttpRequestException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or FormatException or JsonException or OperationCanceledException)
         {
             if (Current()) fail(error);
         }
