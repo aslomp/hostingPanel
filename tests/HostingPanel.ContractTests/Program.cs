@@ -30,6 +30,13 @@ var checks = new List<(string Description, Action Test)>
         Require(!SystemServiceOperations.ValidService("../nginx"));
     }),
     ("Apache candidate revisions are deterministic and immutable", ApacheConfigurationRevisionTests.Run),
+    ("Administrative feedback preserves HTTP status and raw response", () =>
+    {
+        Require(OperationFeedback.FormatRead((403, "denied")) == "HTTP 403\ndenied");
+        Require(OperationFeedback.FormatRead((204, "")) == "HTTP 204\n");
+        Require(OperationFeedback.FormatMutation((202, "pending")) == "Backend HTTP 202: pending");
+        Require(OperationFeedback.FormatMutation((500, "{\"error\":true}")) == "Backend HTTP 500: {\"error\":true}");
+    }),
     ("Dialog mutations reject duplicates and obsolete sessions", DialogMutationTests.Run),
     ("Latest UI reads discard superseded results and cancel on disposal", LatestReadTests.Run),
     ("DNS capability is implemented by both providers", () =>

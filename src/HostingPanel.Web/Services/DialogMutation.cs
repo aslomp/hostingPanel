@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace HostingPanel.Web.Services;
 
 // Component-owned, renderer-context state. Never cancel or replay a dispatched write.
@@ -18,7 +20,7 @@ public sealed class DialogMutation : IDisposable
         {
             await action(Current);
         }
-        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or InvalidOperationException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or InvalidOperationException or UnauthorizedAccessException or JsonException)
         {
             if (Current()) Error = ex.Message;
         }

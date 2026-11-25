@@ -98,7 +98,7 @@ else
             () => Session.Connected && Session.TicketChannel == channel,
             result =>
             {
-                services = $"HTTP {result.Status}\n{result.Body}";
+                services = OperationFeedback.FormatRead(result);
                 if (result.Status is < 200 or >= 300)
                     error = L["Backend did not return the overview (HTTP {0}).", result.Status].Value;
             }, ex => error = ex.Message);
@@ -121,8 +121,8 @@ else
         return detailRead.RunPairAsync(ct => ServiceOps.DetailsAsync(target, ct),
             ct => ServiceOps.LogAsync(target, ct), Current, result =>
         {
-            details = $"HTTP {result.First.Status}\n{result.First.Body}";
-            serviceLog = $"HTTP {result.Second.Status}\n{result.Second.Body}";
+            details = OperationFeedback.FormatRead(result.First);
+            serviceLog = OperationFeedback.FormatRead(result.Second);
         }, ex => error = ex.Message);
     }
 

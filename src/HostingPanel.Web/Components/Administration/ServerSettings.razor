@@ -1,7 +1,6 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @page "/server-settings"
-@using System.Text.Json
 @inject PanelSession Session
 @inject ServerSettingsOperations SettingsOps
 @implements IDisposable
@@ -132,7 +131,7 @@ else
         mutation = null;
         return read.RunAsync(ct => SettingsOps.ListTimezonesAsync(ct),
             () => Session.Connected && Session.TicketChannel == channel,
-            response => timezones = $"HTTP {response.Status}\n{response.Body}",
+            response => timezones = OperationFeedback.FormatRead(response),
             ex => mutation = ex.Message);
     }
 
@@ -143,15 +142,8 @@ else
         mutation = null;
         await write.RunAsync(Session, channel, async current =>
         {
-            try
-            {
-                var feedback = await operation();
-                if (current()) mutation = feedback;
-            }
-            catch (JsonException ex)
-            {
-                if (current()) mutation = ex.Message;
-            }
+            var feedback = await operation();
+            if (current()) mutation = feedback;
         });
         if (!disposed && Session.Connected && Session.TicketChannel == channel)
         {
@@ -180,14 +172,14 @@ else
         ? Task.CompletedTask : RunMutation(async () =>
         {
             var (status, body) = await SettingsOps.ChangeHostnameAsync(hostname);
-            return $"Backend HTTP {status}: {body}";
+            return OperationFeedback.FormatMutation((status, body));
         }, () => hostnameConfirmation = "");
 
     private Task ChangeTimezone() => timezoneConfirmation != "TIMEZONE" || string.IsNullOrWhiteSpace(timezone)
         ? Task.CompletedTask : RunMutation(async () =>
         {
             var (status, body) = await SettingsOps.ChangeTimezoneAsync(timezone);
-            return $"Backend HTTP {status}: {body}";
+            return OperationFeedback.FormatMutation((status, body));
         }, () => timezoneConfirmation = "");
 
     private Task Apply() => confirmation != "PATCH" ? Task.CompletedTask : RunMutation(async () =>
@@ -195,6 +187,6 @@ else
         if (!ServerSettingsOperations.ValidPatch(patch))
             return L["The patch must be a JSON object."].Value;
         var (status, body) = await SettingsOps.PatchAsync(patch);
-        return $"Backend HTTP {status}: {body}";
+        return OperationFeedback.FormatMutation((status, body));
     }, () => confirmation = "");
 }

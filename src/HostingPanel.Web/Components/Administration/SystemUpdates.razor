@@ -87,8 +87,8 @@ else
         return inventoryRead.RunPairAsync(UpdateOps.ListUpdatesAsync, UpdateOps.HistoryAsync,
             Current, response =>
         {
-            updates = $"HTTP {response.First.Status}\n{response.First.Body}";
-            history = $"HTTP {response.Second.Status}\n{response.Second.Body}";
+            updates = OperationFeedback.FormatRead(response.First);
+            history = OperationFeedback.FormatRead(response.Second);
         }, ex => feedback = ex.Message);
     }
 
@@ -106,7 +106,7 @@ else
         feedback = null;
         return logRead.RunAsync(ct => UpdateOps.LogAsync(target, ct),
             () => Session.Connected && Session.TicketChannel == channel && transactionId == target,
-            response => transactionLog = $"HTTP {response.Status}\n{response.Body}",
+            response => transactionLog = OperationFeedback.FormatRead(response),
             ex => feedback = ex.Message);
     }
 
@@ -129,7 +129,7 @@ else
             var (status, body) = install
                 ? await UpdateOps.RunAsync(packages)
                 : await UpdateOps.CheckAsync(packages);
-            if (current()) feedback = $"Backend HTTP {status}: {body}";
+            if (current()) feedback = OperationFeedback.FormatMutation((status, body));
         });
         if (!disposed && Session.Connected && Session.TicketChannel == channel)
         {
