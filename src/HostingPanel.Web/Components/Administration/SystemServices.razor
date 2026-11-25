@@ -118,17 +118,11 @@ else
         error = null;
         bool Current() => !disposed && Session.Connected &&
             Session.TicketChannel == channel && service == target;
-        return detailRead.RunAsync(async ct =>
+        return detailRead.RunPairAsync(ct => ServiceOps.DetailsAsync(target, ct),
+            ct => ServiceOps.LogAsync(target, ct), Current, result =>
         {
-            var detail = await ServiceOps.DetailsAsync(target, ct);
-            ct.ThrowIfCancellationRequested();
-            if (!Current()) throw new OperationCanceledException();
-            var log = await ServiceOps.LogAsync(target, ct);
-            return (Detail: detail, Log: log);
-        }, Current, result =>
-        {
-            details = $"HTTP {result.Detail.Status}\n{result.Detail.Body}";
-            serviceLog = $"HTTP {result.Log.Status}\n{result.Log.Body}";
+            details = $"HTTP {result.First.Status}\n{result.First.Body}";
+            serviceLog = $"HTTP {result.Second.Status}\n{result.Second.Body}";
         }, ex => error = ex.Message);
     }
 

@@ -23,6 +23,23 @@ public static class LatestReadTests
         if (read.Loading || !seen.SequenceEqual(new[] { 2 })) throw new Exception("Current read not applied");
         await read.RunAsync(_ => Task.FromResult(3), () => false, seen.Add, Fail);
         if (seen.Count != 1) throw new Exception("Obsolete context accepted");
+        var pairFirst = new TaskCompletionSource<int>();
+        var contextCurrent = true;
+        var secondCalled = false;
+        var pair = read.RunPairAsync(_ => pairFirst.Task, _ =>
+        {
+            secondCalled = true;
+            return Task.FromResult(5);
+        }, () => contextCurrent, _ => throw new Exception("Obsolete pair accepted"), Fail);
+        contextCurrent = false;
+        pairFirst.SetResult(4);
+        await pair;
+        if (secondCalled || read.Loading) throw new Exception("Obsolete pair dispatched its second read");
+        await read.RunPairAsync(_ => Task.FromResult(6), _ => Task.FromResult(7), () => true,
+            result =>
+            {
+                if (result.First != 6 || result.Second != 7) throw new Exception("Pair result changed");
+            }, Fail);
         var last = new TaskCompletionSource<int>();
         CancellationToken lastToken = default;
         var pending = read.RunAsync(ct => { lastToken = ct; return last.Task; }, () => true, seen.Add, Fail);
