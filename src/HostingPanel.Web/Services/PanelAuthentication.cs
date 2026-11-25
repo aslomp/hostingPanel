@@ -28,9 +28,10 @@ public static class PanelAuthentication
         app.MapPost("/login", async (HttpContext context, IAntiforgery csrf,
             IAuthenticationProvider authentication, PanelSessionStore sessions, IStringLocalizer<SharedResource> l) =>
         {
-            if (!context.Request.HasFormContentType) return Results.BadRequest();
+            // Validate antiforgery before branching on request-controlled content metadata.
             try { await csrf.ValidateRequestAsync(context); }
             catch (AntiforgeryValidationException) { return Results.BadRequest(); }
+            if (!context.Request.HasFormContentType) return Results.BadRequest();
             var form = await context.Request.ReadFormAsync(context.RequestAborted);
             var username = form["username"].ToString().Trim();
             var password = form["password"].ToString();

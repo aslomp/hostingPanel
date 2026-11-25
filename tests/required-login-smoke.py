@@ -102,7 +102,16 @@ def main():
             assert status == 200 and 'action="/login"' in html and 'mud-layout' not in html
             fields = FormParser(html).fields
             assert fields.get("__RequestVerificationToken")
+            # Rejected requests must never establish a panel session.
+            assert request("POST", "/login")[0] == 400
+            assert "__Host-HostingPanel" not in cookies
             assert request("POST", "/login", {"username": "testuser", "password": "test-password"})[0] == 400
+            assert "__Host-HostingPanel" not in cookies
+            invalid_fields = dict(fields, username="testuser", password="test-password")
+            invalid_fields["__RequestVerificationToken"] = "invalid"
+            assert request("POST", "/login", invalid_fields)[0] == 400
+            assert "__Host-HostingPanel" not in cookies
+            assert request("GET", "/users")[0] == 302
             assert request("POST", "/login", dict(fields, username="testuser", password="wrong"))[0] == 401
             status, headers, _ = request("POST", "/login",
                 dict(fields, username="testuser", password="test-password", remember="true"))
