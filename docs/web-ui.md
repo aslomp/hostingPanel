@@ -38,4 +38,6 @@ SystemServiceOperations owns the existing service inventory, inspection, log, ac
 
 ServerSettingsOperations owns the fixed server-settings compatibility routes, typed configuration source selection, request construction and JSON shape checks. ServerSettings uses LatestRead and DialogMutation; session changes clear configuration inputs and confirmation state. Existing explicit confirmations, API routes and upstream authorization are unchanged. Dynamic upstream configuration bodies remain JSON.
 
+LatestRead.RunPairAsync centralizes the sequential read boundary for system service inspection and update inventory: it checks cancellation and the captured UI context before dispatching the second read. Both results are applied together only while current.
+
 SystemUpdateOperations owns the fixed system-package compatibility routes and validates package names and transaction IDs. SystemUpdates uses separate LatestRead instances for inventory and transaction logs and DialogMutation for explicit update requests. Session changes clear old data and confirmations; dispatched writes are neither cancelled nor retried. Existing upstream authorization and UPDATE confirmation remain unchanged.

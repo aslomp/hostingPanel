@@ -84,17 +84,11 @@ else
         }
         var channel = Session.TicketChannel;
         bool Current() => !disposed && Session.Connected && Session.TicketChannel == channel;
-        return inventoryRead.RunAsync(async ct =>
+        return inventoryRead.RunPairAsync(UpdateOps.ListUpdatesAsync, UpdateOps.HistoryAsync,
+            Current, response =>
         {
-            var available = await UpdateOps.ListUpdatesAsync(ct);
-            ct.ThrowIfCancellationRequested();
-            if (!Current()) throw new OperationCanceledException();
-            var previous = await UpdateOps.HistoryAsync(ct);
-            return (Available: available, Previous: previous);
-        }, Current, response =>
-        {
-            updates = $"HTTP {response.Available.Status}\n{response.Available.Body}";
-            history = $"HTTP {response.Previous.Status}\n{response.Previous.Body}";
+            updates = $"HTTP {response.First.Status}\n{response.First.Body}";
+            history = $"HTTP {response.Second.Status}\n{response.Second.Body}";
         }, ex => feedback = ex.Message);
     }
 
