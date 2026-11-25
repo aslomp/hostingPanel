@@ -27,6 +27,23 @@ public static class DialogMutationTests
         await mutation.RunAsync(session, channel, _ => throw new Exception("Obsolete dialog submitted"));
         await mutation.RunAsync(session, session.TicketChannel, _ => throw new InvalidOperationException("expected"));
         if (mutation.Error != "expected" || mutation.Busy) throw new Exception("Error state not restored");
+        await mutation.RunAsync(session, session.TicketChannel, _ =>
+            throw new System.Text.Json.JsonException("invalid JSON"));
+        if (mutation.Error != "invalid JSON" || mutation.Busy)
+            throw new Exception("JSON errors must restore mutation state");
+
+        var staleFailure = new TaskCompletionSource();
+        var failing = mutation.RunAsync(session, session.TicketChannel, async _ =>
+        {
+            await staleFailure.Task;
+            throw new System.Text.Json.JsonException("obsolete JSON error");
+        });
+        session.SetCredentials("thirduser", "test-password");
+        staleFailure.SetResult();
+        await failing;
+        if (mutation.Error is not null || mutation.Busy)
+            throw new Exception("Obsolete JSON error leaked across sessions");
+
         var completion = new TaskCompletionSource();
         var afterDispose = false;
         var last = mutation.RunAsync(session, session.TicketChannel, async current =>

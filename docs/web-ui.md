@@ -30,7 +30,7 @@ The DNS zone overview uses LatestRead for its authorized inventory, clears recor
 
 ## Dialog mutation lifecycle
 
-Account, database, domain and standalone DNS creation dialogs and the DNS record editor use component-owned DialogMutation for exclusive submission and error state. The dialog captures the session channel at opening, validates it again after asynchronous form validation and before accepting backend results, and closes on identity changes. Dispatched writes are never cancelled or replayed by the UI. Backend-specific result interpretation remains with the feature; authorization remains with the provider.
+Account, database, domain and standalone DNS creation dialogs and the DNS record editor use component-owned DialogMutation for exclusive submission and error state. The dialog captures the session channel at opening, validates it again after asynchronous form validation and before accepting backend results, and closes on identity changes. Dispatched writes are never cancelled or replayed by the UI. DialogMutation also captures JSON parsing failures while the captured session is current. Administrative pages use OperationFeedback to format raw HTTP results consistently; backend-specific result interpretation remains with the feature and authorization remains with the provider.
 
 SystemInformationOperations owns the fixed system-information endpoint list and formats upstream responses for the system information page. The page uses LatestRead and clears results on session changes. Upstream response bodies remain generic; unsupported responses are preserved.
 
