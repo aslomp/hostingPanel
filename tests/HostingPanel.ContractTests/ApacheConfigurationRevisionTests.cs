@@ -24,6 +24,7 @@ internal static class ApacheConfigurationRevisionTests
         }
         catch (ArgumentException) { }
         VerifyStorageAsync(first).GetAwaiter().GetResult();
+        VerifyUnavailableStorageAsync(first).GetAwaiter().GetResult();
     }
 
     private static async Task VerifyStorageAsync(ApacheConfigurationRevision revision)
@@ -67,6 +68,37 @@ internal static class ApacheConfigurationRevisionTests
             catch (IOException) { }
             Require(await File.ReadAllTextAsync(path) == "corrupt");
             Require(Directory.GetFiles(root).Length == 1);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    private static async Task VerifyUnavailableStorageAsync(ApacheConfigurationRevision revision)
+    {
+        var root = Directory.CreateTempSubdirectory("apache-unavailable-").FullName;
+        try
+        {
+            var missing = Path.Combine(root, "missing");
+            try
+            {
+                await new ApacheCandidateStore(missing).RecordAsync(revision, CancellationToken.None);
+                throw new Exception("Missing storage was accepted.");
+            }
+            catch (DirectoryNotFoundException) { }
+            Require(!Directory.Exists(missing));
+
+            if (OperatingSystem.IsLinux())
+            {
+                var real = Directory.CreateDirectory(Path.Combine(root, "real")).FullName;
+                var alias = Path.Combine(root, "alias");
+                Directory.CreateSymbolicLink(alias, real);
+                try
+                {
+                    await new ApacheCandidateStore(alias).RecordAsync(revision, CancellationToken.None);
+                    throw new Exception("Symbolic storage root was accepted.");
+                }
+                catch (IOException) { }
+                Require(Directory.GetFileSystemEntries(real).Length == 0);
+            }
         }
         finally { Directory.Delete(root, recursive: true); }
     }
