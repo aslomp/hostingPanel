@@ -23,6 +23,52 @@ internal static class ApacheConfigurationRevisionTests
             throw new Exception("Duplicate domain accepted.");
         }
         catch (ArgumentException) { }
+        VerifyStorageAsync(first).GetAwaiter().GetResult();
+    }
+
+    private static async Task VerifyStorageAsync(ApacheConfigurationRevision revision)
+    {
+        var root = Directory.CreateTempSubdirectory("apache-candidate-").FullName;
+        try
+        {
+            var store = new ApacheCandidateStore(root);
+            using var cancelled = new CancellationTokenSource();
+            cancelled.Cancel();
+            try
+            {
+                await store.RecordAsync(revision, cancelled.Token);
+                throw new Exception("Cancelled candidate was recorded.");
+            }
+            catch (OperationCanceledException) { }
+            Require(Directory.GetFileSystemEntries(root).Length == 0);
+
+            var path = await store.RecordAsync(revision, CancellationToken.None);
+            var concurrent = await Task.WhenAll(
+                Enumerable.Range(0, 8).Select(_ => store.RecordAsync(revision, CancellationToken.None)));
+            Require(concurrent.All(p => p == path));
+            Require(File.Exists(path));
+            Require(path == await store.RecordAsync(revision, CancellationToken.None));
+            Require(Directory.GetFiles(root).Length == 1);
+            using var document = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(path));
+            Require(document.RootElement.GetProperty("Id").GetString() == revision.Id);
+            Require(document.RootElement.GetProperty("Domains").GetArrayLength() == revision.VirtualHosts.Count);
+            Require(!File.Exists(Path.Combine(root, "current")));
+            var empty = new ApacheConfigurationRevision([]);
+            var emptyPath = await store.RecordAsync(empty, CancellationToken.None);
+            Require(emptyPath != path);
+            Require(Directory.GetFiles(root).Length == 2);
+            File.Delete(emptyPath);
+            await File.WriteAllTextAsync(path, "corrupt");
+            try
+            {
+                await store.RecordAsync(revision, CancellationToken.None);
+                throw new Exception("Conflicting candidate accepted.");
+            }
+            catch (IOException) { }
+            Require(await File.ReadAllTextAsync(path) == "corrupt");
+            Require(Directory.GetFiles(root).Length == 1);
+        }
+        finally { Directory.Delete(root, recursive: true); }
     }
 
     private static void Require(bool condition)
