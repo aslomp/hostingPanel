@@ -34,10 +34,12 @@ public sealed class ApacheCandidateStore
         });
         var target = Path.Combine(root, revision.Id + ".candidate.json");
         var temporary = Path.Combine(root, Guid.NewGuid().ToString("N") + ".tmp");
+        var ownsTemporary = false;
         try
         {
             await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
+                ownsTemporary = true;
                 await stream.WriteAsync(Encoding.UTF8.GetBytes(payload), ct);
                 await stream.FlushAsync(ct);
             }
@@ -53,7 +55,7 @@ public sealed class ApacheCandidateStore
         }
         finally
         {
-            File.Delete(temporary);
+            if (ownsTemporary) File.Delete(temporary);
         }
     }
 }
