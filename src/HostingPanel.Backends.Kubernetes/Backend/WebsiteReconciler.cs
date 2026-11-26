@@ -284,7 +284,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 logger.LogWarning(ex, "Domain cleanup failed for {Id}", operation.ResourceId);
             }
             await db.SaveChangesAsync(ct);
-            notifications.Publish();
+            if (operation.Status == "completed" || operation.Attempts == 1) notifications.Publish();
         }
     }
 
