@@ -16,6 +16,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
     ILogger<WebsiteReconciler> logger, NfsDirectoryProvisioner storage, HostingOperationNotifications notifications, KubernetesResourceClient resources) : BackgroundService
 {
     private string? appliedRuntimeHash;
+    private string? stagedApacheRevision;
     private bool migrated;
     private string? appliedListenerSet;
 
@@ -42,7 +43,8 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var listenerSet = settings.TlsListenerSetName;
         var listenerChanged = appliedListenerSet != listenerSet;
         var cleanupPending = await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "domain-cleanup" && x.Status == "pending", ct);
-        if (rows.Count == 0 && !shared && migrated && !listenerChanged && !cleanupPending) return;
+        var stagePending = configuration["KubernetesHosting:ApacheConfigPath"] is { Length: > 0 } && stagedApacheRevision is null;
+        if (rows.Count == 0 && !shared && migrated && !listenerChanged && !cleanupPending && !stagePending) return;
         var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
         var identities = await PhpIdentityModel.AllocateAsync(db, domains.Select(x => x.OwnerId), ct);
         var ownerIds = domains.Select(d => d.OwnerId).Distinct().ToArray();
@@ -123,6 +125,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 appliedRuntimeHash = hash;
             }
         }
+        await StageApacheConfigurationAsync(domains, accounts, identities, storageErrors, ct);
         // Legacy deployments are retired explicitly by the administrator after testing.
         migrated = !migrationFailed;
         if (!migrationFailed) appliedListenerSet = listenerSet;
@@ -135,6 +138,44 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         await db.SaveChangesAsync(ct);
         if (completed.Count > 0) notifications.Publish();
         await CleanupDeletedDomainsAsync(db, ct);
+    }
+
+    // Shadow publication during migration: the legacy runtime remains authoritative.
+    // Never stage a partial revision when a domain cannot be rendered.
+    private async Task StageApacheConfigurationAsync(
+        IReadOnlyList<HostedDomain> domains,
+        IReadOnlyDictionary<Guid, HostingAccount> accounts,
+        IReadOnlyDictionary<Guid, PhpAccountIdentity> identities,
+        IReadOnlyDictionary<Guid, Exception> storageErrors,
+        CancellationToken ct)
+    {
+        var path = configuration["KubernetesHosting:ApacheConfigPath"];
+        if (string.IsNullOrWhiteSpace(path)) return;
+        if (storageErrors.Count != 0)
+        {
+            stagedApacheRevision = null;
+            logger.LogWarning("Apache candidate publication deferred because website storage is unavailable");
+            return;
+        }
+
+        try
+        {
+            var revision = new ApacheConfigurationRevision(domains.Select(domain =>
+                KeyValuePair.Create(domain.Id, BuildVirtualHost(domain,
+                    accounts[domain.OwnerId].Username, identities[domain.OwnerId]).Apache)));
+            if (revision.Id == stagedApacheRevision) return;
+            var store = new ApacheCandidateStore(path);
+            await store.StageAsync(revision, ct);
+            stagedApacheRevision = revision.Id;
+            logger.LogInformation("Staged Apache configuration revision {Revision} with {Count} virtualhosts",
+                revision.Id, revision.VirtualHosts.Count);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            stagedApacheRevision = null;
+            // Shadow publication must not change existing website operation semantics.
+            logger.LogWarning(ex, "Apache candidate publication failed; will retry");
+        }
     }
 
     private async Task CleanupDeletedDomainsAsync(HostingPanelDbContext db, CancellationToken ct)

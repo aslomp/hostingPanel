@@ -85,6 +85,10 @@ spec:
               value: {{ required "kubernetesHosting.nfsPath is required" .Values.kubernetesHosting.nfsPath | quote }}
             - name: KubernetesHosting__NfsProvisioningPath
               value: /storage/sites
+            {{- if .Values.kubernetesHosting.apacheConfigClaim }}
+            - name: KubernetesHosting__ApacheConfigPath
+              value: /storage/apache-config
+            {{- end }}
             - name: KubernetesHosting__GatewayName
               value: {{ required "kubernetesHosting.gatewayName is required" .Values.kubernetesHosting.gatewayName | quote }}
             - name: KubernetesHosting__GatewayNamespace
