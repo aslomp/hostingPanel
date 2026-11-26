@@ -46,7 +46,7 @@ public sealed class KubernetesBackendSettings : IBackendSettings
     [Display(Name = "Package ACME defaults", Description = "Map package GUIDs to provider IDs.")]
     public Dictionary<string,string> AcmePackageProviders { get; set; } = new();
 
-    [Display(Name = "TLS ListenerSet", Description = "Existing ListenerSet in the hosting namespace. Must match the Helm listenerSetName permission.")]
+    [Display(Name = "TLS ListenerSet", Description = "Dedicated HostingPanel ListenerSet in the hosting namespace. Must match the Helm listenerSetName permission.")]
     public string TlsListenerSetName { get; set; } = "";
 
     [JsonIgnore]
