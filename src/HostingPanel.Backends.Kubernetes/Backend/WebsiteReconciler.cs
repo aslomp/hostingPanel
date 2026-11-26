@@ -33,28 +33,48 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         });
         void Notify() => wake.Writer.TryWrite(true);
         notifications.Changed += Notify;
+        using var watchCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var watch = WatchApachePodsAsync(Notify, watchCancellation.Token);
         try
         {
             while (!ct.IsCancellationRequested)
             {
-                try { await ReconcileAsync(ct); }
+                var needsRetry = true;
+                try { needsRetry = await ReconcileAsync(ct); }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
                 catch (Exception ex) { logger.LogError(ex, "Website reconciliation failed"); }
 
-                // Coalesce invalidations, retain a bounded recovery interval for
-                // persisted operations and external changes not yet watched.
+                // Coalesce invalidations. Keep periodic recovery for failed durable work
+                // and settings changes which do not publish notifications.
                 using var delay = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                delay.CancelAfter(TimeSpan.FromSeconds(5));
+                delay.CancelAfter(TimeSpan.FromSeconds(needsRetry ? 5 : 60));
                 try { await wake.Reader.ReadAsync(delay.Token); }
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
                 while (wake.Reader.TryRead(out _)) { }
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
-        finally { notifications.Changed -= Notify; }
+        finally
+        {
+            notifications.Changed -= Notify;
+            await watchCancellation.CancelAsync();
+            await watch;
+        }
     }
 
-    private async Task ReconcileAsync(CancellationToken ct)
+    private async Task WatchApachePodsAsync(Action notify, CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try { await resources.WatchApachePodsAsync(Namespace, notify, ct); }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+            catch (Exception ex) { logger.LogWarning(ex, "Apache pod watch disconnected"); }
+            try { await Task.Delay(TimeSpan.FromSeconds(5), ct); }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+        }
+    }
+
+    private async Task<bool> ReconcileAsync(CancellationToken ct)
     {
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
@@ -69,7 +89,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var runtime = new ApacheRevisionRuntime(resources, Namespace);
         if (!stagePending && !shared && rows.Count == 0 && migrated && !listenerChanged && !cleanupPending)
             stagePending = activatedReplicaFingerprint != await runtime.GetReplicaFingerprintAsync(ct);
-        if (rows.Count == 0 && !shared && migrated && !listenerChanged && !cleanupPending && !stagePending && legacyApacheRetired) return;
+        if (rows.Count == 0 && !shared && migrated && !listenerChanged && !cleanupPending && !stagePending && legacyApacheRetired) return false;
         var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
         var identities = await PhpIdentityModel.AllocateAsync(db, domains.Select(x => x.OwnerId), ct);
         var ownerIds = domains.Select(d => d.OwnerId).Distinct().ToArray();
@@ -162,9 +182,9 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 row.LastError = "Apache configuration activation failed; see application log.";
             }
             await db.SaveChangesAsync(ct);
-            if (completed.Count > 0) notifications.Publish();
+            if (completed.Any(row => row.Attempts == 1)) notifications.Publish();
             logger.LogWarning(ex, "Apache configuration activation failed; will retry");
-            return;
+            return true;
         }
         // Only remove obsolete transport objects after the NFS activation succeeded.
         if (!legacyApacheRetired)
@@ -191,6 +211,8 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         await db.SaveChangesAsync(ct);
         if (completed.Count > 0) notifications.Publish();
         await CleanupDeletedDomainsAsync(db, ct);
+        return migrationFailed || !legacyApacheRetired || await db.ReconciliationOperations.AnyAsync(x =>
+            x.Status == "pending" && (x.ResourceType == "website" || x.ResourceType == "domain-cleanup"), ct);
     }
 
     private async Task ActivateApacheConfigurationAsync(

@@ -105,6 +105,27 @@ public sealed class KubernetesResourceClient : IDisposable
         KubernetesJson.Serialize(await Api.CoreV1.ListNamespacedPodAsync(ns, labelSelector: selector, cancellationToken: ct));
 
 
+    // A list/resourceVersion followed by a watch closes the startup race.
+    // Reconnect is owned by the reconciler; callbacks are invalidation only.
+    public async Task WatchApachePodsAsync(string ns, Action changed, CancellationToken ct)
+    {
+        const string selector = "app.kubernetes.io/name=apache-baseline";
+        var initial = await Api.CoreV1.ListNamespacedPodAsync(ns, labelSelector: selector, cancellationToken: ct);
+        changed();
+        var response = Api.CoreV1.ListNamespacedPodWithHttpMessagesAsync(ns,
+            labelSelector: selector, resourceVersion: initial.Metadata.ResourceVersion,
+            watch: true, timeoutSeconds: 300, cancellationToken: ct);
+        await foreach (var (kind, _) in response.WatchAsync<V1Pod, V1PodList>(
+            onError: error => throw new InvalidOperationException("Apache pod watch failed.", error),
+            cancellationToken: ct))
+        {
+            if (kind == WatchEventType.Error)
+                throw new InvalidOperationException("Apache pod watch returned an error.");
+            if (kind is WatchEventType.Added or WatchEventType.Modified or WatchEventType.Deleted)
+                changed();
+        }
+    }
+
     // Deliberately expose only the two platform Apache operations, not a
     // general-purpose command execution API.
     public Task ValidateApacheRevisionAsync(string ns, string pod, string revision, CancellationToken ct)
