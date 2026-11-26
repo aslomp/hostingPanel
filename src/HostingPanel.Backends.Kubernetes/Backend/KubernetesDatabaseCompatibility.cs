@@ -11,7 +11,7 @@ namespace HostingPanel.Api;
 /// <summary>Explicit subset of the pinned DirectAdmin database contract.</summary>
 public sealed class KubernetesDatabaseCompatibility(
     HostingPanelDbContext db, KubernetesIdentityService identity,
-    IDatabases databases, MariaDbProvisioner provider)
+    IDatabases databases, MariaDbProvisioner provider, KubernetesDatabaseService databaseService)
 {
     private static readonly string[] PrivilegeNames = [
         "alter", "alterRoutine", "create", "createRoutine", "createTmpTable", "createView",
@@ -98,31 +98,44 @@ public sealed class KubernetesDatabaseCompatibility(
                 }), ct);
                 return;
             }
-            if (method == "POST" && path == "/api/db-manage/create-db-with-user")
+            if (method == "POST" && (path == "/api/db-manage/create-db" || path == "/api/db-manage/create-db-with-user"))
             {
                 using var document = await JsonDocument.ParseAsync(context.Request.Body, cancellationToken: ct);
                 var body = document.RootElement;
                 if (body.ValueKind != JsonValueKind.Object) { await Error(context, 400, "INVALID_DATABASE_REQUEST"); return; }
                 string? Read(string key) => body.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+                var withUser = path.EndsWith("/create-db-with-user", StringComparison.Ordinal);
                 var fullName = Read("database");
                 var fullUser = Read("dbuser");
                 if (string.IsNullOrEmpty(fullUser)) fullUser = fullName;
                 var prefix = principal.Username + "_";
-                if (fullName is null || fullUser is null || !fullName.StartsWith(prefix, StringComparison.Ordinal) ||
-                    !fullUser.StartsWith(prefix, StringComparison.Ordinal) ||
-                    !MariaDbProvisioner.ValidName(fullName, 64) || !MariaDbProvisioner.ValidName(fullUser, 80))
-                { await Error(context, 494, "DATABASE_INVALID_ENTITY_NAME"); return; }
-                if (!string.IsNullOrEmpty(Read("charset")) || !string.IsNullOrEmpty(Read("collation")) ||
-                    body.TryGetProperty("hostPatterns", out _) || body.TryGetProperty("privileges", out _))
+                if (fullName is null || !fullName.StartsWith(prefix, StringComparison.Ordinal) ||
+                    fullName.Length <= prefix.Length || !MariaDbProvisioner.ValidName(fullName, 64) ||
+                    (withUser && (fullUser is null || !fullUser.StartsWith(prefix, StringComparison.Ordinal) ||
+                    fullUser.Length <= prefix.Length || !MariaDbProvisioner.ValidName(fullUser, 80))))
+                { await Error(context, withUser ? 494 : 492, "DATABASE_INVALID_ENTITY_NAME"); return; }
+                if (body.TryGetProperty("hostPatterns", out _) || body.TryGetProperty("privileges", out _))
                 { await Error(context, 501, "DATABASE_OPTIONS_NOT_IMPLEMENTED"); return; }
+                foreach (var key in new[] { "database", "dbuser", "password", "charset", "collation" })
+                    if (body.TryGetProperty(key, out var value) && value.ValueKind != JsonValueKind.String)
+                    { await Error(context, 400, "INVALID_DATABASE_REQUEST"); return; }
                 var password = Read("password");
                 if (string.IsNullOrEmpty(password)) password = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24));
-                var result = await databases.CreateAsync(new DatabaseCreateRequest(fullName[prefix.Length..], fullUser[prefix.Length..], password), auth, ct);
+                var result = withUser
+                    ? await databaseService.CreateWithUserAsync(new DatabaseCreateRequest(fullName[prefix.Length..], fullUser![prefix.Length..], password), Read("charset"), Read("collation"), auth, ct)
+                    : await databaseService.CreateEmptyAsync(fullName[prefix.Length..], Read("charset"), Read("collation"), auth, ct);
                 if (result.Error is not null)
                 {
-                    await Error(context, result.Status == 409 ? 490 : result.Status == 502 ? 500 : result.Status, result.Error);
+                    var status = result.Error switch
+                    {
+                        "DATABASE_INVALID_CHARSET" => withUser ? 492 : 494,
+                        "DATABASE_INVALID_COLLATION" => withUser ? 493 : 495,
+                        _ => result.Status == 409 && withUser ? 490 : result.Status == 502 ? 500 : result.Status
+                    };
+                    await Error(context, status, result.Error);
                     return;
                 }
+                if (!withUser) { context.Response.StatusCode = 204; return; }
                 await context.Response.WriteAsJsonAsync(new {
                     address = provider.Address, database = fullName, dbuser = fullUser,
                     hostPatterns = new[] { "%" }, password, privileges = AllPrivileges(), unixSocket = false

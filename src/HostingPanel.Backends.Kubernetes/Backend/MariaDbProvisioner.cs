@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 namespace HostingPanel.Api;
 
 public sealed class MariaDbConflictException : Exception { }
+public sealed class MariaDbEncodingException(string code) : Exception(code) { public string Code { get; } = code; }
 
 /// <summary>Physical database operations. The caller must establish account ownership first.</summary>
 public sealed class MariaDbProvisioner(IConfiguration configuration)
@@ -78,25 +79,27 @@ public sealed class MariaDbProvisioner(IConfiguration configuration)
         await command.ExecuteNonQueryAsync(ct);
     }
 
-    public async Task CreateAsync(string name, string username, string password, CancellationToken ct)
+    public async Task CreateAsync(string name, string? username, string? password, CancellationToken ct, string? charset = null, string? collation = null)
     {
         var databaseIdentifier = QuoteDatabase(name);
-        var accountIdentifier = QuoteAccount(username);
+        var accountIdentifier = username is null ? null : QuoteAccount(username);
         var grantIdentifier = QuoteGrantDatabase(name);
         await using var connection = await OpenAsync(ct);
         // Check for existing physical resources; never adopt or overwrite external accounts.
         using (var check = new MySqlCommand("SELECT (SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE LOWER(SCHEMA_NAME)=LOWER(@db)) + (SELECT COUNT(*) FROM mysql.user WHERE LOWER(User)=LOWER(@user))", connection))
         {
             check.Parameters.AddWithValue("@db", name);
-            check.Parameters.AddWithValue("@user", username);
+            check.Parameters.AddWithValue("@user", (object?)username ?? DBNull.Value);
             if (Convert.ToInt64(await check.ExecuteScalarAsync(ct)) != 0) throw new MariaDbConflictException();
         }
+        var encoding = await EncodingClauseAsync(connection, charset, collation, ct);
         // DDL auto-commits. Track only acknowledged creates for compensation.
         bool databaseCreated = false, userCreated = false;
         try
         {
-            await ExecuteAsync(connection, $"CREATE DATABASE {databaseIdentifier}", ct);
+            await ExecuteAsync(connection, $"CREATE DATABASE {databaseIdentifier}{encoding}", ct);
             databaseCreated = true;
+            if (accountIdentifier is null) return;
             await ExecuteAsync(connection, $"CREATE USER {accountIdentifier} IDENTIFIED BY @password", ct, password);
             userCreated = true;
             // Escape underscores in database-level GRANT patterns (MariaDB wildcard semantics).
@@ -112,6 +115,31 @@ public sealed class MariaDbProvisioner(IConfiguration configuration)
             catch (MySqlException) { /* Preserve original failure; operator must reconcile uncertain state. */ }
             throw;
         }
+    }
+
+    private static async Task<string> EncodingClauseAsync(MySqlConnection connection, string? charset, string? collation, CancellationToken ct)
+    {
+        var clause = "";
+        if (!string.IsNullOrEmpty(charset))
+        {
+            if (!ValidName(charset, 64)) throw new MariaDbEncodingException("DATABASE_INVALID_CHARSET");
+            using var command = new MySqlCommand("SELECT CHARACTER_SET_NAME FROM information_schema.CHARACTER_SETS WHERE CHARACTER_SET_NAME = @charset", connection);
+            command.Parameters.AddWithValue("@charset", charset);
+            if (await command.ExecuteScalarAsync(ct) is not string actual)
+                throw new MariaDbEncodingException("DATABASE_INVALID_CHARSET");
+            clause = " CHARACTER SET " + QuoteDatabase(actual);
+        }
+        if (!string.IsNullOrEmpty(collation))
+        {
+            if (!ValidName(collation, 64)) throw new MariaDbEncodingException("DATABASE_INVALID_COLLATION");
+            using var command = new MySqlCommand("SELECT COLLATION_NAME FROM information_schema.COLLATIONS WHERE COLLATION_NAME = @collation AND (@charset IS NULL OR CHARACTER_SET_NAME = @charset)", connection);
+            command.Parameters.AddWithValue("@collation", collation);
+            command.Parameters.AddWithValue("@charset", string.IsNullOrEmpty(charset) ? (object)DBNull.Value : charset);
+            if (await command.ExecuteScalarAsync(ct) is not string actual)
+                throw new MariaDbEncodingException("DATABASE_INVALID_COLLATION");
+            clause += " COLLATE " + QuoteDatabase(actual);
+        }
+        return clause;
     }
 
     public async Task DeleteAsync(string name, IReadOnlyList<string> ownedUsers, CancellationToken ct)
