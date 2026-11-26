@@ -29,6 +29,7 @@ internal static class ApacheConfigurationRevisionTests
         VerifyInvalidEntries();
         VerifyStorageAsync(first).GetAwaiter().GetResult();
         VerifySnapshotAsync(first).GetAwaiter().GetResult();
+        VerifySelectionAsync(first).GetAwaiter().GetResult();
         VerifyUnavailableStorageAsync(first).GetAwaiter().GetResult();
     }
 
@@ -113,6 +114,52 @@ internal static class ApacheConfigurationRevisionTests
             }
             catch (IOException) { }
             Require(await File.ReadAllTextAsync(first) == "corrupt");
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+
+    private static async Task VerifySelectionAsync(ApacheConfigurationRevision revision)
+    {
+        var root = Directory.CreateTempSubdirectory("apache-selection-").FullName;
+        try
+        {
+            var store = new ApacheCandidateStore(root);
+            var ct = CancellationToken.None;
+            var empty = new ApacheConfigurationRevision([]);
+            Require(await store.ReadActiveAsync(ct) is null);
+            await store.StageAsync(empty, ct);
+            await store.StageAsync(revision, ct);
+            await store.SelectAsync(empty.Id, ct);
+            Require(await store.ReadActiveAsync(ct) == empty.Id);
+            await store.SelectAsync(revision.Id, ct);
+            Require(await new ApacheCandidateStore(root).ReadActiveAsync(ct) == revision.Id);
+            try
+            {
+                await store.SelectAsync("../escape", ct);
+                throw new Exception("Invalid revision selected.");
+            }
+            catch (IOException) { }
+            try
+            {
+                await store.SelectAsync(new string('f', 64), ct);
+                throw new Exception("Unstaged revision selected.");
+            }
+            catch (IOException) { }
+            Require(await store.ReadActiveAsync(ct) == revision.Id);
+            using var cancelled = new CancellationTokenSource();
+            cancelled.Cancel();
+            try
+            {
+                await store.SelectAsync(empty.Id, cancelled.Token);
+                throw new Exception("Cancelled selection succeeded.");
+            }
+            catch (OperationCanceledException) { }
+            Require(await store.ReadActiveAsync(ct) == revision.Id);
+            await store.SelectAsync(empty.Id, ct);
+            Require(await store.ReadActiveAsync(ct) == empty.Id);
+            Require(Directory.Exists(Path.Combine(root, revision.Id)));
+            Require(!Directory.GetFiles(root).Any(x => Path.GetFileName(x).StartsWith(".active-")));
         }
         finally { Directory.Delete(root, recursive: true); }
     }
