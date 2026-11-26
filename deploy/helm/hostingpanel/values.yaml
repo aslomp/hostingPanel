@@ -30,8 +30,8 @@ kubernetesHosting:
   # Optional existing PVC for the provisioning filesystem. Its root must
   # correspond to nfsPath and permit the authorized provisioning identity.
   provisioningClaim: ""
-  # Required existing RWX NFS PVC for enabled hosting. Must not overlap customer storage.
-  apacheConfigClaim: ""
+  # Required dedicated direct NFS export on nfsServer; must not overlap nfsPath.
+  apacheConfigPath: ""
   gatewayName: ""
   gatewayNamespace: envoy-gateway-system
   httpListener: http

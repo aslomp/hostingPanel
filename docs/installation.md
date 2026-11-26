@@ -39,6 +39,22 @@ kubectl -n hostingpanel get pods,svc,pvc
 
 For actual hosting see [Kubernetes hosting](kubernetes-hosting.md), [DNS](dns.md), [configuration](configuration.md) and the current chart. Configure trusted HTTPS ingress. Verify login, /healthz and the requested backend operations independently. A healthy panel does not establish that websites, DNS or certificates are ready.
 
+## Dedicated Apache configuration export
+
+For enabled Kubernetes hosting, create a separate NFS export on the configured
+nfsServer and set kubernetesHosting.apacheConfigPath to its absolute server-side
+path. It must not overlap nfsPath or be accessible from customer workloads.
+The chart mounts it directly, writable in the panel (UID/GID 1654) and read-only
+in Apache (UID/GID 1001). Configure export permissions on the server so that
+the panel can create revision directories and files and Apache can read them.
+Keep root squash and restrict NFS access to authorized nodes. Verify the actual
+permissions and mounts; Kubernetes fsGroup alone does not configure NFS ownership.
+
+No Apache PV, PVC, StorageClass or CSI driver is required. When upgrading from
+apacheConfigClaim, set apacheConfigPath instead and point it at the same dedicated
+export if appropriate. Do not delete the previous claim or its data automatically.
+The backend regenerates configuration from desired state if the export is empty.
+
 ## MariaDB and iSCSI alongside NFS
 
 NFS remains the shared website filesystem. MariaDB can use an independent
@@ -72,6 +88,7 @@ kubernetesHosting:
   enabled: true
   nfsServer: nfs.example.internal
   nfsPath: /home
+  apacheConfigPath: /exports/apache-config
 mariadb:
   enabled: true
   storageClassName: iscsi

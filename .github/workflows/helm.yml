@@ -24,3 +24,9 @@ jobs:
           grep -q 'php:8.6.0-fpm' /tmp/hosting.yaml
           grep -q 'name: apache-baseline' /tmp/hosting.yaml
           grep -q 'kind: RoleBinding' /tmp/hosting.yaml
+          for invalid in "" / /exports/sites /exports/sites/config /exports /exports/apache-config/../sites; do
+            if helm template admin deploy/helm/hostingpanel "${args[@]}" --set-string "kubernetesHosting.apacheConfigPath=$invalid" > /tmp/invalid.yaml 2>/tmp/invalid.err; then
+              echo "Unexpectedly accepted Apache export: $invalid"; exit 1
+            fi
+            grep -qE 'apacheConfigPath|Apache configuration NFS export' /tmp/invalid.err
+          done

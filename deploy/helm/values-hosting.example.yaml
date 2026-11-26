@@ -27,8 +27,8 @@ kubernetesHosting:
   httpsListener: https
   apacheImage: httpd:2.4
   apacheReplicas: 1
-  # Existing dedicated RWX NFS claim, separate from customer storage.
-  apacheConfigClaim: apache-config
+  # Existing dedicated NFS export on nfsServer, separate from customer storage.
+  apacheConfigPath: /exports/apache-config
   phpImage: php:8.6.0-fpm
   phpReplicas: 1
   # Explicit opt-in: only mutually trusted PHP applications until tenant

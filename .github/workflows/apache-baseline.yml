@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Render chart
         run: |
-          helm template smoke deploy/helm/hostingpanel --namespace hosting --set backend=Kubernetes --set kubernetesHosting.enabled=true --set kubernetesHosting.nfsServer=192.0.2.1 --set kubernetesHosting.nfsPath=/home --set kubernetesHosting.gatewayName=smoke --set kubernetesHosting.apacheConfigClaim=apache-config-test --set powerDns.enabled=false --set certManager.enabled=false > /tmp/hosting-rendered.yaml
+          helm template smoke deploy/helm/hostingpanel --namespace hosting --set backend=Kubernetes --set kubernetesHosting.enabled=true --set kubernetesHosting.nfsServer=192.0.2.1 --set kubernetesHosting.nfsPath=/home --set kubernetesHosting.gatewayName=smoke --set kubernetesHosting.apacheConfigPath=/exports/apache-config --set powerDns.enabled=false --set certManager.enabled=false > /tmp/hosting-rendered.yaml
           python3 - <<'PY'
           import pathlib, yaml
           docs = list(yaml.safe_load_all(pathlib.Path('/tmp/hosting-rendered.yaml').read_text()))
@@ -51,7 +51,8 @@ jobs:
                   assert mounts[0]['mountPath'] == '/storage/apache-config'
                   assert mounts[0].get('readOnly', False) == (container['name'] == 'apache')
                   volume = next(v for v in pod['volumes'] if v['name'] == 'apache-config')
-                  assert volume['persistentVolumeClaim']['claimName'] == 'apache-config-test'
+                  assert volume['nfs'] == {'server': '192.0.2.1', 'path': '/exports/apache-config', 'readOnly': container['name'] == 'apache'}
+                  assert 'persistentVolumeClaim' not in volume
                   seen.add(container['name'])
               assert all(c['name'] != 'vhost-sync' for c in pod['containers'])
           assert seen == {'web', 'apache'}
