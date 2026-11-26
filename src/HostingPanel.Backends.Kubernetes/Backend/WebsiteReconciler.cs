@@ -21,7 +21,6 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
     private string? activatedReplicaFingerprint;
     private bool migrated;
     private bool legacyApacheRetired;
-    private string? appliedListenerSet;
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -81,15 +80,12 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var rows = await db.ReconciliationOperations.Where(x => x.ResourceType == "website"
             && x.Status == "pending").ToListAsync(ct);
         var shared = configuration.GetValue<bool>("KubernetesHosting:AllowSharedPhpRuntime");
-        var settings = await scope.ServiceProvider.GetRequiredService<IKubernetesSettingsReader>().GetEffectiveSettingsAsync(ct);
-        var listenerSet = settings.TlsListenerSetName;
-        var listenerChanged = appliedListenerSet != listenerSet;
         var cleanupPending = await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "domain-cleanup" && x.Status == "pending", ct);
         var stagePending = stagedApacheRevision is null;
         var runtime = new ApacheRevisionRuntime(resources, Namespace);
-        if (!stagePending && !shared && rows.Count == 0 && migrated && !listenerChanged && !cleanupPending)
+        if (!stagePending && !shared && rows.Count == 0 && migrated && !cleanupPending)
             stagePending = activatedReplicaFingerprint != await runtime.GetReplicaFingerprintAsync(ct);
-        if (rows.Count == 0 && !shared && migrated && !listenerChanged && !cleanupPending && !stagePending && legacyApacheRetired) return false;
+        if (rows.Count == 0 && !shared && migrated && !cleanupPending && !stagePending && legacyApacheRetired) return false;
         var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
         var identities = await PhpIdentityModel.AllocateAsync(db, domains.Select(x => x.OwnerId), ct);
         var ownerIds = domains.Select(d => d.OwnerId).Distinct().ToArray();
@@ -120,7 +116,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         }
         var completed = new List<ReconciliationOperation>();
         var byId = rows.GroupBy(x => x.ResourceId).ToDictionary(x => x.Key, x => x.ToArray());
-        var targets = byId.Keys.Concat(migrated && !listenerChanged ? Array.Empty<Guid>() : domains.Select(x => x.Id)).Distinct();
+        var targets = byId.Keys.Concat(migrated ? Array.Empty<Guid>() : domains.Select(x => x.Id)).Distinct();
         var migrationFailed = false;
         foreach (var id in targets)
         {
@@ -138,7 +134,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 {
                     if (storageErrors.TryGetValue(domain.Id, out var storageError))
                         throw new InvalidOperationException("Website storage unavailable.", storageError);
-                    var manifest = BuildManifest(domain, accounts[domain.OwnerId].Username, identities[domain.OwnerId], listenerSet.Length > 0);
+                    var manifest = BuildManifest(domain);
                     await resources.ApplyAsync(manifest, Namespace, "hostingpanel", ct);
                 }
                 completed.AddRange(group);
@@ -201,7 +197,6 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         }
         // Legacy per-site deployments are retired explicitly by the administrator after testing.
         migrated = !migrationFailed;
-        if (!migrationFailed) appliedListenerSet = listenerSet;
         foreach (var row in completed)
         {
             row.Status = "completed";
@@ -335,15 +330,14 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         return (apache, tls);
     }
 
-    private string BuildManifest(HostedDomain domain, string username, PhpAccountIdentity identity, bool managedTls)
+    private string BuildManifest(HostedDomain domain)
     {
-        var (_, tls) = BuildVirtualHost(domain, username, identity);
         var host = domain.Name;
         var name = "site-" + domain.Id.ToString("N");
         var resources = new object[] {
             new { apiVersion = "gateway.networking.k8s.io/v1", kind = "HTTPRoute", metadata = new { name, @namespace = Namespace }, spec = new {
                 parentRefs = new[] { new { name = Required("GatewayName"), @namespace = Required("GatewayNamespace"),
-                    sectionName = Required(tls && !managedTls ? "HttpsListener" : "HttpListener") } },
+                    sectionName = Required("HttpListener") } },
                 hostnames = new[] { host }, rules = new[] { new { backendRefs = new[] { new { name = "apache-baseline", port = 80 } } } }
             } }
         };
