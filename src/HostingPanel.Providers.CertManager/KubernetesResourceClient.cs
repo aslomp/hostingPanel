@@ -118,8 +118,11 @@ public sealed class KubernetesResourceClient : IDisposable
         }, ct);
     }
 
-    public Task ReloadApacheAsync(string ns, string pod, CancellationToken ct) =>
-        ApacheExecAsync(ns, pod, new[] { "httpd", "-k", "graceful", "-f", "/etc/hostingpanel/httpd.conf" }, ct);
+    public async Task ReloadApacheAsync(string ns, string pod, CancellationToken ct)
+    {
+        await ApacheExecAsync(ns, pod, new[] { "httpd", "-t", "-f", "/etc/hostingpanel/httpd.conf" }, ct);
+        await ApacheExecAsync(ns, pod, new[] { "httpd", "-k", "graceful", "-f", "/etc/hostingpanel/httpd.conf" }, ct);
+    }
 
     private async Task ApacheExecAsync(string ns, string pod, string[] command, CancellationToken ct)
     {

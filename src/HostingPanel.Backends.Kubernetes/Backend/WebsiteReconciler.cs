@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 using HostingPanel.Api.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
@@ -17,6 +18,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
 {
     private string? appliedRuntimeHash;
     private string? stagedApacheRevision;
+    private string? activatedReplicaFingerprint;
     private bool migrated;
     private bool legacyApacheRetired;
     private string? appliedListenerSet;
@@ -24,13 +26,32 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         if (!configuration.GetValue<bool>("KubernetesHosting:Enabled")) return;
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
-        do
+        var wake = Channel.CreateBounded<bool>(new BoundedChannelOptions(1)
         {
-            try { await ReconcileAsync(ct); }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
-            catch (Exception ex) { logger.LogError(ex, "Website reconciliation failed"); }
-        } while (await timer.WaitForNextTickAsync(ct));
+            FullMode = BoundedChannelFullMode.DropWrite,
+            SingleReader = true
+        });
+        void Notify() => wake.Writer.TryWrite(true);
+        notifications.Changed += Notify;
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                try { await ReconcileAsync(ct); }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+                catch (Exception ex) { logger.LogError(ex, "Website reconciliation failed"); }
+
+                // Coalesce invalidations, retain a bounded recovery interval for
+                // persisted operations and external changes not yet watched.
+                using var delay = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                delay.CancelAfter(TimeSpan.FromSeconds(5));
+                try { await wake.Reader.ReadAsync(delay.Token); }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
+                while (wake.Reader.TryRead(out _)) { }
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        finally { notifications.Changed -= Notify; }
     }
 
     private async Task ReconcileAsync(CancellationToken ct)
@@ -44,7 +65,10 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var listenerSet = settings.TlsListenerSetName;
         var listenerChanged = appliedListenerSet != listenerSet;
         var cleanupPending = await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "domain-cleanup" && x.Status == "pending", ct);
-        var stagePending = configuration["KubernetesHosting:ApacheConfigPath"] is { Length: > 0 } && stagedApacheRevision is null;
+        var stagePending = stagedApacheRevision is null;
+        var runtime = new ApacheRevisionRuntime(resources, Namespace);
+        if (!stagePending && !shared && rows.Count == 0 && migrated && !listenerChanged && !cleanupPending)
+            stagePending = activatedReplicaFingerprint != await runtime.GetReplicaFingerprintAsync(ct);
         if (rows.Count == 0 && !shared && migrated && !listenerChanged && !cleanupPending && !stagePending && legacyApacheRetired) return;
         var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
         var identities = await PhpIdentityModel.AllocateAsync(db, domains.Select(x => x.OwnerId), ct);
@@ -181,12 +205,17 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var revision = new ApacheConfigurationRevision(domains.Select(domain =>
             KeyValuePair.Create(domain.Id, BuildVirtualHost(domain,
                 accounts[domain.OwnerId].Username, identities[domain.OwnerId]).Apache)));
-        if (revision.Id == stagedApacheRevision) return;
         var store = new ApacheCandidateStore(Required("ApacheConfigPath"));
         var runtime = new ApacheRevisionRuntime(resources, Namespace);
+        var fingerprint = await runtime.GetReplicaFingerprintAsync(ct);
+        if (revision.Id == stagedApacheRevision && fingerprint == activatedReplicaFingerprint &&
+            await store.ReadActiveAsync(ct) == revision.Id) return;
         await new ApacheRevisionActivator(store).ActivateAsync(revision,
             runtime.ValidateAsync, runtime.ReloadAsync, ct);
+        if (fingerprint != await runtime.GetReplicaFingerprintAsync(ct))
+            throw new InvalidOperationException("Apache replica set changed during activation; retry required.");
         stagedApacheRevision = revision.Id;
+        activatedReplicaFingerprint = fingerprint;
         logger.LogInformation("Activated Apache configuration revision {Revision} with {Count} virtualhosts",
             revision.Id, revision.VirtualHosts.Count);
     }
