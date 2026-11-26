@@ -78,5 +78,42 @@ public sealed class KubernetesResourceClient : IDisposable
     public async Task<string> ListPodsAsync(string ns, string selector, CancellationToken ct) =>
         KubernetesJson.Serialize(await Api.CoreV1.ListNamespacedPodAsync(ns, labelSelector: selector, cancellationToken: ct));
 
+
+    // Deliberately expose only the two platform Apache operations, not a
+    // general-purpose command execution API.
+    public Task ValidateApacheRevisionAsync(string ns, string pod, string revision, CancellationToken ct)
+    {
+        if (revision.Length != 64 || !revision.All(char.IsAsciiHexDigitLower))
+            throw new ArgumentException("Invalid Apache revision.", nameof(revision));
+        return ApacheExecAsync(ns, pod, new[] {
+            "httpd", "-t", "-f", "/etc/hostingpanel/httpd.conf",
+            "-D", "HOSTINGPANEL_CANDIDATE",
+            "-c", "IncludeOptional /storage/apache-config/" + revision + "/*.conf"
+        }, ct);
+    }
+
+    public Task ReloadApacheAsync(string ns, string pod, CancellationToken ct) =>
+        ApacheExecAsync(ns, pod, new[] { "httpd", "-k", "graceful", "-f", "/etc/hostingpanel/httpd.conf" }, ct);
+
+    private async Task ApacheExecAsync(string ns, string pod, string[] command, CancellationToken ct)
+    {
+        var target = await Api.CoreV1.ReadNamespacedPodAsync(pod, ns, cancellationToken: ct);
+        if (target.Metadata.DeletionTimestamp is not null ||
+            (target.Metadata.Labels is null || !target.Metadata.Labels.TryGetValue("app.kubernetes.io/name", out var label) || label != "apache-baseline") ||
+            target.Spec.Containers.Count != 1 || target.Spec.Containers[0].Name != "apache" ||
+            target.Status.Phase != "Running")
+            throw new InvalidOperationException("Apache replica is not available for configuration activation.");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        var exit = await Api.NamespacedPodExecAsync(pod, ns, "apache", command, false,
+            async (_, stdout, stderr) =>
+            {
+                await Task.WhenAll(stdout.CopyToAsync(Stream.Null, timeout.Token),
+                    stderr.CopyToAsync(Stream.Null, timeout.Token));
+            }, timeout.Token);
+        if (exit != 0)
+            throw new InvalidOperationException("Apache configuration operation failed with exit code " + exit);
+    }
+
     public void Dispose() { if (client.IsValueCreated) client.Value.Dispose(); }
 }

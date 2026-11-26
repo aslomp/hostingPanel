@@ -132,7 +132,9 @@ data:
             DirectoryIndex index.html
         </Directory>
     </VirtualHost>
-    IncludeOptional /runtime/current/*.conf
+    <IfDefine !HOSTINGPANEL_CANDIDATE>
+        IncludeOptional /runtime/current/*.conf
+    </IfDefine>
   sync.py: |
     import hashlib, json, os, pathlib, re, shutil, ssl, subprocess, time, urllib.request, urllib.parse
     root = pathlib.Path("/vhosts")
