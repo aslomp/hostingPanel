@@ -48,12 +48,14 @@ public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfigur
             }
             catch (Exception ex) when (!ct.IsCancellationRequested) { logger.LogWarning(ex, "Certificate request failed for {Id}", domain.Id); }
         }
-        if (settings.TlsListenerSetName.Length > 0)
+        var set = configuration["CertManager:ListenerSetName"];
+        if (!string.IsNullOrEmpty(set))
         {
-            if (settings.TlsListenerSetName != configuration["CertManager:ListenerSetName"])
+            if (settings.TlsListenerSetName.Length > 0 && settings.TlsListenerSetName != set)
                 throw new InvalidOperationException("ListenerSet must match the Helm-authorized name.");
             await new ListenerSetReconciler(resources, configuration["KubernetesHosting:Namespace"] ?? "hosting")
-                .ReconcileAsync(settings.TlsListenerSetName, readyListeners, ct);
+                .ReconcileAsync(set, configuration["KubernetesHosting:GatewayName"] ?? throw new InvalidOperationException("Missing GatewayName."),
+                    configuration["KubernetesHosting:GatewayNamespace"] ?? throw new InvalidOperationException("Missing GatewayNamespace."), readyListeners, ct);
         }
         foreach (var item in actual.RootElement.GetProperty("items").EnumerateArray())
         {

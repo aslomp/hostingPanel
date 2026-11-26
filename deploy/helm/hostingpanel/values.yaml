@@ -65,8 +65,8 @@ powerDns:
 certManager:
   enabled: true
 
-  # Existing ListenerSet in the release namespace; reserve hp-tls-* listeners for HostingPanel.
-  listenerSetName: ""
+  # Dedicated controller-owned ListenerSet, created when a domain certificate is ready.
+  listenerSetName: hosting-sites
 
 # Optional shared MariaDB server for hosted applications.
 mariadb:

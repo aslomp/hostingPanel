@@ -57,6 +57,28 @@ public sealed class KubernetesResourceClient : IDisposable
     public async Task<string> GetAsync(string group, string version, string ns, string plural, string name, CancellationToken ct) =>
         KubernetesJson.Serialize(await Api.CustomObjects.GetNamespacedCustomObjectAsync(group, version, ns, plural, name, cancellationToken: ct));
 
+    public async Task<string?> GetListenerSetAsync(string ns, string name, CancellationToken ct)
+    {
+        try { return await GetAsync("gateway.networking.k8s.io", "v1", ns, "listenersets", name, ct); }
+        catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.NotFound) { return null; }
+    }
+
+    public async Task CreateListenerSetAsync(string ns, string manifest, CancellationToken ct)
+    {
+        using var doc = JsonDocument.Parse(manifest);
+        await Api.CustomObjects.CreateNamespacedCustomObjectAsync(doc.RootElement, "gateway.networking.k8s.io", "v1", ns, "listenersets", cancellationToken: ct);
+    }
+
+    public async Task DeleteListenerSetAsync(string ns, string name, string uid, string resourceVersion, CancellationToken ct)
+    {
+        try
+        {
+            await Api.CustomObjects.DeleteNamespacedCustomObjectAsync("gateway.networking.k8s.io", "v1", ns, "listenersets", name,
+                body: new V1DeleteOptions { Preconditions = new V1Preconditions { Uid = uid, ResourceVersion = resourceVersion } }, cancellationToken: ct);
+        }
+        catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.NotFound) { }
+    }
+
     public async Task<string> ListAsync(string group, string version, string ns, string plural, string? selector, CancellationToken ct) =>
         KubernetesJson.Serialize(await Api.CustomObjects.ListNamespacedCustomObjectAsync(group, version, ns, plural, labelSelector: selector, cancellationToken: ct));
 
