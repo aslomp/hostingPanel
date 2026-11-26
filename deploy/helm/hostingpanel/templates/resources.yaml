@@ -127,6 +127,15 @@ spec:
                   name: {{ default (printf "%s-powerdns" $name) .Values.powerDns.existingSecret | quote }}
                   key: api-key
             {{- end }}
+            {{- if and (eq .Values.backend "Kubernetes") .Values.mariadb.enabled }}
+            - name: MariaDb__Server
+              value: {{ printf "%s-mariadb" .Release.Name | quote }}
+            - name: MariaDb__ProvisioningPassword
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "mariadb.provisioningSecret is required when MariaDB is enabled" .Values.mariadb.provisioningSecret | quote }}
+                  key: password
+            {{- end }}
             - name: ConnectionStrings__HostingPanel
               value: "Data Source=/data/hostingpanel.db;Foreign Keys=True;Default Timeout=5"
             {{- if and (eq .Values.backend "Kubernetes") .Values.bootstrap.existingSecret }}

@@ -76,8 +76,10 @@ mariadb:
   storageClassName: ""
   size: 10Gi
   existingClaim: ""
-  # Existing Secret with key root-password; never put credentials in values.
+  # Existing Secret with key root-password; mounted only in MariaDB.
   existingSecret: ""
+  # Separate existing Secret with key password (64 hexadecimal characters).
+  provisioningSecret: ""
   resources:
     requests: {cpu: 100m, memory: 256Mi}
     limits: {cpu: "2", memory: 2Gi}

@@ -14,7 +14,24 @@ public sealed class MariaDbEncodingException(string code) : Exception(code) { pu
 public sealed class MariaDbProvisioner(IConfiguration configuration)
 {
     private readonly SemaphoreSlim gate = new(1);
-    private string? ConnectionString => configuration.GetConnectionString("MariaDb");
+    private string? ConnectionString
+    {
+        get
+        {
+            var explicitConnection = configuration.GetConnectionString("MariaDb");
+            if (!string.IsNullOrWhiteSpace(explicitConnection)) return explicitConnection;
+            var server = configuration["MariaDb:Server"];
+            var password = configuration["MariaDb:ProvisioningPassword"];
+            if (string.IsNullOrWhiteSpace(server) || string.IsNullOrWhiteSpace(password)) return null;
+            return new MySqlConnectionStringBuilder
+            {
+                Server = server,
+                UserID = "hostingpanel_provisioner",
+                Password = password,
+                SslMode = MySqlSslMode.Required
+            }.ConnectionString;
+        }
+    }
     public bool Enabled => !string.IsNullOrWhiteSpace(ConnectionString);
 
     internal static bool ValidName(string name, int max) =>
