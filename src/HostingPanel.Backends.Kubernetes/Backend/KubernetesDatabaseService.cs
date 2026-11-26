@@ -7,10 +7,11 @@ using HostingPanel.Api.Adapters;
 using HostingPanel.Api.Persistence;
 using HostingPanel.Api.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace HostingPanel.Api;
 
-public sealed class KubernetesDatabaseService(HostingPanelDbContext db, KubernetesIdentityService identity, MariaDbProvisioner? provisioner = null) : IDatabases, IAccessibleDatabases
+public sealed class KubernetesDatabaseService(HostingPanelDbContext db, KubernetesIdentityService identity, MariaDbProvisioner? provisioner = null, ILogger<KubernetesDatabaseService>? logger = null) : IDatabases, IAccessibleDatabases
 {
     public async Task<DatabaseInventory> ListDatabases(AuthenticationHeaderValue auth, CancellationToken ct)
     {
@@ -74,8 +75,16 @@ public sealed class KubernetesDatabaseService(HostingPanelDbContext db, Kubernet
         }
         catch (MariaDbConflictException) { return new(409, "DATABASE_EXISTS"); }
         catch (MariaDbEncodingException ex) { return new(400, ex.Code); }
-        catch (MySqlConnector.MySqlException) { return new(502, "MARIADB_OPERATION_FAILED"); }
-        catch (DbUpdateException) { return new(502, "DATABASE_CHANGE_UNVERIFIED"); }
+        catch (MySqlConnector.MySqlException ex)
+        {
+            logger?.LogWarning("MariaDB operation failed: error {ErrorNumber}, SQL state {SqlState}", ex.Number, ex.SqlState);
+            return new(502, "MARIADB_OPERATION_FAILED");
+        }
+        catch (DbUpdateException)
+        {
+            logger?.LogError("Database inventory update failed after MariaDB mutation; reconciliation required");
+            return new(502, "DATABASE_CHANGE_UNVERIFIED");
+        }
     }
     public async Task<DatabaseMutation> CreateUserAsync(string username, string password, AuthenticationHeaderValue auth, CancellationToken ct)
     {
@@ -99,8 +108,16 @@ public sealed class KubernetesDatabaseService(HostingPanelDbContext db, Kubernet
             return new(204, null);
         }
         catch (MariaDbConflictException) { return new(409, "DATABASE_EXISTS"); }
-        catch (MySqlConnector.MySqlException) { return new(500, "MARIADB_OPERATION_FAILED"); }
-        catch (DbUpdateException) { return new(500, "DATABASE_CHANGE_UNVERIFIED"); }
+        catch (MySqlConnector.MySqlException ex)
+        {
+            logger?.LogWarning("MariaDB operation failed: error {ErrorNumber}, SQL state {SqlState}", ex.Number, ex.SqlState);
+            return new(500, "MARIADB_OPERATION_FAILED");
+        }
+        catch (DbUpdateException)
+        {
+            logger?.LogError("Database inventory update failed after MariaDB mutation; reconciliation required");
+            return new(500, "DATABASE_CHANGE_UNVERIFIED");
+        }
     }
 
     public Task<DatabaseMutation> ChangePasswordAsync(string username, string password, AuthenticationHeaderValue auth, CancellationToken ct)
@@ -139,8 +156,16 @@ public sealed class KubernetesDatabaseService(HostingPanelDbContext db, Kubernet
             else await provisioner.ChangePasswordAsync(user.Name, password!, ct);
             return new(204, null);
         }
-        catch (MySqlConnector.MySqlException) { return new(500, "MARIADB_OPERATION_FAILED"); }
-        catch (DbUpdateException) { return new(500, "DATABASE_CHANGE_UNVERIFIED"); }
+        catch (MySqlConnector.MySqlException ex)
+        {
+            logger?.LogWarning("MariaDB operation failed: error {ErrorNumber}, SQL state {SqlState}", ex.Number, ex.SqlState);
+            return new(500, "MARIADB_OPERATION_FAILED");
+        }
+        catch (DbUpdateException)
+        {
+            logger?.LogError("Database inventory update failed after MariaDB mutation; reconciliation required");
+            return new(500, "DATABASE_CHANGE_UNVERIFIED");
+        }
         catch (InvalidOperationException) { return new(500, "DATABASE_OWNERSHIP_UNVERIFIED"); }
     }
 
@@ -169,8 +194,16 @@ public sealed class KubernetesDatabaseService(HostingPanelDbContext db, Kubernet
             await db.SaveChangesAsync(ct);
             return new(200, null);
         }
-        catch (MySqlConnector.MySqlException) { return new(502, "MARIADB_OPERATION_FAILED"); }
-        catch (DbUpdateException) { return new(502, "DATABASE_CHANGE_UNVERIFIED"); }
+        catch (MySqlConnector.MySqlException ex)
+        {
+            logger?.LogWarning("MariaDB operation failed: error {ErrorNumber}, SQL state {SqlState}", ex.Number, ex.SqlState);
+            return new(502, "MARIADB_OPERATION_FAILED");
+        }
+        catch (DbUpdateException)
+        {
+            logger?.LogError("Database inventory update failed after MariaDB mutation; reconciliation required");
+            return new(502, "DATABASE_CHANGE_UNVERIFIED");
+        }
         catch (InvalidOperationException) { return new(409, "DATABASE_OWNERSHIP_UNVERIFIED"); }
     }
 

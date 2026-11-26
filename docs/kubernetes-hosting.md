@@ -26,4 +26,4 @@ The code contains website, DNS and certificate reconcilers, but production isola
 
 ## Database infrastructure
 
-Optional MariaDB uses its own ReadWriteOnce filesystem PVC, independent of the NFS website export. See [installation: MariaDB and iSCSI alongside NFS](installation.md#mariadb-and-iscsi-alongside-nfs). Database CRUD is not implemented by the Kubernetes backend.
+Optional MariaDB uses its own ReadWriteOnce filesystem PVC, independent of the NFS website export. See [installation: MariaDB and iSCSI alongside NFS](installation.md#mariadb-and-iscsi-alongside-nfs). The Kubernetes backend provisions databases and users through MariaDB when configured. Database-level grants explicitly match the database privileges delegated to the Helm bootstrap account; SQL failures are logged without passwords or raw SQL.
