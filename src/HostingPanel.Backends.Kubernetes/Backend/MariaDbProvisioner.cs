@@ -13,6 +13,7 @@ public sealed class MariaDbEncodingException(string code) : Exception(code) { pu
 /// <summary>Physical database operations. The caller must establish account ownership first.</summary>
 public sealed class MariaDbProvisioner(IConfiguration configuration)
 {
+    internal const string DatabasePrivileges = "SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, REFERENCES, INDEX, ALTER, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, EVENT, TRIGGER";
     private readonly SemaphoreSlim gate = new(1);
     private string? ConnectionString
     {
@@ -162,8 +163,9 @@ public sealed class MariaDbProvisioner(IConfiguration configuration)
             if (accountIdentifier is null) return;
             await ExecuteAsync(connection, $"CREATE USER {accountIdentifier} IDENTIFIED BY @password", ct, password);
             userCreated = true;
-            // Escape underscores in database-level GRANT patterns (MariaDB wildcard semantics).
-            await ExecuteAsync(connection, $"GRANT ALL PRIVILEGES ON {grantIdentifier}.* TO {accountIdentifier}", ct);
+            // Match the database-scoped privileges granted to the bootstrap account in the Helm chart.
+            // ALL can include server-version-specific privileges that the provisioner cannot delegate.
+            await ExecuteAsync(connection, $"GRANT {DatabasePrivileges} ON {grantIdentifier}.* TO {accountIdentifier}", ct);
         }
         catch
         {
