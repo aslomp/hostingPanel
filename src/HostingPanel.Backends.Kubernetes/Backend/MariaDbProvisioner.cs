@@ -35,6 +35,24 @@ public sealed class MariaDbProvisioner(IConfiguration configuration)
     private static string QuoteAccount(string name) =>
         "'" + RequireName(name, 80) + "'@'%'";
 
+    public string Address
+    {
+        get
+        {
+            var options = new MySqlConnectionStringBuilder(ConnectionString);
+            return options.Server + ":" + options.Port;
+        }
+    }
+
+    public async Task<(string Version, string[] SqlMode)> InfoAsync(CancellationToken ct)
+    {
+        await using var connection = await OpenAsync(ct);
+        using var command = new MySqlCommand("SELECT VERSION(), @@SESSION.sql_mode", connection);
+        using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) throw new InvalidOperationException("Missing server metadata.");
+        return (reader.GetString(0), reader.GetString(1).Split(',', StringSplitOptions.RemoveEmptyEntries));
+    }
+
     public async Task<IDisposable> LockAsync(CancellationToken ct)
     {
         await gate.WaitAsync(ct);
