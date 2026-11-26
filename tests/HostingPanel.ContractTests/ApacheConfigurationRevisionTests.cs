@@ -28,6 +28,7 @@ internal static class ApacheConfigurationRevisionTests
         catch (ArgumentException) { }
         VerifyInvalidEntries();
         VerifyStorageAsync(first).GetAwaiter().GetResult();
+        VerifySnapshotAsync(first).GetAwaiter().GetResult();
         VerifyUnavailableStorageAsync(first).GetAwaiter().GetResult();
     }
 
@@ -72,6 +73,46 @@ internal static class ApacheConfigurationRevisionTests
             catch (IOException) { }
             Require(await File.ReadAllTextAsync(path) == "corrupt");
             Require(Directory.GetFiles(root).Length == 1);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+
+    private static async Task VerifySnapshotAsync(ApacheConfigurationRevision revision)
+    {
+        var root = Directory.CreateTempSubdirectory("apache-snapshot-").FullName;
+        try
+        {
+            var store = new ApacheCandidateStore(root);
+            using var cancelled = new CancellationTokenSource();
+            cancelled.Cancel();
+            try
+            {
+                await store.StageAsync(revision, cancelled.Token);
+                throw new Exception("Cancelled snapshot was staged.");
+            }
+            catch (OperationCanceledException) { }
+            Require(Directory.GetFileSystemEntries(root).Length == 0);
+            var results = await Task.WhenAll(Enumerable.Range(0, 8)
+                .Select(_ => store.StageAsync(revision, CancellationToken.None)));
+            var path = results[0];
+            Require(results.All(result => result == path));
+            Require(Directory.GetFileSystemEntries(root).Length == 1);
+            Require(Directory.GetFiles(path).Length == revision.VirtualHosts.Count);
+            foreach (var (id, content) in revision.VirtualHosts)
+                Require(await File.ReadAllTextAsync(Path.Combine(path, "site-" + id.ToString("N") + ".conf")) == content);
+            var empty = await store.StageAsync(new ApacheConfigurationRevision([]), CancellationToken.None);
+            Require(Directory.GetFileSystemEntries(empty).Length == 0);
+            Require(!File.Exists(Path.Combine(root, "current")));
+            var first = Directory.GetFiles(path).First();
+            await File.WriteAllTextAsync(first, "corrupt");
+            try
+            {
+                await store.StageAsync(revision, CancellationToken.None);
+                throw new Exception("Corrupt snapshot accepted.");
+            }
+            catch (IOException) { }
+            Require(await File.ReadAllTextAsync(first) == "corrupt");
         }
         finally { Directory.Delete(root, recursive: true); }
     }

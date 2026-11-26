@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace HostingPanel.Api;
 
-/// <summary>Stores candidate metadata only; does not publish executable Apache configuration.</summary>
+/// <summary>Stores candidate metadata and immutable configuration snapshots; activation is separate.</summary>
 public sealed class ApacheCandidateStore
 {
     private readonly string root;
@@ -56,6 +56,68 @@ public sealed class ApacheCandidateStore
         finally
         {
             if (ownsTemporary) File.Delete(temporary);
+        }
+    }
+
+    /// <summary>Stages executable files in an immutable revision directory without activating it.</summary>
+    public async Task<string> StageAsync(ApacheConfigurationRevision revision, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(revision);
+        ct.ThrowIfCancellationRequested();
+        EnsureRoot();
+        var target = Path.Combine(root, revision.Id);
+        if (Directory.Exists(target))
+        {
+            await VerifyAsync(target, revision, ct);
+            return target;
+        }
+
+        var staging = Path.Combine(root, ".stage-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(staging);
+        try
+        {
+            foreach (var (id, content) in revision.VirtualHosts)
+            {
+                ct.ThrowIfCancellationRequested();
+                var path = Path.Combine(staging, "site-" + id.ToString("N") + ".conf");
+                await using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                await stream.WriteAsync(Encoding.UTF8.GetBytes(content), ct);
+                await stream.FlushAsync(ct);
+            }
+            ct.ThrowIfCancellationRequested();
+            try { Directory.Move(staging, target); }
+            catch (IOException) when (Directory.Exists(target))
+            {
+                await VerifyAsync(target, revision, ct);
+            }
+            return target;
+        }
+        finally
+        {
+            if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
+        }
+    }
+
+    private void EnsureRoot()
+    {
+        if (!Directory.Exists(root))
+            throw new DirectoryNotFoundException("Dedicated Apache storage is unavailable.");
+        for (DirectoryInfo? directory = new(root); directory is not null; directory = directory.Parent)
+            if (directory.LinkTarget is not null)
+                throw new IOException("Configuration storage must not use symbolic links.");
+    }
+
+    private static async Task VerifyAsync(string path, ApacheConfigurationRevision revision, CancellationToken ct)
+    {
+        if (new DirectoryInfo(path).LinkTarget is not null ||
+            Directory.GetFileSystemEntries(path).Length != revision.VirtualHosts.Count)
+            throw new IOException("Existing configuration revision does not match.");
+        foreach (var (id, content) in revision.VirtualHosts)
+        {
+            var file = new FileInfo(Path.Combine(path, "site-" + id.ToString("N") + ".conf"));
+            if (!file.Exists || file.LinkTarget is not null ||
+                await File.ReadAllTextAsync(file.FullName, ct) != content)
+                throw new IOException("Existing configuration revision does not match.");
         }
     }
 }
