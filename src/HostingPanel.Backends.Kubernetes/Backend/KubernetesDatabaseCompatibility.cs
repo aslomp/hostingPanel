@@ -58,6 +58,37 @@ public sealed class KubernetesDatabaseCompatibility(
                 }, ct);
                 return;
             }
+            if (method == "GET" && path == "/api/db-show/databases")
+            {
+                var noSize = false;
+                if (context.Request.Query.TryGetValue("no-size", out var rawNoSize) &&
+                    !bool.TryParse(rawNoSize.ToString(), out noSize))
+                { await Error(context, 400, "INVALID_DATABASE_REQUEST"); return; }
+
+                var names = await ownedDatabases.OrderBy(x => x.Name).Select(x => x.Name).ToListAsync(ct);
+                var result = new List<object>(names.Count);
+                foreach (var name in names)
+                {
+                    var metadata = await provider.MetadataAsync(name, noSize, ct);
+                    if (metadata is null) { await Error(context, 500, "DATABASE_CHANGE_UNVERIFIED"); return; }
+                    result.Add(new {
+                        database = metadata.Database, definerIssues = metadata.DefinerIssues,
+                        sizeBytes = metadata.SizeBytes, tableCount = metadata.TableCount,
+                        userCount = metadata.UserCount
+                    });
+                }
+                await context.Response.WriteAsJsonAsync(result, ct);
+                return;
+            }
+            if (method == "GET" && database is not null && path == "/api/db-show/databases/" + database)
+            {
+                if (!await ownedDatabases.AnyAsync(x => x.Name == database, ct))
+                { await Error(context, 403, "ACCESS_DENIED"); return; }
+                var metadata = await provider.MetadataAsync(database, false, ct);
+                if (metadata is null) { await Error(context, 500, "DATABASE_CHANGE_UNVERIFIED"); return; }
+                await context.Response.WriteAsJsonAsync(metadata, ct);
+                return;
+            }
             if (method == "GET" && path == "/api/db-show/users")
             {
                 var names = await ownedUsers.OrderBy(x => x.Name).Select(x => x.Name).ToListAsync(ct);

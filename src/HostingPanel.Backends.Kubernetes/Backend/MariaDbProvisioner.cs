@@ -3,6 +3,10 @@ using Microsoft.Extensions.Configuration;
 
 namespace HostingPanel.Api;
 
+public sealed record MariaDbMetadata(string Database, string DefaultCharset, string DefaultCollation,
+    long SizeBytes, long TableCount, long ViewCount, long RoutineCount, long EventCount,
+    long TriggerCount, long UserCount, long DefinerIssues);
+
 public sealed class MariaDbConflictException : Exception { }
 public sealed class MariaDbEncodingException(string code) : Exception(code) { public string Code { get; } = code; }
 
@@ -52,6 +56,45 @@ public sealed class MariaDbProvisioner(IConfiguration configuration)
         using var reader = await command.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) throw new InvalidOperationException("Missing server metadata.");
         return (reader.GetString(0), reader.GetString(1).Split(',', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    public async Task<MariaDbMetadata?> MetadataAsync(string name, bool noSize, CancellationToken ct)
+    {
+        RequireName(name, 64);
+        await using var connection = await OpenAsync(ct);
+        // All schema names are values in these catalog queries, not SQL identifiers.
+        // Count objects whose DEFINER no longer exists as a MariaDB account.
+        const string sql = """
+            SELECT s.SCHEMA_NAME, s.DEFAULT_CHARACTER_SET_NAME, s.DEFAULT_COLLATION_NAME,
+                (SELECT COALESCE(SUM(COALESCE(t.DATA_LENGTH,0) + COALESCE(t.INDEX_LENGTH,0)),0)
+                 FROM information_schema.TABLES t WHERE t.TABLE_SCHEMA = s.SCHEMA_NAME AND t.TABLE_TYPE = 'BASE TABLE' AND @includeSize = 1),
+                (SELECT COUNT(*) FROM information_schema.TABLES t WHERE t.TABLE_SCHEMA = s.SCHEMA_NAME AND t.TABLE_TYPE = 'BASE TABLE'),
+                (SELECT COUNT(*) FROM information_schema.VIEWS v WHERE v.TABLE_SCHEMA = s.SCHEMA_NAME),
+                (SELECT COUNT(*) FROM information_schema.ROUTINES r WHERE r.ROUTINE_SCHEMA = s.SCHEMA_NAME),
+                (SELECT COUNT(*) FROM information_schema.EVENTS e WHERE e.EVENT_SCHEMA = s.SCHEMA_NAME),
+                (SELECT COUNT(*) FROM information_schema.TRIGGERS t WHERE t.TRIGGER_SCHEMA = s.SCHEMA_NAME),
+                (SELECT COUNT(DISTINCT d.User) FROM mysql.db d WHERE d.Db = @grantPattern),
+                (SELECT COUNT(*) FROM (
+                    SELECT TABLE_SCHEMA AS schema_name, DEFINER FROM information_schema.VIEWS
+                    UNION ALL SELECT ROUTINE_SCHEMA, DEFINER FROM information_schema.ROUTINES
+                    UNION ALL SELECT EVENT_SCHEMA, DEFINER FROM information_schema.EVENTS
+                    UNION ALL SELECT TRIGGER_SCHEMA, DEFINER FROM information_schema.TRIGGERS
+                ) AS objects WHERE objects.schema_name = @name AND NOT EXISTS (
+                    SELECT 1 FROM mysql.user u WHERE CONCAT(u.User, '@', u.Host) = objects.DEFINER
+                ))
+            FROM information_schema.SCHEMATA s WHERE s.SCHEMA_NAME = @name
+            """;
+        using var command = new MySqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@name", name);
+        command.Parameters.AddWithValue("@grantPattern", GrantPattern(name));
+        command.Parameters.AddWithValue("@includeSize", !noSize);
+        using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) return null;
+        return new MariaDbMetadata(reader.GetString(0), reader.GetString(1), reader.GetString(2),
+            Convert.ToInt64(reader.GetValue(3)), Convert.ToInt64(reader.GetValue(4)),
+            Convert.ToInt64(reader.GetValue(5)), Convert.ToInt64(reader.GetValue(6)),
+            Convert.ToInt64(reader.GetValue(7)), Convert.ToInt64(reader.GetValue(8)),
+            Convert.ToInt64(reader.GetValue(9)), Convert.ToInt64(reader.GetValue(10)));
     }
 
     public async Task<IDisposable> LockAsync(CancellationToken ct)
