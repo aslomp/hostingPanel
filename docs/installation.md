@@ -38,3 +38,64 @@ kubectl -n hostingpanel get pods,svc,pvc
 ```
 
 For actual hosting see [Kubernetes hosting](kubernetes-hosting.md), [DNS](dns.md), [configuration](configuration.md) and the current chart. Configure trusted HTTPS ingress. Verify login, /healthz and the requested backend operations independently. A healthy panel does not establish that websites, DNS or certificates are ready.
+
+## MariaDB and iSCSI alongside NFS
+
+NFS remains the shared website filesystem. MariaDB can use an independent
+block-backed filesystem PVC. Install the storage vendor's supported CSI driver
+with iSCSI support separately; Kubernetes does not include a generic dynamic
+iSCSI provisioner. Configure an iSCSI target/storage pool on the storage system,
+restrict access to cluster nodes, and configure the CSI driver's credentials and
+StorageClass according to its documentation. On every eligible Linux node,
+install and enable the initiator required by that driver (for Debian/Ubuntu,
+typically `sudo apt install open-iscsi` and `sudo systemctl enable --now iscsid`).
+Ensure nodes can reach the target (normally TCP 3260), use unique initiator IQNs,
+and configure CHAP and multipath where required by the storage vendor. Keep
+storage traffic on a restricted network. Do not expose the target publicly.
+
+Check the actual class name with `kubectl get storageclass`. Test a temporary
+ReadWriteOnce filesystem PVC with that class and a consumer pod before deploying
+MariaDB; verify attach, mount, writes and persistence after pod recreation.
+Delete only the test resources afterward. StorageClass parameters are
+driver-specific, not HostingPanel settings.
+
+Create a Secret named `hostingpanel-mariadb` in the release namespace with a
+strong randomly generated `root-password` key using your secret manager or
+Kubernetes Secret tooling. Do not commit the password or put it in Helm values.
+
+Merge these settings into the existing Kubernetes hosting values (replace
+the illustrative class and NFS endpoints with actual infrastructure):
+
+```yaml
+backend: Kubernetes
+kubernetesHosting:
+  enabled: true
+  nfsServer: nfs.example.internal
+  nfsPath: /home
+mariadb:
+  enabled: true
+  storageClassName: iscsi
+  size: 20Gi
+  existingSecret: hostingpanel-mariadb
+```
+
+Keep the other Gateway, image, bootstrap and DNS settings from the hosting
+profile. The chart creates a single MariaDB StatefulSet and a ClusterIP service
+named `<release>-mariadb` on port 3306, plus a ReadWriteOnce filesystem PVC
+unless `mariadb.existingClaim` points to a compatible pre-existing claim in
+the release namespace. An empty storageClassName uses the cluster default.
+The generated PVC is retained on Helm uninstall; back up data separately and
+verify the storage system's reclaim policy. Do not change an existing PVC's
+storage class in place: migrate using a verified backup/restore or supported
+volume migration. Never mount one MariaDB data directory into multiple servers.
+
+After deployment check `kubectl -n hosting get statefulsets,pods,pvc,svc`
+(adjust namespace), confirm the claim is Bound to the intended class, and
+verify MariaDB readiness and authenticated database access. Use separately
+created least-privilege application accounts; never give hosted PHP applications
+the root password. MariaDB initialization credentials apply to an empty data
+directory; changing the Secret alone does not rotate an existing database password.
+
+This deploys database infrastructure only. HostingPanel Kubernetes database
+create/delete operations remain unsupported; external/manual database
+administration is required until that capability is implemented.

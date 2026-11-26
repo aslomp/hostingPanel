@@ -23,3 +23,7 @@ kubectl -n hosting get deployments,services,pods
 ```
 
 The code contains website, DNS and certificate reconcilers, but production isolation, reload behavior, load capacity, cleanup and observed readiness require validation. See [production plan](plans/apache-production.md).
+
+## Database infrastructure
+
+Optional MariaDB uses its own ReadWriteOnce filesystem PVC, independent of the NFS website export. See [installation: MariaDB and iSCSI alongside NFS](installation.md#mariadb-and-iscsi-alongside-nfs). Database CRUD is not implemented by the Kubernetes backend.
