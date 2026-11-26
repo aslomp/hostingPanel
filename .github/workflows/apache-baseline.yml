@@ -108,6 +108,44 @@ jobs:
           done
           test "$(curl -fsS -H 'Host: smoke.invalid' http://127.0.0.1:18080/)" = hostingpanel-static-smoke
           test "$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: unknown.invalid' http://127.0.0.1:18080/)" = 403
+      - name: Verify invalid candidate isolation and graceful revision changes
+        run: |
+          set -eu
+          image="$(cat /tmp/hosting-apache-image)"
+          trap 'docker rm -f hosting-apache-reload >/dev/null 2>&1 || true' EXIT
+          root=/tmp/hosting-vhosts
+          mkdir -p "$root/empty" "$root/invalid"
+          printf '%s\n' 'NotAnApacheDirective' > "$root/invalid/site.conf"
+          printf '%s\n' 'IncludeOptional /storage/apache-config/revision/*.conf' > "$root/active.conf"
+          docker run -d --name hosting-apache-reload --user 1001:1001 --cap-drop ALL --security-opt no-new-privileges -p 127.0.0.1:18080:8080 -p 127.0.0.1:18081:8081 -v /tmp/hosting-httpd.conf:/etc/hostingpanel/httpd.conf:ro -v "$root:/storage/apache-config:ro" -v /tmp/hosting-static:/home/smoke:ro "$image" httpd -DFOREGROUND -f /etc/hostingpanel/httpd.conf
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18081/ >/dev/null; then break; fi
+            sleep 1
+          done
+          test "$(curl -fsS -H 'Host: smoke.invalid' http://127.0.0.1:18080/)" = hostingpanel-static-smoke
+          if docker exec hosting-apache-reload httpd -t -f /etc/hostingpanel/httpd.conf -D HOSTINGPANEL_CANDIDATE -c 'IncludeOptional /storage/apache-config/invalid/*.conf'; then
+            echo "Invalid candidate was accepted"; exit 1
+          fi
+          test "$(curl -fsS -H 'Host: smoke.invalid' http://127.0.0.1:18080/)" = hostingpanel-static-smoke
+          docker exec hosting-apache-reload httpd -t -f /etc/hostingpanel/httpd.conf -D HOSTINGPANEL_CANDIDATE -c 'IncludeOptional /storage/apache-config/empty/*.conf'
+          select_revision() {
+            printf 'IncludeOptional /storage/apache-config/%s/*.conf\n' "$1" > "$root/next.conf"
+            mv "$root/next.conf" "$root/active.conf"
+            docker exec hosting-apache-reload httpd -t -f /etc/hostingpanel/httpd.conf
+            docker exec hosting-apache-reload httpd -k graceful -f /etc/hostingpanel/httpd.conf
+          }
+          await_status() {
+            for attempt in $(seq 1 30); do
+              if [ "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: smoke.invalid' http://127.0.0.1:18080/)" = "$1" ]; then return 0; fi
+              sleep 1
+            done
+            return 1
+          }
+          select_revision empty
+          await_status 403
+          select_revision revision
+          await_status 200
+          test "$(curl -fsS -H 'Host: smoke.invalid' http://127.0.0.1:18080/)" = hostingpanel-static-smoke
       - name: Show Apache logs
         if: failure()
         run: docker logs hosting-apache-smoke || true

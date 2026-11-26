@@ -1,5 +1,8 @@
 {{- if and (eq .Values.backend "Kubernetes") .Values.kubernetesHosting.enabled }}
 {{- $name := include "hostingpanel.name" . }}
+{{- if or (lt (int .Values.kubernetesHosting.apacheReplicas) 1) (gt (int .Values.kubernetesHosting.apacheReplicas) 32) }}
+{{- fail "kubernetesHosting.apacheReplicas must be between 1 and 32" }}
+{{- end }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
