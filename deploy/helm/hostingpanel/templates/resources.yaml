@@ -85,10 +85,8 @@ spec:
               value: {{ required "kubernetesHosting.nfsPath is required" .Values.kubernetesHosting.nfsPath | quote }}
             - name: KubernetesHosting__NfsProvisioningPath
               value: /storage/sites
-            {{- if .Values.kubernetesHosting.apacheConfigClaim }}
             - name: KubernetesHosting__ApacheConfigPath
               value: /storage/apache-config
-            {{- end }}
             - name: KubernetesHosting__GatewayName
               value: {{ required "kubernetesHosting.gatewayName is required" .Values.kubernetesHosting.gatewayName | quote }}
             - name: KubernetesHosting__GatewayNamespace
@@ -167,9 +165,7 @@ spec:
             - {name: data, mountPath: /data}
             {{- if $hosting }}
             - {name: sites, mountPath: /storage/sites}
-            {{- if .Values.kubernetesHosting.apacheConfigClaim }}
             - {name: apache-config, mountPath: /storage/apache-config}
-            {{- end }}
             {{- end }}
       volumes:
         {{- if $hosting }}
@@ -184,10 +180,10 @@ spec:
             readOnly: false
           {{- end }}
         {{- end }}
-        {{- if and $hosting .Values.kubernetesHosting.apacheConfigClaim }}
+        {{- if $hosting }}
         - name: apache-config
           persistentVolumeClaim:
-            claimName: {{ .Values.kubernetesHosting.apacheConfigClaim | quote }}
+            claimName: {{ required "kubernetesHosting.apacheConfigClaim is required" .Values.kubernetesHosting.apacheConfigClaim | quote }}
         {{- end }}
         - name: data
           persistentVolumeClaim:

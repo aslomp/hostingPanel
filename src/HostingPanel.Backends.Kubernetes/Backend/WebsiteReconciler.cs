@@ -88,7 +88,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 if (domain is null)
                     {
                     await resources.DeleteAsync("gateway.networking.k8s.io", "v1", Namespace, "httproutes", name, ct);
-                    await resources.DeleteConfigMapAsync(Namespace, name, ct);
+                    // Retire legacy per-domain configuration on deletion.
                 }
                 else
                 {
@@ -125,7 +125,23 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 appliedRuntimeHash = hash;
             }
         }
-        await StageApacheConfigurationAsync(domains, accounts, identities, storageErrors, ct);
+        try
+        {
+            await ActivateApacheConfigurationAsync(domains, accounts, identities, storageErrors, ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            stagedApacheRevision = null;
+            foreach (var row in completed)
+            {
+                row.Attempts++;
+                row.LastError = "Apache configuration activation failed; see application log.";
+            }
+            await db.SaveChangesAsync(ct);
+            if (completed.Count > 0) notifications.Publish();
+            logger.LogWarning(ex, "Apache configuration activation failed; will retry");
+            return;
+        }
         // Legacy deployments are retired explicitly by the administrator after testing.
         migrated = !migrationFailed;
         if (!migrationFailed) appliedListenerSet = listenerSet;
@@ -140,42 +156,26 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         await CleanupDeletedDomainsAsync(db, ct);
     }
 
-    // Shadow publication during migration: the legacy runtime remains authoritative.
-    // Never stage a partial revision when a domain cannot be rendered.
-    private async Task StageApacheConfigurationAsync(
+    private async Task ActivateApacheConfigurationAsync(
         IReadOnlyList<HostedDomain> domains,
         IReadOnlyDictionary<Guid, HostingAccount> accounts,
         IReadOnlyDictionary<Guid, PhpAccountIdentity> identities,
         IReadOnlyDictionary<Guid, Exception> storageErrors,
         CancellationToken ct)
     {
-        var path = configuration["KubernetesHosting:ApacheConfigPath"];
-        if (string.IsNullOrWhiteSpace(path)) return;
         if (storageErrors.Count != 0)
-        {
-            stagedApacheRevision = null;
-            logger.LogWarning("Apache candidate publication deferred because website storage is unavailable");
-            return;
-        }
-
-        try
-        {
-            var revision = new ApacheConfigurationRevision(domains.Select(domain =>
-                KeyValuePair.Create(domain.Id, BuildVirtualHost(domain,
-                    accounts[domain.OwnerId].Username, identities[domain.OwnerId]).Apache)));
-            if (revision.Id == stagedApacheRevision) return;
-            var store = new ApacheCandidateStore(path);
-            await store.StageAsync(revision, ct);
-            stagedApacheRevision = revision.Id;
-            logger.LogInformation("Staged Apache configuration revision {Revision} with {Count} virtualhosts",
-                revision.Id, revision.VirtualHosts.Count);
-        }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
-        {
-            stagedApacheRevision = null;
-            // Shadow publication must not change existing website operation semantics.
-            logger.LogWarning(ex, "Apache candidate publication failed; will retry");
-        }
+            throw new InvalidOperationException("Website storage unavailable; retaining previous Apache revision.");
+        var revision = new ApacheConfigurationRevision(domains.Select(domain =>
+            KeyValuePair.Create(domain.Id, BuildVirtualHost(domain,
+                accounts[domain.OwnerId].Username, identities[domain.OwnerId]).Apache)));
+        if (revision.Id == stagedApacheRevision) return;
+        var store = new ApacheCandidateStore(Required("ApacheConfigPath"));
+        var runtime = new ApacheRevisionRuntime(resources, Namespace);
+        await new ApacheRevisionActivator(store).ActivateAsync(revision,
+            runtime.ValidateAsync, runtime.ReloadAsync, ct);
+        stagedApacheRevision = revision.Id;
+        logger.LogInformation("Activated Apache configuration revision {Revision} with {Count} virtualhosts",
+            revision.Id, revision.VirtualHosts.Count);
     }
 
     private async Task CleanupDeletedDomainsAsync(HostingPanelDbContext db, CancellationToken ct)
@@ -273,12 +273,10 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
 
     private string BuildManifest(HostedDomain domain, string username, PhpAccountIdentity identity, bool managedTls)
     {
-        var (apache, tls) = BuildVirtualHost(domain, username, identity);
+        var (_, tls) = BuildVirtualHost(domain, username, identity);
         var host = domain.Name;
         var name = "site-" + domain.Id.ToString("N");
-        var configLabels = new Dictionary<string,string> { ["hostingpanel/component"] = "vhost" };
         var resources = new object[] {
-            new { apiVersion = "v1", kind = "ConfigMap", metadata = new { name, @namespace = Namespace, labels = configLabels }, data = new Dictionary<string,string> { ["vhost.conf"] = apache } },
             new { apiVersion = "gateway.networking.k8s.io/v1", kind = "HTTPRoute", metadata = new { name, @namespace = Namespace }, spec = new {
                 parentRefs = new[] { new { name = Required("GatewayName"), @namespace = Required("GatewayNamespace"),
                     sectionName = Required(tls && !managedTls ? "HttpsListener" : "HttpListener") } },
