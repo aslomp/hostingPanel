@@ -185,6 +185,47 @@ public sealed class MariaDbProvisioner(IConfiguration configuration)
         return clause;
     }
 
+    public async Task CreateUserAsync(string username, string password, CancellationToken ct)
+    {
+        var account = QuoteAccount(username);
+        await using var connection = await OpenAsync(ct);
+        using var check = new MySqlCommand("SELECT COUNT(*) FROM mysql.user WHERE LOWER(User) = LOWER(@user)", connection);
+        check.Parameters.AddWithValue("@user", username);
+        if (Convert.ToInt64(await check.ExecuteScalarAsync(ct)) != 0) throw new MariaDbConflictException();
+        await ExecuteAsync(connection, $"CREATE USER {account} IDENTIFIED BY @password", ct, password);
+    }
+
+    public async Task ChangePasswordAsync(string username, string password, CancellationToken ct)
+    {
+        var account = QuoteAccount(username);
+        await using var connection = await OpenAsync(ct);
+        await VerifyAccountAsync(connection, username, false, ct);
+        await ExecuteAsync(connection, $"ALTER USER {account} IDENTIFIED BY @password", ct, password);
+    }
+
+    public async Task DeleteUserAsync(string username, CancellationToken ct)
+    {
+        var account = QuoteAccount(username);
+        await using var connection = await OpenAsync(ct);
+        if (!await VerifyAccountAsync(connection, username, true, ct)) return;
+        await ExecuteAsync(connection, $"DROP USER {account}", ct);
+    }
+
+    private static async Task<bool> VerifyAccountAsync(MySqlConnection connection, string username, bool allowMissing, CancellationToken ct)
+    {
+        using var command = new MySqlCommand("SELECT User, Host FROM mysql.user WHERE LOWER(User) = LOWER(@user)", connection);
+        command.Parameters.AddWithValue("@user", username);
+        using var reader = await command.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            if (allowMissing) return false;
+            throw new InvalidOperationException("Managed database account is missing.");
+        }
+        if (reader.GetString(0) != username || reader.GetString(1) != "%" || await reader.ReadAsync(ct))
+            throw new InvalidOperationException("Unexpected database account; manual reconciliation required.");
+        return true;
+    }
+
     public async Task DeleteAsync(string name, IReadOnlyList<string> ownedUsers, CancellationToken ct)
     {
         var databaseIdentifier = QuoteDatabase(name);

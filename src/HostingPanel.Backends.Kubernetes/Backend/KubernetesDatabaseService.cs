@@ -77,6 +77,73 @@ public sealed class KubernetesDatabaseService(HostingPanelDbContext db, Kubernet
         catch (MySqlConnector.MySqlException) { return new(502, "MARIADB_OPERATION_FAILED"); }
         catch (DbUpdateException) { return new(502, "DATABASE_CHANGE_UNVERIFIED"); }
     }
+    public async Task<DatabaseMutation> CreateUserAsync(string username, string password, AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        var principal = await identity.AuthenticateAsync(auth, ct);
+        if (principal is null) return new(401, "UNAUTHORIZED");
+        var prefix = principal.Username + "_";
+        if (!username.StartsWith(prefix, StringComparison.Ordinal) || username.Length <= prefix.Length ||
+            !MariaDbProvisioner.ValidName(username, 80))
+            return new(492, "DATABASE_INVALID_ENTITY_NAME");
+        if (string.IsNullOrEmpty(password) || password.Length is < 8 or > 128)
+            return new(400, "INVALID_DATABASE_REQUEST");
+        if (provisioner is null || !provisioner.Enabled) return new(501, "MARIADB_NOT_CONFIGURED");
+        using var lease = await provisioner.LockAsync(ct);
+        if (await db.DatabaseUsers.AnyAsync(x => x.Name.ToLower() == username.ToLower(), ct))
+            return new(409, "DATABASE_EXISTS");
+        try
+        {
+            await provisioner.CreateUserAsync(username, password, ct);
+            db.DatabaseUsers.Add(new DatabaseUser { OwnerId = principal.Id, Name = username });
+            await db.SaveChangesAsync(ct);
+            return new(204, null);
+        }
+        catch (MariaDbConflictException) { return new(409, "DATABASE_EXISTS"); }
+        catch (MySqlConnector.MySqlException) { return new(500, "MARIADB_OPERATION_FAILED"); }
+        catch (DbUpdateException) { return new(500, "DATABASE_CHANGE_UNVERIFIED"); }
+    }
+
+    public Task<DatabaseMutation> ChangePasswordAsync(string username, string password, AuthenticationHeaderValue auth, CancellationToken ct)
+        => MutateUserAsync(username, password, false, auth, ct);
+
+    public Task<DatabaseMutation> DeleteUserAsync(string username, AuthenticationHeaderValue auth, CancellationToken ct)
+        => MutateUserAsync(username, null, true, auth, ct);
+
+    private async Task<DatabaseMutation> MutateUserAsync(string username, string? password, bool delete, AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        var principal = await identity.AuthenticateAsync(auth, ct);
+        if (principal is null) return new(401, "UNAUTHORIZED");
+        if (!MariaDbProvisioner.ValidName(username, 80) ||
+            !username.StartsWith(principal.Username + "_", StringComparison.Ordinal))
+            return new(403, "ACCESS_DENIED");
+        if (!delete && (string.IsNullOrEmpty(password) || password.Length is < 8 or > 128))
+            return new(400, "INVALID_DATABASE_REQUEST");
+        if (provisioner is null || !provisioner.Enabled) return new(501, "MARIADB_NOT_CONFIGURED");
+        using var lease = await provisioner.LockAsync(ct);
+        var user = await db.DatabaseUsers.SingleOrDefaultAsync(x => x.OwnerId == principal.Id && x.Name == username, ct);
+        if (user is null) return delete ? new(204, null) : new(404, "DATABASE_USER_NOT_FOUND");
+        try
+        {
+            if (delete)
+            {
+                // Do not remove an account with grants to another owner's database.
+                if (await (from grant in db.DatabaseGrants
+                           join database in db.Databases on grant.DatabaseId equals database.Id
+                           where grant.DatabaseUserId == user.Id && database.OwnerId != principal.Id
+                           select grant).AnyAsync(ct))
+                    return new(500, "DATABASE_OWNERSHIP_UNVERIFIED");
+                await provisioner.DeleteUserAsync(user.Name, ct);
+                db.DatabaseUsers.Remove(user);
+                await db.SaveChangesAsync(ct);
+            }
+            else await provisioner.ChangePasswordAsync(user.Name, password!, ct);
+            return new(204, null);
+        }
+        catch (MySqlConnector.MySqlException) { return new(500, "MARIADB_OPERATION_FAILED"); }
+        catch (DbUpdateException) { return new(500, "DATABASE_CHANGE_UNVERIFIED"); }
+        catch (InvalidOperationException) { return new(500, "DATABASE_OWNERSHIP_UNVERIFIED"); }
+    }
+
     async Task<DatabaseMutation> IDatabases.DeleteAsync(string database, string confirmation, AuthenticationHeaderValue auth, CancellationToken ct)
     {
         var principal = await identity.AuthenticateAsync(auth, ct);

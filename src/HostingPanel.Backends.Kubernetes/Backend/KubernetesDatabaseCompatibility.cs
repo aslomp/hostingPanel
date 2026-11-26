@@ -173,6 +173,42 @@ public sealed class KubernetesDatabaseCompatibility(
                 }, ct);
                 return;
             }
+            if (method == "POST" && path == "/api/db-manage/create-user")
+            {
+                using var document = await JsonDocument.ParseAsync(context.Request.Body, cancellationToken: ct);
+                var body = document.RootElement;
+                if (body.ValueKind != JsonValueKind.Object ||
+                    !body.TryGetProperty("dbuser", out var userValue) || userValue.ValueKind != JsonValueKind.String ||
+                    !body.TryGetProperty("password", out var passwordValue) || passwordValue.ValueKind != JsonValueKind.String)
+                { await Error(context, 400, "INVALID_DATABASE_REQUEST"); return; }
+                if (body.TryGetProperty("hostPatterns", out var hosts) &&
+                    (hosts.ValueKind != JsonValueKind.Array || hosts.GetArrayLength() != 1 ||
+                     hosts[0].ValueKind != JsonValueKind.String || hosts[0].GetString() != "%"))
+                { await Error(context, 501, "DATABASE_OPTIONS_NOT_IMPLEMENTED"); return; }
+                var result = await databaseService.CreateUserAsync(userValue.GetString()!, passwordValue.GetString()!, auth, ct);
+                if (result.Error is not null) await Error(context, result.Status, result.Error);
+                else context.Response.StatusCode = 204;
+                return;
+            }
+            if (method == "POST" && dbuser is not null && path == "/api/db-manage/users/" + dbuser + "/change-password")
+            {
+                using var document = await JsonDocument.ParseAsync(context.Request.Body, cancellationToken: ct);
+                var body = document.RootElement;
+                if (body.ValueKind != JsonValueKind.Object ||
+                    !body.TryGetProperty("newPassword", out var passwordValue) || passwordValue.ValueKind != JsonValueKind.String)
+                { await Error(context, 400, "INVALID_DATABASE_REQUEST"); return; }
+                var result = await databaseService.ChangePasswordAsync(dbuser, passwordValue.GetString()!, auth, ct);
+                if (result.Error is not null) await Error(context, result.Status, result.Error);
+                else context.Response.StatusCode = 204;
+                return;
+            }
+            if (method == "DELETE" && dbuser is not null && path == "/api/db-manage/users/" + dbuser)
+            {
+                var result = await databaseService.DeleteUserAsync(dbuser, auth, ct);
+                if (result.Error is not null) await Error(context, result.Status, result.Error);
+                else context.Response.StatusCode = 204;
+                return;
+            }
             if (method == "DELETE" && database is not null && path == "/api/db-manage/databases/" + database)
             {
                 if (context.Request.Query.ContainsKey("drop-orphan-users") && context.Request.Query["drop-orphan-users"] != "false")
