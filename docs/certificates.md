@@ -23,3 +23,5 @@ The chart defaults certManager.listenerSetName to hosting-sites. ListenerSetReco
 Domain deletion removes ACME intent and schedules cleanup; the cleanup worker waits for dependent website/DNS operations and, when enabled, certificate removal. TLS Secret cleanup depends on cert-manager owner-reference configuration; it is not guaranteed by HostingPanel alone. See [reconciliation](reconciliation.md).
 
 Source map: KubernetesCertificateProvider.cs, KubernetesCertificateProvider.Status.cs, CertificateReconciler.cs, ListenerSetReconciler.cs; provider library CertManagerClient.cs, CertificateSnapshot.cs, KubernetesResourceClient.cs. Install cert-manager and required Gateway API support separately; HostingPanel does not install those controllers or their CRDs.
+
+Website HTTPRoutes always attach to the configured Gateway HTTP listener, independently of SSL intent or certificate readiness. The certificate reconciler owns the separate HTTPS routes. Existing website routes are reconciled on controller startup. Global Gateway redirects are not managed by HostingPanel.
