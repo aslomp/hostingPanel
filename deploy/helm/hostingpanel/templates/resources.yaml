@@ -182,8 +182,10 @@ spec:
         {{- end }}
         {{- if $hosting }}
         - name: apache-config
-          persistentVolumeClaim:
-            claimName: {{ required "kubernetesHosting.apacheConfigClaim is required" .Values.kubernetesHosting.apacheConfigClaim | quote }}
+          nfs:
+            server: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}
+            path: {{ include "hostingpanel.apacheConfigExport" . | quote }}
+            readOnly: false
         {{- end }}
         - name: data
           persistentVolumeClaim:

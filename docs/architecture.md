@@ -43,7 +43,7 @@ DirectAdmin is a full backend, not a compatibility-only stub. Its services own t
 
 ## Desired and observed state (Kubernetes only)
 
-Kubernetes services persist desired resources and reconciliation operations. WebsiteReconciler manages website ConfigMaps/routes, shared PHP resources and cleanup; DnsReconciler handles deferred zone staging and PowerDNS publication; CertificateReconciler and ListenerSetReconciler manage certificate intent and TLS listener integration. Reconciliation is asynchronous. A 202 response means accepted intent, not operational availability.
+Kubernetes services persist desired resources and reconciliation operations. WebsiteReconciler manages immutable Apache NFS revisions and website routes, shared PHP resources and cleanup; DnsReconciler handles deferred zone staging and PowerDNS publication; CertificateReconciler and ListenerSetReconciler manage certificate intent and TLS listener integration. Reconciliation is asynchronous. A 202 response means accepted intent, not operational availability.
 
 The shared Apache service receives per-domain configuration; do not create Apache workloads per domain. KubernetesResourceClient uses the .NET SDK. PowerDNS publication and cert-manager issuance require their actual infrastructure and configuration.
 
