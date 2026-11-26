@@ -6,7 +6,7 @@
     <ProjectReference Include="../HostingPanel.Providers.CertManager/HostingPanel.Providers.CertManager.csproj" />
     <ProjectReference Include="../HostingPanel.Providers.PowerDNS/HostingPanel.Providers.PowerDNS.csproj" />
     <ProjectReference Include="../HostingPanel.Persistence/HostingPanel.Persistence.csproj" />
-    <PackageReference Include="MySqlConnector" Version="2.4.0" />
+    <PackageReference Include="MySqlConnector" Version="2.6.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />
   </ItemGroup>
 </Project>
