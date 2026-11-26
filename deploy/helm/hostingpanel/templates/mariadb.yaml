@@ -1,6 +1,24 @@
 {{- if and (eq .Values.backend "Kubernetes") .Values.mariadb.enabled }}
 {{- $name := printf "%s-mariadb" .Release.Name }}
 {{- $secret := required "mariadb.existingSecret is required when MariaDB is enabled" .Values.mariadb.existingSecret }}
+{{- $provisioning := required "mariadb.provisioningSecret is required when MariaDB is enabled" .Values.mariadb.provisioningSecret }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-init
+data:
+  10-hostingpanel.sh: |
+    # Sourced by the official MariaDB entrypoint during first initialization only.
+    # Restrict the bootstrap password to 64 hexadecimal characters before SQL construction.
+    if [[ ! "${HOSTINGPANEL_PROVISIONING_PASSWORD}" =~ ^[0-9a-fA-F]{64}$ ]]; then
+      echo "MariaDB provisioning password must contain exactly 64 hexadecimal characters" >&2
+      return 1
+    fi
+    docker_process_sql <<SQL
+    CREATE USER 'hostingpanel_provisioner'@'%' IDENTIFIED BY '${HOSTINGPANEL_PROVISIONING_PASSWORD}';
+    GRANT CREATE USER, CREATE, DROP, ALTER, SELECT, INSERT, UPDATE, DELETE, INDEX, REFERENCES, CREATE TEMPORARY TABLES, LOCK TABLES, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, EXECUTE, EVENT, TRIGGER ON *.* TO 'hostingpanel_provisioner'@'%' WITH GRANT OPTION;
+    SQL
+---
 {{- if not .Values.mariadb.existingClaim }}
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -64,6 +82,11 @@ spec:
                 secretKeyRef:
                   name: {{ $secret | quote }}
                   key: root-password
+            - name: HOSTINGPANEL_PROVISIONING_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $provisioning | quote }}
+                  key: password
             - name: MARIADB_ROOT_HOST
               value: localhost
           startupProbe:
@@ -78,9 +101,17 @@ spec:
           resources:
             {{- toYaml .Values.mariadb.resources | nindent 12 }}
           volumeMounts:
+            - name: bootstrap
+              mountPath: /docker-entrypoint-initdb.d/10-hostingpanel.sh
+              subPath: 10-hostingpanel.sh
+              readOnly: true
             - name: data
               mountPath: /var/lib/mysql
       volumes:
+        - name: bootstrap
+          configMap:
+            name: {{ $name }}-init
+            defaultMode: 0444
         - name: data
           persistentVolumeClaim:
             claimName: {{ default $name .Values.mariadb.existingClaim | quote }}

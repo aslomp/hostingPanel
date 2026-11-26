@@ -55,3 +55,5 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 - System package management uses a dedicated UI operation service; upstream compatibility and backend support remain unchanged.
 
 - The optional MariaDB Helm workload provides shared database infrastructure only; Kubernetes database create/delete still return 501.
+
+Helm-managed MariaDB (Kubernetes only): optional dedicated MariaDB StatefulSet, independent PVC, internal service, separate provisioning Secret and first-initialization account bootstrap. Existing volumes require manual account initialization; deployment/runtime validation is pending.
