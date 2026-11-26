@@ -9,6 +9,23 @@ internal sealed class ListenerSetReconciler(KubernetesResourceClient client, str
 {
     private const string Group = "gateway.networking.k8s.io";
     private const string Prefix = "hp-tls-";
+    private const string IgnoreAnnotation = "cert-manager.io/ignore-tls-listeners";
+    internal static string IgnoredListeners(IEnumerable<string> names) => string.Join(",", names.OrderBy(x => x, StringComparer.Ordinal));
+
+    internal static object[] BuildUpdatePatch(JsonObject existing, JsonArray original, JsonArray next, string ignored)
+    {
+        var changes = new List<object>();
+        if (!JsonNode.DeepEquals(original, next))
+            changes.Add(new { op = "replace", path = "/spec/listeners", value = (object)next });
+        var annotations = existing["metadata"]?["annotations"];
+        if (annotations is null)
+            changes.Add(new { op = "add", path = "/metadata/annotations", value = (object)new Dictionary<string, string> { [IgnoreAnnotation] = ignored } });
+        else if (annotations[IgnoreAnnotation]?.GetValue<string>() != ignored)
+            changes.Add(new { op = "add", path = "/metadata/annotations/cert-manager.io~1ignore-tls-listeners", value = (object)ignored });
+        if (changes.Count > 0)
+            changes.Insert(0, new { op = "test", path = "/metadata/resourceVersion", value = (object)existing["metadata"]!["resourceVersion"]!.GetValue<string>() });
+        return changes.ToArray();
+    }
     private static string Name(Guid id) => Prefix + id.ToString("N");
     private static bool Managed(string? name) => name is not null && name.StartsWith(Prefix, StringComparison.Ordinal) &&
         Guid.TryParseExact(name[Prefix.Length..], "N", out _);
@@ -31,12 +48,13 @@ internal sealed class ListenerSetReconciler(KubernetesResourceClient client, str
             next.Add(JsonSerializer.SerializeToNode(new { name = pair.Key, hostname = pair.Value.Host, port = 443, protocol = "HTTPS",
                 tls = new { mode = "Terminate", certificateRefs = new[] { new { group = "", kind = "Secret", name = CertManagerClient.Name(pair.Value.Id) + "-tls" } } },
                 allowedRoutes = new { namespaces = new { from = "Same" } } }));
+        var ignored = IgnoredListeners(desired.Keys);
         if (json is null && next.Count > 0)
         {
             var manifest = JsonSerializer.Serialize(new
             {
                 apiVersion = Group + "/v1", kind = "ListenerSet",
-                metadata = new { name = set, @namespace = ns, labels = new Dictionary<string, string> { ["hostingpanel/component"] = "tls-listener-set" } },
+                metadata = new { name = set, @namespace = ns, annotations = new Dictionary<string, string> { [IgnoreAnnotation] = ignored }, labels = new Dictionary<string, string> { ["hostingpanel/component"] = "tls-listener-set" } },
                 spec = new { parentRef = new { group = Group, kind = "Gateway", name = gateway, @namespace = gatewayNamespace }, listeners = next }
             });
             await client.CreateListenerSetAsync(ns, manifest, ct);
@@ -47,13 +65,11 @@ internal sealed class ListenerSetReconciler(KubernetesResourceClient client, str
                 json["metadata"]!["uid"]!.GetValue<string>(),
                 json["metadata"]!["resourceVersion"]!.GetValue<string>(), ct);
         }
-        else if (json is not null && !JsonNode.DeepEquals(original, next))
+        else if (json is not null)
         {
-            var patch = new object[] {
-                new { op = "test", path = "/metadata/resourceVersion", value = (object)json["metadata"]!["resourceVersion"]!.GetValue<string>() },
-                new { op = "replace", path = "/spec/listeners", value = (object)next }
-            };
-            await client.PatchAsync(Group, "v1", ns, "listenersets", set, JsonSerializer.Serialize(patch), ct);
+            var patch = BuildUpdatePatch(json, original, next, ignored);
+            if (patch.Length > 0)
+                await client.PatchAsync(Group, "v1", ns, "listenersets", set, JsonSerializer.Serialize(patch), ct);
         }
         foreach (var pair in desired)
         {
