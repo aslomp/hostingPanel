@@ -15,7 +15,7 @@ Source: src/HostingPanel.Backends.Kubernetes/Backend/KubernetesProvisioningServi
 3. Resolve the domain owner and creator, including newly tracked accounts.
 4. Hosting IP selection prefers directly assigned eligible addresses (all direct addresses), then reseller shared addresses, then global shared addresses, then server addresses. When no inventory exists, use DnsWebIp. Non-direct selection prefers DnsWebIp among eligible addresses, then ordinal address order, and takes one.
 5. Resolve nameservers independently using the existing configuration in the order below.
-6. Stage the zone and A/AAAA records, www CNAME and two apex NS records in SQLite and schedule dns-zone reconciliation. Missing/invalid defaults or eligible IPs yield a DNS error; callers can persist deferred domain-dns operations. Do not equate accepted domain creation with DNS publication.
+6. Stage the zone and A/AAAA records, www CNAME and two apex NS records in SQLite and schedule dns-zone reconciliation. Missing eligible IPs or an empty fallback public web IP yield `NO_ASSIGNED_IP`; malformed selected IPs yield `INVALID_HOSTING_IP`; missing distinct valid nameservers yield `DNS_NAMESERVERS_NOT_CONFIGURED`. These errors are independent; callers can persist deferred domain-dns operations. Do not equate accepted domain creation with DNS publication.
 
 ### Nameserver precedence (actual main behavior)
 
