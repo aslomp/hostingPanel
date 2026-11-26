@@ -36,3 +36,10 @@ kubernetesHosting:
     enabled: false
     hostname: ""
     listener: https
+
+# Optional database server; set enabled and provide the Secret before deploying.
+mariadb:
+  enabled: false
+  storageClassName: iscsi
+  size: 20Gi
+  existingSecret: hostingpanel-mariadb

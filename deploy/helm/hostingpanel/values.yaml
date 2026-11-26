@@ -68,3 +68,16 @@ certManager:
 
   # Existing ListenerSet in the release namespace; reserve hp-tls-* listeners for HostingPanel.
   listenerSetName: ""
+
+# Optional shared MariaDB server for hosted applications.
+mariadb:
+  enabled: false
+  image: mariadb:11.4
+  storageClassName: ""
+  size: 10Gi
+  existingClaim: ""
+  # Existing Secret with key root-password; never put credentials in values.
+  existingSecret: ""
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "2", memory: 2Gi}

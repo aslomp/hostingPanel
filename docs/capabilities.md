@@ -53,3 +53,5 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 - Server settings use a dedicated UI operation service without adding backend capabilities.
 
 - System package management uses a dedicated UI operation service; upstream compatibility and backend support remain unchanged.
+
+- The optional MariaDB Helm workload provides shared database infrastructure only; Kubernetes database create/delete still return 501.
