@@ -45,6 +45,7 @@ public static class KubernetesRegistration
     services.AddScoped<IDomainPreview>(sp => sp.GetRequiredService<KubernetesDomainService>());
     services.AddScoped<KubernetesWebHosting>();
     services.AddScoped<IWebHosting>(sp => sp.GetRequiredService<KubernetesWebHosting>());
+    services.AddSingleton<MariaDbProvisioner>();
     services.AddScoped<KubernetesDatabaseService>();
     services.AddScoped<IDatabases>(sp => sp.GetRequiredService<KubernetesDatabaseService>());
     services.AddScoped<IAccessibleDatabases>(sp => sp.GetRequiredService<KubernetesDatabaseService>());

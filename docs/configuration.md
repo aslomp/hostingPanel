@@ -30,3 +30,7 @@ AcmeProviders maps logical IDs to existing cert-manager issuers; AcmeDefaultProv
 ## Secrets and persistence
 
 Use secret references and protected deployment settings for API keys, passwords and TLS private material. Do not add secret fields to IBackendSettings, including nested objects. Local account password hashes are not plaintext passwords. See [persistence](shared-sqlite-persistence.md).
+
+## MariaDB provisioning (Kubernetes)
+
+Configure `ConnectionStrings:MariaDb` using a protected deployment secret (environment variable `ConnectionStrings__MariaDb`). Use a dedicated provisioning account on a dedicated MariaDB instance, with TLS verification, schema creation/deletion, account creation and database-level grant privileges plus read access to the grant inventory. Do not use customer or root credentials. The existing database capability prefixes submitted names with the authenticated account name. No database password is stored in SQLite. Physical DDL and SQLite are not atomic: uncertain outcomes require operator reconciliation before retry. Existing external databases must not be adopted automatically. This initial implementation does not implement the official db-manage/db-show compatibility surface, quotas, password rotation or orphan-user cleanup.
