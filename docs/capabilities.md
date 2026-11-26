@@ -57,3 +57,5 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 - The optional MariaDB Helm workload provides shared database infrastructure. Kubernetes database mutations use the provisioning account when configured; failures return sanitized API errors and log MariaDB error numbers and SQL states.
 
 Helm-managed MariaDB (Kubernetes only): optional dedicated MariaDB StatefulSet, independent PVC, internal service, separate provisioning Secret and first-initialization account bootstrap. Existing volumes require manual account initialization; deployment/runtime validation is pending.
+
+- Shared Apache configuration is published as immutable NFS revisions by the Kubernetes reconciler; named StatefulSet pods support scoped SDK validation and graceful reload. Live migration and runtime acceptance are pending.

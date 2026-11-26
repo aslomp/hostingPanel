@@ -16,12 +16,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Render chart
         run: |
-          helm template smoke deploy/helm/hostingpanel --namespace hosting --set backend=Kubernetes --set kubernetesHosting.enabled=true --set kubernetesHosting.nfsServer=192.0.2.1 --set kubernetesHosting.nfsPath=/home --set kubernetesHosting.gatewayName=smoke --set powerDns.enabled=false --set certManager.enabled=false > /tmp/hosting-rendered.yaml
+          helm template smoke deploy/helm/hostingpanel --namespace hosting --set backend=Kubernetes --set kubernetesHosting.enabled=true --set kubernetesHosting.nfsServer=192.0.2.1 --set kubernetesHosting.nfsPath=/home --set kubernetesHosting.gatewayName=smoke --set kubernetesHosting.apacheConfigClaim=apache-config-test --set powerDns.enabled=false --set certManager.enabled=false > /tmp/hosting-rendered.yaml
           python3 - <<'PY'
           import pathlib, yaml
           docs = list(yaml.safe_load_all(pathlib.Path('/tmp/hosting-rendered.yaml').read_text()))
           config = next(d for d in docs if d and d.get('kind') == 'ConfigMap' and d['metadata']['name'] == 'apache-baseline')
-          deployment = next(d for d in docs if d and d.get('kind') == 'Deployment' and d['metadata']['name'] == 'apache-baseline')
+          deployment = next(d for d in docs if d and d.get('kind') == 'StatefulSet' and d['metadata']['name'] == 'apache-baseline')
           pod = deployment['spec']['template']['spec']
           apache = next(c for c in pod['containers'] if c['name'] == 'apache')
           assert pod['automountServiceAccountToken'] is False
@@ -32,17 +32,16 @@ jobs:
           pathlib.Path('/tmp/hosting-httpd.conf').write_text(config['data']['httpd.conf'])
           pathlib.Path('/tmp/hosting-apache-image').write_text(apache['image'])
           PY
-      - name: Verify optional shared Apache configuration storage
+      - name: Verify dedicated shared storage and scoped reload authorization
         run: |
-          helm template smoke deploy/helm/hostingpanel --namespace hosting --set backend=Kubernetes --set kubernetesHosting.enabled=true --set kubernetesHosting.nfsServer=192.0.2.1 --set kubernetesHosting.nfsPath=/home --set kubernetesHosting.gatewayName=smoke --set kubernetesHosting.apacheConfigClaim=apache-config-test --set powerDns.enabled=false --set certManager.enabled=false > /tmp/apache-storage.yaml
           python3 - <<'PY'
           import pathlib, yaml
-          def pods(path):
-              return [d['spec']['template']['spec'] for d in yaml.safe_load_all(pathlib.Path(path).read_text()) if d and d.get('kind') == 'Deployment']
-          for pod in pods('/tmp/hosting-rendered.yaml'):
-              assert not any(v['name'] == 'apache-config' for v in pod.get('volumes', []))
+          docs = [d for d in yaml.safe_load_all(pathlib.Path('/tmp/hosting-rendered.yaml').read_text()) if d]
           seen = set()
-          for pod in pods('/tmp/apache-storage.yaml'):
+          for d in docs:
+              if d.get('kind') not in ('Deployment', 'StatefulSet'):
+                  continue
+              pod = d['spec']['template']['spec']
               for container in pod['containers']:
                   mounts = [m for m in container.get('volumeMounts', []) if m['name'] == 'apache-config']
                   if container['name'] not in ('web', 'apache'):
@@ -53,9 +52,11 @@ jobs:
                   assert mounts[0].get('readOnly', False) == (container['name'] == 'apache')
                   volume = next(v for v in pod['volumes'] if v['name'] == 'apache-config')
                   assert volume['persistentVolumeClaim']['claimName'] == 'apache-config-test'
-                  assert volume['persistentVolumeClaim'].get('readOnly', False) == (container['name'] == 'apache')
                   seen.add(container['name'])
+              assert all(c['name'] != 'vhost-sync' for c in pod['containers'])
           assert seen == {'web', 'apache'}
+          rules = [r for d in docs if d.get('kind') == 'Role' for r in d['rules'] if 'pods/exec' in r.get('resources', [])]
+          assert len(rules) == 1 and rules[0]['resourceNames'] == ['apache-baseline-0']
           PY
       - name: Validate Apache configuration and MPM
         run: |
@@ -83,10 +84,11 @@ jobs:
           set -eu
           image="$(cat /tmp/hosting-apache-image)"
           trap 'docker rm -f hosting-apache-vhost >/dev/null 2>&1 || true' EXIT
-          mkdir -p /tmp/hosting-static/public_html /tmp/hosting-vhosts
+          mkdir -p /tmp/hosting-static/public_html /tmp/hosting-vhosts/revision
+          printf '%s\n' 'IncludeOptional /storage/apache-config/revision/*.conf' > /tmp/hosting-vhosts/active.conf
           printf '%s\n' 'hostingpanel-static-smoke' > /tmp/hosting-static/public_html/index.html
           chmod -R a+rX /tmp/hosting-static /tmp/hosting-vhosts
-          cat > /tmp/hosting-vhosts/site.conf <<'CONF'
+          cat > /tmp/hosting-vhosts/revision/site.conf <<'CONF'
           <VirtualHost *:8080>
             ServerName smoke.invalid
             DocumentRoot "/home/smoke/public_html"
@@ -98,8 +100,8 @@ jobs:
             </Directory>
           </VirtualHost>
           CONF
-          docker run --rm --user 1001:1001 --cap-drop ALL --security-opt no-new-privileges -v /tmp/hosting-httpd.conf:/etc/hostingpanel/httpd.conf:ro -v /tmp/hosting-vhosts:/runtime/current:ro "$image" httpd -t -f /etc/hostingpanel/httpd.conf
-          docker run -d --name hosting-apache-vhost --user 1001:1001 --cap-drop ALL --security-opt no-new-privileges -p 127.0.0.1:18080:8080 -p 127.0.0.1:18081:8081 -v /tmp/hosting-httpd.conf:/etc/hostingpanel/httpd.conf:ro -v /tmp/hosting-vhosts:/runtime/current:ro -v /tmp/hosting-static:/home/smoke:ro "$image" httpd -DFOREGROUND -f /etc/hostingpanel/httpd.conf
+          docker run --rm --user 1001:1001 --cap-drop ALL --security-opt no-new-privileges -v /tmp/hosting-httpd.conf:/etc/hostingpanel/httpd.conf:ro -v /tmp/hosting-vhosts:/storage/apache-config:ro "$image" httpd -t -f /etc/hostingpanel/httpd.conf
+          docker run -d --name hosting-apache-vhost --user 1001:1001 --cap-drop ALL --security-opt no-new-privileges -p 127.0.0.1:18080:8080 -p 127.0.0.1:18081:8081 -v /tmp/hosting-httpd.conf:/etc/hostingpanel/httpd.conf:ro -v /tmp/hosting-vhosts:/storage/apache-config:ro -v /tmp/hosting-static:/home/smoke:ro "$image" httpd -DFOREGROUND -f /etc/hostingpanel/httpd.conf
           for attempt in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:18081/ >/dev/null; then break; fi
             sleep 1

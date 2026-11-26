@@ -30,15 +30,14 @@ kubernetesHosting:
   # Optional existing PVC for the provisioning filesystem. Its root must
   # correspond to nfsPath and permit the authorized provisioning identity.
   provisioningClaim: ""
-  # Optional existing RWX PVC dedicated to platform Apache configuration.
-  # Must not overlap customer storage. Legacy sync remains active for now.
+  # Required existing RWX NFS PVC for enabled hosting. Must not overlap customer storage.
   apacheConfigClaim: ""
   gatewayName: ""
   gatewayNamespace: envoy-gateway-system
   httpListener: http
   httpsListener: https
   apacheImage: httpd:2.4
-  vhostSyncImage: python:3.13-alpine
+  apacheReplicas: 1
   phpImage: php:8.6.0-fpm
   phpReplicas: 1
   allowSharedPhpRuntime: false

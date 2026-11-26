@@ -26,7 +26,9 @@ kubernetesHosting:
   httpListener: http
   httpsListener: https
   apacheImage: httpd:2.4
-  vhostSyncImage: python:3.13-alpine
+  apacheReplicas: 1
+  # Existing dedicated RWX NFS claim, separate from customer storage.
+  apacheConfigClaim: apache-config
   phpImage: php:8.6.0-fpm
   phpReplicas: 1
   # Explicit opt-in: only mutually trusted PHP applications until tenant

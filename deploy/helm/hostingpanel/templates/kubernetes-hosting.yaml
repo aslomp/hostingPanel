@@ -15,7 +15,11 @@ rules:
     verbs: ["get", "list", "create", "patch", "delete"]
   - apiGroups: [""]
     resources: ["pods"]
-    verbs: ["get", "list"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    resourceNames: [{{- range $i := until (int .Values.kubernetesHosting.apacheReplicas) }}{{ if $i }}, {{ end }}{{ printf "apache-baseline-%d" $i | quote }}{{- end }}]
+    verbs: ["get", "create"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list", "create", "patch", "delete"]
@@ -57,33 +61,6 @@ roleRef:
   name: {{ $name }}-controller
 ---
 apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: apache-vhosts
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: apache-vhosts
-rules:
-  - apiGroups: [""]
-    resources: ["configmaps"]
-    verbs: ["list"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: apache-vhosts
-subjects:
-  - kind: ServiceAccount
-    name: apache-vhosts
-    namespace: {{ .Release.Namespace }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: apache-vhosts
----
-apiVersion: v1
 kind: ConfigMap
 metadata:
   name: apache-baseline
@@ -93,6 +70,7 @@ data:
     Listen 8080
     Listen 8081
     ServerName localhost
+    LogFormat "%h %l %u %t \"%r\" %>s %b" common
     LoadModule mpm_event_module modules/mod_mpm_event.so
     LoadModule unixd_module modules/mod_unixd.so
     LoadModule authz_core_module modules/mod_authz_core.so
@@ -132,129 +110,26 @@ data:
             DirectoryIndex index.html
         </Directory>
     </VirtualHost>
-    IncludeOptional /runtime/current/*.conf
-  sync.py: |
-    import hashlib, json, os, pathlib, re, shutil, ssl, subprocess, time, urllib.request, urllib.parse
-    root = pathlib.Path("/vhosts")
-    token_path = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-    ca_path = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-    ns = os.environ["POD_NAMESPACE"]
-    url = "https://kubernetes.default.svc/api/v1/namespaces/" + ns + "/configmaps?labelSelector=hostingpanel%2Fcomponent%3Dvhost"
-    context = ssl.create_default_context(cafile=ca_path)
-    root.mkdir(exist_ok=True)
-    current = root / "current"
-    initial = root / "initial"
-    initial.mkdir(exist_ok=True)
-    if not current.exists():
-        current.symlink_to(initial.name)
-    def snapshot():
-        files = {}
-        next_url = url
-        while next_url:
-            req = urllib.request.Request(next_url, headers={"Authorization": "Bearer " + pathlib.Path(token_path).read_text().strip()})
-            with urllib.request.urlopen(req, context=context, timeout=10) as response:
-                page = json.load(response)
-            for item in page["items"]:
-                name = item["metadata"]["name"]
-                if not re.fullmatch(r"site-[0-9a-f]{32}", name):
-                    continue
-                files[name + ".conf"] = item["data"]["vhost.conf"]
-            continuation = page["metadata"].get("continue")
-            if continuation:
-                next_url = url + "&continue=" + urllib.parse.quote(continuation, safe="")
-            else:
-                next_url = None
-        return files
-    def sync():
-        files = snapshot()
-        digest = hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
-        target = root / digest
-        if current.resolve() == target:
-            return
-        if not target.exists():
-            staging = root / (digest + ".tmp")
-            if staging.exists():
-                shutil.rmtree(staging)
-            staging.mkdir()
-            for name, content in files.items():
-                (staging / name).write_text(content)
-            staging.rename(target)
-        old = os.readlink(current)
-        temp = root / "next"
-        temp.unlink(missing_ok=True)
-        temp.symlink_to(target.name)
-        os.replace(temp, current)
-        try:
-            pass
-        except Exception:
-            temp.symlink_to(old)
-            os.replace(temp, current)
-            raise
-        for item in root.iterdir():
-            if item.is_dir() and not item.is_symlink() and item != target and item != initial and item.name != old:
-                shutil.rmtree(item)
-    while True:
-        try:
-            sync()
-        except Exception as exc:
-            print("Vhost sync failed:", exc, flush=True)
-        time.sleep(5)
-  run.sh: |
-    #!/bin/sh
-    set -eu
-    mkdir -p /runtime/initial
-    if [ ! -L /runtime/current ]; then ln -s initial /runtime/current; fi
-    httpd -t -f /etc/hostingpanel/httpd.conf
-    httpd -DFOREGROUND -f /etc/hostingpanel/httpd.conf &
-    pid=$!
-    trap 'kill -TERM "$pid" 2>/dev/null || true; wait "$pid" || true; exit 0' TERM INT
-    applied="$(readlink /runtime/current)"
-    while kill -0 "$pid" 2>/dev/null; do
-      candidate="$(readlink /vhosts/current 2>/dev/null || true)"
-      case "$candidate" in
-        ""|initial) ;;
-        *)
-          if [ "$candidate" != "$applied" ] && [ -d "/vhosts/$candidate" ]; then
-            mkdir -p "/runtime/$candidate"
-            if ! cp -a "/vhosts/$candidate/." "/runtime/$candidate/"; then
-              rm -rf "/runtime/$candidate"
-              sleep 5
-              continue
-            fi
-            ln -s "$candidate" /runtime/next
-            mv -Tf /runtime/next /runtime/current
-            if httpd -t -f /etc/hostingpanel/httpd.conf && httpd -k graceful -f /etc/hostingpanel/httpd.conf; then
-              old="$applied"
-              applied="$candidate"
-              if [ "$old" != initial ]; then rm -rf "/runtime/$old"; fi
-            else
-              ln -s "$applied" /runtime/next
-              mv -Tf /runtime/next /runtime/current
-              rm -rf "/runtime/$candidate"
-            fi
-          fi
-          ;;
-      esac
-      sleep 5
-    done
-    wait "$pid"
-
+    <IfDefine !HOSTINGPANEL_CANDIDATE>
+        IncludeOptional /storage/apache-config/active.conf
+    </IfDefine>
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: apache-baseline
 spec:
-  replicas: 1
+  serviceName: apache-baseline-headless
+  podManagementPolicy: Parallel
+  replicas: {{ .Values.kubernetesHosting.apacheReplicas }}
   selector:
     matchLabels: {app.kubernetes.io/name: apache-baseline}
   template:
     metadata:
       labels: {app.kubernetes.io/name: apache-baseline}
       annotations:
-        hostingpanel/apache-config: "shared-vhosts-v3"
+        hostingpanel/apache-config: "shared-nfs-v1"
     spec:
-      serviceAccountName: apache-vhosts
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
@@ -265,7 +140,7 @@ spec:
       containers:
         - name: apache
           image: {{ .Values.kubernetesHosting.apacheImage | quote }}
-          command: ["/bin/sh", "/etc/hostingpanel/run.sh"]
+          command: ["httpd", "-DFOREGROUND", "-f", "/etc/hostingpanel/httpd.conf"]
           ports: [{name: http, containerPort: 8080}, {name: health, containerPort: 8081}]
           securityContext:
             allowPrivilegeEscalation: false
@@ -276,50 +151,16 @@ spec:
             httpGet: {path: /, port: health}
           volumeMounts:
             - {name: config, mountPath: /etc/hostingpanel, readOnly: true}
-            - {name: vhosts, mountPath: /vhosts, readOnly: true}
-            - {name: runtime, mountPath: /runtime}
             - {name: sites, mountPath: /home, readOnly: true}
-            {{- if .Values.kubernetesHosting.apacheConfigClaim }}
             - {name: apache-config, mountPath: /storage/apache-config, readOnly: true}
-            {{- end }}
-        - name: vhost-sync
-          image: {{ .Values.kubernetesHosting.vhostSyncImage | quote }}
-          command: ["python3", "/etc/hostingpanel/sync.py"]
-          env:
-            - name: POD_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities: {drop: [ALL]}
-          volumeMounts:
-            - {name: config, mountPath: /etc/hostingpanel, readOnly: true}
-            - {name: vhosts, mountPath: /vhosts}
-            - {name: api-access, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
       volumes:
-        {{- if .Values.kubernetesHosting.apacheConfigClaim }}
         - name: apache-config
           persistentVolumeClaim:
-            claimName: {{ .Values.kubernetesHosting.apacheConfigClaim | quote }}
+            claimName: {{ required "kubernetesHosting.apacheConfigClaim is required" .Values.kubernetesHosting.apacheConfigClaim | quote }}
             readOnly: true
-        {{- end }}
-        - name: runtime
-          emptyDir: {}
-        - name: api-access
-          projected:
-            sources:
-              - serviceAccountToken:
-                  path: token
-                  expirationSeconds: 3600
-              - configMap:
-                  name: kube-root-ca.crt
-                  items: [{key: ca.crt, path: ca.crt}]
         - name: config
           configMap:
             name: apache-baseline
-        - name: vhosts
-          emptyDir: {}
         - name: sites
           nfs:
             server: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}
@@ -332,6 +173,15 @@ metadata:
   name: apache-baseline
 spec:
   type: ClusterIP
+  selector: {app.kubernetes.io/name: apache-baseline}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: apache-baseline-headless
+spec:
+  clusterIP: None
   selector: {app.kubernetes.io/name: apache-baseline}
   ports: [{name: http, port: 80, targetPort: http}]
 {{- if .Values.kubernetesHosting.panelRoute.enabled }}

@@ -75,8 +75,95 @@ public sealed class KubernetesResourceClient : IDisposable
         catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.NotFound) { }
     }
 
+    // Retire only the old controller's dedicated virtualhost ConfigMaps.
+    // Use UID/resourceVersion preconditions so a replaced object is never deleted.
+    public async Task RetireLegacyApacheConfigMapsAsync(string ns, CancellationToken ct)
+    {
+        var maps = await Api.CoreV1.ListNamespacedConfigMapAsync(ns,
+            labelSelector: "hostingpanel/component=vhost", cancellationToken: ct);
+        foreach (var map in maps.Items)
+        {
+            var name = map.Metadata.Name;
+            if (name is null || !name.StartsWith("site-", StringComparison.Ordinal) ||
+                name.Length != 37 || !name[5..].All(char.IsAsciiHexDigitLower) ||
+                map.Data is null || !map.Data.ContainsKey("vhost.conf") ||
+                string.IsNullOrEmpty(map.Metadata.Uid) || string.IsNullOrEmpty(map.Metadata.ResourceVersion))
+                continue;
+            try
+            {
+                await Api.CoreV1.DeleteNamespacedConfigMapAsync(name, ns,
+                    body: new V1DeleteOptions { Preconditions = new V1Preconditions
+                    {
+                        Uid = map.Metadata.Uid, ResourceVersion = map.Metadata.ResourceVersion
+                    } }, cancellationToken: ct);
+            }
+            catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.NotFound) { }
+        }
+    }
+
     public async Task<string> ListPodsAsync(string ns, string selector, CancellationToken ct) =>
         KubernetesJson.Serialize(await Api.CoreV1.ListNamespacedPodAsync(ns, labelSelector: selector, cancellationToken: ct));
+
+
+    // A list/resourceVersion followed by a watch closes the startup race.
+    // Reconnect is owned by the reconciler; callbacks are invalidation only.
+    public async Task WatchApachePodsAsync(string ns, Action changed, CancellationToken ct)
+    {
+        const string selector = "app.kubernetes.io/name=apache-baseline";
+        var initial = await Api.CoreV1.ListNamespacedPodAsync(ns, labelSelector: selector, cancellationToken: ct);
+        changed();
+        var response = Api.CoreV1.ListNamespacedPodWithHttpMessagesAsync(ns,
+            labelSelector: selector, resourceVersion: initial.Metadata.ResourceVersion,
+            watch: true, timeoutSeconds: 300, cancellationToken: ct);
+        await foreach (var (kind, _) in response.WatchAsync<V1Pod, V1PodList>(
+            onError: error => throw new InvalidOperationException("Apache pod watch failed.", error),
+            cancellationToken: ct))
+        {
+            if (kind == WatchEventType.Error)
+                throw new InvalidOperationException("Apache pod watch returned an error.");
+            if (kind is WatchEventType.Added or WatchEventType.Modified or WatchEventType.Deleted)
+                changed();
+        }
+    }
+
+    // Deliberately expose only the two platform Apache operations, not a
+    // general-purpose command execution API.
+    public Task ValidateApacheRevisionAsync(string ns, string pod, string revision, CancellationToken ct)
+    {
+        if (revision.Length != 64 || !revision.All(char.IsAsciiHexDigitLower))
+            throw new ArgumentException("Invalid Apache revision.", nameof(revision));
+        return ApacheExecAsync(ns, pod, new[] {
+            "httpd", "-t", "-f", "/etc/hostingpanel/httpd.conf",
+            "-D", "HOSTINGPANEL_CANDIDATE",
+            "-c", "IncludeOptional /storage/apache-config/" + revision + "/*.conf"
+        }, ct);
+    }
+
+    public async Task ReloadApacheAsync(string ns, string pod, CancellationToken ct)
+    {
+        await ApacheExecAsync(ns, pod, new[] { "httpd", "-t", "-f", "/etc/hostingpanel/httpd.conf" }, ct);
+        await ApacheExecAsync(ns, pod, new[] { "httpd", "-k", "graceful", "-f", "/etc/hostingpanel/httpd.conf" }, ct);
+    }
+
+    private async Task ApacheExecAsync(string ns, string pod, string[] command, CancellationToken ct)
+    {
+        var target = await Api.CoreV1.ReadNamespacedPodAsync(pod, ns, cancellationToken: ct);
+        if (target.Metadata.DeletionTimestamp is not null ||
+            (target.Metadata.Labels is null || !target.Metadata.Labels.TryGetValue("app.kubernetes.io/name", out var label) || label != "apache-baseline") ||
+            target.Spec.Containers.Count != 1 || target.Spec.Containers[0].Name != "apache" ||
+            target.Status.Phase != "Running")
+            throw new InvalidOperationException("Apache replica is not available for configuration activation.");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        var exit = await Api.NamespacedPodExecAsync(pod, ns, "apache", command, false,
+            async (_, stdout, stderr) =>
+            {
+                await Task.WhenAll(stdout.CopyToAsync(Stream.Null, timeout.Token),
+                    stderr.CopyToAsync(Stream.Null, timeout.Token));
+            }, timeout.Token);
+        if (exit != 0)
+            throw new InvalidOperationException("Apache configuration operation failed with exit code " + exit);
+    }
 
     public void Dispose() { if (client.IsValueCreated) client.Value.Dispose(); }
 }

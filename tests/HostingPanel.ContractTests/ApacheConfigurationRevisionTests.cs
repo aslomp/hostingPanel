@@ -28,6 +28,9 @@ internal static class ApacheConfigurationRevisionTests
         catch (ArgumentException) { }
         VerifyInvalidEntries();
         VerifyStorageAsync(first).GetAwaiter().GetResult();
+        VerifySnapshotAsync(first).GetAwaiter().GetResult();
+        VerifySelectionAsync(first).GetAwaiter().GetResult();
+        VerifyActivationAsync(first).GetAwaiter().GetResult();
         VerifyUnavailableStorageAsync(first).GetAwaiter().GetResult();
     }
 
@@ -72,6 +75,142 @@ internal static class ApacheConfigurationRevisionTests
             catch (IOException) { }
             Require(await File.ReadAllTextAsync(path) == "corrupt");
             Require(Directory.GetFiles(root).Length == 1);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+
+    private static async Task VerifySnapshotAsync(ApacheConfigurationRevision revision)
+    {
+        var root = Directory.CreateTempSubdirectory("apache-snapshot-").FullName;
+        try
+        {
+            var store = new ApacheCandidateStore(root);
+            using var cancelled = new CancellationTokenSource();
+            cancelled.Cancel();
+            try
+            {
+                await store.StageAsync(revision, cancelled.Token);
+                throw new Exception("Cancelled snapshot was staged.");
+            }
+            catch (OperationCanceledException) { }
+            Require(Directory.GetFileSystemEntries(root).Length == 0);
+            var results = await Task.WhenAll(Enumerable.Range(0, 8)
+                .Select(_ => store.StageAsync(revision, CancellationToken.None)));
+            var path = results[0];
+            Require(results.All(result => result == path));
+            Require(Directory.GetFileSystemEntries(root).Length == 1);
+            Require(Directory.GetFiles(path).Length == revision.VirtualHosts.Count);
+            foreach (var (id, content) in revision.VirtualHosts)
+                Require(await File.ReadAllTextAsync(Path.Combine(path, "site-" + id.ToString("N") + ".conf")) == content);
+            var empty = await store.StageAsync(new ApacheConfigurationRevision([]), CancellationToken.None);
+            Require(Directory.GetFileSystemEntries(empty).Length == 0);
+            Require(!File.Exists(Path.Combine(root, "current")));
+            var first = Directory.GetFiles(path).First();
+            await File.WriteAllTextAsync(first, "corrupt");
+            try
+            {
+                await store.StageAsync(revision, CancellationToken.None);
+                throw new Exception("Corrupt snapshot accepted.");
+            }
+            catch (IOException) { }
+            Require(await File.ReadAllTextAsync(first) == "corrupt");
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+
+    private static async Task VerifySelectionAsync(ApacheConfigurationRevision revision)
+    {
+        var root = Directory.CreateTempSubdirectory("apache-selection-").FullName;
+        try
+        {
+            var store = new ApacheCandidateStore(root);
+            var ct = CancellationToken.None;
+            var empty = new ApacheConfigurationRevision([]);
+            Require(await store.ReadActiveAsync(ct) is null);
+            await store.StageAsync(empty, ct);
+            await store.StageAsync(revision, ct);
+            await store.SelectAsync(empty.Id, ct);
+            Require(await store.ReadActiveAsync(ct) == empty.Id);
+            await store.SelectAsync(revision.Id, ct);
+            Require(await new ApacheCandidateStore(root).ReadActiveAsync(ct) == revision.Id);
+            try
+            {
+                await store.SelectAsync("../escape", ct);
+                throw new Exception("Invalid revision selected.");
+            }
+            catch (IOException) { }
+            try
+            {
+                await store.SelectAsync(new string('f', 64), ct);
+                throw new Exception("Unstaged revision selected.");
+            }
+            catch (IOException) { }
+            Require(await store.ReadActiveAsync(ct) == revision.Id);
+            using var cancelled = new CancellationTokenSource();
+            cancelled.Cancel();
+            try
+            {
+                await store.SelectAsync(empty.Id, cancelled.Token);
+                throw new Exception("Cancelled selection succeeded.");
+            }
+            catch (OperationCanceledException) { }
+            Require(await store.ReadActiveAsync(ct) == revision.Id);
+            await store.SelectAsync(empty.Id, ct);
+            Require(await store.ReadActiveAsync(ct) == empty.Id);
+            Require(Directory.Exists(Path.Combine(root, revision.Id)));
+            Require(!Directory.GetFiles(root).Any(x => Path.GetFileName(x).StartsWith(".active-")));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+
+    private static async Task VerifyActivationAsync(ApacheConfigurationRevision revision)
+    {
+        var root = Directory.CreateTempSubdirectory("apache-activation-").FullName;
+        try
+        {
+            var store = new ApacheCandidateStore(root);
+            var activator = new ApacheRevisionActivator(store);
+            var ct = CancellationToken.None;
+            var baseline = new ApacheConfigurationRevision([]);
+            var events = new List<string>();
+            Task Validate(string id, CancellationToken _) { events.Add("validate:" + id); return Task.CompletedTask; }
+            async Task Reload(string id, CancellationToken token)
+            {
+                Require(await store.ReadActiveAsync(token) == id);
+                events.Add("reload:" + id);
+            }
+            await activator.ActivateAsync(baseline, Validate, Reload, ct);
+            Require(await store.ReadActiveAsync(ct) == baseline.Id);
+            events.Clear();
+            try
+            {
+                await activator.ActivateAsync(revision, (_, _) => throw new InvalidOperationException("invalid"), Reload, ct);
+                throw new Exception("Invalid revision activated.");
+            }
+            catch (InvalidOperationException) { }
+            Require(await store.ReadActiveAsync(ct) == baseline.Id);
+            Require(events.Count == 0);
+
+            async Task FailReload(string id, CancellationToken token)
+            {
+                await Reload(id, token);
+                if (id == revision.Id) throw new IOException("reload failed");
+            }
+            try
+            {
+                await activator.ActivateAsync(revision, Validate, FailReload, ct);
+                throw new Exception("Failed reload accepted.");
+            }
+            catch (IOException) { }
+            Require(await store.ReadActiveAsync(ct) == baseline.Id);
+            Require(events.SequenceEqual(new[] { "validate:" + revision.Id, "reload:" + revision.Id, "reload:" + baseline.Id }));
+            events.Clear();
+            await activator.ActivateAsync(revision, Validate, Reload, ct);
+            Require(await store.ReadActiveAsync(ct) == revision.Id);
+            Require(events.SequenceEqual(new[] { "validate:" + revision.Id, "reload:" + revision.Id }));
         }
         finally { Directory.Delete(root, recursive: true); }
     }

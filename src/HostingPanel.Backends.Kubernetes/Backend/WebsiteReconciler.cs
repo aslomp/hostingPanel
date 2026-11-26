@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 using HostingPanel.Api.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
@@ -16,22 +17,64 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
     ILogger<WebsiteReconciler> logger, NfsDirectoryProvisioner storage, HostingOperationNotifications notifications, KubernetesResourceClient resources) : BackgroundService
 {
     private string? appliedRuntimeHash;
+    private string? stagedApacheRevision;
+    private string? activatedReplicaFingerprint;
     private bool migrated;
+    private bool legacyApacheRetired;
     private string? appliedListenerSet;
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         if (!configuration.GetValue<bool>("KubernetesHosting:Enabled")) return;
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
-        do
+        var wake = Channel.CreateBounded<bool>(new BoundedChannelOptions(1)
         {
-            try { await ReconcileAsync(ct); }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
-            catch (Exception ex) { logger.LogError(ex, "Website reconciliation failed"); }
-        } while (await timer.WaitForNextTickAsync(ct));
+            FullMode = BoundedChannelFullMode.DropWrite,
+            SingleReader = true
+        });
+        void Notify() => wake.Writer.TryWrite(true);
+        notifications.Changed += Notify;
+        using var watchCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var watch = WatchApachePodsAsync(Notify, watchCancellation.Token);
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                var needsRetry = true;
+                try { needsRetry = await ReconcileAsync(ct); }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+                catch (Exception ex) { logger.LogError(ex, "Website reconciliation failed"); }
+
+                // Coalesce invalidations. Keep periodic recovery for failed durable work
+                // and settings changes which do not publish notifications.
+                using var delay = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                delay.CancelAfter(TimeSpan.FromSeconds(needsRetry ? 5 : 60));
+                try { await wake.Reader.ReadAsync(delay.Token); }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
+                while (wake.Reader.TryRead(out _)) { }
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        finally
+        {
+            notifications.Changed -= Notify;
+            await watchCancellation.CancelAsync();
+            await watch;
+        }
     }
 
-    private async Task ReconcileAsync(CancellationToken ct)
+    private async Task WatchApachePodsAsync(Action notify, CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try { await resources.WatchApachePodsAsync(Namespace, notify, ct); }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+            catch (Exception ex) { logger.LogWarning(ex, "Apache pod watch disconnected"); }
+            try { await Task.Delay(TimeSpan.FromSeconds(5), ct); }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+        }
+    }
+
+    private async Task<bool> ReconcileAsync(CancellationToken ct)
     {
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
@@ -42,7 +85,11 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var listenerSet = settings.TlsListenerSetName;
         var listenerChanged = appliedListenerSet != listenerSet;
         var cleanupPending = await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "domain-cleanup" && x.Status == "pending", ct);
-        if (rows.Count == 0 && !shared && migrated && !listenerChanged && !cleanupPending) return;
+        var stagePending = stagedApacheRevision is null;
+        var runtime = new ApacheRevisionRuntime(resources, Namespace);
+        if (!stagePending && !shared && rows.Count == 0 && migrated && !listenerChanged && !cleanupPending)
+            stagePending = activatedReplicaFingerprint != await runtime.GetReplicaFingerprintAsync(ct);
+        if (rows.Count == 0 && !shared && migrated && !listenerChanged && !cleanupPending && !stagePending && legacyApacheRetired) return false;
         var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
         var identities = await PhpIdentityModel.AllocateAsync(db, domains.Select(x => x.OwnerId), ct);
         var ownerIds = domains.Select(d => d.OwnerId).Distinct().ToArray();
@@ -86,7 +133,6 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 if (domain is null)
                     {
                     await resources.DeleteAsync("gateway.networking.k8s.io", "v1", Namespace, "httproutes", name, ct);
-                    await resources.DeleteConfigMapAsync(Namespace, name, ct);
                 }
                 else
                 {
@@ -123,7 +169,37 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 appliedRuntimeHash = hash;
             }
         }
-        // Legacy deployments are retired explicitly by the administrator after testing.
+        try
+        {
+            await ActivateApacheConfigurationAsync(domains, accounts, identities, storageErrors, ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            stagedApacheRevision = null;
+            foreach (var row in completed)
+            {
+                row.Attempts++;
+                row.LastError = "Apache configuration activation failed; see application log.";
+            }
+            await db.SaveChangesAsync(ct);
+            if (completed.Any(row => row.Attempts == 1)) notifications.Publish();
+            logger.LogWarning(ex, "Apache configuration activation failed; will retry");
+            return true;
+        }
+        // Only remove obsolete transport objects after the NFS activation succeeded.
+        if (!legacyApacheRetired)
+        {
+            try
+            {
+                await resources.RetireLegacyApacheConfigMapsAsync(Namespace, ct);
+                legacyApacheRetired = true;
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                logger.LogWarning(ex, "Legacy Apache ConfigMap retirement failed; will retry");
+            }
+        }
+        // Legacy per-site deployments are retired explicitly by the administrator after testing.
         migrated = !migrationFailed;
         if (!migrationFailed) appliedListenerSet = listenerSet;
         foreach (var row in completed)
@@ -135,6 +211,35 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         await db.SaveChangesAsync(ct);
         if (completed.Count > 0) notifications.Publish();
         await CleanupDeletedDomainsAsync(db, ct);
+        return migrationFailed || !legacyApacheRetired || await db.ReconciliationOperations.AnyAsync(x =>
+            x.Status == "pending" && (x.ResourceType == "website" || x.ResourceType == "domain-cleanup"), ct);
+    }
+
+    private async Task ActivateApacheConfigurationAsync(
+        IReadOnlyList<HostedDomain> domains,
+        IReadOnlyDictionary<Guid, HostingAccount> accounts,
+        IReadOnlyDictionary<Guid, PhpAccountIdentity> identities,
+        IReadOnlyDictionary<Guid, Exception> storageErrors,
+        CancellationToken ct)
+    {
+        if (storageErrors.Count != 0)
+            throw new InvalidOperationException("Website storage unavailable; retaining previous Apache revision.");
+        var revision = new ApacheConfigurationRevision(domains.Select(domain =>
+            KeyValuePair.Create(domain.Id, BuildVirtualHost(domain,
+                accounts[domain.OwnerId].Username, identities[domain.OwnerId]).Apache)));
+        var store = new ApacheCandidateStore(Required("ApacheConfigPath"));
+        var runtime = new ApacheRevisionRuntime(resources, Namespace);
+        var fingerprint = await runtime.GetReplicaFingerprintAsync(ct);
+        if (revision.Id == stagedApacheRevision && fingerprint == activatedReplicaFingerprint &&
+            await store.ReadActiveAsync(ct) == revision.Id) return;
+        await new ApacheRevisionActivator(store).ActivateAsync(revision,
+            runtime.ValidateAsync, runtime.ReloadAsync, ct);
+        if (fingerprint != await runtime.GetReplicaFingerprintAsync(ct))
+            throw new InvalidOperationException("Apache replica set changed during activation; retry required.");
+        stagedApacheRevision = revision.Id;
+        activatedReplicaFingerprint = fingerprint;
+        logger.LogInformation("Activated Apache configuration revision {Revision} with {Count} virtualhosts",
+            revision.Id, revision.VirtualHosts.Count);
     }
 
     private async Task CleanupDeletedDomainsAsync(HostingPanelDbContext db, CancellationToken ct)
@@ -232,12 +337,10 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
 
     private string BuildManifest(HostedDomain domain, string username, PhpAccountIdentity identity, bool managedTls)
     {
-        var (apache, tls) = BuildVirtualHost(domain, username, identity);
+        var (_, tls) = BuildVirtualHost(domain, username, identity);
         var host = domain.Name;
         var name = "site-" + domain.Id.ToString("N");
-        var configLabels = new Dictionary<string,string> { ["hostingpanel/component"] = "vhost" };
         var resources = new object[] {
-            new { apiVersion = "v1", kind = "ConfigMap", metadata = new { name, @namespace = Namespace, labels = configLabels }, data = new Dictionary<string,string> { ["vhost.conf"] = apache } },
             new { apiVersion = "gateway.networking.k8s.io/v1", kind = "HTTPRoute", metadata = new { name, @namespace = Namespace }, spec = new {
                 parentRefs = new[] { new { name = Required("GatewayName"), @namespace = Required("GatewayNamespace"),
                     sectionName = Required(tls && !managedTls ? "HttpsListener" : "HttpListener") } },
