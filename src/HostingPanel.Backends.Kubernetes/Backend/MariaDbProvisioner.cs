@@ -16,6 +16,25 @@ public sealed class MariaDbProvisioner(IConfiguration configuration)
         name.Length > 0 && name.Length <= max &&
         name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_');
 
+    private static string RequireName(string name, int max)
+    {
+        if (!ValidName(name, max))
+            throw new ArgumentException("Invalid MariaDB identifier.", nameof(name));
+        return name;
+    }
+
+    private static string QuoteDatabase(string name) =>
+        "`" + RequireName(name, 64) + "`";
+
+    private static string GrantPattern(string name) =>
+        RequireName(name, 64).Replace("_", "\\_", StringComparison.Ordinal);
+
+    private static string QuoteGrantDatabase(string name) =>
+        "`" + GrantPattern(name) + "`";
+
+    private static string QuoteAccount(string name) =>
+        "'" + RequireName(name, 80) + "'@'%'";
+
     public async Task<IDisposable> LockAsync(CancellationToken ct)
     {
         await gate.WaitAsync(ct);
@@ -43,7 +62,9 @@ public sealed class MariaDbProvisioner(IConfiguration configuration)
 
     public async Task CreateAsync(string name, string username, string password, CancellationToken ct)
     {
-        if (!ValidName(name, 64) || !ValidName(username, 80)) throw new ArgumentException("Invalid database identifier");
+        var databaseIdentifier = QuoteDatabase(name);
+        var accountIdentifier = QuoteAccount(username);
+        var grantIdentifier = QuoteGrantDatabase(name);
         await using var connection = await OpenAsync(ct);
         // Check for existing physical resources; never adopt or overwrite external accounts.
         using (var check = new MySqlCommand("SELECT (SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE LOWER(SCHEMA_NAME)=LOWER(@db)) + (SELECT COUNT(*) FROM mysql.user WHERE LOWER(User)=LOWER(@user))", connection))
@@ -56,20 +77,19 @@ public sealed class MariaDbProvisioner(IConfiguration configuration)
         bool databaseCreated = false, userCreated = false;
         try
         {
-            await ExecuteAsync(connection, $"CREATE DATABASE `{name}`", ct);
+            await ExecuteAsync(connection, $"CREATE DATABASE {databaseIdentifier}", ct);
             databaseCreated = true;
-            await ExecuteAsync(connection, $"CREATE USER '{username}'@'%' IDENTIFIED BY @password", ct, password);
+            await ExecuteAsync(connection, $"CREATE USER {accountIdentifier} IDENTIFIED BY @password", ct, password);
             userCreated = true;
             // Escape underscores in database-level GRANT patterns (MariaDB wildcard semantics).
-            var grantName = name.Replace("_", "\\_");
-            await ExecuteAsync(connection, $"GRANT ALL PRIVILEGES ON `{grantName}`.* TO '{username}'@'%'", ct);
+            await ExecuteAsync(connection, $"GRANT ALL PRIVILEGES ON {grantIdentifier}.* TO {accountIdentifier}", ct);
         }
         catch
         {
             try
             {
-                if (userCreated) await ExecuteAsync(connection, $"DROP USER '{username}'@'%'", CancellationToken.None);
-                if (databaseCreated) await ExecuteAsync(connection, $"DROP DATABASE `{name}`", CancellationToken.None);
+                if (userCreated) await ExecuteAsync(connection, $"DROP USER {accountIdentifier}", CancellationToken.None);
+                if (databaseCreated) await ExecuteAsync(connection, $"DROP DATABASE {databaseIdentifier}", CancellationToken.None);
             }
             catch (MySqlException) { /* Preserve original failure; operator must reconcile uncertain state. */ }
             throw;
@@ -78,10 +98,11 @@ public sealed class MariaDbProvisioner(IConfiguration configuration)
 
     public async Task DeleteAsync(string name, IReadOnlyList<string> ownedUsers, CancellationToken ct)
     {
-        if (!ValidName(name, 64)) throw new ArgumentException("Invalid database identifier");
+        var databaseIdentifier = QuoteDatabase(name);
+        var grantIdentifier = QuoteGrantDatabase(name);
         await using var connection = await OpenAsync(ct);
         // Remove database-level grants before dropping the schema; orphan users remain managed.
-        var grantName = name.Replace("_", "\\_");
+        var grantName = GrantPattern(name);
         var users = new List<(string User, string Host)>();
         using (var command = new MySqlCommand("SELECT User, Host FROM mysql.db WHERE Db = @db", connection))
         {
@@ -89,12 +110,13 @@ public sealed class MariaDbProvisioner(IConfiguration configuration)
             using var reader = await command.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct)) users.Add((reader.GetString(0), reader.GetString(1)));
         }
+        // Validate every grant before issuing any mutation.
+        if (users.Any(account => !ValidName(account.User, 80) || account.Host != "%" ||
+            !ownedUsers.Contains(account.User, StringComparer.Ordinal)))
+            throw new InvalidOperationException("Unexpected database grant; manual reconciliation required.");
+
         foreach (var account in users)
-        {
-            if (!ValidName(account.User, 80) || account.Host != "%" || !ownedUsers.Contains(account.User, StringComparer.Ordinal))
-                throw new InvalidOperationException("Unexpected database grant; manual reconciliation required.");
-            await ExecuteAsync(connection, $"REVOKE ALL PRIVILEGES ON `{grantName}`.* FROM '{account.User}'@'%'", ct);
-        }
-        await ExecuteAsync(connection, $"DROP DATABASE IF EXISTS `{name}`", ct);
+            await ExecuteAsync(connection, $"REVOKE ALL PRIVILEGES ON {grantIdentifier}.* FROM {QuoteAccount(account.User)}", ct);
+        await ExecuteAsync(connection, $"DROP DATABASE IF EXISTS {databaseIdentifier}", ct);
     }
 }
