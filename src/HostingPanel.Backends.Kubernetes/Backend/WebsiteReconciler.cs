@@ -18,6 +18,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
     private string? appliedRuntimeHash;
     private string? stagedApacheRevision;
     private bool migrated;
+    private bool legacyApacheRetired;
     private string? appliedListenerSet;
 
     protected override async Task ExecuteAsync(CancellationToken ct)
@@ -44,7 +45,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var listenerChanged = appliedListenerSet != listenerSet;
         var cleanupPending = await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "domain-cleanup" && x.Status == "pending", ct);
         var stagePending = configuration["KubernetesHosting:ApacheConfigPath"] is { Length: > 0 } && stagedApacheRevision is null;
-        if (rows.Count == 0 && !shared && migrated && !listenerChanged && !cleanupPending && !stagePending) return;
+        if (rows.Count == 0 && !shared && migrated && !listenerChanged && !cleanupPending && !stagePending && legacyApacheRetired) return;
         var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
         var identities = await PhpIdentityModel.AllocateAsync(db, domains.Select(x => x.OwnerId), ct);
         var ownerIds = domains.Select(d => d.OwnerId).Distinct().ToArray();
@@ -88,7 +89,6 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 if (domain is null)
                     {
                     await resources.DeleteAsync("gateway.networking.k8s.io", "v1", Namespace, "httproutes", name, ct);
-                    // Retire legacy per-domain configuration on deletion.
                 }
                 else
                 {
@@ -142,7 +142,20 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             logger.LogWarning(ex, "Apache configuration activation failed; will retry");
             return;
         }
-        // Legacy deployments are retired explicitly by the administrator after testing.
+        // Only remove obsolete transport objects after the NFS activation succeeded.
+        if (!legacyApacheRetired)
+        {
+            try
+            {
+                await resources.RetireLegacyApacheConfigMapsAsync(Namespace, ct);
+                legacyApacheRetired = true;
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                logger.LogWarning(ex, "Legacy Apache ConfigMap retirement failed; will retry");
+            }
+        }
+        // Legacy per-site deployments are retired explicitly by the administrator after testing.
         migrated = !migrationFailed;
         if (!migrationFailed) appliedListenerSet = listenerSet;
         foreach (var row in completed)

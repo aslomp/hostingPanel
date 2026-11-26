@@ -32,10 +32,15 @@ public sealed class ApacheRevisionRuntime(KubernetesResourceClient resources, st
         {
             var metadata = pod.GetProperty("metadata");
             if (metadata.TryGetProperty("deletionTimestamp", out _)) continue;
+            var name = metadata.GetProperty("name").GetString()!;
+            if (!name.StartsWith("apache-baseline-", StringComparison.Ordinal) ||
+                !int.TryParse(name["apache-baseline-".Length..], out var ordinal) || ordinal < 0 ||
+                name != $"apache-baseline-{ordinal}")
+                throw new InvalidOperationException("Legacy Apache workload still present; wait for Helm migration.");
             if (!pod.TryGetProperty("status", out var status) ||
                 !status.TryGetProperty("phase", out var phase) || phase.GetString() != "Running")
                 continue;
-            names.Add(metadata.GetProperty("name").GetString()!);
+            names.Add(name);
         }
         if (names.Count == 0)
             throw new InvalidOperationException("No running Apache replicas available.");

@@ -75,6 +75,32 @@ public sealed class KubernetesResourceClient : IDisposable
         catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.NotFound) { }
     }
 
+    // Retire only the old controller's dedicated virtualhost ConfigMaps.
+    // Use UID/resourceVersion preconditions so a replaced object is never deleted.
+    public async Task RetireLegacyApacheConfigMapsAsync(string ns, CancellationToken ct)
+    {
+        var maps = await Api.CoreV1.ListNamespacedConfigMapAsync(ns,
+            labelSelector: "hostingpanel/component=vhost", cancellationToken: ct);
+        foreach (var map in maps.Items)
+        {
+            var name = map.Metadata.Name;
+            if (name is null || !name.StartsWith("site-", StringComparison.Ordinal) ||
+                name.Length != 37 || !name[5..].All(char.IsAsciiHexDigitLower) ||
+                map.Data is null || !map.Data.ContainsKey("vhost.conf") ||
+                string.IsNullOrEmpty(map.Metadata.Uid) || string.IsNullOrEmpty(map.Metadata.ResourceVersion))
+                continue;
+            try
+            {
+                await Api.CoreV1.DeleteNamespacedConfigMapAsync(name, ns,
+                    body: new V1DeleteOptions { Preconditions = new V1Preconditions
+                    {
+                        Uid = map.Metadata.Uid, ResourceVersion = map.Metadata.ResourceVersion
+                    } }, cancellationToken: ct);
+            }
+            catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.NotFound) { }
+        }
+    }
+
     public async Task<string> ListPodsAsync(string ns, string selector, CancellationToken ct) =>
         KubernetesJson.Serialize(await Api.CoreV1.ListNamespacedPodAsync(ns, labelSelector: selector, cancellationToken: ct));
 
