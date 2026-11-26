@@ -45,6 +45,7 @@ public static class KubernetesRegistration
     services.AddScoped<IDomainPreview>(sp => sp.GetRequiredService<KubernetesDomainService>());
     services.AddScoped<KubernetesWebHosting>();
     services.AddScoped<IWebHosting>(sp => sp.GetRequiredService<KubernetesWebHosting>());
+    services.AddSingleton<MariaDbProvisioner>();
     services.AddScoped<KubernetesDatabaseService>();
     services.AddScoped<IDatabases>(sp => sp.GetRequiredService<KubernetesDatabaseService>());
     services.AddScoped<IAccessibleDatabases>(sp => sp.GetRequiredService<KubernetesDatabaseService>());
@@ -54,6 +55,7 @@ public static class KubernetesRegistration
     services.AddScoped<IFileAccess>(sp => sp.GetRequiredService<KubernetesFileAccessService>());
     services.AddScoped<KubernetesTicketService>();
     services.AddScoped<ITickets>(sp => sp.GetRequiredService<KubernetesTicketService>());
+    services.AddScoped<KubernetesDatabaseCompatibility>();
     services.AddScoped<KubernetesCompatibilityHandler>();
     services.AddScoped<IApiCompatibilityHandler>(sp => sp.GetRequiredService<KubernetesCompatibilityHandler>());
     services.AddScoped<KubernetesCertificateProvider>();

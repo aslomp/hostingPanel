@@ -10,10 +10,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HostingPanel.Api;
 
-public sealed class KubernetesCompatibilityHandler : IApiCompatibilityHandler
+public sealed class KubernetesCompatibilityHandler(KubernetesDatabaseCompatibility? database = null) : IApiCompatibilityHandler
 {
     public Task ForwardAsync(HttpContext context)
     {
+        if (database is not null &&
+            (context.Request.Path.StartsWithSegments("/api/db-show") ||
+             context.Request.Path.StartsWithSegments("/api/db-manage") ||
+             context.Request.Path.StartsWithSegments("/api/db-monitor")))
+            return database.ForwardAsync(context);
         context.Response.StatusCode = StatusCodes.Status501NotImplemented;
         context.Response.ContentType = "application/json";
         return context.Response.WriteAsJsonAsync(new { type = "KUBERNETES_OPERATION_NOT_IMPLEMENTED" });
