@@ -9,7 +9,7 @@ using Microsoft.Extensions.Configuration;
 namespace HostingPanel.Api;
 
 internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesIdentityService identity,
-    IHttpClientFactory clients, IConfiguration configuration) : IMailProvider
+    IHttpClientFactory clients, IConfiguration configuration, MailMutationGate gate) : IMailProvider
 {
     private static bool ValidName(string? name) => name is { Length: > 0 and <= 64 }
         && Regex.IsMatch(name, @"^[a-z0-9][a-z0-9._+-]*$", RegexOptions.CultureInvariant)
@@ -23,10 +23,20 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
     private async Task<MailResult> Execute(string domain, AuthenticationHeaderValue auth, CancellationToken ct,
         Func<HttpClient, string, Task<MailResult>> action, bool createDomain = false, bool mutation = false)
     {
+        if (mutation) await gate.Semaphore.WaitAsync(ct);
+        try { return await ExecuteCore(domain, auth, ct, action, createDomain, mutation); }
+        finally { if (mutation) gate.Semaphore.Release(); }
+    }
+
+    private async Task<MailResult> ExecuteCore(string domain, AuthenticationHeaderValue auth, CancellationToken ct,
+        Func<HttpClient, string, Task<MailResult>> action, bool createDomain, bool mutation)
+    {
         var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
         var row = await db.Domains.AsNoTracking().SingleOrDefaultAsync(d => d.Name == domain.ToLowerInvariant(), ct);
         if (row is null || row.Suspended) return new(404, "DOMAIN_NOT_FOUND");
+        var owner = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(a => a.Id == row.OwnerId, ct);
+        if (owner is null || owner.Suspended) return new(404, "DOMAIN_NOT_FOUND");
         var visible = await identity.VisibleAccountsAsync(principal, ct);
         if (!visible.Contains(row.OwnerId)) return new(404, "DOMAIN_NOT_FOUND");
         // Until package limits and domain lifecycle are integrated, mutations are operator-only.
@@ -42,6 +52,29 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
             using var client = clients.CreateClient("stalwart-management");
             client.BaseAddress = new Uri(uri.AbsoluteUri.TrimEnd('/') + "/");
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            if (createDomain)
+            {
+                var package = await db.Packages.AsNoTracking().Where(p => p.Id == owner.PackageId).Select(p => p.LimitsJson).SingleOrDefaultAsync(ct);
+                var limit = MailLimitPolicy.Resolve(package, owner.LimitsJson);
+                if (limit == 0) return new(409, "MAIL_ACCOUNT_LIMIT_REACHED");
+                if (limit != long.MaxValue)
+                {
+                    var names = await db.Domains.AsNoTracking().Where(d => d.OwnerId == owner.Id).Select(d => d.Name).ToListAsync(ct);
+                    long count = 0;
+                    foreach (var name in names)
+                    {
+                        var matchesForOwner = (await Query(client, "Domain", new { name }, new[] { "id", "name" }, ct)).Where(d => Field(d, "name") == name).ToArray();
+                        if (matchesForOwner.Length == 0) continue;
+                        if (matchesForOwner.Length != 1 || Field(matchesForOwner[0], "id") is not { } ownedId)
+                            return new(502, "MAIL_INVENTORY_UNVERIFIED");
+                        var inventory = await Query(client, "Account", new { domainId = ownedId }, new[] { "id", "@type", "domainId" }, ct);
+                        if (inventory.Any(a => Field(a, "domainId") != ownedId || Field(a, "@type") is null))
+                            return new(502, "MAIL_INVENTORY_UNVERIFIED");
+                        count += inventory.LongCount(a => Field(a, "@type") == "User");
+                        if (!MailLimitPolicy.CanCreate(count, limit)) return new(409, "MAIL_ACCOUNT_LIMIT_REACHED");
+                    }
+                }
+            }
             var domains = await Query(client, "Domain", new { name = row.Name }, new[] { "id", "name" }, ct);
             var matches = domains.Where(d => Field(d, "name") == row.Name).ToArray();
             if (matches.Length > 1) return new(502, "MAIL_UPSTREAM_ERROR");
@@ -87,7 +120,10 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
             if (ids.Length == 0) return results;
             if (ids.Any(id => !seen.Add(id))) throw new InvalidOperationException("Unstable query.");
             var get = await Call(client, $"x:{type}/get", new { ids, properties }, ct);
-            results.AddRange(get.GetProperty("list").EnumerateArray());
+            var batch = get.GetProperty("list").EnumerateArray().ToArray();
+            if (batch.Length != ids.Length || !batch.Select(a => Field(a, "id")).ToHashSet().SetEquals(ids))
+                throw new InvalidOperationException("Incomplete JMAP inventory.");
+            results.AddRange(batch);
             position += ids.Length;
             if (position > 10000) throw new InvalidOperationException("Query exceeds inventory limit.");
         }
