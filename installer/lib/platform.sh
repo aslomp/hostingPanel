@@ -75,6 +75,8 @@ install_platform() {
   k3s kubectl -n envoy-gateway-system wait --for=condition=Ready certificate/hosting-panel-tls --timeout=600s
   k3s kubectl -n envoy-gateway-system wait --for=condition=Programmed gateway/external --timeout=300s
   check_panel_https
+  apt-get install -y dnsutils
+  python3 "$here/bootstrap-dns.py" "$config"
 }
 
 ensure_secret() (

@@ -30,7 +30,7 @@ jobs:
               remove+=("$package-")
             fi
           done
-          sudo apt-get -s install "${remove[@]}" python3 iproute2 zfsutils-linux nfs-kernel-server targetcli-fb openssh-server sudo openssl nftables clamav clamav-freshclam clamav-daemon clamdscan curl ca-certificates nfs-common open-iscsi docker.io
+          sudo apt-get -s install "${remove[@]}" python3 iproute2 zfsutils-linux nfs-kernel-server targetcli-fb openssh-server sudo openssl nftables clamav clamav-freshclam clamav-daemon clamdscan curl ca-certificates nfs-common open-iscsi docker.io dnsutils
       - run: |
           for script in installer/*.sh; do bash -n "$script"; done
           for script in installer/lib/*.sh; do bash -n "$script"; done
@@ -47,7 +47,7 @@ jobs:
           truncate -s 16M "$image"
           test -z "$(wipefs --no-act --noheadings --output TYPE "$image")"
           rm -f "$image"
-          python3 -m py_compile installer/generate.py installer/zfs-retention.py
+          python3 -m py_compile installer/generate.py installer/zfs-retention.py installer/bootstrap-dns.py
           python3 -m unittest discover -s installer -p 'test_*.py'
           tmp=$(mktemp -d)
           python3 -c 'import json,sys; c=json.load(open("installer/cluster.example.json")); c["acmeEmail"]="test@invalid.test"; json.dump(c,open(sys.argv[1],"w"))' "$tmp/cluster.json"
