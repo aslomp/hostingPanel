@@ -1,6 +1,5 @@
 using HostingPanel.Providers.CertManager;
 using System.Text.Json;
-using System.Threading.Channels;
 using HostingPanel.Api.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
@@ -20,37 +19,16 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         if (!configuration.GetValue<bool>("KubernetesHosting:Enabled")) return;
-        var wake = Channel.CreateBounded<bool>(new BoundedChannelOptions(1)
-        {
-            FullMode = BoundedChannelFullMode.DropWrite,
-            SingleReader = true
-        });
-        void Notify() => wake.Writer.TryWrite(true);
-        notifications.Changed += Notify;
+        void Notify() => notifications.Signal(ReconciliationTarget.Website);
         using var watchCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var watch = WatchApachePodsAsync(Notify, watchCancellation.Token);
         try
         {
-            while (!ct.IsCancellationRequested)
-            {
-                var needsRetry = true;
-                try { needsRetry = await ReconcileAsync(ct); }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
-                catch (Exception ex) { logger.LogError(ex, "Website reconciliation failed"); }
-
-                // Coalesce invalidations. Retry failed durable work promptly; retain a
-                // low-frequency integrity sweep for NFS and out-of-band changes.
-                using var delay = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                delay.CancelAfter(needsRetry ? TimeSpan.FromSeconds(5) : TimeSpan.FromMinutes(15));
-                try { await wake.Reader.ReadAsync(delay.Token); }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
-                while (wake.Reader.TryRead(out _)) { }
-            }
+            await ReconciliationLoop.RunAsync(notifications.Reader(ReconciliationTarget.Website),
+                ReconcileAsync, TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(15), logger, ct);
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
         finally
         {
-            notifications.Changed -= Notify;
             await watchCancellation.CancelAsync();
             await watch;
         }

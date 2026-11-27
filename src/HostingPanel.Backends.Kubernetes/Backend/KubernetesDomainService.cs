@@ -105,7 +105,7 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
             else return new(400, "INVALID_OPERATION");
         }
         await db.SaveChangesAsync(ct);
-        notifications?.Publish();
+        notifications?.PublishChange(ReconciliationTarget.All);
         return new(202, null);
     }
 
@@ -170,7 +170,7 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
         operations.Schedule("domain", row.Id, "update", new { row.Name, setting });
         await provisioning.ScheduleWebsiteAsync(row, "update", ct);
         await db.SaveChangesAsync(ct);
-        notifications?.Publish();
+        notifications?.PublishChange(ReconciliationTarget.All);
         return new(202, null);
     }
     public IResult PreviewDomain(DomainCreatePreview input)

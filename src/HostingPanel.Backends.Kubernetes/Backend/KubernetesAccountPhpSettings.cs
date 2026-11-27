@@ -55,7 +55,7 @@ public sealed class KubernetesAccountPhpSettings(HostingPanelDbContext db, Kuber
         row.LimitsJson = JsonSerializer.Serialize(fields);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        notifications.Publish();
+        notifications.PublishChange(ReconciliationTarget.Website);
         return new(202, null);
     }
 }

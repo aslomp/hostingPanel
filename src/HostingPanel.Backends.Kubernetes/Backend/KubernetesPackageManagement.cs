@@ -89,7 +89,7 @@ public sealed class KubernetesPackageManagement(HostingPanelDbContext db, Kubern
         row.LimitsJson = JsonSerializer.Serialize(fields);
         try { await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct); }
         catch (DbUpdateException) { return new(409, "PACKAGE_CONFLICT"); }
-        notifications?.Publish();
+        notifications?.PublishChange(ReconciliationTarget.All);
         return new(create ? 201 : 200, null);
     }
 

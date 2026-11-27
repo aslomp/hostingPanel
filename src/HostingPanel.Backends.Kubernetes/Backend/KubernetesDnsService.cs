@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HostingPanel.Api;
 
-public sealed class KubernetesDnsService(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesOperationQueue operations, IConfiguration? configuration = null, PowerDnsClient? powerDns = null) : IDNSProvider
+public sealed class KubernetesDnsService(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesOperationQueue operations, IConfiguration? configuration = null, PowerDnsClient? powerDns = null, HostingOperationNotifications? notifications = null) : IDNSProvider
 {
     public async Task<AccessibleDnsInventory> ListAccessibleZonesAsync(AuthenticationHeaderValue auth, CancellationToken ct)
     {
@@ -95,6 +95,7 @@ public sealed class KubernetesDnsService(HostingPanelDbContext db, KubernetesIde
         });
         operations.Schedule("dns-zone", zone.Id, "update", new { zone.Name });
         await db.SaveChangesAsync(ct);
+        notifications?.PublishChange(ReconciliationTarget.Dns);
         return new(202, null);
     }
 
@@ -119,6 +120,7 @@ public sealed class KubernetesDnsService(HostingPanelDbContext db, KubernetesIde
             db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "@", Type = "NS", Value = ns + "." });
         operations.Schedule("dns-zone", zone.Id, "create", new { zone.Name });
         await db.SaveChangesAsync(ct);
+        notifications?.PublishChange(ReconciliationTarget.Dns);
         return new(202, null);
     }
 
@@ -134,6 +136,7 @@ public sealed class KubernetesDnsService(HostingPanelDbContext db, KubernetesIde
         db.DnsZones.Remove(zone);
         operations.Schedule("dns-zone", zone.Id, "delete", new { zone.Name });
         await db.SaveChangesAsync(ct);
+        notifications?.PublishChange(ReconciliationTarget.Dns);
         return new(202, null);
     }
 }

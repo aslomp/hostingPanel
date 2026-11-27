@@ -62,7 +62,7 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         await provisioning.ScheduleWebsiteAsync(domain, "create", ct);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        notifications?.Publish();
+        notifications?.PublishChange(ReconciliationTarget.All);
         return new(202, null);
     }
 
@@ -86,7 +86,7 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         db.Accounts.Remove(target);
         operations.Schedule("account", target.Id, "delete", new { target.Username });
         await db.SaveChangesAsync(ct);
-        notifications?.Publish();
+        notifications?.PublishChange(ReconciliationTarget.All);
         return new(202, null);
     }
 
@@ -106,7 +106,7 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         account.PackageId = assigned.Id;
         operations.Schedule("account", account.Id, "update", new { account.Username, package });
         await db.SaveChangesAsync(ct);
-        notifications?.Publish();
+        notifications?.PublishChange(ReconciliationTarget.All);
         return new(202, null);
     }
 
@@ -126,7 +126,7 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         account.LimitsJson = JsonSerializer.Serialize(limits);
         operations.Schedule("account", account.Id, "update", new { account.Username, change.Field });
         await db.SaveChangesAsync(ct);
-        notifications?.Publish();
+        notifications?.PublishChange(ReconciliationTarget.All);
         return new(202, null);
     }
 
@@ -142,7 +142,7 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         target.Suspended = suspended;
         operations.Schedule("account", target.Id, "update", new { target.Username, suspended });
         await db.SaveChangesAsync(ct);
-        notifications?.Publish();
+        notifications?.PublishChange(ReconciliationTarget.All);
         return new(202, null);
     }
     public async Task<AccountOverviewResult> GetAsync(string username, AuthenticationHeaderValue auth, CancellationToken ct)

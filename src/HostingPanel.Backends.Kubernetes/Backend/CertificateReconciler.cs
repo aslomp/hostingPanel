@@ -7,18 +7,14 @@ using System.Text.Json;
 namespace HostingPanel.Api;
 
 // Only labelled Certificate resources are managed. cert-manager handles renewal.
-public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<CertificateReconciler> logger, KubernetesResourceClient resources) : BackgroundService
+public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<CertificateReconciler> logger, KubernetesResourceClient resources, HostingOperationNotifications notifications) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         if (!configuration.GetValue<bool>("CertManager:Enabled") || !configuration.GetValue<bool>("KubernetesHosting:Enabled")) return;
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
-        do
-        {
-            try { await ReconcileAsync(ct); }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
-            catch (Exception ex) { logger.LogWarning(ex, "Certificate reconciliation failed"); }
-        } while (await timer.WaitForNextTickAsync(ct));
+        await ReconciliationLoop.RunAsync(notifications.Reader(ReconciliationTarget.Certificate),
+            async token => { await ReconcileAsync(token); return false; },
+            TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(30), logger, ct);
     }
     private async Task ReconcileAsync(CancellationToken ct)
     {
