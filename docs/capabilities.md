@@ -66,3 +66,5 @@ Helm-managed MariaDB (Kubernetes only): optional dedicated MariaDB StatefulSet, 
 - Stalwart v1: optional Kubernetes-only official legacy `CMD_API_POP` API for listing, creating, setting individual quotas and deleting ordinary mail users. DirectAdmin forwards this exact endpoint to its upstream using caller credentials. Only list, create, quota modification and single-user deletion are implemented for Stalwart. Password reset, alias/forwarder changes, aggregate package quota enforcement, DNS publication and domain lifecycle integration are not implemented. See [mail infrastructure](kubernetes-hosting.md#mail-infrastructure).
 
 - The additive `/hosting/mail` JSON routes reuse the Stalwart mail provider and are separately documented at `/openapi/hosting-mail.json`. DirectAdmin supports the official legacy passthrough, not yet the additive typed API.
+
+- MudBlazor mailbox frontend: accessible domain selection, mailbox inventory, create, quota edit and confirmed delete using the shared mail capability; DirectAdmin typed mail management remains unsupported. Live browser verification pending.
