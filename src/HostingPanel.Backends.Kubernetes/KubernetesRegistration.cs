@@ -24,6 +24,7 @@ public static class KubernetesRegistration
     services.AddSingleton(settings);
     services.AddSingleton<KubernetesResourceClient>();
     services.AddScoped<KubernetesIdentityService>();
+    services.AddSingleton<MailMutationGate>();
     services.AddScoped<IMailProvider, StalwartMailProvider>();
     services.AddHttpClient("stalwart-management", http => http.Timeout = TimeSpan.FromSeconds(15))
         .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false });
