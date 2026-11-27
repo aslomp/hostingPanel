@@ -44,6 +44,15 @@ install_platform() {
   fi
   helm template admin "$here/../deploy/helm/hostingpanel" -n hosting -f "$base/hosting-values.json" >/dev/null
   helm upgrade --install admin "$here/../deploy/helm/hostingpanel" -n hosting -f "$base/hosting-values.json" --wait --timeout 10m
+  if [[ -z $(get panelHostname) ]]; then
+    k3s kubectl -n envoy-gateway-system wait --for=condition=Programmed gateway/external --timeout=300s
+    local pod
+    pod=$(k3s kubectl -n hosting get pods -l app.kubernetes.io/instance=admin,app.kubernetes.io/component=web -o jsonpath='{.items[0].metadata.name}')
+    [[ -n "$pod" ]] || die "Panel pod missing"
+    k3s kubectl -n hosting wait --for=condition=Ready "pod/$pod" --timeout=300s
+    echo "Panel is private until a public hostname is configured. Use kubectl port-forward over SSH."
+    return
+  fi
   k3s kubectl -n envoy-gateway-system wait --for=condition=Ready certificate/hosting-panel-tls --timeout=600s
   k3s kubectl -n envoy-gateway-system wait --for=condition=Programmed gateway/external --timeout=300s
   local -a tls_options=()
