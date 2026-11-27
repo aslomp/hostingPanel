@@ -2,7 +2,13 @@
 
 Experimental installer; live end-to-end testing is required. Start on a disposable Ubuntu 24.04 LTS or Debian host with a private network and an unused extra disk. ZFS packages must be available in the OS package repositories (Debian: contrib). Do not use a production host or a disk containing data.
 
-## All-in-one
+## Default installation (no template)
+
+    sudo bash installer/install.sh --full-server --new-cluster
+
+The only prompt is the ACME email. Configuration is persisted at /etc/hostingpanel/installer/cluster.json and reused. The default route determines the IPv4 address; storage access is limited to that node (/32). An existing imported ZFS pool named tank is required; the default never initializes an unknown disk. Without a configured public hostname the panel is not publicly routed, and DNS zone automation is disabled until nameservers are set. Use kubectl port-forward on the server and an SSH tunnel for initial administration. Configure public DNS and the panel hostname explicitly before enabling public HTTPS. The default ACME issuer uses production; explicit templates may select staging. Dedicated storage mode does not request ACME email; remote cluster/storage topology requires an explicit configuration with trusted node addresses. Workers can omit --config after receiving worker.json and agent-token in /etc/hostingpanel/installer; a join token and endpoint cannot be inferred. No role asks for disk confirmation interactively.
+
+## All-in-one with explicit configuration
 
     sudo install -d -m 0700 /root/hosting-cluster
     sudo cp installer/cluster.example.json /root/hosting-cluster/cluster.json
