@@ -19,7 +19,7 @@ public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfigur
         var watches = new List<Task>
         {
             ReconciliationLoop.WatchAsync((_, token) => resources.WatchCertificateStateAsync(ns,
-                work.AllChanged, name => { if (TryDomainId(name, out var id)) work.DomainChanged(id); },
+                () => { work.AllChanged(); notifications.Signal(ReconciliationTarget.Website); }, name => { if (TryDomainId(name, out var id)) { work.DomainChanged(id); notifications.Signal(ReconciliationTarget.Website); } },
                 notifications.Publish, token), () => { }, logger, lifetime.Token)
         };
         if (configuration["CertManager:ListenerSetName"] is { Length: > 0 } set)

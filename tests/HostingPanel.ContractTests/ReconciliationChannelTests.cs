@@ -4,6 +4,10 @@ internal static class ReconciliationChannelTests
 {
     internal static void Run()
     {
+        Check(ReconciliationLoop.RetryDelay(TimeSpan.FromSeconds(5), 1) == TimeSpan.FromSeconds(5));
+        Check(ReconciliationLoop.RetryDelay(TimeSpan.FromSeconds(5), 2) == TimeSpan.FromSeconds(10));
+        Check(ReconciliationLoop.RetryDelay(TimeSpan.FromSeconds(5), 10) == TimeSpan.FromMinutes(5));
+        Check(ReconciliationLoop.RetryDelay(TimeSpan.FromSeconds(2), 1) == TimeSpan.FromSeconds(2));
         var notifications = new HostingOperationNotifications();
         var website = notifications.Reader(ReconciliationTarget.Website);
         var dns = notifications.Reader(ReconciliationTarget.Dns);

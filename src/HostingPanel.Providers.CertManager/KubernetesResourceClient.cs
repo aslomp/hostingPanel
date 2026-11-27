@@ -153,48 +153,99 @@ public sealed class KubernetesResourceClient : IDisposable
         KubernetesJson.Serialize(await Api.CoreV1.ListNamespacedPodAsync(ns, labelSelector: selector, cancellationToken: ct));
 
 
-    // A list/resourceVersion followed by a watch closes the startup race.
-    // Reconnect is owned by the reconciler; callbacks are invalidation only.
-    public async Task WatchApachePodsAsync(string ns, Action changed, CancellationToken ct)
+    // Each stream owns a cursor and an independent reconnect lifecycle.
+    // The cursor advances only after the event callback succeeds.
+    private async Task RunWatchAsync<T>(Func<CancellationToken, Task<string>> list,
+        Func<string, CancellationToken, IAsyncEnumerable<(WatchEventType, T)>> watch,
+        Action<string> reset, Action<WatchEventType, T> observe, CancellationToken ct)
     {
-        const string selector = "app.kubernetes.io/name=apache-baseline";
-        var initial = await Api.CoreV1.ListNamespacedPodAsync(ns, labelSelector: selector, cancellationToken: ct);
-        var key = ns + "/apache-pods";
-        ObserveList(key, KubernetesJson.Serialize(initial), _ => true, changed, ApacheFingerprint);
-        var response = Api.CoreV1.ListNamespacedPodWithHttpMessagesAsync(ns,
-            labelSelector: selector, resourceVersion: initial.Metadata.ResourceVersion,
-            watch: true, timeoutSeconds: 300, cancellationToken: ct);
-        await foreach (var (kind, item) in response.WatchAsync<V1Pod, V1PodList>(
-            onError: error => throw new InvalidOperationException("Apache pod watch failed.", error),
-            cancellationToken: ct))
+        string? cursor = null;
+        var failures = 0;
+        while (!ct.IsCancellationRequested)
         {
-            ObserveEvent(key, kind, item, _ => true, changed, ApacheFingerprint);
-        }
-    }
-
-    // Custom resources use the same list/watch recovery contract as pods.
-    public async Task WatchCustomResourcesAsync(string group, string version, string ns,
-        string plural, string selector, Action reset, Action<string> changed, CancellationToken ct)
-    {
-        using var initial = JsonDocument.Parse(await ListAsync(group, version, ns, plural, selector, ct));
-        var resourceVersion = initial.RootElement.GetProperty("metadata").GetProperty("resourceVersion").GetString();
-        reset();
-        var response = Api.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(
-            group, version, ns, plural, labelSelector: selector, resourceVersion: resourceVersion,
-            watch: true, timeoutSeconds: 300, cancellationToken: ct);
-        await foreach (var (kind, item) in response.WatchAsync<object, object>(
-            onError: error => throw new InvalidOperationException("Custom resource watch failed.", error),
-            cancellationToken: ct))
-        {
-            if (kind == WatchEventType.Error)
-                throw new InvalidOperationException("Custom resource watch returned an error.");
-            if (kind is WatchEventType.Added or WatchEventType.Modified or WatchEventType.Deleted)
+            try
             {
-                using var doc = JsonDocument.Parse(KubernetesJson.Serialize(item));
-                changed(doc.RootElement.GetProperty("metadata").GetProperty("name").GetString()!);
+                if (cursor is null)
+                {
+                    var json = await list(ct);
+                    using var doc = JsonDocument.Parse(json);
+                    reset(json);
+                    cursor = doc.RootElement.GetProperty("metadata").GetProperty("resourceVersion").GetString()
+                        ?? throw new InvalidOperationException("Missing list resourceVersion.");
+                }
+                var started = System.Diagnostics.Stopwatch.StartNew();
+                await foreach (var (kind, item) in watch(cursor, ct).WithCancellation(ct))
+                {
+                    using var doc = JsonDocument.Parse(KubernetesJson.Serialize(item));
+                    var resource = doc.RootElement;
+                    if (kind == WatchEventType.Error)
+                    {
+                        if (resource.TryGetProperty("code", out var code) && code.TryGetInt32(out var status) && status == 410)
+                        {
+                            cursor = null;
+                            break;
+                        }
+                        throw new InvalidOperationException("Kubernetes watch returned an error.");
+                    }
+                    if (kind is WatchEventType.Added or WatchEventType.Modified or WatchEventType.Deleted)
+                    {
+                        try { observe(kind, item); }
+                        catch { cursor = null; throw; }
+                    }
+                    if (resource.TryGetProperty("metadata", out var metadata) &&
+                        metadata.TryGetProperty("resourceVersion", out var rv) && rv.GetString() is { Length: > 0 } next)
+                        cursor = next;
+                    failures = 0;
+                }
+                // A normal server timeout is not a failure. Avoid a tight loop
+                // if a proxy closes the stream immediately.
+                if (started.Elapsed >= TimeSpan.FromSeconds(10)) failures = 0;
+                else failures = Math.Min(failures + 1, 7);
+                await Task.Delay(TimeSpan.FromSeconds(failures == 0 ? 0.25 : Math.Min(60, Math.Pow(2, failures - 1))), ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+            catch (Exception ex)
+            {
+                if (WatchCursorExpired(ex)) cursor = null;
+                failures = Math.Min(failures + 1, 7);
+                System.Diagnostics.Trace.TraceWarning("Kubernetes watch disconnected: {0}", ex.GetType().Name);
+                await Task.Delay(TimeSpan.FromSeconds(Math.Min(60, Math.Pow(2, failures - 1))), ct);
             }
         }
     }
+
+    private static bool WatchCursorExpired(Exception ex)
+    {
+        for (Exception? current = ex; current is not null; current = current.InnerException)
+            if (current is HttpOperationException http && http.Response?.StatusCode == HttpStatusCode.Gone)
+                return true;
+        return false;
+    }
+
+    public Task WatchApachePodsAsync(string ns, Action changed, CancellationToken ct)
+    {
+        const string selector = "app.kubernetes.io/name=apache-baseline";
+        var key = ns + "/apache-pods";
+        return RunWatchAsync<V1Pod>(
+            async token => KubernetesJson.Serialize(await Api.CoreV1.ListNamespacedPodAsync(ns, labelSelector: selector, cancellationToken: token)),
+            (rv, token) => Api.CoreV1.ListNamespacedPodWithHttpMessagesAsync(ns, labelSelector: selector,
+                resourceVersion: rv, allowWatchBookmarks: true, watch: true, timeoutSeconds: 300, cancellationToken: token)
+                .WatchAsync<V1Pod, V1PodList>(onError: e => throw new InvalidOperationException("Apache watch failed.", e), cancellationToken: token),
+            json => ObserveList(key, json, _ => true, changed, ApacheFingerprint),
+            (kind, item) => ObserveEvent(key, kind, item, _ => true, changed, ApacheFingerprint), ct);
+    }
+
+    public Task WatchCustomResourcesAsync(string group, string version, string ns,
+        string plural, string selector, Action reset, Action<string> changed, CancellationToken ct) =>
+        RunWatchAsync<object>(
+            token => ListAsync(group, version, ns, plural, selector, token),
+            (rv, token) => Api.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(group, version, ns, plural,
+                labelSelector: selector, resourceVersion: rv, allowWatchBookmarks: true, watch: true, timeoutSeconds: 300, cancellationToken: token)
+                .WatchAsync<object, object>(onError: e => throw new InvalidOperationException("Custom watch failed.", e), cancellationToken: token),
+            _ => reset(), (kind, item) => {
+                using var doc = JsonDocument.Parse(KubernetesJson.Serialize(item));
+                changed(doc.RootElement.GetProperty("metadata").GetProperty("name").GetString()!);
+            }, ct);
 
     // Certificate status queries remain independent. Only spec/identity/readiness
     // transitions enqueue controller work; other certificate events invalidate UI reads.
@@ -234,29 +285,24 @@ public sealed class KubernetesResourceClient : IDisposable
         return Fingerprint(item) + "|" + ignored;
     }
 
-    private async Task WatchRelevantCustomAsync(string group, string ns, string plural,
+    private Task WatchRelevantCustomAsync(string group, string ns, string plural,
         string? selector, string? fieldSelector, Func<JsonElement, string> fingerprint,
         Action reset, Action<string> changed, Action? statusChanged, CancellationToken ct)
     {
-        // The snapshot survives normal reconnects. A relist only schedules work
-        // when relevant state changed, including deletions while disconnected.
         var key = ns + "/tls/" + plural + "/" + fieldSelector;
-        var list = await Api.CustomObjects.ListNamespacedCustomObjectAsync(group, "v1", ns, plural,
-            labelSelector: selector, fieldSelector: fieldSelector, cancellationToken: ct);
-        var json = KubernetesJson.Serialize(list);
-        using var initial = JsonDocument.Parse(json);
-        ObserveList(key, json, _ => true, reset, fingerprint);
-        if (statusChanged is not null)
-            ObserveList(key + "/status", json, _ => true, statusChanged, StatusFingerprint);
-        var response = Api.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(group, "v1", ns, plural,
-            labelSelector: selector, fieldSelector: fieldSelector,
-            resourceVersion: initial.RootElement.GetProperty("metadata").GetProperty("resourceVersion").GetString(),
-            watch: true, timeoutSeconds: 300, cancellationToken: ct);
-        await foreach (var (kind, item) in response.WatchAsync<object, object>(
-            onError: error => throw new InvalidOperationException("TLS resource watch failed.", error), cancellationToken: ct))
-        {
-            if (kind == WatchEventType.Error) throw new InvalidOperationException("TLS resource watch returned an error.");
-            if (kind is not (WatchEventType.Added or WatchEventType.Modified or WatchEventType.Deleted)) continue;
+        return RunWatchAsync<object>(
+            async token => KubernetesJson.Serialize(await Api.CustomObjects.ListNamespacedCustomObjectAsync(group, "v1", ns, plural,
+                labelSelector: selector, fieldSelector: fieldSelector, cancellationToken: token)),
+            (rv, token) => Api.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(group, "v1", ns, plural,
+                labelSelector: selector, fieldSelector: fieldSelector, resourceVersion: rv,
+                allowWatchBookmarks: true, watch: true, timeoutSeconds: 300, cancellationToken: token)
+                .WatchAsync<object, object>(onError: e => throw new InvalidOperationException("TLS watch failed.", e), cancellationToken: token),
+            json => {
+                ObserveList(key, json, _ => true, reset, fingerprint);
+                if (statusChanged is not null) ObserveList(key + "/status", json, _ => true, statusChanged, StatusFingerprint);
+            },
+            (kind, item) =>
+            {
             using var doc = JsonDocument.Parse(KubernetesJson.Serialize(item));
             var resource = doc.RootElement;
             var name = resource.GetProperty("metadata").GetProperty("name").GetString()!;
@@ -291,7 +337,7 @@ public sealed class KubernetesResourceClient : IDisposable
                     }
                 }
             }
-        }
+            }, ct);
     }
 
     private static string StatusFingerprint(JsonElement item) =>
@@ -367,7 +413,7 @@ public sealed class KubernetesResourceClient : IDisposable
         }
     }
 
-    public async Task WatchWebsiteRoutesAsync(string ns, Action changed, CancellationToken ct)
+    public Task WatchWebsiteRoutesAsync(string ns, Action changed, CancellationToken ct)
     {
         const string group = "gateway.networking.k8s.io", version = "v1", plural = "httproutes";
         var key = ns + "/website-routes";
@@ -375,76 +421,69 @@ public sealed class KubernetesResourceClient : IDisposable
             var name = x.GetProperty("metadata").GetProperty("name").GetString()!;
             return name.StartsWith("site-", StringComparison.Ordinal) && Guid.TryParseExact(name[5..], "N", out _);
         }
-        var json = await ListAsync(group, version, ns, plural, null, ct);
-        using var doc = JsonDocument.Parse(json);
-        ObserveList(key, json, Include, changed);
-        var response = Api.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(group, version, ns, plural,
-            resourceVersion: doc.RootElement.GetProperty("metadata").GetProperty("resourceVersion").GetString(),
-            watch: true, timeoutSeconds: 300, cancellationToken: ct);
-        await foreach (var (kind, item) in response.WatchAsync<object, object>(onError: e => throw new InvalidOperationException("Route watch failed.", e), cancellationToken: ct))
-            ObserveEvent(key, kind, item, Include, changed);
+        return RunWatchAsync<object>(
+            token => ListAsync(group, version, ns, plural, null, token),
+            (rv, token) => Api.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(group, version, ns, plural,
+                resourceVersion: rv, allowWatchBookmarks: true, watch: true, timeoutSeconds: 300, cancellationToken: token)
+                .WatchAsync<object, object>(onError: e => throw new InvalidOperationException("Route watch failed.", e), cancellationToken: token),
+            json => ObserveList(key, json, Include, changed),
+            (kind, item) => ObserveEvent(key, kind, item, Include, changed), ct);
     }
 
-    public async Task WatchAccountPhpAsync(string ns, Action changed, CancellationToken ct)
-    {
-        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var tasks = new[] { WatchPhpDeploymentsAsync(ns, changed, lifetime.Token), WatchPhpServicesAsync(ns, changed, lifetime.Token),
-            WatchPhpConfigMapsAsync(ns, changed, lifetime.Token), WatchPhpPoliciesAsync(ns, changed, lifetime.Token) };
-        try { await await Task.WhenAny(tasks); }
-        finally
-        {
-            await lifetime.CancelAsync();
-            try { await Task.WhenAll(tasks); }
-            catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
-        }
-    }
+    public Task WatchAccountPhpAsync(string ns, Action changed, CancellationToken ct) =>
+        Task.WhenAll(WatchPhpDeploymentsAsync(ns, changed, ct), WatchPhpServicesAsync(ns, changed, ct),
+            WatchPhpConfigMapsAsync(ns, changed, ct), WatchPhpPoliciesAsync(ns, changed, ct));
 
-    private async Task WatchPhpDeploymentsAsync(string ns, Action changed, CancellationToken ct)
+    private Task WatchPhpDeploymentsAsync(string ns, Action changed, CancellationToken ct)
     {
         const string selector = "hostingpanel/component=account-php";
         var key = ns + "/php-deployments";
-        var initial = await Api.AppsV1.ListNamespacedDeploymentAsync(ns, labelSelector: selector, cancellationToken: ct);
-        ObserveList(key, KubernetesJson.Serialize(initial), _ => true, changed);
-        var response = Api.AppsV1.ListNamespacedDeploymentWithHttpMessagesAsync(ns, labelSelector: selector,
-            resourceVersion: initial.Metadata.ResourceVersion, watch: true, timeoutSeconds: 300, cancellationToken: ct);
-        await foreach (var (kind, item) in response.WatchAsync<V1Deployment, V1DeploymentList>(onError: e => throw new InvalidOperationException("PHP watch failed.", e), cancellationToken: ct))
-            ObserveEvent(key, kind, item, _ => true, changed);
+        return RunWatchAsync<V1Deployment>(
+            async token => KubernetesJson.Serialize(await Api.AppsV1.ListNamespacedDeploymentAsync(ns, labelSelector: selector, cancellationToken: token)),
+            (rv, token) => Api.AppsV1.ListNamespacedDeploymentWithHttpMessagesAsync(ns, labelSelector: selector,
+                resourceVersion: rv, allowWatchBookmarks: true, watch: true, timeoutSeconds: 300, cancellationToken: token)
+                .WatchAsync<V1Deployment, V1DeploymentList>(onError: e => throw new InvalidOperationException("PHP watch failed.", e), cancellationToken: token),
+            json => ObserveList(key, json, _ => true, changed),
+            (eventType, item) => ObserveEvent(key, eventType, item, _ => true, changed), ct);
     }
 
-    private async Task WatchPhpServicesAsync(string ns, Action changed, CancellationToken ct)
+    private Task WatchPhpServicesAsync(string ns, Action changed, CancellationToken ct)
     {
         const string selector = "hostingpanel/component=account-php";
         var key = ns + "/php-services";
-        var initial = await Api.CoreV1.ListNamespacedServiceAsync(ns, labelSelector: selector, cancellationToken: ct);
-        ObserveList(key, KubernetesJson.Serialize(initial), _ => true, changed);
-        var response = Api.CoreV1.ListNamespacedServiceWithHttpMessagesAsync(ns, labelSelector: selector,
-            resourceVersion: initial.Metadata.ResourceVersion, watch: true, timeoutSeconds: 300, cancellationToken: ct);
-        await foreach (var (kind, item) in response.WatchAsync<V1Service, V1ServiceList>(onError: e => throw new InvalidOperationException("PHP watch failed.", e), cancellationToken: ct))
-            ObserveEvent(key, kind, item, _ => true, changed);
+        return RunWatchAsync<V1Service>(
+            async token => KubernetesJson.Serialize(await Api.CoreV1.ListNamespacedServiceAsync(ns, labelSelector: selector, cancellationToken: token)),
+            (rv, token) => Api.CoreV1.ListNamespacedServiceWithHttpMessagesAsync(ns, labelSelector: selector,
+                resourceVersion: rv, allowWatchBookmarks: true, watch: true, timeoutSeconds: 300, cancellationToken: token)
+                .WatchAsync<V1Service, V1ServiceList>(onError: e => throw new InvalidOperationException("PHP watch failed.", e), cancellationToken: token),
+            json => ObserveList(key, json, _ => true, changed),
+            (eventType, item) => ObserveEvent(key, eventType, item, _ => true, changed), ct);
     }
 
-    private async Task WatchPhpConfigMapsAsync(string ns, Action changed, CancellationToken ct)
+    private Task WatchPhpConfigMapsAsync(string ns, Action changed, CancellationToken ct)
     {
         const string selector = "hostingpanel/component=account-php";
         var key = ns + "/php-configmaps";
-        var initial = await Api.CoreV1.ListNamespacedConfigMapAsync(ns, labelSelector: selector, cancellationToken: ct);
-        ObserveList(key, KubernetesJson.Serialize(initial), _ => true, changed);
-        var response = Api.CoreV1.ListNamespacedConfigMapWithHttpMessagesAsync(ns, labelSelector: selector,
-            resourceVersion: initial.Metadata.ResourceVersion, watch: true, timeoutSeconds: 300, cancellationToken: ct);
-        await foreach (var (kind, item) in response.WatchAsync<V1ConfigMap, V1ConfigMapList>(onError: e => throw new InvalidOperationException("PHP watch failed.", e), cancellationToken: ct))
-            ObserveEvent(key, kind, item, _ => true, changed);
+        return RunWatchAsync<V1ConfigMap>(
+            async token => KubernetesJson.Serialize(await Api.CoreV1.ListNamespacedConfigMapAsync(ns, labelSelector: selector, cancellationToken: token)),
+            (rv, token) => Api.CoreV1.ListNamespacedConfigMapWithHttpMessagesAsync(ns, labelSelector: selector,
+                resourceVersion: rv, allowWatchBookmarks: true, watch: true, timeoutSeconds: 300, cancellationToken: token)
+                .WatchAsync<V1ConfigMap, V1ConfigMapList>(onError: e => throw new InvalidOperationException("PHP watch failed.", e), cancellationToken: token),
+            json => ObserveList(key, json, _ => true, changed),
+            (eventType, item) => ObserveEvent(key, eventType, item, _ => true, changed), ct);
     }
 
-    private async Task WatchPhpPoliciesAsync(string ns, Action changed, CancellationToken ct)
+    private Task WatchPhpPoliciesAsync(string ns, Action changed, CancellationToken ct)
     {
         const string selector = "hostingpanel/component=account-php";
         var key = ns + "/php-policies";
-        var initial = await Api.NetworkingV1.ListNamespacedNetworkPolicyAsync(ns, labelSelector: selector, cancellationToken: ct);
-        ObserveList(key, KubernetesJson.Serialize(initial), _ => true, changed);
-        var response = Api.NetworkingV1.ListNamespacedNetworkPolicyWithHttpMessagesAsync(ns, labelSelector: selector,
-            resourceVersion: initial.Metadata.ResourceVersion, watch: true, timeoutSeconds: 300, cancellationToken: ct);
-        await foreach (var (kind, item) in response.WatchAsync<V1NetworkPolicy, V1NetworkPolicyList>(onError: e => throw new InvalidOperationException("PHP watch failed.", e), cancellationToken: ct))
-            ObserveEvent(key, kind, item, _ => true, changed);
+        return RunWatchAsync<V1NetworkPolicy>(
+            async token => KubernetesJson.Serialize(await Api.NetworkingV1.ListNamespacedNetworkPolicyAsync(ns, labelSelector: selector, cancellationToken: token)),
+            (rv, token) => Api.NetworkingV1.ListNamespacedNetworkPolicyWithHttpMessagesAsync(ns, labelSelector: selector,
+                resourceVersion: rv, allowWatchBookmarks: true, watch: true, timeoutSeconds: 300, cancellationToken: token)
+                .WatchAsync<V1NetworkPolicy, V1NetworkPolicyList>(onError: e => throw new InvalidOperationException("PHP watch failed.", e), cancellationToken: token),
+            json => ObserveList(key, json, _ => true, changed),
+            (eventType, item) => ObserveEvent(key, eventType, item, _ => true, changed), ct);
     }
 
     public async Task<string?> TryGetAsync(string group, string version, string ns, string plural, string name, CancellationToken ct)
