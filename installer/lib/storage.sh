@@ -4,7 +4,7 @@ install_storage() {
   [[ "$pool" =~ ^[a-zA-Z][a-zA-Z0-9_-]*$ ]] || die "Invalid pool"
   python3 -c 'import ipaddress,sys; ipaddress.ip_network(sys.argv[1]); ipaddress.ip_address(sys.argv[2])' "$network" "$host"
   apt-get update
-  apt-get install -y zfsutils-linux nfs-kernel-server targetcli-fb openssh-server sudo
+  apt-get install -y zfsutils-linux nfs-kernel-server targetcli-fb openssh-server sudo openssl
   if ! zpool list -H "$pool" >/dev/null 2>&1; then
     [[ $(get confirmPoolCreation) == True ]] || die "Create/import pool or explicitly confirm pool creation"
     local devices
@@ -15,6 +15,11 @@ install_storage() {
       [[ "$disk" == /dev/disk/by-id/* && -b "$disk" ]] || die "Invalid disk"
       [[ $(lsblk -nr -o TYPE "$disk") == disk ]] || die "Disk has partitions or children"
       [[ -z $(wipefs -n --noheadings -o TYPE "$disk") ]] || die "Disk has signatures"
+      [[ -z $(lsblk -nr -o MOUNTPOINTS "$disk" | tr -d '[:space:]') ]] || die "Disk is mounted"
+      [[ -z $(ls -A "/sys/class/block/$(basename "$(readlink -f "$disk")")/holders") ]] || die "Disk has active holders"
+      for previous in "${disks[@]}"; do
+        [[ $(readlink -f "$previous") != $(readlink -f "$disk") ]] || die "Duplicate disk alias"
+      done
       disks+=("$disk")
     done <<< "$devices"
     if ((${#disks[@]} == 1)); then zpool create "$pool" "${disks[@]}";
@@ -25,7 +30,13 @@ install_storage() {
     zfs list -H "$pool/$dataset" >/dev/null 2>&1 || zfs create "$pool/$dataset"
   done
   for dataset in home apache; do
-    zfs set "mountpoint=/srv/hosting/$dataset" "$pool/hosting/$dataset"
+    local current
+    current=$(zfs get -H -o value mountpoint "$pool/hosting/$dataset")
+    if [[ "$current" != "/srv/hosting/$dataset" ]]; then
+      [[ "$current" == "/$pool/hosting/$dataset" ]] || die "Unexpected existing mountpoint: $current"
+      zfs set "mountpoint=/srv/hosting/$dataset" "$pool/hosting/$dataset"
+    fi
+    mountpoint -q "/srv/hosting/$dataset" || die "Dataset is not mounted"
   done
   chown 1654:1654 /srv/hosting/home /srv/hosting/apache
   chmod 0755 /srv/hosting/home /srv/hosting/apache
@@ -33,6 +44,7 @@ install_storage() {
   printf '/srv/hosting/home %s(rw,sync,root_squash,no_subtree_check)\n/srv/hosting/apache %s(rw,sync,root_squash,no_subtree_check)\n' "$network" "$network" > /etc/exports.d/hostingpanel.exports
   local base
   base=$(dirname "$config")
+  [[ -f "$base/iscsi-chap" ]] || openssl rand -hex 8 > "$base/iscsi-chap"
   [[ -f "$base/csi-key" ]] || ssh-keygen -q -t rsa -b 3072 -m PEM -N '' -f "$base/csi-key"
   id hosting-csi >/dev/null 2>&1 || useradd -m -s /bin/bash hosting-csi
   install -d -m 0700 -o hosting-csi -g hosting-csi /home/hosting-csi/.ssh
