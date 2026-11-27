@@ -55,6 +55,8 @@ powerDns:
   existingClaim: ""
   existingSecret: ""
   serviceType: LoadBalancer
+  # Optional node-owned addresses for ClusterIP DNS exposure (no ServiceLB hostPort).
+  externalIPs: []
   autoCreateZones: true
   # Public web ingress address, not the PowerDNS service address.
   webIp: ""
