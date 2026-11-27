@@ -136,16 +136,23 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
         response.TryGetProperty("updated", out var updated) && updated.ValueKind == JsonValueKind.Object
         && updated.TryGetProperty(id, out _);
     private static async Task<List<JsonElement>> Accounts(HttpClient client, string domainId, CancellationToken ct) =>
-        (await Query(client, "Account", new { domainId }, new[] { "id", "@type", "domainId", "name", "emailAddress", "roles", "permissions", "quotas", "usedDiskQuota" }, ct))
+        (await Query(client, "Account", new { domainId }, new[] { "id", "@type", "domainId", "name", "emailAddress", "roles", "permissions", "quotas", "usedDiskQuota", "aliases" }, ct))
         .Where(a => Field(a, "domainId") == domainId && Field(a, "@type") == "User"
             && a.TryGetProperty("roles", out var roles) && Field(roles, "@type") == "User"
             && a.TryGetProperty("permissions", out var permissions) && Field(permissions, "@type") == "Inherit").ToList();
+
+    private static IReadOnlyList<string> LocalAliases(JsonElement account, string domainId) =>
+        account.TryGetProperty("aliases", out var aliases) && aliases.ValueKind == JsonValueKind.Object
+            ? aliases.EnumerateObject().Where(a => Field(a.Value, "domainId") == domainId &&
+                (!a.Value.TryGetProperty("enable", out var enabled) || enabled.ValueKind != JsonValueKind.False))
+                .Select(a => Field(a.Value, "name")).OfType<string>().ToArray()
+            : [];
 
     public Task<MailResult> ListAsync(string domain, AuthenticationHeaderValue auth, CancellationToken ct) =>
         Execute(domain, auth, ct, async (client, id) => new(200, Accounts: (await Accounts(client, id, ct)).Select(a =>
             new MailAccount(Field(a, "name")!, Field(a, "emailAddress")!,
                 a.TryGetProperty("quotas", out var quotas) && quotas.ValueKind == JsonValueKind.Object ? Number(quotas, "maxDiskQuota") : null,
-                Number(a, "usedDiskQuota"))).ToArray()));
+                Number(a, "usedDiskQuota"), LocalAliases(a, id))).ToArray()));
 
     public Task<MailResult> CreateAsync(string domain, MailCreateRequest input, AuthenticationHeaderValue auth, CancellationToken ct) =>
         Execute(domain, auth, ct, async (client, id) =>
@@ -165,7 +172,7 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
         Execute(domain, auth, ct, async (client, domainId) =>
         {
             if (!ValidName(name) || input.Password is not null && !ValidPassword(input.Password)
-                || input.QuotaBytes is <= 0 || input.Password is null && input.QuotaBytes is null) return new(400, "INVALID_MAIL_ACCOUNT");
+                || input.QuotaBytes is <= 0 || input.Password is null && input.QuotaBytes is null && input.Aliases is null) return new(400, "INVALID_MAIL_ACCOUNT");
             var account = (await Accounts(client, domainId, ct)).SingleOrDefault(a => Field(a, "name") == name);
             if (account.ValueKind == JsonValueKind.Undefined || Field(account, "id") is not { } id) return new(404, "MAIL_ACCOUNT_NOT_FOUND");
             var patch = new Dictionary<string, object>();
@@ -182,6 +189,34 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
                 patch["credentials/" + passwords[0].Name + "/secret"] = input.Password;
             }
             if (input.QuotaBytes is long quota) patch["quotas/maxDiskQuota"] = quota;
+            if (input.Aliases is not null)
+            {
+                if (input.Aliases.Count > 100 || input.Aliases.Any(a => !ValidName(a) || a == name)
+                    || input.Aliases.Distinct(StringComparer.OrdinalIgnoreCase).Count() != input.Aliases.Count)
+                    return new(400, "INVALID_MAIL_ALIASES");
+                if (!account.TryGetProperty("aliases", out var aliases) || aliases.ValueKind != JsonValueKind.Object)
+                    return new(502, "MAIL_INVENTORY_UNVERIFIED");
+                // Never overwrite aliases in other domains or disabled addresses.
+                var retained = aliases.EnumerateObject().Where(a => Field(a.Value, "domainId") != domainId ||
+                    (a.Value.TryGetProperty("enable", out var enabled) && enabled.ValueKind == JsonValueKind.False)).ToArray();
+                var desired = input.Aliases.ToHashSet(StringComparer.Ordinal);
+                var used = aliases.EnumerateObject().Select(a => a.Name).ToHashSet(StringComparer.Ordinal);
+                foreach (var existing in aliases.EnumerateObject())
+                {
+                    if (retained.Any(a => a.Name == existing.Name)) continue;
+                    if (Field(existing.Value, "name") is { } alias && desired.Remove(alias)) continue;
+                    if (!existing.Name.All(char.IsAsciiDigit)) return new(502, "MAIL_INVENTORY_UNVERIFIED");
+                    patch["aliases/" + existing.Name] = null!;
+                }
+                var next = 0;
+                foreach (var alias in desired)
+                {
+                    while (used.Contains(next.ToString(System.Globalization.CultureInfo.InvariantCulture))) next++;
+                    var key = (next++).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    patch["aliases/" + key] = new { name = alias, domainId };
+                }
+            }
+            if (patch.Count == 0) return new(200);
             var result = await Call(client, "x:Account/set", new { update = new Dictionary<string, object> { [id] = patch } }, ct);
             return Updated(result, id) ? new(200) : new(409, "MAIL_UPDATE_FAILED");
         }, mutation: true);
