@@ -31,8 +31,8 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
         if (matches.Length != 1 || !matches[0].TryGetProperty("dnsZoneFile", out var file)
             || file.ValueKind != JsonValueKind.String) return "MAIL_DNS_NOT_READY";
         var desired = StalwartDnsRecords.Parse(domain.Name, file.GetString()!);
-        var dnsServerId = configuration["Stalwart:DkimDnsServerId"];
-        var nativeRotation = !string.IsNullOrWhiteSpace(dnsServerId);
+        var nativeRotation = StalwartDnsProviderRegistration.Enabled(configuration);
+        var dnsServerId = nativeRotation ? await StalwartDnsProviderRegistration.EnsureAsync(client, configuration, ct) : null;
         if (nativeRotation)
             desired = desired.Where(x => !IsDkim(domain.Name, x.Name, x.Type)).ToArray();
         // No network requests inside the database transaction.
