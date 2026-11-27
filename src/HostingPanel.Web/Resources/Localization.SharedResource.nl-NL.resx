@@ -869,4 +869,24 @@
   <data name="PHP-FPM update accepted." xml:space="preserve"><value>PHP-FPM-wijziging geaccepteerd.</value></data>
   <data name="Use package PHP-FPM settings" xml:space="preserve"><value>PHP-FPM-instellingen voor pakket gebruiken</value></data>
   <data name="Invalid PHP-FPM settings." xml:space="preserve"><value>Ongeldige PHP-FPM-instellingen.</value></data>
+  <data name="Select a domain to manage its email accounts." xml:space="preserve"><value>Selecteer een domein om de e-mailaccounts te beheren.</value></data>
+  <data name="Sign in first." xml:space="preserve"><value>Log eerst in.</value></data>
+  <data name="Mail operation unavailable." xml:space="preserve"><value>Mailbewerking niet beschikbaar.</value></data>
+  <data name="Mailbox changes currently require administrator permissions." xml:space="preserve"><value>Voor wijzigingen aan mailboxen zijn momenteel beheerdersrechten vereist.</value></data>
+  <data name="Create mailbox" xml:space="preserve"><value>Mailbox aanmaken</value></data>
+  <data name="Loading mailboxes…" xml:space="preserve"><value>Mailboxen laden…</value></data>
+  <data name="Used space" xml:space="preserve"><value>Gebruikte ruimte</value></data>
+  <data name="Quota" xml:space="preserve"><value>Quota</value></data>
+  <data name="Edit quota" xml:space="preserve"><value>Quota wijzigen</value></data>
+  <data name="Delete mailbox" xml:space="preserve"><value>Mailbox verwijderen</value></data>
+  <data name="No mailboxes found." xml:space="preserve"><value>Geen mailboxen gevonden.</value></data>
+  <data name="Mailbox management is not available for this backend or configuration." xml:space="preserve"><value>Mailboxbeheer is niet beschikbaar voor deze backend of configuratie.</value></data>
+  <data name="Mail operation failed (HTTP {0})." xml:space="preserve"><value>Mailbewerking mislukt (HTTP {0}).</value></data>
+  <data name="Deleting a mailbox permanently removes its messages." xml:space="preserve"><value>Bij het verwijderen van een mailbox worden de berichten permanent verwijderd.</value></data>
+  <data name="Enter the exact email address to confirm." xml:space="preserve"><value>Voer het exacte e-mailadres in ter bevestiging.</value></data>
+  <data name="Mailbox deleted." xml:space="preserve"><value>Mailbox verwijderd.</value></data>
+  <data name="Mailbox name" xml:space="preserve"><value>Mailboxnaam</value></data>
+  <data name="Mailbox quota (MiB)" xml:space="preserve"><value>Mailboxquota (MiB)</value></data>
+  <data name="Enter a positive quota and a password of at least 12 characters for new mailboxes." xml:space="preserve"><value>Voer een positief quota en voor nieuwe mailboxen een wachtwoord van minimaal 12 tekens in.</value></data>
+  <data name="The backend denied this mailbox operation." xml:space="preserve"><value>De backend heeft deze mailboxbewerking geweigerd.</value></data>
 </root>

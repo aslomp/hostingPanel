@@ -42,3 +42,33 @@ Open http://127.0.0.1:8080/admin, complete the setup wizard with the real mail h
 
 The external service exposes TCP 25, 465, 993 and 4190. Optional 587 and 995 require matching Stalwart listeners. HTTPS is disabled externally by default because it also serves administration; enabling it for ACME TLS-ALPN-01 or JMAP requires reviewing administration access controls. Otherwise configure trusted certificates manually or use DNS-based ACME. Configure public mail IP, PTR, inbound and outbound TCP 25, MX, SPF, DKIM and DMARC before accepting customer traffic. Verify source-IP preservation and outbound SMTP IP with the actual load balancer and network. No HTTPRoute is required for mail TCP ports. The chart does not configure listeners, DNS or mail accounts automatically. See [official Stalwart installation](https://www.stalwart.email/docs/install/platform/docker/).
 
+
+### Mail management API (initial integration)
+
+Enable `stalwart.api.enabled`, set `stalwart.api.baseUrl` to an HTTPS origin reachable by the panel with a trusted matching certificate, and set `stalwart.api.existingSecret` to a Secret with key `api-key`. This is independent of the bundled workload, so an external dedicated Stalwart v1 instance is supported. Never reuse the bootstrap recovery identity. Configure a restricted management identity with domain query/get/create and account query/get/create/update/destroy permissions; Stalwart also requires sufficient permissions for managed users. Do not mix infrastructure administrator accounts with customer mail domains. TLS verification remains enabled, and redirects are disabled.
+
+All endpoints require panel Basic authentication and a visible, non-suspended hosted domain. The first mailbox creation creates the Stalwart domain if absent. Existing matching mail domains are treated as managed; use a dedicated instance and verify ownership before enabling. No local mailbox mirror is maintained.
+
+The official legacy DirectAdmin endpoint is `/CMD_API_POP`. The pinned modern DirectAdmin Swagger and its routes remain unchanged.
+
+| Method | Action | Form / query fields |
+| --- | --- | --- |
+| GET | list | domain |
+| POST | create | domain, user, passwd, passwd2, quota (MiB, positive integer) |
+| POST | modify | domain, user, quota (bytes, positive integer) |
+| POST | delete | domain, user |
+
+Responses are URL-encoded legacy fields. Unsupported actions (including full_list, detailed quota, multiple deletion, unlimited quotas, send limits and rename) fail explicitly. State-changing GET requests are rejected.
+
+Password reset, aliases, forwarding, aggregate hosting package limits, mail DNS, suspension propagation and domain deletion cleanup are pending. Mutations are administrator-only until aggregate resource limits and lifecycle integration have been completed; resellers and users can only list accounts for their visible domains. An upstream failure may leave a newly created mail domain; no automatic destructive rollback is attempted. DirectAdmin forwards CMD_API_POP to its upstream with the caller's credentials.
+
+The additional provider-neutral API uses the same IMailProvider and authorization, with JSON responses and quotaBytes expressed in bytes for both create and update. Its separate OpenAPI contract is available at /openapi/hosting-mail.json and in the Swagger UI selector.
+
+| Method | Path |
+| --- | --- |
+| GET, POST | /hosting/mail/{domain}/accounts |
+| PATCH, DELETE | /hosting/mail/{domain}/accounts/{name} |
+
+DELETE requires confirmation=name@domain. The additional API uses DirectAdminMailProvider on the DirectAdmin backend; CMD_API_POP still forwards unchanged to DirectAdmin. No new modern DirectAdmin /api operations are claimed.
+
+Mailbox creation now requires an explicit `nemails` entitlement in the existing hosting package or account override (nonnegative integer, or explicit package `unlimited`). All current domains owned by the account are counted, including suspended domains. Missing limits deny creation. A process-wide gate serializes panel mail mutations; only a single panel replica with no external mailbox writers is supported for this limit. Deleted/orphaned domains, aggregate disk quota and lifecycle synchronization still require separate implementation. Administrators remain the only permitted Stalwart mutators.

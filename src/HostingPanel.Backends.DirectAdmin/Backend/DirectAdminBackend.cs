@@ -109,7 +109,8 @@ public static class DirectAdminTransport
         // Forward Authorization (of any scheme) and cookies unchanged.
 
         var rawPath = context.Request.Path.Value ?? string.Empty;
-        if (!rawPath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase)
+        if ((!rawPath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase)
+            && !rawPath.Equals("/CMD_API_POP", StringComparison.OrdinalIgnoreCase))
             || rawPath.Contains("..", StringComparison.Ordinal)
             || rawPath.Contains('\\') || rawPath.Any(char.IsControl))
         {

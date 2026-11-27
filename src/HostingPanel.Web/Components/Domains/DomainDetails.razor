@@ -11,7 +11,7 @@
 <PanelPageHeader>
     <Breadcrumb><a href="/domains">@L["Domain management"]</a> / Details</Breadcrumb>
     <TitleContent>@Domain</TitleContent>
-    <Description>@L["Domain configuration and settings."] <a href="@($"/domains/{Uri.EscapeDataString(Domain)}/dns")">@L["Manage DNS records"]</a></Description>
+    <Description>@L["Domain configuration and settings."] <a href="@($"/domains/{Uri.EscapeDataString(Domain)}/dns")">@L["Manage DNS records"]</a> · <a href="@($"/domains/{Uri.EscapeDataString(Domain)}/mail")">@L["Email accounts"]</a></Description>
     <Actions><MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Refresh" Disabled="@loading">@(loading ? L["Loading…"].Value : L["Refresh"].Value)</MudButton></Actions>
 </PanelPageHeader>
 

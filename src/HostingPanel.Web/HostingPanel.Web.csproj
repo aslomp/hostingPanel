@@ -8,6 +8,7 @@
     <ProjectReference Include="../HostingPanel.Persistence/HostingPanel.Persistence.csproj" />
     <ProjectReference Include="../HostingPanel.Backends.DirectAdmin/HostingPanel.Backends.DirectAdmin.csproj" />
     <ProjectReference Include="../HostingPanel.Backends.Kubernetes/HostingPanel.Backends.Kubernetes.csproj" />
+    <Content Update="spec/hosting-mail.openapi.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Update="spec/directadmin.swagger.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

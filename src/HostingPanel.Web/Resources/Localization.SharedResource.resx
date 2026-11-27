@@ -775,4 +775,24 @@
   <data name="PHP-FPM update accepted." xml:space="preserve"><value>PHP-FPM update accepted.</value></data>
   <data name="Use package PHP-FPM settings" xml:space="preserve"><value>Use package PHP-FPM settings</value></data>
   <data name="Invalid PHP-FPM settings." xml:space="preserve"><value>Invalid PHP-FPM settings.</value></data>
+  <data name="Select a domain to manage its email accounts." xml:space="preserve"><value>Select a domain to manage its email accounts.</value></data>
+  <data name="Sign in first." xml:space="preserve"><value>Sign in first.</value></data>
+  <data name="Mail operation unavailable." xml:space="preserve"><value>Mail operation unavailable.</value></data>
+  <data name="Mailbox changes currently require administrator permissions." xml:space="preserve"><value>Mailbox changes currently require administrator permissions.</value></data>
+  <data name="Create mailbox" xml:space="preserve"><value>Create mailbox</value></data>
+  <data name="Loading mailboxes…" xml:space="preserve"><value>Loading mailboxes…</value></data>
+  <data name="Used space" xml:space="preserve"><value>Used space</value></data>
+  <data name="Quota" xml:space="preserve"><value>Quota</value></data>
+  <data name="Edit quota" xml:space="preserve"><value>Edit quota</value></data>
+  <data name="Delete mailbox" xml:space="preserve"><value>Delete mailbox</value></data>
+  <data name="No mailboxes found." xml:space="preserve"><value>No mailboxes found.</value></data>
+  <data name="Mailbox management is not available for this backend or configuration." xml:space="preserve"><value>Mailbox management is not available for this backend or configuration.</value></data>
+  <data name="Mail operation failed (HTTP {0})." xml:space="preserve"><value>Mail operation failed (HTTP {0}).</value></data>
+  <data name="Deleting a mailbox permanently removes its messages." xml:space="preserve"><value>Deleting a mailbox permanently removes its messages.</value></data>
+  <data name="Enter the exact email address to confirm." xml:space="preserve"><value>Enter the exact email address to confirm.</value></data>
+  <data name="Mailbox deleted." xml:space="preserve"><value>Mailbox deleted.</value></data>
+  <data name="Mailbox name" xml:space="preserve"><value>Mailbox name</value></data>
+  <data name="Mailbox quota (MiB)" xml:space="preserve"><value>Mailbox quota (MiB)</value></data>
+  <data name="Enter a positive quota and a password of at least 12 characters for new mailboxes." xml:space="preserve"><value>Enter a positive quota and a password of at least 12 characters for new mailboxes.</value></data>
+  <data name="The backend denied this mailbox operation." xml:space="preserve"><value>The backend denied this mailbox operation.</value></data>
 </root>

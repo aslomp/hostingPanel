@@ -1,0 +1,104 @@
+@page "/domains/{Domain}/mail"
+@using HostingPanel.Api
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject PanelSession Session
+@inject MailOperations Mail
+@inject IDialogService Dialogs
+@implements IDisposable
+
+<PageTitle>@Domain — @L["Email accounts"]</PageTitle>
+<PanelPageHeader>
+    <Breadcrumb><a href="/email-accounts">@L["Email accounts"]</a> / @Domain</Breadcrumb>
+    <TitleContent>@L["Email accounts"] — @Domain</TitleContent>
+    <Description>@L["Mailbox changes currently require administrator permissions."]</Description>
+    <Actions><MudStack Row="true">
+        <CrudAddButton OnClick="OpenCreate" Disabled="@(!Ready)">@L["Create mailbox"]</CrudAddButton>
+        <MudButton OnClick="Refresh" Disabled="@(read.Loading || busy)">@L["Refresh"]</MudButton>
+    </MudStack></Actions>
+</PanelPageHeader>
+@if (!Session.Connected) { <MudAlert Severity="Severity.Info">@L["Sign in first."]</MudAlert> }
+else if (read.Loading) { <PanelLoading>@L["Loading mailboxes…"]</PanelLoading> }
+else if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+else if (accounts is not null)
+{
+    <MudSimpleTable Dense="true" Hover="true">
+        <thead><tr><th>@L["Email address"]</th><th>@L["Used space"] (MiB)</th><th>@L["Quota"] (MiB)</th><th>@L["Actions"]</th></tr></thead>
+        <tbody>
+        @foreach (var account in accounts)
+        {
+            <tr @key="account.Name">
+                <td><MudButton Variant="Variant.Text" Disabled="@(!Ready)" OnClick="() => OpenEdit(account)">@account.Address</MudButton></td>
+                <td>@Format(account.UsedBytes)</td><td>@Format(account.QuotaBytes)</td>
+                <td><MudButton Disabled="@(!Ready)" OnClick="() => OpenEdit(account)">@L["Edit quota"]</MudButton>
+                <CrudDeleteButton Label="@L["Delete mailbox"].Value" Disabled="@(!Ready)" OnClick="() => Delete(account)" /></td>
+            </tr>
+        }
+        </tbody>
+    </MudSimpleTable>
+    @if (accounts.Count == 0) { <PanelEmptyState>@L["No mailboxes found."]</PanelEmptyState> }
+}
+@if (message is not null) { <MudAlert Severity="@(failed ? Severity.Error : Severity.Success)">@message</MudAlert> }
+
+@code {
+    [Parameter] public string Domain { get; set; } = "";
+    private readonly LatestRead read = new();
+    private IReadOnlyList<MailAccount>? accounts;
+    private string? error, message;
+    private bool busy, failed, disposed;
+    private bool Ready => Session.Connected && accounts is not null && !read.Loading && !busy;
+    private static string Format(long? bytes) => bytes is long value ? (value / 1048576m).ToString("N2") : "—";
+    protected override void OnInitialized() => Session.Changed += SessionChanged;
+    protected override Task OnParametersSetAsync() { message = null; return Refresh(); }
+    private bool Current(string target, string? channel) => !disposed && Session.Connected && Session.TicketChannel == channel && Domain == target;
+    private Task Refresh()
+    {
+        accounts = null; error = null;
+        if (disposed || !Session.Connected) { read.Cancel(); return Task.CompletedTask; }
+        var target = Domain; var channel = Session.TicketChannel;
+        return read.RunAsync(ct => Mail.ListAsync(target, ct), () => Current(target, channel),
+            result => {
+                if (result.Status == 501) error = L["Mailbox management is not available for this backend or configuration."].Value;
+                else if (result.Status != 200 || result.Accounts is null) error = L["Mail operation failed (HTTP {0}).", result.Status].Value;
+                else accounts = result.Accounts;
+            }, _ => error = L["Mail operation unavailable."].Value);
+    }
+    private void SessionChanged() => _ = InvokeAsync(async () => { if (disposed) return; message = null; var task = Refresh(); StateHasChanged(); await task; if (!disposed) StateHasChanged(); });
+    private Task OpenCreate() => OpenEditor(null);
+    private Task OpenEdit(MailAccount account) => OpenEditor(account);
+    private async Task OpenEditor(MailAccount? account)
+    {
+        if (!Ready) return;
+        busy = true; message = null;
+        var target = Domain; var channel = Session.TicketChannel;
+        try
+        {
+            var parameters = new DialogParameters<MailAccountDialog> { { x => x.Domain, target }, { x => x.Account, account } };
+            var dialog = await Dialogs.ShowAsync<MailAccountDialog>(L[account is null ? "Create mailbox" : "Edit quota"].Value, parameters,
+                new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, BackdropClick = false, CloseOnEscapeKey = false });
+            if (await dialog.Result is { Canceled: false } && Current(target, channel)) await Refresh();
+        }
+        finally { busy = false; }
+    }
+    private async Task Delete(MailAccount account)
+    {
+        if (!Ready) return;
+        busy = true; message = null;
+        var target = Domain; var channel = Session.TicketChannel;
+        try
+        {
+            var confirmed = await Dialogs.ConfirmResourceDeletionAsync(L["Delete mailbox"].Value, account.Address,
+                L["Deleting a mailbox permanently removes its messages."].Value, L["Enter the exact email address to confirm."].Value);
+            if (!confirmed || !Current(target, channel)) return;
+            var result = await Mail.DeleteAsync(target, account.Name);
+            if (!Current(target, channel)) return;
+            failed = result.Error is not null || result.Status is < 200 or >= 300;
+            message = failed ? L["Mail operation failed (HTTP {0}).", result.Status].Value : L["Mailbox deleted."].Value;
+            if (!failed) await Refresh();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException)
+        { if (Current(target, channel)) { failed = true; message = L["Mail operation unavailable."].Value; } }
+        finally { busy = false; }
+    }
+    public void Dispose() { disposed = true; Session.Changed -= SessionChanged; read.Dispose(); }
+}

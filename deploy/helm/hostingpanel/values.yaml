@@ -86,6 +86,12 @@ mariadb:
 # Optional Stalwart v1 mail infrastructure (Kubernetes backend only).
 stalwart:
   enabled: false
+  api:
+    enabled: false
+    # HTTPS origin matching the Stalwart TLS certificate, reachable from the panel.
+    baseUrl: ""
+    # Existing Secret with key api-key; dedicated restricted management identity.
+    existingSecret: ""
   image: stalwartlabs/stalwart:v1
   imagePullPolicy: IfNotPresent
   storageClassName: ""

@@ -62,3 +62,11 @@ Helm-managed MariaDB (Kubernetes only): optional dedicated MariaDB StatefulSet, 
 
 - Optional Stalwart v1 Helm infrastructure (Kubernetes only): single StatefulSet, persistent configuration and data, internal administration service and separate mail service. Mailbox CRUD, DNS automation, quotas and panel API integration are not implemented. See [Kubernetes hosting](kubernetes-hosting.md#mail-infrastructure).
 - Kubernetes account PHP-FPM settings: authorized admin/reseller edits image and resource limits; trusted images are managed by admins in BackendSettings. Package defaults and account overrides are stored in existing limits JSON. Runtime acceptance pending; unsupported by DirectAdmin.
+
+- Stalwart v1: optional Kubernetes-only official legacy `CMD_API_POP` API for listing, creating, setting individual quotas and deleting ordinary mail users. DirectAdmin forwards this exact endpoint to its upstream using caller credentials. Only list, create, quota modification and single-user deletion are implemented for Stalwart. Password reset, alias/forwarder changes, aggregate package quota enforcement, DNS publication and domain lifecycle integration are not implemented. See [mail infrastructure](kubernetes-hosting.md#mail-infrastructure).
+
+- The additive `/hosting/mail` JSON routes reuse the Stalwart mail provider and are separately documented at `/openapi/hosting-mail.json`. DirectAdmin supports the official legacy passthrough and additive typed mailbox inventory, create, quota modification and delete.
+
+- MudBlazor mailbox frontend: accessible domain selection, mailbox inventory, create, quota edit and confirmed delete using the shared mail capability; DirectAdmin typed mail management uses CMD_API_POP with upstream read-back. Live browser verification pending.
+
+- Stalwart mailbox creation enforces the owning account's `nemails` package limit and account override across all current hosted domains, including suspended domains. Missing entitlement denies creation. Single-panel-process writes are serialized; external writers, orphaned domains, aggregate disk limits and lifecycle reconciliation remain outside this guarantee.

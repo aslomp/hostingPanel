@@ -1,0 +1,59 @@
+@using HostingPanel.Api
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject PanelSession Session
+@inject MailOperations Mail
+@implements IDisposable
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form">
+            @if (Account is null)
+            {
+                <MudTextField T="string" Label="@L["Mailbox name"].Value" @bind-Value="name" Required="true" Disabled="@mutation.Busy" InputId="mailbox-name" />
+                <MudText Typo="Typo.caption">@@@Domain</MudText>
+                <MudTextField T="string" Label="@L["Password"].Value" @bind-Value="password" Required="true" InputType="InputType.Password" autocomplete="new-password" Disabled="@mutation.Busy" InputId="mailbox-password" />
+            }
+            else { <MudText>@Account.Address</MudText> }
+            <MudNumericField T="long" Label="@L["Mailbox quota (MiB)"].Value" @bind-Value="quota" Min="1" Max="8796093022207L" Required="true" Disabled="@mutation.Busy" InputId="mailbox-quota" />
+        </MudForm>
+        @if (mutation.Error is not null) { <MudAlert Severity="Severity.Error">@mutation.Error</MudAlert> }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="@mutation.Busy">@L["Cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="@mutation.Busy">@L["Save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public string Domain { get; set; } = "";
+    [Parameter] public MailAccount? Account { get; set; }
+    private MudForm form = default!;
+    private readonly DialogMutation mutation = new();
+    private string name = "", password = "";
+    private long quota = 1024;
+    private string? channel;
+    protected override void OnInitialized()
+    {
+        channel = Session.TicketChannel;
+        if (Account?.QuotaBytes is long bytes) quota = Math.Max(1, bytes / 1048576);
+        Session.Changed += SessionChanged;
+    }
+    private void Cancel() { if (!mutation.Busy) Dialog.Cancel(); }
+    private void SessionChanged() => _ = InvokeAsync(() => { if (!Session.Connected || Session.TicketChannel != channel) Dialog.Cancel(); });
+    private Task Save() => mutation.RunAsync(Session, channel, async current =>
+    {
+        await form.ValidateAsync();
+        if (!current() || !form.IsValid) return;
+        if (quota <= 0 || quota > long.MaxValue / 1048576 || (Account is null && password.Length < 12))
+        { mutation.SetError(L["Enter a positive quota and a password of at least 12 characters for new mailboxes."].Value); return; }
+        var result = Account is null
+            ? await Mail.CreateAsync(Domain, new(name.Trim(), password, quota * 1048576))
+            : await Mail.UpdateAsync(Domain, Account.Name, quota * 1048576);
+        password = "";
+        if (!current()) return;
+        if (result.Error is null && result.Status is >= 200 and < 300) Dialog.Close(DialogResult.Ok(true));
+        else mutation.SetError(result.Status == 403 ? L["The backend denied this mailbox operation."].Value : L["Mail operation failed (HTTP {0}).", result.Status].Value);
+    });
+    public void Dispose() { password = ""; Session.Changed -= SessionChanged; mutation.Dispose(); }
+}
