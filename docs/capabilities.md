@@ -81,4 +81,4 @@ Helm-managed MariaDB (Kubernetes only): optional dedicated MariaDB StatefulSet, 
 
 - Website reconciliation has no idle timer; committed changes and resource watches trigger staged NFS, PHP and Apache work. External NFS mutations are not automatically detected.
 
-- Native Stalwart mail DNS delegates MX/SPF/DKIM/DMARC directly to PowerDNS; the panel protects reserved RRsets and reads them live. Manual periodic import is opt-in and disabled in native mode. Other mail record types are not delegated. Existing reserved local records require explicit resolution; live validation pending.
+- Native Stalwart mail DNS delegates MX/SPF/DKIM/DMARC directly to PowerDNS; the panel reads live mail RRsets, preserves them during ordinary zone reconciliation, and permits explicit TXT edits. Manual periodic import is opt-in and disabled in native mode. Other mail record types are not delegated. Existing apex MX conflicts require explicit resolution; live validation pending.

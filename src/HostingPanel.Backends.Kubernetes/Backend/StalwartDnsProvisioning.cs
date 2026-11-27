@@ -49,8 +49,8 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
         if (zone is null) return "MAIL_DNS_ZONE_NOT_READY";
         if (zone.OwnerId != domain.OwnerId || zone.DomainId != domain.Id) return "MAIL_DNS_ZONE_OWNERSHIP_CONFLICT";
         var existing = await db.DnsRecords.Where(x => x.ZoneId == zone.Id).ToListAsync(ct);
-        // Native mail ownership is exclusive for the delegated RRsets. Do not
-        // discard existing non-mail TXT records or silently migrate old zones.
+        // TXT records are shared and may exist before mail setup. Only apex MX
+        // ownership conflicts block native configuration.
         if (nativeRotation && existing.Any(x => !x.Type.Equals("TXT", StringComparison.OrdinalIgnoreCase) && MailDnsOwnership.Reserved(domain.Name, x.Name, x.Type)))
             return "MAIL_DNS_RECORD_CONFLICT";
         var additions = Plan(domain.Name, existing, desired);

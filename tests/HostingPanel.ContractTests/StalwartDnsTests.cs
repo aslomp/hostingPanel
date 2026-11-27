@@ -23,6 +23,7 @@ internal static class StalwartDnsTests
         Check(!MailDnsOwnership.Reserved(domain, "@", "A"));
         Check(!MailDnsOwnership.Reserved(domain, "@", "NS"));
         Check(!MailDnsOwnership.Reserved(domain, "www", "CNAME"));
+        Check(PowerDnsClient.SameRecord(domain, new HostingPanel.Api.Adapters.DnsRecord("TXT", "@", "verification", "300"), new HostingPanel.Api.Adapters.DnsRecord("TXT", domain + ".", "\"verification\"", "300")));
         const string source = """
             $ORIGIN example.test.
             @ 3600 IN MX 10 mail.example.net.

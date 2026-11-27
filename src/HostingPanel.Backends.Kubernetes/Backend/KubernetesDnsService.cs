@@ -88,13 +88,22 @@ public sealed class KubernetesDnsService(HostingPanelDbContext db, KubernetesIde
         {
             if (change.Action == "edit" && sharedNew != sharedOld)
                 return new(400, "DNS_RECORD_TYPE_CHANGE_REQUIRES_DELETE_AND_ADD");
-            if (powerDns is null) return new(503, null, "MAIL_DNS_UNAVAILABLE");
+            if (powerDns is null) return new(503, "MAIL_DNS_UNAVAILABLE");
             if (change.Action != "add")
             {
-                var current = await powerDns.ReadManagedMailAsync(zone.Name, ct);
-                if (!current.Any(r => PowerDnsClient.SameRecord(zone.Name, r, change.Previous!)))
-                    return new(404, "DNS_RECORD_NOT_FOUND");
+                try
+                {
+                    var current = await powerDns.ReadManagedMailAsync(zone.Name, ct);
+                    if (!current.Any(r => PowerDnsClient.SameRecord(zone.Name, r, change.Previous!)))
+                        return new(404, "DNS_RECORD_NOT_FOUND");
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or InvalidOperationException or JsonException or OperationCanceledException or KeyNotFoundException)
+                { return new(503, "MAIL_DNS_UNAVAILABLE"); }
             }
+            var local = await db.DnsRecords.Where(x => x.ZoneId == zone.Id && x.Type == "TXT").ToListAsync(ct);
+            if (change.Action != "add")
+                db.DnsRecords.RemoveRange(local.Where(x => PowerDnsClient.SameRecord(zone.Name,
+                    new DnsRecord(x.Type, x.Name, x.Value, x.Ttl.ToString()), change.Previous!)));
             operations.Schedule("dns-record", zone.Id, change.Action, new { zone.Name, Change = change });
             await db.SaveChangesAsync(ct);
             notifications?.PublishChange(ReconciliationTarget.Dns);
