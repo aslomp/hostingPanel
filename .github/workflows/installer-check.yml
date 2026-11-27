@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          bash -n installer/install.sh
+          for script in installer/*.sh; do bash -n "$script"; done
           for script in installer/lib/*.sh; do bash -n "$script"; done
           bash installer/install.sh --help
           python3 -m py_compile installer/generate.py
