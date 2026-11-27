@@ -18,7 +18,12 @@ await Check(HttpMethod.Get, "/api/filemanager/download", "?path=%2Fhome%2Fdemo",
 await Check(HttpMethod.Get, "/api/clamav", "", null,
     "Basic ZGVtbzprZXk=", HttpStatusCode.NotImplemented, "application/json",
     """{"type":"NOT_IMPLEMENTED"}""", null);
-Console.WriteLine("PASS: 5 fake backend HTTP forwarding scenarios (auth, body, query, SSE, binary, 501).");
+await Check(HttpMethod.Post, "/CMD_API_DNS_ADMIN", "", "action=create&domain=example.test&ip=192.0.2.1&ns1=ns1.example.test&ns2=ns2.example.test",
+    "Basic ZGVtbzprZXk=", HttpStatusCode.OK, "application/x-www-form-urlencoded",
+    "error=0&text=Success", "application/x-www-form-urlencoded");
+await Check(HttpMethod.Get, "/CMD_API_DNS_ADMIN", "?action=exists&domain=example.test", null,
+    "Basic ZGVtbzprZXk=", HttpStatusCode.OK, "application/x-www-form-urlencoded", "exists=1", null);
+Console.WriteLine("PASS: 7 fake backend HTTP forwarding scenarios.");
 
 static async Task Check(HttpMethod method, string path, string query,
     string? requestBody, string? authorization, HttpStatusCode expectedStatus,
