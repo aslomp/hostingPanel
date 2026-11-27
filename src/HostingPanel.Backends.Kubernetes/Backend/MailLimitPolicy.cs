@@ -6,14 +6,14 @@ namespace HostingPanel.Api;
 internal static class MailLimitPolicy
 {
     // Missing limits deny new capacity; unlimited must be an explicit entitlement.
-    internal static long Resolve(string? package, string? account)
+    internal static long Resolve(string? package, string? account, string field = "nemails")
     {
         static Dictionary<string, string> Fields(string? json) =>
             JsonSerializer.Deserialize<Dictionary<string, string>>(json ?? "{}")
                 ?? throw new InvalidOperationException("Invalid hosting limits.");
         var defaults = Fields(package);
         var overrides = Fields(account);
-        var raw = overrides.GetValueOrDefault("nemails") ?? defaults.GetValueOrDefault("nemails");
+        var raw = overrides.GetValueOrDefault(field) ?? defaults.GetValueOrDefault(field);
         if (raw is null) return 0;
         if (raw == "unlimited") return long.MaxValue;
         if (!long.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var value) || value < 0)
