@@ -32,7 +32,7 @@ def validate(c):
             raise ValueError(f"Invalid {k}")
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", c["pool"]):
         raise ValueError("Invalid pool")
-    if "@" not in c["acmeEmail"] or c["acmeEmail"].split("@")[-1] in {"example.com","example.net","example.org"}:
+    if c["acmeEmail"] and (not re.fullmatch(r"[^\\s@]+@[^\\s@]+\\.[^\\s@]+", c["acmeEmail"]) or c["acmeEmail"].split("@")[-1].lower() in {"example.com","example.net","example.org","example.invalid"}):
         raise ValueError("Set real ACME email")
     for k in ("localStorage", "acmeStaging", "confirmPoolCreation", "buildPanelImage"):
         if type(c[k]) is not bool:
@@ -94,9 +94,10 @@ def generate(c, base):
     https = dict(name="https", protocol="HTTPS", port=443, hostname=c["panelHostname"],
         tls=dict(mode="Terminate", certificateRefs=[dict(name="hosting-panel-tls")]),
         allowedRoutes=http["allowedRoutes"])
-    external = gateway("external", [http, https])
+    external = gateway("external", [http, https] if c["panelHostname"] else [http])
     external["spec"]["allowedListeners"] = {"namespaces":{"from":"All"}}
-    external["metadata"]["annotations"] = {"cert-manager.io/cluster-issuer":"lets-encrypt"}
+    if c["panelHostname"]:
+        external["metadata"]["annotations"] = {"cert-manager.io/cluster-issuer":"lets-encrypt"}
     # Internal gateway uses a ClusterIP proxy, selected via its own GatewayClass.
     internal = gateway("internal", [http])
     internal["spec"]["gatewayClassName"] = "eg-internal"
@@ -115,8 +116,8 @@ def generate(c, base):
     values = dict(backend="Kubernetes",web=dict(image=dict(repository=c["panelImage"],tag=c["panelTag"],pullPolicy="IfNotPresent")),
         bootstrap=dict(existingSecret="hostingpanel-bootstrap"),sqlite=dict(storageClassName="zfs-iscsi"),
         kubernetesHosting=dict(enabled=True,nfsServer=host,nfsPath="/srv/hosting/home",apacheConfigPath="/srv/hosting/apache",
-            gatewayName="external",gatewayNamespace=namespace,panelRoute=dict(enabled=True,hostname=c["panelHostname"],listener="https")),
-        powerDns=dict(enabled=True,storageClassName="zfs-iscsi",webIp=c["webIp"],ns1=c["ns1"],ns2=c["ns2"]),
+            gatewayName="external",gatewayNamespace=namespace,panelRoute=dict(enabled=bool(c["panelHostname"]),hostname=c["panelHostname"],listener="https")),
+        powerDns=dict(enabled=True,storageClassName="zfs-iscsi",webIp=c["webIp"],ns1=c["ns1"],ns2=c["ns2"],autoCreateZones=bool(c["ns1"] and c["ns2"])),
         certManager=dict(enabled=True),mariadb=dict(enabled=True,storageClassName="zfs-iscsi",existingSecret="hostingpanel-mariadb",provisioningSecret="hostingpanel-mariadb-provisioning"))
     write(base/"hosting-values.json",values)
 
