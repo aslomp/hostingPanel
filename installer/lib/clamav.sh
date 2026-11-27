@@ -1,10 +1,9 @@
 install_clamav() {
-  apt-get install -y clamav clamav-daemon clamav-freshclam clamdscan
+  apt-get install -y clamav clamav-freshclam
   install -d -m 0755 /usr/local/lib/hostingpanel
   install -m 0755 "$here/clam-on-demand.sh" /usr/local/lib/hostingpanel/clam-on-demand.sh
   ln -sfn /usr/local/lib/hostingpanel/clam-on-demand.sh /usr/local/sbin/clam-on-demand
   systemctl enable --now clamav-freshclam.service
-  systemctl enable clamav-daemon.service
   # FreshClam may need time to retrieve the initial database.
   local attempt
   for ((attempt=0; attempt<120; attempt++)); do
@@ -13,17 +12,11 @@ install_clamav() {
     sleep 5
   done
   ((attempt<120)) || die "ClamAV signature database unavailable; inspect clamav-freshclam logs"
-  systemctl start clamav-daemon.service
-  for ((attempt=0; attempt<60; attempt++)); do
-    if clamdscan --ping 1 >/dev/null 2>&1; then break; fi
-    sleep 5
-  done
-  ((attempt<60)) || die "ClamAV daemon not ready"
   cat > /etc/systemd/system/hosting-clamav-scan.service <<'EOF'
 [Unit]
 Description=HostingPanel on-demand scan of all hosting account directories
-After=clamav-daemon.service zfs-mount.service
-Requires=clamav-daemon.service
+After=clamav-freshclam.service zfs-mount.service
+Wants=clamav-freshclam.service
 RequiresMountsFor=/srv/hosting/home
 [Service]
 Type=oneshot
@@ -36,6 +29,7 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadOnlyPaths=/srv/hosting/home
+ReadWritePaths=/run/lock
 TimeoutStartSec=12h
 EOF
   cat > /etc/systemd/system/hosting-clamav-scan.timer <<'EOF'
