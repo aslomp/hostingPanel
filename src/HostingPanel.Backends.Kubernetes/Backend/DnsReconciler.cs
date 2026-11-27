@@ -60,6 +60,41 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
             catch (Exception ex) when (!ct.IsCancellationRequested)
             { logger.LogWarning(ex, "Deferred DNS provisioning failed for operation {Id}", id); }
         }
+        var mailJobs = await db.ReconciliationOperations.AsNoTracking()
+            .Where(x => x.ResourceType == "mail-dns" && x.Status == "pending")
+            .Select(x => x.Id).ToListAsync(ct);
+        foreach (var id in mailJobs)
+        {
+            using var mailScope = scopes.CreateScope();
+            var mailDb = mailScope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
+            var job = await mailDb.ReconciliationOperations.SingleOrDefaultAsync(x => x.Id == id && x.Status == "pending", ct);
+            if (job is null) continue;
+            try
+            {
+                var stage = mailScope.ServiceProvider.GetRequiredService<StalwartDnsProvisioning>();
+                job.LastError = await stage.StageAsync(job.ResourceId, ct);
+                if (job.LastError is null)
+                {
+                    job.Status = "completed";
+                    job.CompletedAt = DateTimeOffset.UtcNow;
+                }
+                else job.Attempts++;
+                await mailDb.SaveChangesAsync(ct);
+                notifications.Publish();
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                mailDb.ChangeTracker.Clear();
+                var failed = await mailDb.ReconciliationOperations.SingleOrDefaultAsync(x => x.Id == id && x.Status == "pending", ct);
+                if (failed is not null)
+                {
+                    failed.Attempts++;
+                    failed.LastError = "MAIL_DNS_RECONCILIATION_FAILED";
+                    await mailDb.SaveChangesAsync(ct);
+                }
+                logger.LogWarning("Mail DNS reconciliation failed for operation {Id}: {ErrorType}", id, ex.GetType().Name);
+            }
+        }
         var pending = await db.ReconciliationOperations.Where(x => x.ResourceType == "dns-zone" && x.Status == "pending").ToListAsync(ct);
         foreach (var group in pending.GroupBy(x => x.ResourceId))
         {
