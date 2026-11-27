@@ -87,5 +87,47 @@ EOF
   python3 "$here/generate.py" "$config" generate
   targetcli saveconfig
   systemctl enable rtslib-fb-targetctl.service || die "Cannot enable persistent iSCSI targets"
+  install_snapshot_retention "$pool"
   echo "Storage ready: $host:/srv/hosting/home and $host:/srv/hosting/apache"
+}
+
+install_snapshot_retention() {
+  local pool=$1 tier schedule
+  install -d -m 0755 /usr/local/lib/hostingpanel
+  install -m 0755 "$here/zfs-retention.py" /usr/local/lib/hostingpanel/zfs-retention.py
+  for tier in hourly daily weekly; do
+    case "$tier" in
+      hourly) schedule="*-*-* *:00:00 UTC" ;;
+      daily) schedule="*-*-* 00:00:00 UTC" ;;
+      weekly) schedule="Sun *-*-* 00:00:00 UTC" ;;
+    esac
+    cat > "/etc/systemd/system/hosting-zfs-$tier.service" <<EOF
+[Unit]
+Description=HostingPanel $tier ZFS snapshots and retention
+After=zfs-mount.service
+Requires=zfs-mount.service
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/hostingpanel/zfs-retention.py $pool/hosting $tier
+UMask=0077
+EOF
+    cat > "/etc/systemd/system/hosting-zfs-$tier.timer" <<EOF
+[Unit]
+Description=HostingPanel $tier ZFS snapshot schedule
+[Timer]
+OnCalendar=$schedule
+Persistent=true
+AccuracySec=1s
+[Install]
+WantedBy=timers.target
+EOF
+  done
+  systemctl daemon-reload
+  for tier in hourly daily weekly; do
+    systemctl enable --now "hosting-zfs-$tier.timer"
+  done
+  systemctl start hosting-zfs-hourly.service hosting-zfs-daily.service
+  if [[ $(date -u +%u) == 7 ]]; then
+    systemctl start hosting-zfs-weekly.service
+  fi
 }
