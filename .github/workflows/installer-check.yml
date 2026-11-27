@@ -19,7 +19,8 @@ jobs:
           for script in installer/*.sh; do bash -n "$script"; done
           for script in installer/lib/*.sh; do bash -n "$script"; done
           bash installer/install.sh --help
-          python3 -m py_compile installer/generate.py
+          python3 -m py_compile installer/generate.py installer/zfs-retention.py
+          python3 -m unittest discover -s installer -p 'test_*.py'
           tmp=$(mktemp -d)
           python3 -c 'import json,sys; c=json.load(open("installer/cluster.example.json")); c["acmeEmail"]="test@invalid.test"; json.dump(c,open(sys.argv[1],"w"))' "$tmp/cluster.json"
           printf test-key > "$tmp/csi-key"
