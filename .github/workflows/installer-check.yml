@@ -63,6 +63,10 @@ jobs:
           assert gateway["spec"]["listeners"][1]["tls"]["certificateRefs"][0]["name"] == tls[1]["spec"]["secretName"]
           for protocol in ("nfs", "iscsi"):
               assert json.loads((p/("csi-"+protocol+".json")).read_text())["controller"] == {"hostNetwork": True, "dnsPolicy": "ClusterFirstWithHostNet"}
-          assert json.loads((p/"hosting-values.json").read_text())["sqlite"]["storageClassName"] == "zfs-iscsi"
+          values = json.loads((p/"hosting-values.json").read_text())
+          cfg = json.loads((p/"cluster.json").read_text())
+          assert values["powerDns"]["serviceType"] == "ClusterIP"
+          assert values["powerDns"]["externalIPs"] == [cfg["clusterHost"]]
+          assert values["sqlite"]["storageClassName"] == "zfs-iscsi"
           assert json.loads((p/"csi-iscsi.json").read_text())["driver"]["config"]["iscsi"]["shareStrategyTargetCli"]["tpg"]["attributes"]["authentication"] == 1
           PY

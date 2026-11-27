@@ -33,6 +33,8 @@ case "$ID:$VERSION_ID" in
 esac
 [[ $(uname -m) == x86_64 || $(uname -m) == aarch64 ]] || die "Unsupported CPU architecture"
 trap 'printf "Installation failed at %s:%s (exit %s). Inspect systemd and Kubernetes logs; no automatic deletion is performed.\\n" "${BASH_SOURCE[0]}" "$LINENO" "$?" >&2' ERR
+source "$here/lib/preflight.sh"
+check_host_capacity "$mode"
 command -v python3 >/dev/null && command -v ip >/dev/null || { apt-get update; apt-get install -y python3 iproute2; }
 if [[ -z "$config" ]]; then
   default_config=true

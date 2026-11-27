@@ -86,6 +86,9 @@ metadata:
   name: {{ $name }}-powerdns
 spec:
   type: {{ .Values.powerDns.serviceType }}
+  {{- with .Values.powerDns.externalIPs }}
+  externalIPs: {{ toJson . }}
+  {{- end }}
   selector: {app.kubernetes.io/instance: {{ .Release.Name | quote }}, app.kubernetes.io/component: powerdns}
   ports:
     - {name: dns-tcp, port: 53, targetPort: dns-tcp, protocol: TCP}
