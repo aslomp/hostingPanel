@@ -2,7 +2,7 @@ using HostingPanel.Api.Persistence;
 
 namespace HostingPanel.Api;
 
-internal interface IKubernetesSettingsReader
+public interface IKubernetesSettingsReader
 {
     Task<KubernetesBackendSettings> GetEffectiveSettingsAsync(CancellationToken ct);
 }
