@@ -125,7 +125,7 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
                 else
                 {
                     var rows = await db.DnsRecords.AsNoTracking().Where(x => x.ZoneId == zone.Id).ToListAsync(ct);
-                    var delegated = zone.DomainId.HasValue && !string.IsNullOrWhiteSpace(config["Stalwart:DkimDnsServerId"])
+                    var delegated = zone.DomainId.HasValue && StalwartDnsProviderRegistration.Enabled(config)
                         && await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "mail-dns" && x.ResourceId == zone.DomainId.Value, ct);
                     await provider.ProvisionAsync(name, rows.Select(x => new DnsRecord(x.Type, x.Name, x.Value, x.Ttl.ToString())).ToArray(), ct, delegated);
                 }
