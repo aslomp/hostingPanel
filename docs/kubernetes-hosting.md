@@ -49,7 +49,7 @@ Enable `stalwart.api.enabled`, set `stalwart.api.baseUrl` to an HTTPS origin rea
 
 All endpoints require panel Basic authentication and a visible, non-suspended hosted domain. The first mailbox creation creates the Stalwart domain if absent. Existing matching mail domains are treated as managed; use a dedicated instance and verify ownership before enabling. No local mailbox mirror is maintained.
 
-The official legacy DirectAdmin endpoint is `/CMD_API_POP`. No new /hosting or /api routes are introduced; the pinned Swagger is unchanged.
+The official legacy DirectAdmin endpoint is `/CMD_API_POP`. The pinned modern DirectAdmin Swagger and its routes remain unchanged.
 
 | Method | Action | Form / query fields |
 | --- | --- | --- |
@@ -61,3 +61,12 @@ The official legacy DirectAdmin endpoint is `/CMD_API_POP`. No new /hosting or /
 Responses are URL-encoded legacy fields. Unsupported actions (including full_list, detailed quota, multiple deletion, unlimited quotas, send limits and rename) fail explicitly. State-changing GET requests are rejected.
 
 Password reset, aliases, forwarding, aggregate hosting package limits, mail DNS, suspension propagation and domain deletion cleanup are pending. Mutations are administrator-only until aggregate resource limits and lifecycle integration have been completed; resellers and users can only list accounts for their visible domains. An upstream failure may leave a newly created mail domain; no automatic destructive rollback is attempted. DirectAdmin forwards CMD_API_POP to its upstream with the caller's credentials.
+
+The additional provider-neutral API uses the same IMailProvider and authorization, with JSON responses and quotaBytes expressed in bytes for both create and update. Its separate OpenAPI contract is available at /openapi/hosting-mail.json and in the Swagger UI selector.
+
+| Method | Path |
+| --- | --- |
+| GET, POST | /hosting/mail/{domain}/accounts |
+| PATCH, DELETE | /hosting/mail/{domain}/accounts/{name} |
+
+DELETE requires confirmation=name@domain. The additional API returns 501 on the DirectAdmin backend until a typed mail adapter is implemented; CMD_API_POP still forwards to DirectAdmin. No new modern DirectAdmin /api operations are claimed.
