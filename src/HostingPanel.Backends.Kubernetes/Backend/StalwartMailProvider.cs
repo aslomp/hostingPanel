@@ -169,8 +169,18 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
             var account = (await Accounts(client, domainId, ct)).SingleOrDefault(a => Field(a, "name") == name);
             if (account.ValueKind == JsonValueKind.Undefined || Field(account, "id") is not { } id) return new(404, "MAIL_ACCOUNT_NOT_FOUND");
             var patch = new Dictionary<string, object>();
-            // Password rotation is intentionally deferred until credential indexes can be resolved safely.
-            if (input.Password is not null) return new(501, "MAIL_PASSWORD_RESET_NOT_SUPPORTED");
+            if (input.Password is not null)
+            {
+                var response = await Call(client, "x:Account/get", new { ids = new[] { id }, properties = new[] { "id", "credentials" } }, ct);
+                var credentials = response.GetProperty("list").EnumerateArray().Single();
+                if (Field(credentials, "id") != id) return new(502, "MAIL_INVENTORY_UNVERIFIED");
+                if (!credentials.TryGetProperty("credentials", out var entries) || entries.ValueKind != JsonValueKind.Object)
+                    return new(409, "MAIL_PASSWORD_CREDENTIAL_UNAVAILABLE");
+                var passwords = entries.EnumerateObject().Where(x => Field(x.Value, "@type") == "Password").ToArray();
+                if (passwords.Length != 1 || !passwords[0].Name.All(char.IsAsciiDigit))
+                    return new(409, "MAIL_PASSWORD_CREDENTIAL_UNAVAILABLE");
+                patch["credentials/" + passwords[0].Name + "/secret"] = input.Password;
+            }
             if (input.QuotaBytes is long quota) patch["quotas/maxDiskQuota"] = quota;
             var result = await Call(client, "x:Account/set", new { update = new Dictionary<string, object> { [id] = patch } }, ct);
             return Updated(result, id) ? new(200) : new(409, "MAIL_UPDATE_FAILED");
