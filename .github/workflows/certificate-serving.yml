@@ -1,0 +1,60 @@
+name: Certificate issuance and HTTPS convergence
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  serving:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: helm/kind-action@v1.12.0
+      - name: Install installer-pinned controllers
+        run: |
+          set -euo pipefail
+          envoy=$(jq -r .envoyVersion installer/cluster.example.json)
+          cert=$(jq -r .certManagerVersion installer/cluster.example.json)
+          helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm -n envoy-gateway-system --create-namespace --version "$envoy" --wait --timeout 5m
+          helm repo add jetstack https://charts.jetstack.io
+          helm repo update
+          helm upgrade --install cert-manager jetstack/cert-manager -n cert-manager --create-namespace --version "$cert" --set crds.enabled=true --set config.enableGatewayAPI=true --wait --timeout 5m
+          kubectl wait --for=condition=Established crd/listenersets.gateway.networking.k8s.io --timeout=120s
+      - name: Bootstrap isolated CA and gateway
+        run: |
+          set -euo pipefail
+          kubectl create namespace certificate-serving-test
+          kubectl apply -f tests/fixtures/certificate-serving.yaml
+          kubectl -n certificate-serving-test wait --for=condition=Ready certificate/root --timeout=180s
+          kubectl -n certificate-serving-test wait --for=condition=Ready issuer/test-ca --timeout=120s
+          kubectl -n certificate-serving-test wait --for=condition=Programmed gateway/external --timeout=180s
+          kubectl -n certificate-serving-test rollout status deployment/apache-baseline --timeout=120s
+          kubectl -n certificate-serving-test get secret test-root-ca -o jsonpath='{.data.tls\.crt}' | base64 -d > "$RUNNER_TEMP/test-ca.pem"
+      - name: Reconcile actual certificates and verify HTTPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The HTTPS service port appears after the reconciler adds the first ListenerSet.
+          # Reconnect port-forward until the dynamically generated service exposes it.
+          (
+            while true; do
+              svc=$(kubectl -n envoy-gateway-system get svc -l gateway.envoyproxy.io/owning-gateway-name=external,gateway.envoyproxy.io/owning-gateway-namespace=certificate-serving-test -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+              if [[ -n "$svc" ]]; then
+                kubectl -n envoy-gateway-system port-forward "svc/$svc" 18443:443 || true
+              fi
+              sleep 2
+            done
+          ) > "$RUNNER_TEMP/cert-forward.log" 2>&1 &
+          forward=$!
+          trap 'kill "$forward" 2>/dev/null || true; cat "$RUNNER_TEMP/cert-forward.log"' EXIT
+          TEST_CA_CERT="$RUNNER_TEMP/test-ca.pem" dotnet run --project tests/HostingPanel.ContractTests -c Release -- --certificate-serving-integration
+      - name: Diagnostics
+        if: failure()
+        run: |
+          kubectl -n certificate-serving-test get certificate,certificaterequest,issuer,gateway,listenerset,httproute -o yaml || true
+          kubectl -n envoy-gateway-system get pods,svc -o wide || true

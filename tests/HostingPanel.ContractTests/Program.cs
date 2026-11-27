@@ -4,6 +4,12 @@ using HostingPanel.Api.Services;
 using System.Net.Http.Headers;
 using System.Text;
 
+if (args.Contains("--certificate-serving-integration"))
+{
+    await CertificateServingIntegrationTests.RunAsync();
+    return 0;
+}
+
 if (args.Contains("--certificate-watch-integration"))
 {
     await CertificateWatchIntegrationTests.RunAsync();
