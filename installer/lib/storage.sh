@@ -56,7 +56,8 @@ install_storage() {
   [[ -f "$base/csi-key" ]] || ssh-keygen -q -t rsa -b 3072 -m PEM -N '' -f "$base/csi-key"
   id hosting-csi >/dev/null 2>&1 || useradd -m -s /bin/bash hosting-csi
   install -d -m 0700 -o hosting-csi -g hosting-csi /home/hosting-csi/.ssh
-  printf 'restrict,from="%s" %s\n' "$network" "$(ssh-keygen -y -f "$base/csi-key")" > /home/hosting-csi/.ssh/authorized_keys
+  # targetcli requires an SSH pseudo-terminal; retain all other key restrictions.
+  printf 'restrict,pty,from="%s" %s\n' "$network" "$(ssh-keygen -y -f "$base/csi-key")" > /home/hosting-csi/.ssh/authorized_keys
   chown hosting-csi:hosting-csi /home/hosting-csi/.ssh/authorized_keys
   chmod 600 /home/hosting-csi/.ssh/authorized_keys
   printf 'hosting-csi ALL=(root) NOPASSWD: ALL\n' > /etc/sudoers.d/hosting-csi
