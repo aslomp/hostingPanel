@@ -35,6 +35,7 @@ install_platform() {
   if ! k3s kubectl wait --for=condition=Ready clusterissuer/lets-encrypt --timeout=15s; then
     echo "ACME issuer not ready; initial panel TLS does not depend on ACME" >&2
   fi
+  bash "$here/lib/runtime-smoke.sh"
   bash "$here/lib/storage-smoke.sh"
   k3s kubectl create namespace hosting --dry-run=client -o yaml | k3s kubectl apply -f -
   ensure_secret hostingpanel-bootstrap username admin password

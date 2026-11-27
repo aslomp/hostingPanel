@@ -35,6 +35,13 @@ jobs:
           for script in installer/*.sh; do bash -n "$script"; done
           for script in installer/lib/*.sh; do bash -n "$script"; done
           bash installer/install.sh --help
+          source installer/lib/apparmor-compat.sh
+          needs_apparmor_compat ubuntu 26.04 7.0.0-44-generic v1.35.10+k3s1
+          ! needs_apparmor_compat ubuntu 24.04 7.0.0-44-generic v1.35.10+k3s1
+          ! needs_apparmor_compat ubuntu 26.04 7.0.0-45-generic v1.35.10+k3s1
+          ! needs_apparmor_compat ubuntu 26.04 7.0.0-44-generic v1.35.11+k3s1
+          sudo apt-get install -y apparmor
+          sudo apparmor_parser -Q -K installer/compat/containerd-2.2.10-k3s1.apparmor
           # Exercise the actual wipefs CLI on a disposable regular file, without writing signatures.
           image=$(mktemp)
           truncate -s 16M "$image"
