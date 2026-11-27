@@ -50,15 +50,15 @@ public sealed class KubernetesDnsService(HostingPanelDbContext db, KubernetesIde
         var result = records.Select(r => new DnsRecord(r.Type, r.Name, r.Value, r.Ttl.ToString())).ToList();
         if (await DelegatedAsync(zone, ct))
         {
-            if (powerDns is null) return new(503, null, "DKIM_DNS_UNAVAILABLE");
+            if (powerDns is null) return new(503, null, "MAIL_DNS_UNAVAILABLE");
             try
             {
-                var current = await powerDns.ReadDkimAsync(zone.Name, ct);
-                result.RemoveAll(r => StalwartDnsProvisioning.IsDkim(zone.Name, r.Name, r.Type));
+                var current = await powerDns.ReadManagedMailAsync(zone.Name, ct);
+                result.RemoveAll(r => MailDnsOwnership.Reserved(zone.Name, r.Name, r.Type));
                 result.AddRange(current);
             }
             catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or InvalidOperationException or JsonException or OperationCanceledException or KeyNotFoundException)
-            { return new(503, null, "DKIM_DNS_UNAVAILABLE"); }
+            { return new(503, null, "MAIL_DNS_UNAVAILABLE"); }
         }
         return new(200, result.OrderBy(x => x.Name).ThenBy(x => x.Type).ToArray(), null);
     }
@@ -80,10 +80,35 @@ public sealed class KubernetesDnsService(HostingPanelDbContext db, KubernetesIde
         var zone = await db.DnsZones.FirstOrDefaultAsync(x => x.Name == domain.ToLowerInvariant(), ct);
         if (zone is null) return new(404, "ZONE_NOT_FOUND");
         if (!ids.Contains(zone.OwnerId)) return new(403, "ACCESS_DENIED");
-        if (await DelegatedAsync(zone, ct) &&
-            (StalwartDnsProvisioning.IsDkim(zone.Name, change.Record.Name, change.Record.Type)
-             || change.Previous is not null && StalwartDnsProvisioning.IsDkim(zone.Name, change.Previous.Name, change.Previous.Type)))
-            return new(409, "DKIM_MANAGED_BY_STALWART");
+        // Explicit edits of live shared mail RRsets are allowed, including SPF/DKIM.
+        // Persist the command, not a stale copy of the authoritative RRset.
+        var sharedNew = MailDnsOwnership.Reserved(zone.Name, change.Record.Name, change.Record.Type);
+        var sharedOld = change.Previous is not null && MailDnsOwnership.Reserved(zone.Name, change.Previous.Name, change.Previous.Type);
+        if (await DelegatedAsync(zone, ct) && (sharedNew || sharedOld))
+        {
+            if (change.Action == "edit" && sharedNew != sharedOld)
+                return new(400, "DNS_RECORD_TYPE_CHANGE_REQUIRES_DELETE_AND_ADD");
+            if (powerDns is null) return new(503, "MAIL_DNS_UNAVAILABLE");
+            if (change.Action != "add")
+            {
+                try
+                {
+                    var current = await powerDns.ReadManagedMailAsync(zone.Name, ct);
+                    if (!current.Any(r => PowerDnsClient.SameRecord(zone.Name, r, change.Previous!)))
+                        return new(404, "DNS_RECORD_NOT_FOUND");
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or InvalidOperationException or JsonException or OperationCanceledException or KeyNotFoundException)
+                { return new(503, "MAIL_DNS_UNAVAILABLE"); }
+            }
+            var local = await db.DnsRecords.Where(x => x.ZoneId == zone.Id && (x.Type == "TXT" || x.Type == "MX")).ToListAsync(ct);
+            if (change.Action != "add")
+                db.DnsRecords.RemoveRange(local.Where(x => PowerDnsClient.SameRecord(zone.Name,
+                    new DnsRecord(x.Type, x.Name, x.Value, x.Ttl.ToString()), change.Previous!)));
+            operations.Schedule("dns-record", zone.Id, change.Action, new { zone.Name, Change = change });
+            await db.SaveChangesAsync(ct);
+            notifications?.PublishChange(ReconciliationTarget.Dns);
+            return new(202, null);
+        }
         var prev = change.Action == "add" ? null : change.Previous;
         var previous = prev is null ? null : await db.DnsRecords.FirstOrDefaultAsync(x =>
             x.ZoneId == zone.Id && x.Name == prev.Name && x.Type == prev.Type && x.Value == prev.Value, ct);

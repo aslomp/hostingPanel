@@ -795,4 +795,7 @@
   <data name="Mailbox quota (MiB)" xml:space="preserve"><value>Mailbox quota (MiB)</value></data>
   <data name="Enter a positive quota and a password of at least 12 characters for new mailboxes." xml:space="preserve"><value>Enter a positive quota and a password of at least 12 characters for new mailboxes.</value></data>
   <data name="The backend denied this mailbox operation." xml:space="preserve"><value>The backend denied this mailbox operation.</value></data>
+  <data name="Automatic mail DNS publication" xml:space="preserve"><value>Automatic mail DNS publication</value></data>
+  <data name="Automatic DKIM rotation" xml:space="preserve"><value>Automatic DKIM rotation</value></data>
+  <data name="Without automatic DNS publication, Stalwart cannot rotate DKIM keys automatically." xml:space="preserve"><value>Without automatic DNS publication, Stalwart cannot rotate DKIM keys automatically.</value></data>
 </root>

@@ -93,6 +93,8 @@ stalwart:
   api:
     enabled: false
     autoProvisionDns: true
+    # Optional import of panel-owned mail records; native DKIM does not require this.
+    periodicDnsSync: false
     dnsSyncMinutes: 60
     autoRegisterDnsProvider: true
     # ID of an existing Stalwart DnsServer configured for this PowerDNS service.

@@ -90,6 +90,7 @@ public static class KubernetesRegistration
             http.Timeout = TimeSpan.FromSeconds(15);
         });
         services.AddHostedService<DnsReconciler>();
+        services.AddHostedService<StalwartDnsSyncScheduler>();
     }
 
         return services;

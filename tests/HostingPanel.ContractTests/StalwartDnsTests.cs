@@ -1,11 +1,34 @@
 using HostingPanel.Api;
+using HostingPanel.Providers.PowerDNS;
 using HostingPanel.Api.Persistence;
 
 internal static class StalwartDnsTests
 {
     internal static void Run()
     {
+        Check(!DnsRetryPolicy.RequiresRetry(null));
+        Check(!DnsRetryPolicy.RequiresRetry("NO_ASSIGNED_IP"));
+        Check(!DnsRetryPolicy.RequiresRetry("DNS_NAMESERVERS_NOT_CONFIGURED"));
+        Check(!DnsRetryPolicy.RequiresRetry("MAIL_DOMAIN_SUSPENDED"));
+        Check(!DnsRetryPolicy.RequiresRetry("MAIL_DNS_ZONE_NOT_READY"));
+        Check(!DnsRetryPolicy.RequiresRetry("MAIL_DNS_RECORD_CONFLICT"));
+        Check(DnsRetryPolicy.RequiresRetry("MAIL_DNS_NOT_READY"));
+        Check(DnsRetryPolicy.RequiresRetry("MAIL_DNS_RECONCILIATION_FAILED"));
+        Check(MailDnsPolicy.Read("{}") == new MailDnsPolicy(true, true));
+        Check(MailDnsPolicy.Read("""{"mailAutoPublish":false,"mailAutoRotate":false}""") == new MailDnsPolicy(false, false));
+        Check(MailDnsPolicy.Read("""{"mailAutoPublish":false}""") == new MailDnsPolicy(false, true));
+        Check(MailDnsPolicy.Read("""{"mailAutoRotate":false}""") == new MailDnsPolicy(true, false));
         const string domain = "example.test";
+        Check(MailDnsOwnership.PublishRecords.SetEquals(["mx", "spf", "dkim", "dmarc"]));
+        Check(MailDnsOwnership.Reserved(domain, "@", "MX"));
+        Check(MailDnsOwnership.Reserved(domain, "mail", "MX"));
+        Check(MailDnsOwnership.Reserved(domain, domain + ".", "TXT"));
+        Check(MailDnsOwnership.Reserved(domain, "mail._domainkey", "TXT"));
+        Check(MailDnsOwnership.Reserved(domain, "_dmarc", "TXT"));
+        Check(!MailDnsOwnership.Reserved(domain, "@", "A"));
+        Check(!MailDnsOwnership.Reserved(domain, "@", "NS"));
+        Check(!MailDnsOwnership.Reserved(domain, "www", "CNAME"));
+        Check(PowerDnsClient.SameRecord(domain, new HostingPanel.Api.Adapters.DnsRecord("TXT", "@", "verification", "300"), new HostingPanel.Api.Adapters.DnsRecord("TXT", domain + ".", "\"verification\"", "300")));
         const string source = """
             $ORIGIN example.test.
             @ 3600 IN MX 10 mail.example.net.

@@ -14,7 +14,7 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         await ReconciliationLoop.RunAsync(notifications.Reader(ReconciliationTarget.Dns),
-            ReconcileAsync, TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(5), logger, ct);
+            ReconcileAsync, TimeSpan.FromSeconds(5), Timeout.InfiniteTimeSpan, logger, ct);
     }
 
     private async Task<bool> ReconcileAsync(CancellationToken ct)
@@ -25,6 +25,7 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
         var provider = new PowerDnsProvider(backend, scope.ServiceProvider.GetRequiredService<PowerDnsClient>());
         // Stage deferred zone creation from durable domain requests. A new scope
         // per request prevents failed work from leaking tracked changes into other domains.
+        var retry = false;
         var deferred = await db.ReconciliationOperations.AsNoTracking().Where(x => x.ResourceType == "domain-dns" && x.Status == "pending").Select(x => x.Id).ToListAsync(ct);
         foreach (var id in deferred)
         {
@@ -38,6 +39,7 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
                 if (operation is null) continue;
                 var domain = await retryDb.Domains.SingleOrDefaultAsync(x => x.Id == operation.ResourceId, ct);
                 var error = domain is null ? null : await retryBackend.StageDomainDnsAsync(domain, ct, retry: true);
+                if (DnsRetryPolicy.RequiresRetry(error)) retry = true;
                 var changed = operation.LastError != error;
                 if (error is null)
                 {
@@ -54,22 +56,9 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
                 }
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
-            { logger.LogWarning(ex, "Deferred DNS provisioning failed for operation {Id}", id); }
+            { retry = true; logger.LogWarning(ex, "Deferred DNS provisioning failed for operation {Id}", id); }
         }
         var config = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
-        if (config.GetValue<bool>("Stalwart:Enabled") && config.GetValue("Stalwart:AutoProvisionDns", true))
-        {
-            var cutoff = DateTimeOffset.UtcNow.AddMinutes(-Math.Clamp(config.GetValue("Stalwart:DnsSyncMinutes", 60), 5, 1440));
-            var history = await db.ReconciliationOperations.AsNoTracking().Where(x => x.ResourceType == "mail-dns").ToListAsync(ct);
-            var active = await db.Domains.AsNoTracking().Where(x => !x.Suspended).Select(x => new { x.Id, x.Name }).ToListAsync(ct);
-            foreach (var domain in active)
-            {
-                var jobs = history.Where(x => x.ResourceId == domain.Id).ToArray();
-                if (jobs.Length == 0 || jobs.Any(x => x.Status == "pending") || jobs.Any(x => x.CreatedAt >= cutoff)) continue;
-                scope.ServiceProvider.GetRequiredService<KubernetesOperationQueue>().Schedule("mail-dns", domain.Id, "update", new { domain.Name });
-            }
-            await db.SaveChangesAsync(ct);
-        }
         var mailJobs = await db.ReconciliationOperations.AsNoTracking()
             .Where(x => x.ResourceType == "mail-dns" && x.Status == "pending")
             .Select(x => x.Id).ToListAsync(ct);
@@ -82,18 +71,24 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
             try
             {
                 var stage = mailScope.ServiceProvider.GetRequiredService<StalwartDnsProvisioning>();
+                var previousError = job.LastError;
                 job.LastError = await stage.StageAsync(job.ResourceId, ct);
                 if (job.LastError is null)
                 {
                     job.Status = "completed";
                     job.CompletedAt = DateTimeOffset.UtcNow;
                 }
-                else job.Attempts++;
+                else
+                {
+                    if (DnsRetryPolicy.RequiresRetry(job.LastError)) retry = true;
+                    if (DnsRetryPolicy.RequiresRetry(job.LastError) || previousError != job.LastError) job.Attempts++;
+                }
                 await mailDb.SaveChangesAsync(ct);
-                notifications.Publish();
+                if (job.LastError is null || previousError != job.LastError) notifications.Publish();
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
+                retry = true;
                 mailDb.ChangeTracker.Clear();
                 var failed = await mailDb.ReconciliationOperations.SingleOrDefaultAsync(x => x.Id == id && x.Status == "pending", ct);
                 if (failed is not null)
@@ -133,6 +128,7 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
+                retry = true;
                 foreach (var row in group) { row.Attempts++; row.LastError = "DNS reconciliation failed; see application log."; }
                 logger.LogWarning(ex, "Could not reconcile DNS zone {Id}", group.Key);
             }
@@ -140,7 +136,45 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
             notifications.Publish();
             if (group.All(row => row.Status == "completed")) notifications.Signal(ReconciliationTarget.Website);
         }
-        return await db.ReconciliationOperations.AsNoTracking().AnyAsync(x => x.Status == "pending" &&
-            (x.ResourceType == "dns-zone" || x.ResourceType == "domain-dns" || x.ResourceType == "mail-dns"), ct);
+        // Execute explicit shared-record commands in chronological order, never
+        // coalesce them into a desired-state replacement of the whole zone.
+        var edits = await db.ReconciliationOperations.Where(x => x.ResourceType == "dns-record" && x.Status == "pending").ToListAsync(ct);
+        var blockedZones = new HashSet<Guid>();
+        foreach (var edit in edits.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id))
+        {
+            if (blockedZones.Contains(edit.ResourceId)) continue;
+            try
+            {
+                var zone = await db.DnsZones.AsNoTracking().SingleOrDefaultAsync(x => x.Id == edit.ResourceId, ct);
+                if (zone is not null)
+                {
+                    if (await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "dns-zone" &&
+                        x.ResourceId == zone.Id && x.Status == "pending", ct))
+                    {
+                        retry = true;
+                        blockedZones.Add(edit.ResourceId);
+                        continue;
+                    }
+                    using var payload = JsonDocument.Parse(edit.PayloadJson);
+                    var change = payload.RootElement.GetProperty("Change").Deserialize<DnsChange>()
+                        ?? throw new InvalidOperationException("Missing DNS change.");
+                    await scope.ServiceProvider.GetRequiredService<PowerDnsClient>().ChangeSharedRecordAsync(zone.Name, change, ct);
+                }
+                edit.Status = "completed";
+                edit.CompletedAt = DateTimeOffset.UtcNow;
+                edit.LastError = null;
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                retry = true;
+                blockedZones.Add(edit.ResourceId);
+                edit.Attempts++;
+                edit.LastError = "DNS record publication failed; see application log.";
+                logger.LogWarning(ex, "DNS record publication failed for operation {Id}", edit.Id);
+            }
+            await db.SaveChangesAsync(ct);
+            notifications.Publish();
+        }
+        return retry;
     }
 }

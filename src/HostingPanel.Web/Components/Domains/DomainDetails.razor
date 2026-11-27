@@ -68,6 +68,16 @@ else
             <label for="domainQuota">@L["Disk space (MiB or unlimited)"]</label>
             <MudTextField T="string" @bind-Value="quota" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" InputId="domainQuota" />
             <MudButton Variant="Variant.Outlined" Color="Color.Default" Disabled="@saving" OnClick="SaveQuota">@L["Save quota"]</MudButton>
+            @if (fields?.ContainsKey("mailAutoPublish") == true && fields.ContainsKey("mailAutoRotate"))
+            {
+                <label for="mailPublish">@L["Automatic mail DNS publication"]</label>
+                <MudSelect T="string" @bind-Value="mailPublish" InputId="mailPublish" Variant="Variant.Outlined"><MudSelectItem T="string" Value='@("ON")'>@L["Enabled"]</MudSelectItem><MudSelectItem T="string" Value='@("OFF")'>@L["Disabled"]</MudSelectItem></MudSelect>
+                <MudButton Disabled="@saving" OnClick="SaveMailPublish">@L["Save"]</MudButton>
+                <MudText Typo="Typo.caption">@L["Without automatic DNS publication, Stalwart cannot rotate DKIM keys automatically."]</MudText>
+                <label for="mailRotate">@L["Automatic DKIM rotation"]</label>
+                <MudSelect T="string" @bind-Value="mailRotate" InputId="mailRotate" Variant="Variant.Outlined"><MudSelectItem T="string" Value='@("ON")'>@L["Enabled"]</MudSelectItem><MudSelectItem T="string" Value='@("OFF")'>@L["Disabled"]</MudSelectItem></MudSelect>
+                <MudButton Disabled="@saving" OnClick="SaveMailRotate">@L["Save"]</MudButton>
+            }
             @if (saving) { <p role="status">@L["Saving change…"]</p> }
             @if (saveMessage is not null) { <p role="status">@saveMessage</p> }
         </MudPaper></MudItem>
@@ -95,6 +105,7 @@ else
     private bool saving;
     private string php = "OFF", ssl = "OFF", cgi = "OFF";
     private string bandwidth = "", quota = "";
+    private string mailPublish = "ON", mailRotate = "ON";
 
     private bool disposed;
     protected override void OnInitialized()
@@ -174,6 +185,8 @@ else
                 cgi = Get("cgi");
                 bandwidth = Get("bandwidth");
                 quota = Get("quota");
+                mailPublish = Get("mailAutoPublish");
+                mailRotate = Get("mailAutoRotate");
             }, ex => error = ex.Message);
     }
 
@@ -182,6 +195,8 @@ else
             ? (value.Equals("ON", StringComparison.OrdinalIgnoreCase) || value == "1" || value.Equals("true", StringComparison.OrdinalIgnoreCase) ? "ON" : "OFF")
             : value) : "";
 
+    private Task SaveMailPublish() => SaveSetting("mailAutoPublish", mailPublish);
+    private Task SaveMailRotate() => SaveSetting("mailAutoRotate", mailRotate);
     private Task SavePhp() => SaveSetting("php", php);
     private Task SaveSsl() => SaveSetting("ssl", ssl);
     private Task SaveCgi() => SaveSetting("cgi", cgi);

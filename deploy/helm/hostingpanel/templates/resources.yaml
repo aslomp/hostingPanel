@@ -143,6 +143,8 @@ spec:
               value: "true"
             - name: Stalwart__AutoProvisionDns
               value: {{ .Values.stalwart.api.autoProvisionDns | quote }}
+            - name: Stalwart__PeriodicDnsSync
+              value: {{ .Values.stalwart.api.periodicDnsSync | quote }}
             - name: Stalwart__DnsSyncMinutes
               value: {{ .Values.stalwart.api.dnsSyncMinutes | quote }}
             - name: Stalwart__AutoRegisterDnsProvider
