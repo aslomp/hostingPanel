@@ -24,6 +24,8 @@ command -v python3 >/dev/null || { apt-get update; apt-get install -y python3; }
 [[ $(stat -c %u "$config") == 0 ]] || die "Config must be owned by root"
 chmod 600 "$config"
 config=$(realpath "$config")
+[[ $(stat -c %u "$(dirname "$config")") == 0 ]] || die "Config directory must be owned by root"
+[[ $(stat -c %a "$(dirname "$config")") == 700 ]] || die "Config directory must have mode 0700"
 # Parse data, never source user configuration as shell code.
 get() { python3 -c 'import json,sys; v=json.load(open(sys.argv[1])); print(v[sys.argv[2]])' "$config" "$1"; }
 require() { local v; v=$(get "$1"); [[ -n "$v" && "$v" != null ]] || die "Missing $1"; printf '%s' "$v"; }
