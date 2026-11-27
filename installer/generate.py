@@ -130,7 +130,7 @@ def generate(c, base):
         bootstrap=dict(existingSecret="hostingpanel-bootstrap"),sqlite=dict(storageClassName="zfs-iscsi"),
         kubernetesHosting=dict(enabled=True,nfsServer=host,nfsPath="/srv/hosting/home",apacheConfigPath="/srv/hosting/apache",
             gatewayName="external",gatewayNamespace=namespace,panelRoute=dict(enabled=bool(c["panelHostname"]),hostname=c["panelHostname"],listener="https")),
-        powerDns=dict(enabled=True,storageClassName="zfs-iscsi",webIp=c["webIp"],ns1=c["ns1"],ns2=c["ns2"],autoCreateZones=bool(c["ns1"] and c["ns2"] and c["ns1"] != c["ns2"])),
+        powerDns=dict(enabled=True,serviceType="ClusterIP",externalIPs=[c["clusterHost"]],storageClassName="zfs-iscsi",webIp=c["webIp"],ns1=c["ns1"],ns2=c["ns2"],autoCreateZones=bool(c["ns1"] and c["ns2"] and c["ns1"] != c["ns2"])),
         certManager=dict(enabled=True),mariadb=dict(enabled=True,storageClassName="zfs-iscsi",existingSecret="hostingpanel-mariadb",provisioningSecret="hostingpanel-mariadb-provisioning"))
     write(base/"hosting-values.json",values)
 
