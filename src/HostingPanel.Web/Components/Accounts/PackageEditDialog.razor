@@ -1,4 +1,7 @@
 @using HostingPanel.Api.Services
+@using HostingPanel.Api
+@using System.Text.Json
+@inject AccountOperations Accounts
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @inject PackageOperations PackagesApi
@@ -32,6 +35,13 @@
                 <MudSelectItem T="string" Value="@("THREE")">THREE</MudSelectItem>
             </MudSelect>
         }
+        @if (php is not null)
+        {
+            <MudDivider />
+            <h3>@L["PHP-FPM settings"]</h3>
+            <MudCheckBox T="bool" Label="@L["Use package PHP-FPM settings"].Value" @bind-Value="usePhp" Disabled="busy" />
+            @if (usePhp) { <PhpRuntimeFields @bind-Value="php" Images="phpImages" Disabled="busy" /> }
+        }
         @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
     </DialogContent>
     <DialogActions>
@@ -48,7 +58,10 @@
     private bool busy;
     private string? error;
     private string? channel;
-    protected override void OnInitialized()
+    private PhpRuntimeSettings? php;
+    private string[] phpImages = [];
+    private bool usePhp;
+    protected override async Task OnInitializedAsync()
     {
         channel = Session.TicketChannel;
         name = Package?.Name ?? "";
@@ -56,6 +69,17 @@
         foreach (var key in PackageFields.Flags.Concat(Kind == "reseller" ? PackageFields.ResellerFlags : Array.Empty<string>()))
             settings[key] = Package?.Settings.GetValueOrDefault(key)?.ToUpperInvariant() == "ON" ? "ON" : "OFF";
         if (Kind == "reseller") { settings["ips"] = Package?.Settings.GetValueOrDefault("ips") ?? "0"; settings["dns"] = Package?.Settings.GetValueOrDefault("dns") ?? "OFF"; }
+        if (Configuration["HostingPanel:Backend"] == "Kubernetes")
+        {
+            var result = await Accounts.PhpDefaultsAsync();
+            if (result.Status == 200)
+            {
+                phpImages = result.Images;
+                var stored = Package?.Settings.GetValueOrDefault("phpRuntime");
+                usePhp = !string.IsNullOrEmpty(stored);
+                php = usePhp ? JsonSerializer.Deserialize<PhpRuntimeSettings>(stored!) : result.Settings;
+            }
+        }
     }
     private bool Unlimited(string key) => settings.GetValueOrDefault(key) == "unlimited";
     private long Number(string key) => long.TryParse(settings.GetValueOrDefault(key),out var n) ? n : 0;
@@ -76,6 +100,11 @@
         busy = true; error = null;
         try
         {
+            if (php is not null)
+            {
+                if (usePhp && !php.Valid(phpImages)) { error = L["Invalid PHP-FPM settings."].Value; return; }
+                settings["phpRuntime"] = usePhp ? JsonSerializer.Serialize(php) : "";
+            }
             var result = await PackagesApi.SaveAsync(Kind,new(name,settings),Package is null);
             if (result.Error is null && result.Status is >= 200 and < 300) MudDialog.Close(DialogResult.Ok(name));
             else error = result.Error ?? L["Backend HTTP {0}.", result.Status].Value;

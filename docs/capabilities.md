@@ -59,3 +59,5 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 Helm-managed MariaDB (Kubernetes only): optional dedicated MariaDB StatefulSet, independent PVC, internal service, separate provisioning Secret and first-initialization account bootstrap. Existing volumes require manual account initialization; deployment/runtime validation is pending.
 
 - Shared Apache configuration is published as immutable revisions on a dedicated direct NFS export (apacheConfigPath on nfsServer, no Apache PV/PVC) by the Kubernetes reconciler; named StatefulSet pods support scoped SDK validation and graceful reload. Live migration and runtime acceptance are pending.
+
+- Kubernetes account PHP-FPM settings: authorized admin/reseller edits image and resource limits; trusted images are managed by admins in BackendSettings. Package defaults and account overrides are stored in existing limits JSON. Runtime acceptance pending; unsupported by DirectAdmin.
