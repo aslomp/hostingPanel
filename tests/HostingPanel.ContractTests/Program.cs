@@ -4,6 +4,12 @@ using HostingPanel.Api.Services;
 using System.Net.Http.Headers;
 using System.Text;
 
+if (args.Contains("--certificate-watch-integration"))
+{
+    await CertificateWatchIntegrationTests.RunAsync();
+    return;
+}
+
 var checks = new List<(string Description, Action Test)>
 {
     ("Legacy DNS administration enforces admin access and persists existing DNS intent", LegacyDnsAdminTests.Run),

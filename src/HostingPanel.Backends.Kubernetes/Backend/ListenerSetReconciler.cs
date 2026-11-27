@@ -78,6 +78,18 @@ internal sealed class ListenerSetReconciler(KubernetesResourceClient client, str
                 metadata = new { name = pair.Key, @namespace = ns, labels = new Dictionary<string,string> { ["hostingpanel/component"] = "tls-route" } },
                 spec = new { parentRefs = new[] { new { group = "gateway.networking.k8s.io", kind = "ListenerSet", name = set, sectionName = pair.Key } },
                     hostnames = new[] { pair.Value.Host }, rules = new[] { new { backendRefs = new[] { new { name = "apache-baseline", port = 80 } } } } } });
+            var raw = await client.TryGetAsync(Group, "v1", ns, "httproutes", pair.Key, ct);
+            if (raw is not null)
+            {
+                using var observed = JsonDocument.Parse(raw);
+                using var wanted = JsonDocument.Parse(manifest);
+                var meta = observed.RootElement.GetProperty("metadata");
+                if (!meta.TryGetProperty("labels", out var labels) ||
+                    !labels.TryGetProperty("hostingpanel/component", out var label) || label.GetString() != "tls-route")
+                    throw new InvalidOperationException("Refusing to modify an unowned TLS route.");
+                if (CertificateReconciler.MatchesDesired(wanted.RootElement.GetProperty("spec"), observed.RootElement.GetProperty("spec")))
+                    continue;
+            }
             await client.ApplyAsync(manifest, ns, "hostingpanel-tls", ct);
         }
         if (targets is not null)
@@ -101,7 +113,7 @@ internal sealed class ListenerSetReconciler(KubernetesResourceClient client, str
         {
             var name = item.GetProperty("metadata").GetProperty("name").GetString()!;
             if (Managed(name) && !desired.ContainsKey(name))
-                await client.DeleteAsync(Group, "v1", ns, "httproutes", name, ct);
+                await client.DeleteObservedAsync(Group, "v1", ns, "httproutes", item, ct);
         }
     }
 }

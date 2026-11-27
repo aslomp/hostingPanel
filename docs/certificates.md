@@ -31,3 +31,5 @@ Website HTTPRoutes always attach to the configured Gateway HTTP listener, indepe
 ## Installer panel bootstrap TLS
 
 The standalone installer creates a namespace-local self-signed Issuer and an explicit panel Certificate, independent of public DNS or ACME availability. The external Gateway references the panel TLS Secret directly; no ACME gateway-shim annotation is used. Domain certificate reconciliation is unchanged. The operator can promote the panel Certificate to the Let's Encrypt ClusterIssuer after public DNS and ingress are ready, without changing the Gateway TLS Secret reference. See [installer documentation](../installer/README.md).
+
+CI includes an isolated kind Kubernetes API LIST/WATCH test with a fixture Certificate CRD, covering create, update, disconnect, relist and delete. This does not test actual cert-manager issuance or Gateway serving convergence.

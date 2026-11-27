@@ -19,14 +19,14 @@ public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfigur
                 configuration["KubernetesHosting:Namespace"] ?? "hosting", "certificates",
                 "hostingpanel/component=certificate", work.AllChanged,
                 name => { if (TryDomainId(name, out var id)) work.DomainChanged(id); }, token),
-            ReconcileAsync, logger, TimeSpan.FromHours(1), ct);
+            ReconcileAsync, logger, TimeSpan.FromHours(1), ct, work.Recover);
     }
 
     private async Task<bool> ReconcileAsync(CancellationToken ct)
     {
         var keys = work.Take();
-        // Empty mailbox means the idle recovery timer fired.
-        if (keys is { Length: 0 }) keys = null;
+        // A duplicate wake can race with Take; it must not trigger a full pass.
+        if (keys is { Length: 0 }) return false;
         try { return await ReconcileCoreAsync(keys, ct); }
         catch { work.Recover(); throw; }
     }
