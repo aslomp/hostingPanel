@@ -76,3 +76,5 @@ Helm-managed MariaDB (Kubernetes only): optional dedicated MariaDB StatefulSet, 
 - Official legacy `CMD_API_DNS_ADMIN`: original GET/POST request forwarding for DirectAdmin; Kubernetes admin-only exists/create/add backed by existing DNS desired-state operations. Legacy mutation responses distinguish accepted asynchronous publication in details; authoritative DNS read-back is separate. Other legacy DNS actions are not implemented for Kubernetes. Modern pinned Swagger unchanged.
 
 - Clean-server installer: local Docker build services are stopped and disabled after image import only when installer ownership was established before package installation. Existing runtimes are preserved; K3s embedded containerd remains active. See installer README.
+
+- Kubernetes website, DNS and certificate workers share targeted coalescing reconciliation channels; durable operation state remains in SQLite. Certificate observation retains its periodic fallback.

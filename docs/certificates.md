@@ -12,7 +12,7 @@ Issuer resolution order: explicit domain Provider, AcmeUserProviders keyed by ac
 
 ## Reconciliation and observed status
 
-CertificateReconciler runs periodically (30 seconds) when both CertManager:Enabled and KubernetesHosting:Enabled. It applies the desired Certificate for eligible SSL/ACME-enabled domains, observes readiness and removes obsolete managed certificate resources. cert-manager handles actual issuance and renewal. The manual provision route submits a Certificate request and does not prove issuance. The dry-run route summarizes intent/observed coverage; it is not a real ACME validation.
+CertificateReconciler wakes on committed intent changes through its reconciliation channel and runs a periodic observed-state sweep (30 seconds) when both CertManager:Enabled and KubernetesHosting:Enabled. It applies the desired Certificate for eligible SSL/ACME-enabled domains, observes readiness and removes obsolete managed certificate resources. cert-manager handles actual issuance and renewal. The manual provision route submits a Certificate request and does not prove issuance. The dry-run route summarizes intent/observed coverage; it is not a real ACME validation.
 
 CertificateSnapshot reads Certificate, CertificateRequest, Order and Challenge resources through CertManagerClient; public certificate material and status are used to produce the certificate inventory and ACME log views. No TLS private-key/Secret read is needed for these observations. Do not interpret estimated/placeholder fields in the compatibility response as actual external measurements.
 
