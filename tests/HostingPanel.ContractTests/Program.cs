@@ -18,6 +18,7 @@ if (args.Contains("--certificate-watch-integration"))
 
 var checks = new List<(string Description, Action Test)>
 {
+    ("Subdomain ownership follows authorized parent and rejects foreign accounts", SubdomainOwnershipTests.Run),
     ("Legacy DNS administration enforces admin access and persists existing DNS intent", LegacyDnsAdminTests.Run),
     ("Mail DNS imports preserve existing customer records", StalwartDnsTests.Run),
     ("Mailbox package entitlements fail closed and respect overrides", MailLimitPolicyTests.Run),
