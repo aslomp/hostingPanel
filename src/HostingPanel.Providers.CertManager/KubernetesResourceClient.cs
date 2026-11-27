@@ -173,6 +173,7 @@ public sealed class KubernetesResourceClient : IDisposable
                     cursor = doc.RootElement.GetProperty("metadata").GetProperty("resourceVersion").GetString()
                         ?? throw new InvalidOperationException("Missing list resourceVersion.");
                 }
+                var started = System.Diagnostics.Stopwatch.StartNew();
                 await foreach (var (kind, item) in watch(cursor, ct).WithCancellation(ct))
                 {
                     using var doc = JsonDocument.Parse(KubernetesJson.Serialize(item));
@@ -187,7 +188,10 @@ public sealed class KubernetesResourceClient : IDisposable
                         throw new InvalidOperationException("Kubernetes watch returned an error.");
                     }
                     if (kind is WatchEventType.Added or WatchEventType.Modified or WatchEventType.Deleted)
-                        observe(kind, item);
+                    {
+                        try { observe(kind, item); }
+                        catch { cursor = null; throw; }
+                    }
                     if (resource.TryGetProperty("metadata", out var metadata) &&
                         metadata.TryGetProperty("resourceVersion", out var rv) && rv.GetString() is { Length: > 0 } next)
                         cursor = next;
@@ -195,8 +199,9 @@ public sealed class KubernetesResourceClient : IDisposable
                 }
                 // A normal server timeout is not a failure. Avoid a tight loop
                 // if a proxy closes the stream immediately.
-                failures = 0;
-                await Task.Delay(TimeSpan.FromMilliseconds(250), ct);
+                if (started.Elapsed >= TimeSpan.FromSeconds(10)) failures = 0;
+                else failures = Math.Min(failures + 1, 7);
+                await Task.Delay(TimeSpan.FromSeconds(failures == 0 ? 0.25 : Math.Min(60, Math.Pow(2, failures - 1))), ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
             catch (Exception ex)
