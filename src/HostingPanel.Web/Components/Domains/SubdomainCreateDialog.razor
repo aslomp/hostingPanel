@@ -1,0 +1,54 @@
+@using HostingPanel.Api
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject PanelSession Session
+@inject DomainOperations DomainOps
+@implements IDisposable
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField T="string" @bind-Value="label" Immediate="true" InputId="newSubdomain"
+            Label="@L["Subdomain label"].Value" Variant="Variant.Outlined" Disabled="@mutation.Busy" />
+        <MudText Typo="Typo.caption">@(label.Trim().ToLowerInvariant() + "." + Domain)</MudText>
+        @if (mutation.Error is not null) { <MudAlert Severity="Severity.Error">@mutation.Error</MudAlert> }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Disabled="@mutation.Busy" OnClick="Cancel">@L["Cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(mutation.Busy || !Valid)" OnClick="Create">@L["Add subdomain"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter] public string Domain { get; set; } = "";
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    private string label = "";
+    private readonly DialogMutation mutation = new();
+    private string? channel;
+    private bool disposed;
+    private bool Valid => SubdomainNames.ValidLabel(label.Trim()) && SubdomainNames.ValidDomain(label.Trim() + "." + Domain);
+    protected override void OnInitialized()
+    {
+        channel = Session.TicketChannel;
+        Session.Changed += SessionChanged;
+    }
+    private void SessionChanged() => _ = InvokeAsync(() =>
+    {
+        if (!disposed && (!Session.Connected || channel != Session.TicketChannel)) Dialog.Cancel();
+    });
+    private void Cancel() { if (!mutation.Busy) Dialog.Cancel(); }
+    private Task Create() => mutation.RunAsync(Session, channel, async current =>
+    {
+        if (!Valid || !current()) return;
+        var result = await DomainOps.CreateSubdomainAsync(Domain, label.Trim().ToLowerInvariant());
+        if (!current()) return;
+        if (result.Error is null && result.Status is >= 200 and < 300)
+            Dialog.Close(DialogResult.Ok(result.Status));
+        else mutation.SetError(L["Subdomain operation failed: HTTP {0}.", result.Status].Value + " " + result.Error);
+    });
+    public void Dispose()
+    {
+        disposed = true;
+        Session.Changed -= SessionChanged;
+        mutation.Dispose();
+    }
+}

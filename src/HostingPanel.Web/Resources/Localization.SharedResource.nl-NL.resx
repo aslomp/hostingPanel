@@ -892,4 +892,16 @@
   <data name="Automatic mail DNS publication" xml:space="preserve"><value>Automatische publicatie van mail-DNS</value></data>
   <data name="Automatic DKIM rotation" xml:space="preserve"><value>Automatische DKIM-rotatie</value></data>
   <data name="Without automatic DNS publication, Stalwart cannot rotate DKIM keys automatically." xml:space="preserve"><value>Zonder automatische DNS-publicatie kan Stalwart DKIM-sleutels niet automatisch roteren.</value></data>
+  <data name="Add subdomain" xml:space="preserve"><value>Subdomein toevoegen</value></data>
+  <data name="Delete subdomain" xml:space="preserve"><value>Subdomein verwijderen</value></data>
+  <data name="Subdomain label" xml:space="preserve"><value>Subdomeinnaam</value></data>
+  <data name="No subdomains found." xml:space="preserve"><value>Geen subdomeinen gevonden.</value></data>
+  <data name="Subdomain management is not supported by this backend." xml:space="preserve"><value>Deze backend ondersteunt nog geen subdomeinbeheer.</value></data>
+  <data name="Subdomain operation failed: HTTP {0}." xml:space="preserve"><value>Subdomeinbewerking mislukt: HTTP {0}.</value></data>
+  <data name="Enter the exact subdomain name to confirm." xml:space="preserve"><value>Voer de volledige subdomeinnaam in ter bevestiging.</value></data>
+  <data name="Permanently delete this subdomain?" xml:space="preserve"><value>Dit subdomein definitief verwijderen?</value></data>
+  <data name="Subdomain operation accepted. Provisioning is pending." xml:space="preserve"><value>Subdomeinbewerking geaccepteerd. Provisioning is in behandeling.</value></data>
+  <data name="Subdomain operation completed." xml:space="preserve"><value>Subdomeinbewerking voltooid.</value></data>
+  <data name="Manage subdomains of this domain." xml:space="preserve"><value>Beheer subdomeinen van dit domein.</value></data>
+  <data name="Retrieving subdomains…" xml:space="preserve"><value>Subdomeinen ophalen…</value></data>
 </root>
