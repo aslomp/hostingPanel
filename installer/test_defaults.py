@@ -23,14 +23,21 @@ class DefaultTests(unittest.TestCase):
     def test_complete_prompts_only_missing_fields(self):
         template = json.loads(pathlib.Path(__file__).with_name("cluster.example.json").read_text())
         c = defaults(template, "10.0.0.10", "10.0.0.10/32", "admin@hosting.test", "--full-server")
-        with patch("defaults.ask_email") as email, patch("defaults.ask_hostname", side_effect=["ns1.hosting.test", "panel.hosting.test"]) as hostname:
+        with patch("defaults.ask_email") as email, patch("defaults.ask_hostname", side_effect=["ns1.hosting.test", "ns2.hosting.test", "panel.hosting.test"]) as hostname:
             complete(c)
             complete(c)
             email.assert_not_called()
-            self.assertEqual(hostname.call_count, 2)
+            self.assertEqual(hostname.call_count, 3)
         self.assertEqual(c["ns1"], "ns1.hosting.test")
         self.assertEqual(c["panelHostname"], "panel.hosting.test")
-        self.assertEqual(c["ns2"], "")
+        self.assertEqual(c["ns2"], "ns2.hosting.test")
+
+    def test_duplicate_nameservers_rejected(self):
+        template = json.loads(pathlib.Path(__file__).with_name("cluster.example.json").read_text())
+        c = defaults(template, "10.0.0.10", "10.0.0.10/32", "admin@hosting.test", "--full-server")
+        with patch("defaults.ask_hostname", side_effect=["ns1.hosting.test", "ns1.hosting.test", "panel.hosting.test"]):
+            with self.assertRaises(ValueError):
+                complete(c)
 
     def test_hostname_validation(self):
         self.assertTrue(hostname_valid("ns1.hosting.test"))
