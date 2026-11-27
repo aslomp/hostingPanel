@@ -79,6 +79,7 @@ internal static class NavigationCatalog
             Live("Sessions", "◷", "/sessions"),
             Live("Reseller management", "♙", "/resellers"),
             Live("Database management", "▦", "/databases"),
+            Live("Email accounts", "✉", "/email-accounts"),
             Live("System information", "▤", "/system-info"),
             Live("ModSecurity and ClamAV", "♢", "/security"),
             Live("DirectAdmin API", "⌘", "/api-browser")
@@ -93,7 +94,7 @@ internal static class NavigationCatalog
         new("User", "♙",
         [
             Live("Domain management", "◎", "/domains"),
-            Planned("Email accounts", "✉", "email-accounts"),
+            Live("Email accounts", "✉", "/email-accounts"),
             Planned("File management", "▤", "file-manager"),
             Live("Databases", "▦", "/databases"),
             Planned("SSL certificates", "♢", "domain-ssl"),
