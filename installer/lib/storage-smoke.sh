@@ -9,7 +9,13 @@ cleanup() {
     k3s kubectl -n "$ns" get pods,pvc -o wide || true
     k3s kubectl -n "$ns" get events --sort-by=.lastTimestamp || true
   else
-    # Retain-policy backing volumes are deliberately not destroyed by this test.
+    # Delete only volumes created by this isolated check, never customer volumes.
+    for protocol in nfs iscsi; do
+      pv=$(k3s kubectl -n "$ns" get pvc "$protocol" -o jsonpath='{.spec.volumeName}')
+      [[ -n "$pv" ]] || continue
+      [[ $(k3s kubectl get pv "$pv" -o jsonpath='{.spec.claimRef.namespace}') == "$ns" ]] || continue
+      k3s kubectl patch pv "$pv" --type merge -p '{"spec":{"persistentVolumeReclaimPolicy":"Delete"}}'
+    done
     k3s kubectl delete namespace "$ns" --wait=false
   fi
 }
@@ -49,6 +55,8 @@ spec:
     - |
       $command
     securityContext:
+      runAsUser: $([[ "$protocol" == nfs ]] && echo 1654 || echo 0)
+      runAsGroup: $([[ "$protocol" == nfs ]] && echo 1654 || echo 0)
       allowPrivilegeEscalation: false
       capabilities:
         drop: ["ALL"]
