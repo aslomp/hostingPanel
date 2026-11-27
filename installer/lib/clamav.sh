@@ -79,10 +79,34 @@ RandomizedDelaySec=15m
 [Install]
 WantedBy=timers.target
 EOF
+  install -m 0755 "$here/quarantine-cleanup.py" /usr/local/lib/hostingpanel/quarantine-cleanup.py
+  cat > /etc/systemd/system/hosting-clamav-quarantine-cleanup.service <<'EOF'
+[Unit]
+Description=Remove quarantined malware after 30 days
+RequiresMountsFor=/var/lib/hostingpanel/quarantine
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/hostingpanel/quarantine-cleanup.py
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/hostingpanel/quarantine
+EOF
+  cat > /etc/systemd/system/hosting-clamav-quarantine-cleanup.timer <<'EOF'
+[Unit]
+Description=Daily quarantine retention cleanup
+[Timer]
+OnCalendar=*-*-* 04:00:00 UTC
+Persistent=true
+[Install]
+WantedBy=timers.target
+EOF
   systemctl daemon-reload
   systemctl enable --now hosting-clamav-onaccess.service
   systemctl restart hosting-clamav-onaccess.service
   sleep 3
   systemctl is-active --quiet hosting-clamav-onaccess.service
-  systemctl enable --now hosting-clamav-scan.timer
+  systemctl enable --now hosting-clamav-scan.timer hosting-clamav-quarantine-cleanup.timer
 }
