@@ -18,7 +18,7 @@ install_storage() {
       [[ "$disk" == /dev/disk/by-id/* && -b "$disk" ]] || die "Invalid disk"
       [[ $(lsblk -nr -o TYPE "$disk") == disk ]] || die "Disk has partitions or children"
       local signatures
-      signatures=$(wipefs -n --noheadings -o TYPE "$disk") || die "Cannot inspect disk signatures"
+      signatures=$(wipefs --no-act --noheadings --output TYPE "$disk") || die "Cannot inspect disk signatures"
       [[ -z "$signatures" ]] || die "Disk has signatures"
       local mounts
       mounts=$(lsblk -nr -o MOUNTPOINTS "$disk" | tr -d '[:space:]') || die "Cannot inspect disk mounts"
