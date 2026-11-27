@@ -54,6 +54,19 @@ public sealed class PowerDnsClient(HttpClient http)
         response.EnsureSuccessStatusCode();
         return JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
     }
+    public async Task<IReadOnlyList<DnsRecord>> ReadDkimAsync(string domain, CancellationToken ct)
+    {
+        var zone = Fqdn(domain);
+        using var actual = await ReadAsync(zone, ct) ?? throw new InvalidOperationException("DNS zone unavailable.");
+        return actual.RootElement.GetProperty("rrsets").EnumerateArray()
+            .Where(x => x.GetProperty("type").GetString() == "TXT" &&
+                x.GetProperty("name").GetString()!.EndsWith("._domainkey." + zone, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(x => x.GetProperty("records").EnumerateArray()
+                .Where(r => !r.GetProperty("disabled").GetBoolean())
+                .Select(r => new DnsRecord("TXT", x.GetProperty("name").GetString()!,
+                    r.GetProperty("content").GetString()!, x.GetProperty("ttl").GetInt32().ToString(System.Globalization.CultureInfo.InvariantCulture))))
+            .ToArray();
+    }
     private sealed record Entry(string content, bool disabled);
     private sealed record Rrset(string name, string type, int ttl, string changetype, Entry[] records);
     public async Task ApplyAsync(string domain, IReadOnlyList<DnsRecord> records, CancellationToken ct, bool preserveDkim = false)
