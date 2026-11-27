@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using HostingPanel.Api.Adapters;
+using HostingPanel.Api.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.Extensions.Primitives;
@@ -39,11 +40,24 @@ public sealed class KubernetesDnsAdminCompatibility(KubernetesIdentityService id
             await Error(context, "AMBIGUOUS_FORM", 400);
             return;
         }
-        if (HttpMethods.IsPost(request.Method) && (request.ContentLength != 0 || request.HasFormContentType))
+        if (HttpMethods.IsPost(request.Method) && (request.ContentLength is > 0 || request.Headers.ContainsKey("Transfer-Encoding") || request.HasFormContentType))
         {
-            if (!request.HasFormContentType || !Collect(await request.ReadFormAsync(ct)))
+            try
             {
-                await Error(context, "INVALID_OR_AMBIGUOUS_FORM", 400);
+                if (!request.HasFormContentType || !Collect(await request.ReadFormAsync(ct)))
+                {
+                    await Error(context, "INVALID_OR_AMBIGUOUS_FORM", 400);
+                    return;
+                }
+            }
+            catch (InvalidDataException)
+            {
+                await Error(context, "INVALID_FORM", 400);
+                return;
+            }
+            catch (BadHttpRequestException)
+            {
+                await Error(context, "INVALID_FORM", 400);
                 return;
             }
         }
