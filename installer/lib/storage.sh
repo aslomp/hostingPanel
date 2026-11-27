@@ -88,6 +88,7 @@ EOF
   targetcli saveconfig
   systemctl enable rtslib-fb-targetctl.service || die "Cannot enable persistent iSCSI targets"
   install_snapshot_retention "$pool"
+  install_clamav
   echo "Storage ready: $host:/srv/hosting/home and $host:/srv/hosting/apache"
 }
 
