@@ -6,6 +6,7 @@ using System.Text;
 
 var checks = new List<(string Description, Action Test)>
 {
+    ("Legacy DNS administration enforces admin access and persists existing DNS intent", LegacyDnsAdminTests.Run),
     ("Mail DNS imports preserve existing customer records", StalwartDnsTests.Run),
     ("Mailbox package entitlements fail closed and respect overrides", MailLimitPolicyTests.Run),
     ("DirectAdmin mailbox adapter verifies mutations and preserves caller credentials", DirectAdminMailTests.Run),
