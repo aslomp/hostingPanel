@@ -11,21 +11,14 @@ while (($#)); do
       mode=$1; [[ "$mode" != --storage ]] || mode=--storage-server ;;
     --new-cluster) new=true ;;
     --config) shift; (($#)) || die "Missing config path"; config=$1 ;;
-    --help) echo "Usage: bash installer/install.sh --full-server|--storage-server|--worker [--new-cluster] --config FILE"; exit 0 ;;
+    --help) echo "Usage: bash installer/install.sh --full-server|--storage-server|--worker [--new-cluster] [--config FILE]"; exit 0 ;;
     *) die "Unknown argument: $1" ;;
   esac
   shift
 done
-[[ -n "$mode" && -n "$config" ]] || die "Role and config required"
+[[ -n "$mode" ]] || die "Role required"
 [[ "$new" == false || "$mode" == --full-server ]] || die "--new-cluster requires --full-server"
 [[ $EUID == 0 ]] || die "Run as root"
-[[ -f "$config" ]] || die "Copy installer/cluster.example.json and configure it first"
-command -v python3 >/dev/null || { apt-get update; apt-get install -y python3; }
-[[ $(stat -c %u "$config") == 0 ]] || die "Config must be owned by root"
-chmod 600 "$config"
-config=$(realpath "$config")
-[[ $(stat -c %u "$(dirname "$config")") == 0 ]] || die "Config directory must be owned by root"
-[[ $(stat -c %a "$(dirname "$config")") == 700 ]] || die "Config directory must have mode 0700"
 # Parse data, never source user configuration as shell code.
 get() { python3 -c 'import json,sys; v=json.load(open(sys.argv[1])); print(v[sys.argv[2]])' "$config" "$1"; }
 require() { local v; v=$(get "$1"); [[ -n "$v" && "$v" != null ]] || die "Missing $1"; printf '%s' "$v"; }
@@ -40,6 +33,30 @@ case "$ID:$VERSION_ID" in
 esac
 [[ $(uname -m) == x86_64 || $(uname -m) == aarch64 ]] || die "Unsupported CPU architecture"
 trap 'printf "Installation failed at %s:%s (exit %s). Inspect systemd and Kubernetes logs; no automatic deletion is performed.\\n" "${BASH_SOURCE[0]}" "$LINENO" "$?" >&2' ERR
+command -v python3 >/dev/null && command -v ip >/dev/null || { apt-get update; apt-get install -y python3 iproute2; }
+if [[ -z "$config" ]]; then
+  base=/etc/hostingpanel/installer
+  [[ ! -L "$base" && ! -L /etc/hostingpanel ]] || die "Unsafe default configuration path"
+  install -d -m 0700 -o root -g root "$base"
+  if [[ "$mode" == --worker ]]; then
+    config="$base/worker.json"
+    [[ -f "$config" ]] || die "Copy worker.json and agent-token from the control plane to $base"
+  else
+    config="$base/cluster.json"
+    if [[ ! -e "$config" ]]; then
+      python3 "$here/defaults.py" "$config" "$mode"
+    fi
+  fi
+fi
+[[ -f "$config" && ! -L "$config" ]] || die "Configuration file missing or unsafe"
+config=$(realpath "$config")
+[[ $(stat -c %u "$config") == 0 ]] || die "Config must be owned by root"
+[[ $(stat -c %u "$(dirname "$config")") == 0 ]] || die "Config directory must be owned by root"
+[[ $(stat -c %a "$(dirname "$config")") == 700 ]] || die "Config directory must have mode 0700"
+chmod 600 "$config"
+if [[ "$mode" == --full-server && -z $(get acmeEmail) ]]; then
+  python3 "$here/defaults.py" "$config" --email-only
+fi
 if [[ "$mode" == --worker ]]; then
   python3 -c 'import json,sys,ipaddress,re; c=json.load(open(sys.argv[1])); assert ipaddress.ip_address(c["clusterHost"]).version==4; assert re.fullmatch(r"v\d+\.\d+\.\d+\+k3s\d+",c["k3sVersion"]); assert c["agentTokenFile"]=="agent-token"' "$config"
 fi
