@@ -16,8 +16,9 @@
   "webIp": "10.0.0.10",
   "ns1": "ns1.example.net",
   "ns2": "ns2.example.net",
-  "panelImage": "harbor.eagleconnect.nl/hosting/admin",
-  "panelTag": "latest",
+  "panelImage": "hostingpanel-web",
+  "panelTag": "installer-local",
   "poolDevices": [],
-  "confirmPoolCreation": false
+  "confirmPoolCreation": false,
+  "buildPanelImage": true
 }
