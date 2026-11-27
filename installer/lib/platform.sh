@@ -28,7 +28,13 @@ install_platform() {
   k3s kubectl wait --for=condition=Established crd/listenersets.gateway.networking.k8s.io --timeout=120s
   k3s kubectl apply -f "$base/issuer.json"
   k3s kubectl apply -f "$base/gateways.json"
-  k3s kubectl wait --for=condition=Ready clusterissuer/lets-encrypt --timeout=180s
+  if [[ -n $(get panelHostname) ]]; then
+    ensure_panel_tls "$base"
+  fi
+  # ACME account readiness is not an installation prerequisite.
+  if ! k3s kubectl wait --for=condition=Ready clusterissuer/lets-encrypt --timeout=15s; then
+    echo "ACME issuer not ready; initial panel TLS does not depend on ACME" >&2
+  fi
   bash "$here/lib/storage-smoke.sh"
   k3s kubectl create namespace hosting --dry-run=client -o yaml | k3s kubectl apply -f -
   ensure_secret hostingpanel-bootstrap username admin password
@@ -55,9 +61,7 @@ install_platform() {
   fi
   k3s kubectl -n envoy-gateway-system wait --for=condition=Ready certificate/hosting-panel-tls --timeout=600s
   k3s kubectl -n envoy-gateway-system wait --for=condition=Programmed gateway/external --timeout=300s
-  local -a tls_options=()
-  [[ $(get acmeStaging) != True ]] || tls_options+=(--insecure)
-  curl --fail --silent --show-error --retry 5 --retry-all-errors --connect-timeout 10 --max-time 30 "${tls_options[@]}" "https://$(require panelHostname)/healthz"
+  check_panel_https
 }
 
 ensure_secret() (
@@ -77,4 +81,32 @@ ensure_secret() (
     openssl rand -hex 32 | tr -d '\n' > "$tmp/$1"
     k3s kubectl -n hosting create secret generic "$name" --from-file="$1=$tmp/$1"
   fi
+)
+
+# Keep a previously issued certificate, including a manually promoted ACME certificate.
+ensure_panel_tls() {
+  local base=$1 ns=envoy-gateway-system existing secret
+  existing=$(k3s kubectl -n "$ns" get certificate hosting-panel-tls --ignore-not-found -o name)
+  secret=$(k3s kubectl -n "$ns" get secret hosting-panel-tls --ignore-not-found -o name)
+  # Remove legacy shim ownership of issuance intent (not the Secret).
+  k3s kubectl -n "$ns" annotate gateway external cert-manager.io/cluster-issuer- --overwrite
+  if [[ -z "$existing" || -z "$secret" ]]; then
+    k3s kubectl apply -f "$base/panel-bootstrap-tls.json"
+    k3s kubectl -n "$ns" wait --for=condition=Ready certificate/hosting-panel-tls --timeout=180s
+  fi
+}
+
+check_panel_https() (
+  local tmp hostname
+  tmp=$(mktemp -d)
+  trap 'rm -rf -- "$tmp"' EXIT
+  hostname=$(require panelHostname)
+  k3s kubectl -n envoy-gateway-system get secret hosting-panel-tls -o jsonpath='{.data.tls\.crt}' | base64 -d > "$tmp/cert.pem"
+  openssl x509 -in "$tmp/cert.pem" -noout -checkhost "$hostname"
+  openssl x509 -in "$tmp/cert.pem" -noout -checkend 0
+  openssl x509 -in "$tmp/cert.pem" -pubkey -noout > "$tmp/pubkey.pem"
+  # Trust the key obtained through the authenticated Kubernetes API, not public DNS.
+  curl --fail --silent --show-error --retry 5 --retry-all-errors --connect-timeout 10 --max-time 30 \
+    --noproxy '*' --resolve "$hostname:443:$(require webIp)" --insecure --pinnedpubkey "$tmp/pubkey.pem" "https://$hostname/healthz"
+  echo "Panel HTTPS ready. Bootstrap certificates are not publicly trusted; configure ACME when public DNS and ingress are ready."
 )
