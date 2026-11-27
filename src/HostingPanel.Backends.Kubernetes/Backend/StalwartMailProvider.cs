@@ -9,7 +9,7 @@ using Microsoft.Extensions.Configuration;
 namespace HostingPanel.Api;
 
 internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesIdentityService identity,
-    IHttpClientFactory clients, IConfiguration configuration, MailMutationGate gate) : IMailProvider
+    IHttpClientFactory clients, IConfiguration configuration, MailMutationGate gate) : IMailProvider, IMailForwarders
 {
     private static bool ValidName(string? name) => name is { Length: > 0 and <= 64 }
         && Regex.IsMatch(name, @"^[a-z0-9][a-z0-9._+-]*$", RegexOptions.CultureInvariant)
@@ -21,15 +21,15 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
         value.TryGetProperty(key, out var item) && item.ValueKind == JsonValueKind.Number && item.TryGetInt64(out var n) ? n : null;
 
     private async Task<MailResult> Execute(string domain, AuthenticationHeaderValue auth, CancellationToken ct,
-        Func<HttpClient, string, Task<MailResult>> action, bool createDomain = false, bool mutation = false)
+        Func<HttpClient, string, Task<MailResult>> action, bool createDomain = false, bool mutation = false, bool forwarder = false)
     {
         if (mutation) await gate.Semaphore.WaitAsync(ct);
-        try { return await ExecuteCore(domain, auth, ct, action, createDomain, mutation); }
+        try { return await ExecuteCore(domain, auth, ct, action, createDomain, mutation, forwarder); }
         finally { if (mutation) gate.Semaphore.Release(); }
     }
 
     private async Task<MailResult> ExecuteCore(string domain, AuthenticationHeaderValue auth, CancellationToken ct,
-        Func<HttpClient, string, Task<MailResult>> action, bool createDomain, bool mutation)
+        Func<HttpClient, string, Task<MailResult>> action, bool createDomain, bool mutation, bool forwarder)
     {
         var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
@@ -55,7 +55,7 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
             if (createDomain)
             {
                 var package = await db.Packages.AsNoTracking().Where(p => p.Id == owner.PackageId).Select(p => p.LimitsJson).SingleOrDefaultAsync(ct);
-                var limit = MailLimitPolicy.Resolve(package, owner.LimitsJson);
+                var limit = MailLimitPolicy.Resolve(package, owner.LimitsJson, forwarder ? "nemailf" : "nemails");
                 if (limit == 0) return new(409, "MAIL_ACCOUNT_LIMIT_REACHED");
                 if (limit != long.MaxValue)
                 {
@@ -67,10 +67,10 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
                         if (matchesForOwner.Length == 0) continue;
                         if (matchesForOwner.Length != 1 || Field(matchesForOwner[0], "id") is not { } ownedId)
                             return new(502, "MAIL_INVENTORY_UNVERIFIED");
-                        var inventory = await Query(client, "Account", new { domainId = ownedId }, new[] { "id", "@type", "domainId" }, ct);
-                        if (inventory.Any(a => Field(a, "domainId") != ownedId || Field(a, "@type") is null))
+                        var inventory = forwarder ? await Lists(client, ownedId, ct) : await Query(client, "Account", new { domainId = ownedId }, new[] { "id", "@type", "domainId" }, ct);
+                        if (inventory.Any(a => Field(a, "domainId") != ownedId || !forwarder && Field(a, "@type") is null))
                             return new(502, "MAIL_INVENTORY_UNVERIFIED");
-                        count += inventory.LongCount(a => Field(a, "@type") == "User");
+                        count += inventory.LongCount(a => forwarder || Field(a, "@type") == "User");
                         if (!MailLimitPolicy.CanCreate(count, limit)) return new(409, "MAIL_ACCOUNT_LIMIT_REACHED");
                     }
                 }
@@ -230,5 +230,72 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
             var result = await Call(client, "x:Account/set", new { destroy = new[] { id } }, ct);
             return result.TryGetProperty("destroyed", out var destroyed) && destroyed.ValueKind == JsonValueKind.Array
                 && destroyed.EnumerateArray().Any(x => x.GetString() == id) ? new(200) : new(409, "MAIL_DELETE_FAILED");
+        }, mutation: true);
+
+    private static async Task<List<JsonElement>> Lists(HttpClient client, string domainId, CancellationToken ct) =>
+        (await Query(client, "MailingList", new { }, new[] { "id", "name", "domainId", "recipients", "aliases" }, ct))
+        .Where(x => Field(x, "domainId") == domainId).ToList();
+
+    private static bool ValidForwarder(MailForwarder input, string domain) =>
+        ValidName(input.Name) && input.Recipients is { Count: > 0 and <= 100 }
+        && input.Recipients.All(x => x is { Length: > 0 and <= 254 }
+            && System.Net.Mail.MailAddress.TryCreate(x, out var address) && address.Address == x
+            && !x.Equals(input.Name + "@" + domain, StringComparison.OrdinalIgnoreCase))
+        && input.Recipients.Distinct(StringComparer.OrdinalIgnoreCase).Count() == input.Recipients.Count;
+
+    private static Dictionary<string, bool> RecipientSet(MailForwarder input) =>
+        input.Recipients.ToDictionary(x => x, _ => true, StringComparer.OrdinalIgnoreCase);
+
+    private async Task<MailForwarderResult> ForwarderOperation(string domain, AuthenticationHeaderValue auth,
+        CancellationToken ct, Func<HttpClient, string, Task<MailForwarderResult>> operation,
+        bool create = false, bool mutation = false)
+    {
+        MailForwarderResult? answer = null;
+        var result = await Execute(domain, auth, ct, async (client, id) =>
+        {
+            answer = await operation(client, id);
+            return new MailResult(answer.Status, answer.Error);
+        }, createDomain: create, mutation: mutation, forwarder: true);
+        return answer ?? new(result.Status, result.Error, result.Status == 200 ? Array.Empty<MailForwarder>() : null);
+    }
+
+    public Task<MailForwarderResult> ListForwardersAsync(string domain, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        ForwarderOperation(domain, auth, ct, async (client, id) => new(200, Forwarders:
+            (await Lists(client, id, ct)).Select(x => new MailForwarder(
+                Field(x, "name") ?? throw new InvalidOperationException("Missing list name."),
+                x.GetProperty("recipients").EnumerateObject().Where(r => r.Value.ValueKind == JsonValueKind.True)
+                    .Select(r => r.Name).ToArray())).ToArray()));
+
+    public Task<MailForwarderResult> CreateForwarderAsync(string domain, MailForwarder input, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        !ValidForwarder(input, domain) ? Task.FromResult(new MailForwarderResult(400, "INVALID_FORWARDER"))
+        : ForwarderOperation(domain, auth, ct, async (client, id) =>
+        {
+            var response = await Call(client, "x:MailingList/set", new { create = new { item = new {
+                name = input.Name, domainId = id, recipients = RecipientSet(input) } } }, ct);
+            return CreatedId(response) is null ? new(409, "FORWARDER_CREATE_FAILED") : new(201);
+        }, create: true, mutation: true);
+
+    public Task<MailForwarderResult> UpdateForwarderAsync(string domain, MailForwarder input, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        !ValidForwarder(input, domain) ? Task.FromResult(new MailForwarderResult(400, "INVALID_FORWARDER"))
+        : ForwarderOperation(domain, auth, ct, async (client, domainId) =>
+        {
+            var row = (await Lists(client, domainId, ct)).SingleOrDefault(x => Field(x, "name") == input.Name);
+            if (row.ValueKind == JsonValueKind.Undefined || Field(row, "id") is not { } id) return new(404, "FORWARDER_NOT_FOUND");
+            var result = await Call(client, "x:MailingList/set", new { update = new Dictionary<string, object> {
+                [id] = new { recipients = RecipientSet(input) } } }, ct);
+            return Updated(result, id) ? new(200) : new(409, "FORWARDER_UPDATE_FAILED");
+        }, mutation: true);
+
+    public Task<MailForwarderResult> DeleteForwarderAsync(string domain, string name, AuthenticationHeaderValue auth, CancellationToken ct) =>
+        !ValidName(name) ? Task.FromResult(new MailForwarderResult(400, "INVALID_FORWARDER"))
+        : ForwarderOperation(domain, auth, ct, async (client, domainId) =>
+        {
+            var row = (await Lists(client, domainId, ct)).SingleOrDefault(x => Field(x, "name") == name);
+            if (row.ValueKind == JsonValueKind.Undefined || Field(row, "id") is not { } id) return new(404, "FORWARDER_NOT_FOUND");
+            if (!row.TryGetProperty("aliases", out var aliases) || aliases.ValueKind != JsonValueKind.Object || aliases.EnumerateObject().Any())
+                return new(409, "FORWARDER_HAS_ALIASES");
+            var result = await Call(client, "x:MailingList/set", new { destroy = new[] { id } }, ct);
+            return result.TryGetProperty("destroyed", out var destroyed) && destroyed.ValueKind == JsonValueKind.Array
+                && destroyed.EnumerateArray().Any(x => x.GetString() == id) ? new(200) : new(409, "FORWARDER_DELETE_FAILED");
         }, mutation: true);
 }
