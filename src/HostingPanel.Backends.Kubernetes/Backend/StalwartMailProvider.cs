@@ -21,7 +21,7 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
         value.TryGetProperty(key, out var item) && item.ValueKind == JsonValueKind.Number && item.TryGetInt64(out var n) ? n : null;
 
     private async Task<MailResult> Execute(string domain, AuthenticationHeaderValue auth, CancellationToken ct,
-        Func<HttpClient, string, Task<MailResult>> action, bool createDomain = false)
+        Func<HttpClient, string, Task<MailResult>> action, bool createDomain = false, bool mutation = false)
     {
         var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
@@ -29,6 +29,8 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
         if (row is null || row.Suspended) return new(404, "DOMAIN_NOT_FOUND");
         var visible = await identity.VisibleAccountsAsync(principal, ct);
         if (!visible.Contains(row.OwnerId)) return new(404, "DOMAIN_NOT_FOUND");
+        // Until package limits and domain lifecycle are integrated, mutations are operator-only.
+        if (mutation && principal.Kind != "admin") return new(403, "MAIL_MUTATION_ADMIN_ONLY");
         if (!configuration.GetValue<bool>("Stalwart:Enabled")) return new(501, "MAIL_NOT_CONFIGURED");
         var endpoint = configuration["Stalwart:BaseUrl"];
         var token = configuration["Stalwart:ApiKey"];
@@ -50,7 +52,7 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
                 domainId = CreatedId(response);
                 if (domainId is null) return new(409, "MAIL_DOMAIN_CREATE_FAILED");
             }
-            if (domainId is null) return new(200, Accounts: Array.Empty<MailAccount>());
+            if (domainId is null) return mutation ? new(404, "MAIL_DOMAIN_NOT_FOUND") : new(200, Accounts: Array.Empty<MailAccount>());
             return await action(client, domainId);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return new(503, "MAIL_UPSTREAM_TIMEOUT"); }
@@ -121,7 +123,7 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
             };
             var result = await Call(client, "x:Account/set", new { create = new { item } }, ct);
             return CreatedId(result) is null ? new(409, "MAIL_CREATE_FAILED") : new(201);
-        }, createDomain: ValidName(input.Name) && ValidPassword(input.Password) && input.QuotaBytes > 0);
+        }, createDomain: ValidName(input.Name) && ValidPassword(input.Password) && input.QuotaBytes > 0, mutation: true);
 
     public Task<MailResult> UpdateAsync(string domain, string name, MailUpdateRequest input, AuthenticationHeaderValue auth, CancellationToken ct) =>
         Execute(domain, auth, ct, async (client, domainId) =>
@@ -136,7 +138,7 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
             if (input.QuotaBytes is long quota) patch["quotas/maxDiskQuota"] = quota;
             var result = await Call(client, "x:Account/set", new { update = new Dictionary<string, object> { [id] = patch } }, ct);
             return Updated(result, id) ? new(200) : new(409, "MAIL_UPDATE_FAILED");
-        });
+        }, mutation: true);
 
     public Task<MailResult> DeleteAsync(string domain, string name, AuthenticationHeaderValue auth, CancellationToken ct) =>
         Execute(domain, auth, ct, async (client, domainId) =>
@@ -147,5 +149,5 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
             var result = await Call(client, "x:Account/set", new { destroy = new[] { id } }, ct);
             return result.TryGetProperty("destroyed", out var destroyed) && destroyed.ValueKind == JsonValueKind.Array
                 && destroyed.EnumerateArray().Any(x => x.GetString() == id) ? new(200) : new(409, "MAIL_DELETE_FAILED");
-        });
+        }, mutation: true);
 }
