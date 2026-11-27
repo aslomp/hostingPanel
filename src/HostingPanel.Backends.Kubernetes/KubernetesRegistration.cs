@@ -51,6 +51,11 @@ public static class KubernetesRegistration
     services.AddScoped<IAccountOverview>(sp => sp.GetRequiredService<KubernetesAccountService>());
     services.AddScoped<IUserDetails>(sp => sp.GetRequiredService<KubernetesAccountService>());
     services.AddScoped<IImpersonation>(sp => sp.GetRequiredService<KubernetesAccountService>());
+    services.AddSingleton<SubdomainModel>();
+    services.AddSingleton<IHostingPanelModelExtension>(sp => sp.GetRequiredService<SubdomainModel>());
+    services.AddSingleton<IHostingPanelSchemaExtension>(sp => sp.GetRequiredService<SubdomainModel>());
+    services.AddScoped<SubdomainOwnership>();
+    services.AddScoped<ISubdomains, KubernetesSubdomainService>();
     services.AddScoped<KubernetesDomainService>();
     services.AddScoped<IDomains>(sp => sp.GetRequiredService<KubernetesDomainService>());
     services.AddScoped<IAccessibleDomains>(sp => sp.GetRequiredService<KubernetesDomainService>());
@@ -69,6 +74,7 @@ public static class KubernetesRegistration
     services.AddScoped<ITickets>(sp => sp.GetRequiredService<KubernetesTicketService>());
     services.AddScoped<KubernetesDatabaseCompatibility>();
     services.AddScoped<KubernetesDnsAdminCompatibility>();
+    services.AddScoped<KubernetesSubdomainCompatibility>();
     services.AddScoped<KubernetesCompatibilityHandler>();
     services.AddScoped<IApiCompatibilityHandler>(sp => sp.GetRequiredService<KubernetesCompatibilityHandler>());
     services.AddScoped<KubernetesCertificateProvider>();

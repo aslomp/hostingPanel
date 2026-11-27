@@ -111,7 +111,8 @@ public static class DirectAdminTransport
         var rawPath = context.Request.Path.Value ?? string.Empty;
         if ((!rawPath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase)
             && !rawPath.Equals("/CMD_API_POP", StringComparison.OrdinalIgnoreCase)
-            && !rawPath.Equals("/CMD_API_DNS_ADMIN", StringComparison.OrdinalIgnoreCase))
+            && !rawPath.Equals("/CMD_API_DNS_ADMIN", StringComparison.OrdinalIgnoreCase)
+            && !rawPath.Equals("/CMD_API_SUBDOMAINS", StringComparison.OrdinalIgnoreCase))
             || rawPath.Contains("..", StringComparison.Ordinal)
             || rawPath.Contains('\\') || rawPath.Any(char.IsControl))
         {

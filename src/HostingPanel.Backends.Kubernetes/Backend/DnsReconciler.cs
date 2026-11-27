@@ -137,8 +137,9 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
             if (group.All(row => row.Status == "completed"))
             {
                 notifications.Signal(ReconciliationTarget.Website);
-                // Publication can unblock mail configuration in the next pass.
-                if (await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "mail-dns" && x.Status == "pending" && x.LastError == "MAIL_DNS_PUBLICATION_PENDING", ct))
+                // Publication can unblock mail and subdomain DNS in the next pass.
+                if (await db.ReconciliationOperations.AnyAsync(x => x.Status == "pending" && ((x.ResourceType == "mail-dns" && x.LastError == "MAIL_DNS_PUBLICATION_PENDING") ||
+                    (x.ResourceType == "domain-dns" && x.LastError == "SUBDOMAIN_PARENT_ZONE_NOT_READY")), ct))
                     notifications.Signal(ReconciliationTarget.Dns);
             }
         }

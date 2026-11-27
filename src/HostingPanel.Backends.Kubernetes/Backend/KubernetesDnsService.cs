@@ -136,6 +136,8 @@ public sealed class KubernetesDnsService(HostingPanelDbContext db, KubernetesIde
         var domain = await db.Domains.FirstOrDefaultAsync(d => d.Name == name, ct);
         var ids = await identity.VisibleAccountsAsync(principal, ct);
         if (domain is not null && !ids.Contains(domain.OwnerId)) return new(403, "ACCESS_DENIED");
+        if (domain is not null && await db.Set<SubdomainBinding>().AnyAsync(x => x.ChildId == domain.Id, ct))
+            return new(409, "SUBDOMAIN_USES_PARENT_ZONE");
         if (domain is null && principal.Kind != "admin") return new(403, "ACCESS_DENIED");
         if (await db.DnsZones.AnyAsync(z => z.Name == name, ct)) return new(409, "ZONE_EXISTS");
         var zone = new DnsZone { Name = name, DomainId = domain?.Id, OwnerId = domain?.OwnerId ?? principal.Id };
