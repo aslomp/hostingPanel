@@ -26,11 +26,15 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
         client.BaseAddress = new Uri(uri.AbsoluteUri.TrimEnd('/') + "/");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var matches = (await StalwartMailProvider.Query(client, "Domain", new { name = domain.Name },
-            new[] { "id", "name", "dnsZoneFile" }, ct))
+            new[] { "id", "name", "dnsZoneFile", "dnsManagement", "dkimManagement" }, ct))
             .Where(x => x.GetProperty("name").GetString() == domain.Name).ToArray();
         if (matches.Length != 1 || !matches[0].TryGetProperty("dnsZoneFile", out var file)
             || file.ValueKind != JsonValueKind.String) return "MAIL_DNS_NOT_READY";
         var desired = StalwartDnsRecords.Parse(domain.Name, file.GetString()!);
+        var dnsServerId = configuration["Stalwart:DkimDnsServerId"];
+        var nativeRotation = !string.IsNullOrWhiteSpace(dnsServerId);
+        if (nativeRotation)
+            desired = desired.Where(x => !IsDkim(domain.Name, x.Name, x.Type)).ToArray();
         // No network requests inside the database transaction.
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var current = await db.Domains.AsNoTracking().SingleOrDefaultAsync(d => d.Id == domainId, ct);
@@ -51,7 +55,50 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
             operations.Schedule("dns-zone", zone.Id, "update", new { zone.Name });
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
+        if (nativeRotation)
+        {
+            // The DNS reconciler must preserve delegated DKIM records before this is enabled.
+            // Never replace an unrelated automatic DNS configuration.
+            var upstream = matches[0];
+            var management = upstream.GetProperty("dnsManagement");
+            var mode = management.GetProperty("@type").GetString();
+            if (mode == "Automatic")
+            {
+                if (management.GetProperty("dnsServerId").GetString() != dnsServerId
+                    || !management.TryGetProperty("publishRecords", out var published)
+                    || !published.TryGetProperty("dkim", out var dkim) || dkim.ValueKind != JsonValueKind.True
+                    || published.EnumerateObject().Any(x => x.Name != "dkim" && x.Value.ValueKind == JsonValueKind.True))
+                    return "MAIL_DNS_MANAGEMENT_CONFLICT";
+            }
+            else if (mode != "Manual") return "MAIL_DNS_MANAGEMENT_CONFLICT";
+            var signing = upstream.GetProperty("dkimManagement");
+            var automatic = signing.GetProperty("@type").GetString() == "Automatic";
+            var patch = new Dictionary<string, object>();
+            if (mode == "Manual") patch["dnsManagement"] = new Dictionary<string, object> {
+                ["@type"] = "Automatic", ["dnsServerId"] = dnsServerId!, ["origin"] = domain.Name,
+                ["publishRecords"] = new Dictionary<string, bool> { ["dkim"] = true }
+            };
+            if (!automatic) patch["dkimManagement"] = new Dictionary<string, object> { ["@type"] = "Automatic" };
+            if (patch.Count > 0)
+            {
+                var id = upstream.GetProperty("id").GetString()!;
+                var result = await StalwartMailProvider.Call(client, "x:Domain/set", new {
+                    update = new Dictionary<string, object> { [id] = patch }
+                }, ct);
+                if (!result.TryGetProperty("updated", out var updated) || updated.ValueKind != JsonValueKind.Object
+                    || !updated.TryGetProperty(id, out _)) return "MAIL_DKIM_ENABLE_FAILED";
+            }
+        }
         return null;
+    }
+
+    internal static bool IsDkim(string domain, string name, string type)
+    {
+        if (!type.Equals("TXT", StringComparison.OrdinalIgnoreCase)) return false;
+        var zone = domain.TrimEnd('.').ToLowerInvariant();
+        var owner = name.TrimEnd('.').ToLowerInvariant();
+        if (!owner.EndsWith("." + zone)) owner += "." + zone;
+        return owner.EndsWith("._domainkey." + zone, StringComparison.Ordinal);
     }
 
     internal static IReadOnlyList<DnsRecord>? Plan(string domain, IReadOnlyList<DnsRecordEntity> existing, IReadOnlyList<DnsRecord> desired)
