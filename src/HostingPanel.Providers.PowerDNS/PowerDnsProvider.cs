@@ -18,7 +18,7 @@ public sealed class PowerDnsProvider(IDNSProvider desiredState, PowerDnsClient c
     public Task<DnsChangeResult> ChangeAsync(string domain, DnsChange change, AuthenticationHeaderValue auth, CancellationToken ct) => desiredState.ChangeAsync(domain, change, auth, ct);
     public Task<DnsChangeResult> CreateZoneAsync(DnsZoneCreate input, AuthenticationHeaderValue auth, CancellationToken ct) => desiredState.CreateZoneAsync(input, auth, ct);
     public Task<DnsChangeResult> DeleteZoneAsync(string domain, string confirmation, AuthenticationHeaderValue auth, CancellationToken ct) => desiredState.DeleteZoneAsync(domain, confirmation, auth, ct);
-    public Task ProvisionAsync(string zone, IReadOnlyList<DnsRecord> records, CancellationToken ct) => client.ApplyAsync(zone, records, ct);
+    public Task ProvisionAsync(string zone, IReadOnlyList<DnsRecord> records, CancellationToken ct, bool preserveDkim = false) => client.ApplyAsync(zone, records, ct, preserveDkim);
     public Task DeprovisionAsync(string zone, CancellationToken ct) => client.DeleteAsync(zone, ct);
 }
 
@@ -56,13 +56,17 @@ public sealed class PowerDnsClient(HttpClient http)
     }
     private sealed record Entry(string content, bool disabled);
     private sealed record Rrset(string name, string type, int ttl, string changetype, Entry[] records);
-    public async Task ApplyAsync(string domain, IReadOnlyList<DnsRecord> records, CancellationToken ct)
+    public async Task ApplyAsync(string domain, IReadOnlyList<DnsRecord> records, CancellationToken ct, bool preserveDkim = false)
     {
         var zone = Fqdn(domain);
         var desired = records.GroupBy(r => (name: Owner(zone, r.Name), type: r.Type.ToUpperInvariant()))
             .ToDictionary(g => g.Key, g => new Rrset(g.Key.name, g.Key.type,
                 g.Select(r => int.TryParse(r.Ttl, out var ttl) ? ttl : 3600).Min(), "REPLACE",
                 g.Select(r => new Entry(Content(r), false)).Distinct().OrderBy(r => r.content, StringComparer.Ordinal).ToArray()));
+        bool ExternallyManaged(string name, string type) => preserveDkim
+            && type == "TXT" && name.EndsWith("._domainkey." + zone, StringComparison.Ordinal);
+        foreach (var key in desired.Keys.Where(k => ExternallyManaged(k.name, k.type)).ToArray())
+            desired.Remove(key);
         var ns = desired.GetValueOrDefault((zone, "NS"))?.records.Select(r => r.content).ToArray() ?? [];
         if (ns.Length == 0) throw new InvalidOperationException("A zone must retain at least one apex NS record.");
         using var initial = await ReadAsync(zone, ct);
@@ -77,7 +81,7 @@ public sealed class PowerDnsClient(HttpClient http)
         {
             var name = current.GetProperty("name").GetString()!;
             var type = current.GetProperty("type").GetString()!;
-            if (type == "SOA" || (type == "TXT" && name.Split('.').Contains("_acme-challenge"))) { desired.Remove((name, type)); continue; } // PowerDNS owns the SOA and serial.
+            if (ExternallyManaged(name, type) || type == "SOA" || (type == "TXT" && name.Split('.').Contains("_acme-challenge"))) { desired.Remove((name, type)); continue; } // PowerDNS owns the SOA and serial.
             if (!desired.Remove((name, type), out var target))
                 changes.Add(new(name, type, 0, "DELETE", []));
             else
