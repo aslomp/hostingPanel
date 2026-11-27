@@ -80,6 +80,26 @@ public sealed class KubernetesDnsService(HostingPanelDbContext db, KubernetesIde
         var zone = await db.DnsZones.FirstOrDefaultAsync(x => x.Name == domain.ToLowerInvariant(), ct);
         if (zone is null) return new(404, "ZONE_NOT_FOUND");
         if (!ids.Contains(zone.OwnerId)) return new(403, "ACCESS_DENIED");
+        // Explicit edits of live shared TXT RRsets are allowed, including SPF/DKIM.
+        // Persist the command, not a stale copy of the authoritative RRset.
+        var sharedNew = change.Record.Type.Equals("TXT", StringComparison.OrdinalIgnoreCase);
+        var sharedOld = change.Previous?.Type.Equals("TXT", StringComparison.OrdinalIgnoreCase) == true;
+        if (await DelegatedAsync(zone, ct) && (sharedNew || sharedOld))
+        {
+            if (change.Action == "edit" && sharedNew != sharedOld)
+                return new(400, "DNS_RECORD_TYPE_CHANGE_REQUIRES_DELETE_AND_ADD");
+            if (powerDns is null) return new(503, null, "MAIL_DNS_UNAVAILABLE");
+            if (change.Action != "add")
+            {
+                var current = await powerDns.ReadManagedMailAsync(zone.Name, ct);
+                if (!current.Any(r => PowerDnsClient.SameRecord(zone.Name, r, change.Previous!)))
+                    return new(404, "DNS_RECORD_NOT_FOUND");
+            }
+            operations.Schedule("dns-record", zone.Id, change.Action, new { zone.Name, Change = change });
+            await db.SaveChangesAsync(ct);
+            notifications?.PublishChange(ReconciliationTarget.Dns);
+            return new(202, null);
+        }
         if (await DelegatedAsync(zone, ct) &&
             (MailDnsOwnership.Reserved(zone.Name, change.Record.Name, change.Record.Type)
              || change.Previous is not null && MailDnsOwnership.Reserved(zone.Name, change.Previous.Name, change.Previous.Type)))

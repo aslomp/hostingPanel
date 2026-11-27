@@ -136,6 +136,45 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
             notifications.Publish();
             if (group.All(row => row.Status == "completed")) notifications.Signal(ReconciliationTarget.Website);
         }
+        // Execute explicit shared-record commands in chronological order, never
+        // coalesce them into a desired-state replacement of the whole zone.
+        var edits = await db.ReconciliationOperations.Where(x => x.ResourceType == "dns-record" && x.Status == "pending").ToListAsync(ct);
+        var blockedZones = new HashSet<Guid>();
+        foreach (var edit in edits.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id))
+        {
+            if (blockedZones.Contains(edit.ResourceId)) continue;
+            try
+            {
+                var zone = await db.DnsZones.AsNoTracking().SingleOrDefaultAsync(x => x.Id == edit.ResourceId, ct);
+                if (zone is not null)
+                {
+                    if (await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "dns-zone" &&
+                        x.ResourceId == zone.Id && x.Status == "pending", ct))
+                    {
+                        retry = true;
+                        blockedZones.Add(edit.ResourceId);
+                        continue;
+                    }
+                    using var payload = JsonDocument.Parse(edit.PayloadJson);
+                    var change = payload.RootElement.GetProperty("Change").Deserialize<DnsChange>()
+                        ?? throw new InvalidOperationException("Missing DNS change.");
+                    await scope.ServiceProvider.GetRequiredService<PowerDnsClient>().ChangeTxtAsync(zone.Name, change, ct);
+                }
+                edit.Status = "completed";
+                edit.CompletedAt = DateTimeOffset.UtcNow;
+                edit.LastError = null;
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                retry = true;
+                blockedZones.Add(edit.ResourceId);
+                edit.Attempts++;
+                edit.LastError = "DNS record publication failed; see application log.";
+                logger.LogWarning(ex, "DNS record publication failed for operation {Id}", edit.Id);
+            }
+            await db.SaveChangesAsync(ct);
+            notifications.Publish();
+        }
         return retry;
     }
 }

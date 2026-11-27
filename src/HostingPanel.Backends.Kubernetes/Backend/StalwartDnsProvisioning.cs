@@ -51,7 +51,7 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
         var existing = await db.DnsRecords.Where(x => x.ZoneId == zone.Id).ToListAsync(ct);
         // Native mail ownership is exclusive for the delegated RRsets. Do not
         // discard existing non-mail TXT records or silently migrate old zones.
-        if (nativeRotation && existing.Any(x => MailDnsOwnership.Reserved(domain.Name, x.Name, x.Type)))
+        if (nativeRotation && existing.Any(x => !x.Type.Equals("TXT", StringComparison.OrdinalIgnoreCase) && MailDnsOwnership.Reserved(domain.Name, x.Name, x.Type)))
             return "MAIL_DNS_RECORD_CONFLICT";
         var additions = Plan(domain.Name, existing, desired);
         if (additions is null) return "MAIL_DNS_RECORD_CONFLICT";
