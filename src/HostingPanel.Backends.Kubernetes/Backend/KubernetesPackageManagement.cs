@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HostingPanel.Api;
 
-public sealed class KubernetesPackageManagement(HostingPanelDbContext db, KubernetesIdentityService identity, IKubernetesSettingsReader? runtimeSettings = null) : IPackageManagement
+public sealed class KubernetesPackageManagement(HostingPanelDbContext db, KubernetesIdentityService identity, IKubernetesSettingsReader? runtimeSettings = null, HostingOperationNotifications? notifications = null) : IPackageManagement
 {
     // Existing packages without a kind marker are user packages.
     // Keep the marker in the existing package settings, not in a second inventory.
@@ -89,6 +89,7 @@ public sealed class KubernetesPackageManagement(HostingPanelDbContext db, Kubern
         row.LimitsJson = JsonSerializer.Serialize(fields);
         try { await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct); }
         catch (DbUpdateException) { return new(409, "PACKAGE_CONFLICT"); }
+        notifications?.Publish();
         return new(create ? 201 : 200, null);
     }
 
