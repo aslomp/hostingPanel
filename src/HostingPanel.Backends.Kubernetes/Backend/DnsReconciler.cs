@@ -13,16 +13,11 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
-        do
-        {
-            try { await ReconcileAsync(ct); }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
-            catch (Exception ex) { logger.LogWarning(ex, "DNS reconciliation failed"); }
-        } while (await timer.WaitForNextTickAsync(ct));
+        await ReconciliationLoop.RunAsync(notifications.Reader(ReconciliationTarget.Dns),
+            ReconcileAsync, TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(5), logger, ct);
     }
 
-    private async Task ReconcileAsync(CancellationToken ct)
+    private async Task<bool> ReconcileAsync(CancellationToken ct)
     {
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
@@ -143,6 +138,9 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
             }
             await db.SaveChangesAsync(ct);
             notifications.Publish();
+            if (group.All(row => row.Status == "completed")) notifications.Signal(ReconciliationTarget.Website);
         }
+        return await db.ReconciliationOperations.AsNoTracking().AnyAsync(x => x.Status == "pending" &&
+            (x.ResourceType == "dns-zone" || x.ResourceType == "domain-dns" || x.ResourceType == "mail-dns"), ct);
     }
 }

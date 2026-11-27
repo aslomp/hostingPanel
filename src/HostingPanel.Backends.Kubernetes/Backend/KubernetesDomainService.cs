@@ -109,7 +109,7 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
         }
         await db.SaveChangesAsync(ct);
         certificateWork?.DomainChanged(changedId);
-        notifications?.Publish();
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
         return new(202, null);
     }
 
@@ -175,7 +175,7 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
         await provisioning.ScheduleWebsiteAsync(row, "update", ct);
         await db.SaveChangesAsync(ct);
         certificateWork?.DomainChanged(row.Id);
-        notifications?.Publish();
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
         return new(202, null);
     }
     public IResult PreviewDomain(DomainCreatePreview input)

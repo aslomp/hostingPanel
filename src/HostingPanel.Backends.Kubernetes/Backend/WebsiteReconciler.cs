@@ -1,6 +1,5 @@
 using HostingPanel.Providers.CertManager;
 using System.Text.Json;
-using System.Threading.Channels;
 using HostingPanel.Api.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
@@ -12,21 +11,47 @@ namespace HostingPanel.Api;
 public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguration configuration,
     ILogger<WebsiteReconciler> logger, NfsDirectoryProvisioner storage, HostingOperationNotifications notifications, KubernetesResourceClient resources) : BackgroundService
 {
-    private string? stagedApacheRevision;
-    private string? activatedReplicaFingerprint;
+    private readonly NfsReconciliation nfs = new(storage);
+    private readonly PhpRuntimeReconciliation php = new(configuration, resources);
+    private readonly ApacheReconciliation apache = new(configuration, resources, logger);
     private bool migrated;
+    private int runtimeDrift;
+    private int routeDrift;
+    private int apacheDrift;
     private bool legacyApacheRetired;
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         if (!configuration.GetValue<bool>("KubernetesHosting:Enabled")) return;
-        await ReconciliationLoop.RunAsync(notifications,
-            (changed, token) => resources.WatchApachePodsAsync(Namespace, changed, token),
-            ReconcileAsync, logger, TimeSpan.FromSeconds(60), ct);
+        await ReconciliationLoop.RunAsync(notifications.Reader(ReconciliationTarget.Website),
+            (changed, token) => WatchResourcesAsync(changed, token),
+            ReconcileAsync, logger, Timeout.InfiniteTimeSpan, ct, signal: () => notifications.Signal(ReconciliationTarget.Website));
+    }
+
+    private async Task WatchResourcesAsync(Action changed, CancellationToken ct)
+    {
+        void PhpChanged() { Interlocked.Exchange(ref runtimeDrift, 1); changed(); }
+        void RouteChanged() { Interlocked.Exchange(ref routeDrift, 1); changed(); }
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var tasks = new[] {
+            resources.WatchApachePodsAsync(Namespace, () => { Interlocked.Exchange(ref apacheDrift, 1); changed(); }, lifetime.Token),
+            resources.WatchAccountPhpAsync(Namespace, PhpChanged, lifetime.Token),
+            resources.WatchWebsiteRoutesAsync(Namespace, RouteChanged, lifetime.Token)
+        };
+        try { await await Task.WhenAny(tasks); }
+        finally
+        {
+            await lifetime.CancelAsync();
+            try { await Task.WhenAll(tasks); }
+            catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        }
     }
 
     private async Task<bool> ReconcileAsync(CancellationToken ct)
     {
+        if (Interlocked.Exchange(ref apacheDrift, 0) != 0) apache.Invalidate();
+        if (Interlocked.Exchange(ref runtimeDrift, 0) != 0) php.InvalidateAll();
+        if (Interlocked.Exchange(ref routeDrift, 0) != 0) migrated = false;
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
         var rows = await db.ReconciliationOperations.Where(x => x.ResourceType == "website"
@@ -36,29 +61,8 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var ownerIds = domains.Select(d => d.OwnerId).Distinct().ToArray();
         var accounts = await db.Accounts.AsNoTracking().Where(x => ownerIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id, ct);
-        // Resolve storage independently for each domain. A broken mount or
-        // missing directory must not block unrelated websites or deletion.
-        var usable = new List<HostedDomain>();
-        var storageErrors = new Dictionary<Guid, Exception>();
-        foreach (var domain in domains)
-        {
-            try
-            {
-                var owner = accounts[domain.OwnerId];
-                var identity = identities[domain.OwnerId];
-                var (uid, gid) = await storage.EnsureAsync(owner.Username, domain.Name, identity, ct);
-                if (identity.ExistingUid is { } previousUid && (previousUid != uid || identity.ExistingGid != gid))
-                    throw new InvalidOperationException("Inconsistent ownership of DirectAdmin account directories.");
-                identity.ExistingUid = uid;
-                identity.ExistingGid = gid;
-                usable.Add(domain);
-            }
-            catch (Exception ex) when (!ct.IsCancellationRequested)
-            {
-                storageErrors[domain.Id] = ex;
-                logger.LogWarning(ex, "Storage unavailable for website {Id}", domain.Id);
-            }
-        }
+        var (usable, storageErrors) = await nfs.EnsureAsync(domains, accounts, identities, ct);
+        foreach (var (id, error) in storageErrors) logger.LogWarning(error, "Storage unavailable for website {Id}", id);
         var completed = new List<ReconciliationOperation>();
         var byId = rows.GroupBy(x => x.ResourceId).ToDictionary(x => x.Key, x => x.ToArray());
         var targets = byId.Keys.Concat(migrated ? Array.Empty<Guid>() : domains.Select(x => x.Id)).Distinct();
@@ -80,7 +84,10 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                     if (storageErrors.TryGetValue(domain.Id, out var storageError))
                         throw new InvalidOperationException("Website storage unavailable.", storageError);
                     var manifest = BuildManifest(domain);
-                    await resources.ApplyAsync(manifest, Namespace, "hostingpanel", ct);
+                    using var desired = JsonDocument.Parse(manifest);
+                    var existing = await resources.TryGetAsync("gateway.networking.k8s.io", "v1", Namespace, "httproutes", name, ct);
+                    if (existing is null || !RouteMatches(desired.RootElement.GetProperty("items")[0], existing))
+                        await resources.ApplyAsync(manifest, Namespace, "hostingpanel", ct);
                 }
                 completed.AddRange(group);
             }
@@ -100,18 +107,17 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var backendSettings = await scope.ServiceProvider.GetRequiredService<IKubernetesSettingsReader>().GetEffectiveSettingsAsync(ct);
         var packageIds = accounts.Values.Where(x => x.PackageId.HasValue).Select(x => x.PackageId!.Value).Distinct().ToArray();
         var packages = await db.Packages.AsNoTracking().Where(x => packageIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, ct);
-        var phpRuntime = new AccountPhpRuntime(configuration, resources, Namespace);
-        var desiredPhp = await phpRuntime.EnsureAsync(usable.Where(HasPhp)
+        var desiredPhp = await php.EnsureAsync(Namespace, usable.Where(HasPhp)
             .Select(domain => (accounts[domain.OwnerId].Username, identities[domain.OwnerId], PhpRuntimePolicy.Resolve(backendSettings,
                 accounts[domain.OwnerId].PackageId is { } packageId ? packages.GetValueOrDefault(packageId)?.LimitsJson : null,
                 accounts[domain.OwnerId].LimitsJson))), ct);
         try
         {
-            await ActivateApacheConfigurationAsync(domains, accounts, identities, storageErrors, ct);
+            await apache.ActivateAsync(domains, accounts, identities, storageErrors, ct);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            stagedApacheRevision = null;
+            apache.Invalidate();
             foreach (var row in completed)
             {
                 row.Attempts++;
@@ -123,7 +129,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             return true;
         }
         // Keep obsolete runtimes until the new Apache configuration has been activated.
-        await resources.RetireAccountPhpResourcesAsync(Namespace, desiredPhp, ct);
+        await php.RetireAsync(Namespace, desiredPhp, ct);
         // Only remove obsolete transport objects after the NFS activation succeeded.
         if (!legacyApacheRetired)
         {
@@ -150,33 +156,6 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         await CleanupDeletedDomainsAsync(db, ct);
         return migrationFailed || !legacyApacheRetired || await db.ReconciliationOperations.AnyAsync(x =>
             x.Status == "pending" && (x.ResourceType == "website" || x.ResourceType == "domain-cleanup"), ct);
-    }
-
-    private async Task ActivateApacheConfigurationAsync(
-        IReadOnlyList<HostedDomain> domains,
-        IReadOnlyDictionary<Guid, HostingAccount> accounts,
-        IReadOnlyDictionary<Guid, PhpAccountIdentity> identities,
-        IReadOnlyDictionary<Guid, Exception> storageErrors,
-        CancellationToken ct)
-    {
-        if (storageErrors.Count != 0)
-            throw new InvalidOperationException("Website storage unavailable; retaining previous Apache revision.");
-        var revision = new ApacheConfigurationRevision(domains.Select(domain =>
-            KeyValuePair.Create(domain.Id, BuildVirtualHost(domain,
-                accounts[domain.OwnerId].Username, identities[domain.OwnerId]).Apache)));
-        var store = new ApacheCandidateStore(Required("ApacheConfigPath"));
-        var runtime = new ApacheRevisionRuntime(resources, Namespace);
-        var fingerprint = await runtime.GetReplicaFingerprintAsync(ct);
-        if (revision.Id == stagedApacheRevision && fingerprint == activatedReplicaFingerprint &&
-            await store.ReadActiveAsync(ct) == revision.Id) return;
-        await new ApacheRevisionActivator(store).ActivateAsync(revision,
-            runtime.ValidateAsync, runtime.ReloadAsync, ct);
-        if (fingerprint != await runtime.GetReplicaFingerprintAsync(ct))
-            throw new InvalidOperationException("Apache replica set changed during activation; retry required.");
-        stagedApacheRevision = revision.Id;
-        activatedReplicaFingerprint = fingerprint;
-        logger.LogInformation("Activated Apache configuration revision {Revision} with {Count} virtualhosts",
-            revision.Id, revision.VirtualHosts.Count);
     }
 
     private async Task CleanupDeletedDomainsAsync(HostingPanelDbContext db, CancellationToken ct)
@@ -208,7 +187,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                     // TLS Secrets are removed by cert-manager's certificate owner reference
                     // when enabled by the cluster administrator.
                 }
-                await storage.DeleteAsync(username, name, ct);
+                await nfs.DeleteAsync(operation.ResourceId, username, name, ct);
                 db.Configuration.Remove(marker);
                 operation.Status = "completed";
                 operation.CompletedAt = DateTimeOffset.UtcNow;
@@ -230,7 +209,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
 
     private string Namespace => configuration["KubernetesHosting:Namespace"] ?? "hosting";
 
-    private (string Apache, bool Tls) BuildVirtualHost(HostedDomain domain, string username, PhpAccountIdentity identity)
+    internal static (string Apache, bool Tls) BuildVirtualHost(HostedDomain domain, string username, PhpAccountIdentity identity)
     {
         var host = domain.Name;
         if (host.Length > 253 || host.Split('.').Any(label => label.Length is < 1 or > 63
@@ -264,6 +243,12 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             (php ? "<FilesMatch \"[.]php$\">\nSetHandler \"proxy:fcgi://" + AccountPhpRuntime.Name(identity.AccountId) + ":9000" + "\"\n</FilesMatch>\n" : "") +
             "</VirtualHost>\n";
         return (apache, tls);
+    }
+
+    private static bool RouteMatches(JsonElement desired, string existing)
+    {
+        using var observed = JsonDocument.Parse(existing);
+        return CertificateReconciler.MatchesDesired(desired.GetProperty("spec"), observed.RootElement.GetProperty("spec"));
     }
 
     private string BuildManifest(HostedDomain domain)

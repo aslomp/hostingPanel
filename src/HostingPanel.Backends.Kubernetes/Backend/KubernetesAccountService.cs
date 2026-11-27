@@ -63,7 +63,7 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         certificateWork?.DomainChanged(domain.Id);
-        notifications?.Publish();
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
         return new(202, null);
     }
 
@@ -87,7 +87,7 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         db.Accounts.Remove(target);
         operations.Schedule("account", target.Id, "delete", new { target.Username });
         await db.SaveChangesAsync(ct);
-        notifications?.Publish();
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
         return new(202, null);
     }
 
@@ -109,7 +109,7 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         operations.Schedule("account", account.Id, "update", new { account.Username, package });
         await db.SaveChangesAsync(ct);
         foreach (var id in affectedDomains) certificateWork?.DomainChanged(id);
-        notifications?.Publish();
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
         return new(202, null);
     }
 
@@ -129,7 +129,7 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         account.LimitsJson = JsonSerializer.Serialize(limits);
         operations.Schedule("account", account.Id, "update", new { account.Username, change.Field });
         await db.SaveChangesAsync(ct);
-        notifications?.Publish();
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
         return new(202, null);
     }
 
@@ -145,7 +145,7 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         target.Suspended = suspended;
         operations.Schedule("account", target.Id, "update", new { target.Username, suspended });
         await db.SaveChangesAsync(ct);
-        notifications?.Publish();
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
         return new(202, null);
     }
     public async Task<AccountOverviewResult> GetAsync(string username, AuthenticationHeaderValue auth, CancellationToken ct)

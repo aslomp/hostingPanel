@@ -14,12 +14,12 @@ public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfigur
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         if (!configuration.GetValue<bool>("CertManager:Enabled") || !configuration.GetValue<bool>("KubernetesHosting:Enabled")) return;
-        await ReconciliationLoop.RunAsync(work.Wake,
+        await ReconciliationLoop.RunAsync(work.Wake.Reader(ReconciliationTarget.Certificate),
             (_, token) => resources.WatchCustomResourcesAsync("cert-manager.io", "v1",
                 configuration["KubernetesHosting:Namespace"] ?? "hosting", "certificates",
                 "hostingpanel/component=certificate", work.AllChanged,
                 name => { if (TryDomainId(name, out var id)) work.DomainChanged(id); }, token),
-            ReconcileAsync, logger, TimeSpan.FromHours(1), ct, work.Recover);
+            ReconcileAsync, logger, TimeSpan.FromHours(1), ct, work.Recover, () => work.Wake.Signal(ReconciliationTarget.Certificate));
     }
 
     private async Task<bool> ReconcileAsync(CancellationToken ct)
@@ -114,6 +114,7 @@ public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfigur
         ready.Clear();
         foreach (var pair in next) ready.Add(pair.Key, pair.Value);
         if (changed) notifications.Publish();
+        notifications.Signal(ReconciliationTarget.Website);
         if (retry) work.Recover();
         return retry;
     }

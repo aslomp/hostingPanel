@@ -11,13 +11,13 @@ public sealed class CertificateWork
     public void DomainChanged(Guid id)
     {
         lock (gate) { if (!full) domains.Add(id); }
-        Wake.Publish();
+        Wake.Signal(ReconciliationTarget.Certificate);
     }
 
     public void AllChanged()
     {
         lock (gate) { full = true; domains.Clear(); }
-        Wake.Publish();
+        Wake.Signal(ReconciliationTarget.Certificate);
     }
 
     internal Guid[]? Take()

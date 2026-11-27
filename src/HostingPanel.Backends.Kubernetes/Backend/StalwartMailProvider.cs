@@ -9,7 +9,7 @@ using Microsoft.Extensions.Configuration;
 namespace HostingPanel.Api;
 
 internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesIdentityService identity,
-    IHttpClientFactory clients, IConfiguration configuration, MailMutationGate gate, KubernetesOperationQueue operations) : IMailProvider, IMailForwarders
+    IHttpClientFactory clients, IConfiguration configuration, MailMutationGate gate, KubernetesOperationQueue operations, HostingOperationNotifications? notifications = null) : IMailProvider, IMailForwarders
 {
     private static bool ValidName(string? name) => name is { Length: > 0 and <= 64 }
         && Regex.IsMatch(name, @"^[a-z0-9][a-z0-9._+-]*$", RegexOptions.CultureInvariant)
@@ -87,6 +87,7 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
                 {
                     operations.Schedule("mail-dns", row.Id, "update", new { row.Name });
                     await db.SaveChangesAsync(ct);
+                    notifications?.PublishChange(ReconciliationTarget.Dns);
                 }
             }
             if (domainId is null && createDomain)

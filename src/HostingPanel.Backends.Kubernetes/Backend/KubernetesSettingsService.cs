@@ -85,7 +85,7 @@ public sealed class KubernetesSettingsService(HostingPanelDbContext db, Kubernet
         }
         await tx.CommitAsync(ct);
         certificateWork?.AllChanged();
-        notifications?.Publish();
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
         return Results.Ok(BackendSettingsSchema.Describe("Kubernetes", await GetEffectiveSettingsAsync(ct)));
     }
 

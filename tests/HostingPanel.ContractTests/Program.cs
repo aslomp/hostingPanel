@@ -22,6 +22,7 @@ var checks = new List<(string Description, Action Test)>
     ("Mail DNS imports preserve existing customer records", StalwartDnsTests.Run),
     ("Mailbox package entitlements fail closed and respect overrides", MailLimitPolicyTests.Run),
     ("DirectAdmin mailbox adapter verifies mutations and preserves caller credentials", DirectAdminMailTests.Run),
+    ("Reconciliation channels isolate targets and coalesce invalidations", ReconciliationChannelTests.Run),
     ("Account PHP runtime manifests isolate account identities and storage", AccountPhpRuntimeTests.Run),
     ("Certificate desired fields and observed generation gate writes and readiness", CertificateReconciliationTests.Run),
     ("ListenerSet shim exclusions converge without replacing unrelated annotations", ListenerSetOptOutTests.Run),
