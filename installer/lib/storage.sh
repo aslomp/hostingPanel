@@ -84,7 +84,8 @@ EOF
   systemctl restart hosting-storage-firewall
   systemctl enable --now nfs-kernel-server ssh
   exportfs -ra
-  python3 "$here/generate.py" "$config" generate
+  # The control plane generates Helm inputs after receiving storage credentials.
+  if [[ -n $(get acmeEmail) ]]; then python3 "$here/generate.py" "$config" generate; fi
   targetcli saveconfig
   systemctl enable rtslib-fb-targetctl.service || die "Cannot enable persistent iSCSI targets"
   install_snapshot_retention "$pool"
