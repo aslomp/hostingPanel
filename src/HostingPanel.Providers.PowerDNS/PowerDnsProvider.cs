@@ -76,38 +76,38 @@ public sealed class PowerDnsClient(HttpClient http)
 
     // Explicit user edits operate against the current authoritative RRset.
     // Other TXT values are retained, including those published by Stalwart.
-    public async Task ChangeTxtAsync(string domain, DnsChange change, CancellationToken ct)
+    public async Task ChangeSharedRecordAsync(string domain, DnsChange change, CancellationToken ct)
     {
         if (change.Action is not ("add" or "edit" or "delete") ||
-            !change.Record.Type.Equals("TXT", StringComparison.OrdinalIgnoreCase) ||
+            !MailDnsOwnership.Reserved(domain, change.Record.Name, change.Record.Type) ||
             (change.Action != "add" && (change.Previous is null ||
-                !change.Previous.Type.Equals("TXT", StringComparison.OrdinalIgnoreCase))))
-            throw new InvalidOperationException("Invalid shared TXT change.");
+                !MailDnsOwnership.Reserved(domain, change.Previous.Name, change.Previous.Type))))
+            throw new InvalidOperationException("Invalid shared DNS change.");
         var zone = Fqdn(domain);
         using var actual = await ReadAsync(zone, ct) ?? throw new InvalidOperationException("DNS zone unavailable.");
-        var newOwner = Owner(zone, change.Record.Name);
-        var oldOwner = change.Previous is null ? newOwner : Owner(zone, change.Previous.Name);
+        var newKey = (Owner: Owner(zone, change.Record.Name), Type: change.Record.Type.ToUpperInvariant());
+        var oldKey = change.Previous is null ? newKey : (Owner: Owner(zone, change.Previous.Name), Type: change.Previous.Type.ToUpperInvariant());
         var changes = new List<Rrset>();
-        foreach (var owner in new[] { oldOwner, newOwner }.Distinct(StringComparer.Ordinal))
+        foreach (var key in new[] { oldKey, newKey }.Distinct())
         {
             var current = actual.RootElement.GetProperty("rrsets").EnumerateArray().FirstOrDefault(x =>
-                x.GetProperty("type").GetString() == "TXT" && x.GetProperty("name").GetString() == owner);
+                x.GetProperty("type").GetString() == key.Type && x.GetProperty("name").GetString() == key.Owner);
             var exists = current.ValueKind != JsonValueKind.Undefined;
             var old = exists ? current.GetProperty("records").EnumerateArray()
                 .Select(r => new Entry(r.GetProperty("content").GetString()!, r.GetProperty("disabled").GetBoolean())).ToList() : new List<Entry>();
             var next = old.ToList();
-            if (change.Action != "add" && owner == oldOwner)
+            if (change.Action != "add" && key == oldKey)
                 next.RemoveAll(x => x.content == Content(change.Previous!));
-            if (change.Action != "delete" && owner == newOwner)
+            if (change.Action != "delete" && key == newKey)
             {
                 var content = Content(change.Record);
                 if (!next.Any(x => x.content == content && !x.disabled)) next.Add(new Entry(content, false));
             }
             var ttl = exists ? current.GetProperty("ttl").GetInt32() :
                 int.TryParse(change.Record.Ttl, out var requested) ? requested : 3600;
-            if (owner == newOwner && change.Action != "delete" && int.TryParse(change.Record.Ttl, out var changedTtl)) ttl = changedTtl;
+            if (key == newKey && change.Action != "delete" && int.TryParse(change.Record.Ttl, out var changedTtl)) ttl = changedTtl;
             if (old.SequenceEqual(next) && (!exists || ttl == current.GetProperty("ttl").GetInt32())) continue;
-            changes.Add(new(owner, "TXT", ttl, next.Count == 0 ? "DELETE" : "REPLACE", next.ToArray()));
+            changes.Add(new(key.Owner, key.Type, ttl, next.Count == 0 ? "DELETE" : "REPLACE", next.ToArray()));
         }
         if (changes.Count == 0) return;
         using var patch = await http.PatchAsJsonAsync(PathFor(zone), new { rrsets = changes }, ct);
@@ -125,8 +125,6 @@ public sealed class PowerDnsClient(HttpClient http)
                 g.Select(r => new Entry(Content(r), false)).Distinct().OrderBy(r => r.content, StringComparer.Ordinal).ToArray()));
         bool ExternallyManaged(string name, string type) => preserveDkim
             && MailDnsOwnership.Reserved(zone, name, type);
-        foreach (var key in desired.Keys.Where(k => ExternallyManaged(k.name, k.type) && k.type != "TXT").ToArray())
-            desired.Remove(key);
         var ns = desired.GetValueOrDefault((zone, "NS"))?.records.Select(r => r.content).ToArray() ?? [];
         if (ns.Length == 0) throw new InvalidOperationException("A zone must retain at least one apex NS record.");
         using var initial = await ReadAsync(zone, ct);
@@ -141,9 +139,9 @@ public sealed class PowerDnsClient(HttpClient http)
         {
             var name = current.GetProperty("name").GetString()!;
             var type = current.GetProperty("type").GetString()!;
-            if (ExternallyManaged(name, type) && type == "TXT")
+            if (ExternallyManaged(name, type))
             {
-                // Existing local TXT entries predate native mail setup; merge only missing values.
+                // Existing local mail entries predate native mail setup; merge only missing values.
                 if (desired.Remove((name, type), out var local))
                 {
                     var existing = current.GetProperty("records").EnumerateArray().Select(r => new Entry(r.GetProperty("content").GetString()!, r.GetProperty("disabled").GetBoolean())).ToArray();

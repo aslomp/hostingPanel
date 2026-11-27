@@ -80,10 +80,10 @@ public sealed class KubernetesDnsService(HostingPanelDbContext db, KubernetesIde
         var zone = await db.DnsZones.FirstOrDefaultAsync(x => x.Name == domain.ToLowerInvariant(), ct);
         if (zone is null) return new(404, "ZONE_NOT_FOUND");
         if (!ids.Contains(zone.OwnerId)) return new(403, "ACCESS_DENIED");
-        // Explicit edits of live shared TXT RRsets are allowed, including SPF/DKIM.
+        // Explicit edits of live shared mail RRsets are allowed, including SPF/DKIM.
         // Persist the command, not a stale copy of the authoritative RRset.
-        var sharedNew = change.Record.Type.Equals("TXT", StringComparison.OrdinalIgnoreCase);
-        var sharedOld = change.Previous?.Type.Equals("TXT", StringComparison.OrdinalIgnoreCase) == true;
+        var sharedNew = MailDnsOwnership.Reserved(zone.Name, change.Record.Name, change.Record.Type);
+        var sharedOld = change.Previous is not null && MailDnsOwnership.Reserved(zone.Name, change.Previous.Name, change.Previous.Type);
         if (await DelegatedAsync(zone, ct) && (sharedNew || sharedOld))
         {
             if (change.Action == "edit" && sharedNew != sharedOld)
@@ -100,7 +100,7 @@ public sealed class KubernetesDnsService(HostingPanelDbContext db, KubernetesIde
                 catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or InvalidOperationException or JsonException or OperationCanceledException or KeyNotFoundException)
                 { return new(503, "MAIL_DNS_UNAVAILABLE"); }
             }
-            var local = await db.DnsRecords.Where(x => x.ZoneId == zone.Id && x.Type == "TXT").ToListAsync(ct);
+            var local = await db.DnsRecords.Where(x => x.ZoneId == zone.Id && (x.Type == "TXT" || x.Type == "MX")).ToListAsync(ct);
             if (change.Action != "add")
                 db.DnsRecords.RemoveRange(local.Where(x => PowerDnsClient.SameRecord(zone.Name,
                     new DnsRecord(x.Type, x.Name, x.Value, x.Ttl.ToString()), change.Previous!)));
@@ -109,10 +109,6 @@ public sealed class KubernetesDnsService(HostingPanelDbContext db, KubernetesIde
             notifications?.PublishChange(ReconciliationTarget.Dns);
             return new(202, null);
         }
-        if (await DelegatedAsync(zone, ct) &&
-            (MailDnsOwnership.Reserved(zone.Name, change.Record.Name, change.Record.Type)
-             || change.Previous is not null && MailDnsOwnership.Reserved(zone.Name, change.Previous.Name, change.Previous.Type)))
-            return new(409, "MAIL_DNS_MANAGED_BY_STALWART");
         var prev = change.Action == "add" ? null : change.Previous;
         var previous = prev is null ? null : await db.DnsRecords.FirstOrDefaultAsync(x =>
             x.ZoneId == zone.Id && x.Name == prev.Name && x.Type == prev.Type && x.Value == prev.Value, ct);

@@ -49,10 +49,20 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
         if (zone is null) return "MAIL_DNS_ZONE_NOT_READY";
         if (zone.OwnerId != domain.OwnerId || zone.DomainId != domain.Id) return "MAIL_DNS_ZONE_OWNERSHIP_CONFLICT";
         var existing = await db.DnsRecords.Where(x => x.ZoneId == zone.Id).ToListAsync(ct);
-        // TXT records are shared and may exist before mail setup. Only apex MX
-        // ownership conflicts block native configuration.
-        if (nativeRotation && existing.Any(x => !x.Type.Equals("TXT", StringComparison.OrdinalIgnoreCase) && MailDnsOwnership.Reserved(domain.Name, x.Name, x.Type)))
-            return "MAIL_DNS_RECORD_CONFLICT";
+        // Bootstrap MX/SPF/DMARC once, without replacing existing customer records.
+        // Subsequent mailbox creation must not recreate deliberately deleted records.
+        if (nativeRotation && !await db.ReconciliationOperations.AnyAsync(x =>
+            x.ResourceType == "mail-dns" && x.ResourceId == domain.Id && x.Status == "completed", ct))
+        {
+            if (!matches[0].TryGetProperty("dnsZoneFile", out var initialFile) || initialFile.ValueKind != JsonValueKind.String)
+                return "MAIL_DNS_NOT_READY";
+            desired = StalwartDnsRecords.Parse(domain.Name, initialFile.GetString()!)
+                .Where(x => !IsDkim(domain.Name, x.Name, x.Type))
+                .Where(x => !existing.Any(e => e.Type.Equals(x.Type, StringComparison.OrdinalIgnoreCase) &&
+                    (x.Type == "MX" || e.Value.TrimStart('"').StartsWith("v=spf1", StringComparison.OrdinalIgnoreCase) && x.Value.TrimStart('"').StartsWith("v=spf1", StringComparison.OrdinalIgnoreCase) ||
+                    e.Value.TrimStart('"').StartsWith("v=DMARC1", StringComparison.OrdinalIgnoreCase) && x.Value.TrimStart('"').StartsWith("v=DMARC1", StringComparison.OrdinalIgnoreCase))))
+                .ToArray();
+        }
         var additions = Plan(domain.Name, existing, desired);
         if (additions is null) return "MAIL_DNS_RECORD_CONFLICT";
         foreach (var record in additions)
@@ -80,14 +90,14 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
                 if (management.GetProperty("dnsServerId").GetString() != dnsServerId
                     || (management.TryGetProperty("origin", out var origin) && origin.GetString() != domain.Name)
                     || !management.TryGetProperty("publishRecords", out var published)
-                    || published.EnumerateObject().Any(x => !MailDnsOwnership.PublishRecords.Contains(x.Name) && x.Value.ValueKind == JsonValueKind.True))
+                    || published.EnumerateObject().Any(x => x.Name is not ("mx" or "spf" or "dkim" or "dmarc") && x.Value.ValueKind == JsonValueKind.True))
                     return "MAIL_DNS_MANAGEMENT_CONFLICT";
             }
             else if (mode != "Manual") return "MAIL_DNS_MANAGEMENT_CONFLICT";
             var signing = upstream.GetProperty("dkimManagement");
             var automatic = signing.GetProperty("@type").GetString() == "Automatic";
             var patch = new Dictionary<string, object>();
-            if (mode == "Manual" || MailDnsOwnership.PublishRecords.Any(key => !management.GetProperty("publishRecords").TryGetProperty(key, out var value) || value.ValueKind != JsonValueKind.True)) patch["dnsManagement"] = new Dictionary<string, object> {
+            if (mode == "Manual" || MailDnsOwnership.PublishRecords.Any(key => !management.GetProperty("publishRecords").TryGetProperty(key, out var value) || value.ValueKind != JsonValueKind.True) || management.GetProperty("publishRecords").EnumerateObject().Any(x => !MailDnsOwnership.PublishRecords.Contains(x.Name) && x.Value.ValueKind == JsonValueKind.True)) patch["dnsManagement"] = new Dictionary<string, object> {
                 ["@type"] = "Automatic", ["dnsServerId"] = dnsServerId!, ["origin"] = domain.Name,
                 ["publishRecords"] = MailDnsOwnership.PublishRecords.ToDictionary(key => key, _ => true)
             };

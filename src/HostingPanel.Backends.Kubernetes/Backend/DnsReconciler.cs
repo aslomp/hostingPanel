@@ -158,7 +158,7 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
                     using var payload = JsonDocument.Parse(edit.PayloadJson);
                     var change = payload.RootElement.GetProperty("Change").Deserialize<DnsChange>()
                         ?? throw new InvalidOperationException("Missing DNS change.");
-                    await scope.ServiceProvider.GetRequiredService<PowerDnsClient>().ChangeTxtAsync(zone.Name, change, ct);
+                    await scope.ServiceProvider.GetRequiredService<PowerDnsClient>().ChangeSharedRecordAsync(zone.Name, change, ct);
                 }
                 edit.Status = "completed";
                 edit.CompletedAt = DateTimeOffset.UtcNow;
