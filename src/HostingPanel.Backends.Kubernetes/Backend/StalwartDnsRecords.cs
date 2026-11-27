@@ -1,3 +1,4 @@
+using HostingPanel.Api.Adapters;
 using System.Text.RegularExpressions;
 using HostingPanel.Api.Services;
 
