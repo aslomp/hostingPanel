@@ -49,7 +49,8 @@ install_platform() {
     docker save "$image" | k3s ctr images import -
   fi
   helm template admin "$here/../deploy/helm/hostingpanel" -n hosting -f "$base/hosting-values.json" >/dev/null
-  helm upgrade --install admin "$here/../deploy/helm/hostingpanel" -n hosting -f "$base/hosting-values.json" --wait --timeout 10m
+  install_panel_with_progress "$base"
+  getent ahostsv4 registry-1.docker.io >/dev/null || die "Host DNS resolution failed after panel deployment"
   if [[ -z $(get panelHostname) ]]; then
     k3s kubectl -n envoy-gateway-system wait --for=condition=Programmed gateway/external --timeout=300s
     local pod
@@ -108,4 +109,32 @@ check_panel_https() (
   curl --fail --silent --show-error --retry 5 --retry-all-errors --connect-timeout 10 --max-time 30 \
     --noproxy '*' --resolve "$hostname:443:$(require clusterHost)" --insecure --pinnedpubkey "$tmp/pubkey.pem" "https://$hostname/healthz"
   echo "Panel HTTPS ready. Bootstrap certificates are not publicly trusted; configure ACME when public DNS and ingress are ready."
+)
+
+# Keep Helm readiness gating, but expose progress and diagnostics while it waits.
+install_panel_with_progress() (
+  local base=$1 pid status=0
+  helm upgrade --install admin "$here/../deploy/helm/hostingpanel" -n hosting -f "$base/hosting-values.json" --wait --timeout 10m &
+  pid=$!
+  trap 'kill "$pid" 2>/dev/null || true' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  while kill -0 "$pid" 2>/dev/null; do
+    echo "Waiting for HostingPanel workloads..."
+    k3s kubectl --request-timeout=5s -n hosting get pods,pvc -o wide || true
+    k3s kubectl --request-timeout=5s -n hosting get events --field-selector type=Warning --sort-by=.lastTimestamp | tail -15 || true
+    for ((i=0;i<15;i++)); do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 1
+    done
+  done
+  wait "$pid" || status=$?
+  trap - EXIT
+  if ((status)); then
+    k3s kubectl --request-timeout=10s -n hosting get pods,pvc -o wide || true
+    k3s kubectl --request-timeout=10s -n hosting get events --sort-by=.lastTimestamp || true
+    k3s kubectl --request-timeout=10s get nodes || true
+    df -h /
+  fi
+  return "$status"
 )
