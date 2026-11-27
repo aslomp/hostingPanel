@@ -49,11 +49,15 @@ Enable `stalwart.api.enabled`, set `stalwart.api.baseUrl` to an HTTPS origin rea
 
 All endpoints require panel Basic authentication and a visible, non-suspended hosted domain. The first mailbox creation creates the Stalwart domain if absent. Existing matching mail domains are treated as managed; use a dedicated instance and verify ownership before enabling. No local mailbox mirror is maintained.
 
-| Method | Path | Body / query |
-| --- | --- | --- |
-| GET | /hosting/mail/{domain}/accounts | Lists ordinary users and disk usage |
-| POST | /hosting/mail/{domain}/accounts | name, password (12+ characters), quotaBytes (positive) |
-| PATCH | /hosting/mail/{domain}/accounts/{name} | quotaBytes (positive) |
-| DELETE | /hosting/mail/{domain}/accounts/{name} | confirmation=name@domain |
+The official legacy DirectAdmin endpoint is `/CMD_API_POP`. No new /hosting or /api routes are introduced; the pinned Swagger is unchanged.
 
-Password reset, aliases, forwarding, aggregate hosting package limits, mail DNS, suspension propagation and domain deletion cleanup are pending. Mutations are administrator-only until aggregate resource limits and lifecycle integration have been completed; resellers and users can only list accounts for their visible domains. An upstream failure may leave a newly created mail domain; no automatic destructive rollback is attempted. DirectAdmin does not implement these new routes.
+| Method | Action | Form / query fields |
+| --- | --- | --- |
+| GET | list | domain |
+| POST | create | domain, user, passwd, passwd2, quota (MiB, positive integer) |
+| POST | modify | domain, user, quota (bytes, positive integer) |
+| POST | delete | domain, user |
+
+Responses are URL-encoded legacy fields. Unsupported actions (including full_list, detailed quota, multiple deletion, unlimited quotas, send limits and rename) fail explicitly. State-changing GET requests are rejected.
+
+Password reset, aliases, forwarding, aggregate hosting package limits, mail DNS, suspension propagation and domain deletion cleanup are pending. Mutations are administrator-only until aggregate resource limits and lifecycle integration have been completed; resellers and users can only list accounts for their visible domains. An upstream failure may leave a newly created mail domain; no automatic destructive rollback is attempted. DirectAdmin forwards CMD_API_POP to its upstream with the caller's credentials.
