@@ -5,13 +5,26 @@ import json
 import pathlib
 import re
 import sys
+import os
+import tempfile
 
 def write(path, value):
     path = pathlib.Path(path)
-    with path.open("w") as stream:
-        json.dump(value, stream, indent=2)
-        stream.write("\n")
-    path.chmod(0o600)
+    fd, tmp = tempfile.mkstemp(dir=path.parent)
+    try:
+        with os.fdopen(fd, "w") as stream:
+            json.dump(value, stream, indent=2)
+            stream.write("\n")
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+def hostname_valid(value):
+    return isinstance(value, str) and len(value) <= 253 and "." in value and all(
+        re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+        for label in value.split(".")) and not value.split(".")[-1].isdigit()
+
 
 def validate(c):
     for k in ("clusterHost", "storageHost", "webIp"):
@@ -21,18 +34,37 @@ def validate(c):
     if net.version != 4 or net.prefixlen == 0 or ipaddress.ip_address(c["storageHost"]) not in net:
         raise ValueError("storageNetwork must be a restricted IPv4 network containing storageHost")
     for k in ("panelHostname", "ns1", "ns2"):
-        if not re.fullmatch(r"[a-z0-9][a-z0-9.-]*\.[a-z0-9-]+", c[k]):
+        if c[k] and not hostname_valid(c[k]):
             raise ValueError(f"Invalid {k}")
+    if c["ns1"] and c["ns1"] == c["ns2"]:
+        raise ValueError("Primary and secondary nameserver hostnames must be distinct")
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", c["pool"]):
         raise ValueError("Invalid pool")
-    if "@" not in c["acmeEmail"] or c["acmeEmail"].split("@")[-1] in {"example.com","example.net","example.org"}:
+    if c["acmeEmail"] and (not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", c["acmeEmail"]) or c["acmeEmail"].split("@")[-1].lower() in {"example.com","example.net","example.org","example.invalid"}):
         raise ValueError("Set real ACME email")
+    for k in ("localStorage", "acmeStaging", "confirmPoolCreation", "buildPanelImage"):
+        if type(c[k]) is not bool:
+            raise ValueError(f"{k} must be a boolean")
+    for k in ("k3sVersion", "helmVersion", "envoyVersion", "certManagerVersion", "csiVersion"):
+        if not re.fullmatch(r"v?\d+\.\d+\.\d+(?:\+k3s\d+)?", c[k]):
+            raise ValueError(f"{k} must be pinned")
+    if c["agentTokenFile"] != "agent-token":
+        raise ValueError("agentTokenFile must be agent-token")
+    if not isinstance(c["poolDevices"], list) or len(c["poolDevices"]) > 2:
+        raise ValueError("poolDevices must contain at most two disks")
+    if len(set(c["poolDevices"])) != len(c["poolDevices"]):
+        raise ValueError("Duplicate pool devices")
+    if not c["acmeStaging"] and c["panelTag"] == "latest":
+        raise ValueError("Production requires a versioned panel image")
     if c["localStorage"] and c["clusterHost"] != c["storageHost"]:
         raise ValueError("Local storage must use the cluster host address")
 
 def generate(c, base):
     host, pool = c["storageHost"], c["pool"] + "/hosting"
     key = (base / "csi-key").read_text()
+    chap = (base / "iscsi-chap").read_text().strip()
+    if not re.fullmatch(r"[a-f0-9]{16}", chap):
+        raise ValueError("Invalid iSCSI CHAP secret")
     for protocol in ("nfs", "iscsi"):
         zfs = dict(datasetParentName=pool + ("/nfs-volumes" if protocol == "nfs" else "/volumes"),
                    detachedSnapshotsDatasetParentName=pool + ("/nfs-snapshots" if protocol == "nfs" else "/snapshots"),
@@ -49,12 +81,17 @@ def generate(c, base):
             zfs["zvolEnableReservation"] = True
             driver["iscsi"] = dict(shareStrategy="targetCli", targetPortal=host+":3260",
                 shareStrategyTargetCli=dict(sudoEnabled=True, basename="iqn.2026-11.local.hosting",
-                    tpg=dict(attributes=dict(authentication=0, generate_node_acls=1, cache_dynamic_acls=1, demo_mode_write_protect=0))))
+                    tpg=dict(attributes=dict(authentication=1, generate_node_acls=1, cache_dynamic_acls=1, demo_mode_write_protect=0), auth=dict(userid="hosting-csi", password=chap))))
         values = dict(csiDriver=dict(name="org.democratic-csi."+protocol),
             driver=dict(config=driver),
             storageClasses=[dict(name="zfs-"+protocol, reclaimPolicy="Retain", volumeBindingMode="Immediate",
                 allowVolumeExpansion=True, parameters=dict(fsType="nfs" if protocol=="nfs" else "ext4"),
                 mountOptions=["nfsvers=4.1"] if protocol=="nfs" else [])])
+        if protocol == "iscsi":
+            values["storageClasses"][0]["secrets"] = {"node-stage-secret": {
+                "node-db.node.session.auth.authmethod": "CHAP",
+                "node-db.node.session.auth.username": "hosting-csi",
+                "node-db.node.session.auth.password": chap}}
         write(base / ("csi-"+protocol+".json"), values)
     namespace = "envoy-gateway-system"
     def gateway(name, listeners):
@@ -65,9 +102,10 @@ def generate(c, base):
     https = dict(name="https", protocol="HTTPS", port=443, hostname=c["panelHostname"],
         tls=dict(mode="Terminate", certificateRefs=[dict(name="hosting-panel-tls")]),
         allowedRoutes=http["allowedRoutes"])
-    external = gateway("external", [http, https])
+    external = gateway("external", [http, https] if c["panelHostname"] else [http])
     external["spec"]["allowedListeners"] = {"namespaces":{"from":"All"}}
-    external["metadata"]["annotations"] = {"cert-manager.io/cluster-issuer":"lets-encrypt"}
+    if c["panelHostname"]:
+        external["metadata"]["annotations"] = {"cert-manager.io/cluster-issuer":"lets-encrypt"}
     # Internal gateway uses a ClusterIP proxy, selected via its own GatewayClass.
     internal = gateway("internal", [http])
     internal["spec"]["gatewayClassName"] = "eg-internal"
@@ -82,12 +120,12 @@ def generate(c, base):
     write(base/"gateways.json", dict(apiVersion="v1",kind="List",items=resources))
     write(base/"issuer.json", dict(apiVersion="cert-manager.io/v1",kind="ClusterIssuer",metadata=dict(name="lets-encrypt"),
         spec=dict(acme=dict(email=c["acmeEmail"],server="https://acme-"+("staging-v02" if c["acmeStaging"] else "v02")+".api.letsencrypt.org/directory",
-        privateKeySecretRef=dict(name="lets-encrypt-account"),solvers=[dict(http01=dict(gatewayHTTPRoute=dict(parentRefs=[dict(name="external",namespace=namespace,kind="Gateway",sectionName="http")])))]))))
+        privateKeySecretRef=dict(name="lets-encrypt-staging-account" if c["acmeStaging"] else "lets-encrypt-production-account"),solvers=[dict(http01=dict(gatewayHTTPRoute=dict(parentRefs=[dict(name="external",namespace=namespace,kind="Gateway",sectionName="http")])))]))))
     values = dict(backend="Kubernetes",web=dict(image=dict(repository=c["panelImage"],tag=c["panelTag"],pullPolicy="IfNotPresent")),
         bootstrap=dict(existingSecret="hostingpanel-bootstrap"),sqlite=dict(storageClassName="zfs-iscsi"),
         kubernetesHosting=dict(enabled=True,nfsServer=host,nfsPath="/srv/hosting/home",apacheConfigPath="/srv/hosting/apache",
-            gatewayName="external",gatewayNamespace=namespace,panelRoute=dict(enabled=True,hostname=c["panelHostname"],listener="https")),
-        powerDns=dict(enabled=True,storageClassName="zfs-iscsi",webIp=c["webIp"],ns1=c["ns1"],ns2=c["ns2"]),
+            gatewayName="external",gatewayNamespace=namespace,panelRoute=dict(enabled=bool(c["panelHostname"]),hostname=c["panelHostname"],listener="https")),
+        powerDns=dict(enabled=True,storageClassName="zfs-iscsi",webIp=c["webIp"],ns1=c["ns1"],ns2=c["ns2"],autoCreateZones=bool(c["ns1"] and c["ns2"] and c["ns1"] != c["ns2"])),
         certManager=dict(enabled=True),mariadb=dict(enabled=True,storageClassName="zfs-iscsi",existingSecret="hostingpanel-mariadb",provisioningSecret="hostingpanel-mariadb-provisioning"))
     write(base/"hosting-values.json",values)
 

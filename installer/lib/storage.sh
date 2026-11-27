@@ -4,8 +4,11 @@ install_storage() {
   [[ "$pool" =~ ^[a-zA-Z][a-zA-Z0-9_-]*$ ]] || die "Invalid pool"
   python3 -c 'import ipaddress,sys; ipaddress.ip_network(sys.argv[1]); ipaddress.ip_address(sys.argv[2])' "$network" "$host"
   apt-get update
-  apt-get install -y zfsutils-linux nfs-kernel-server targetcli-fb openssh-server sudo
+  apt-get install -y zfsutils-linux nfs-kernel-server targetcli-fb openssh-server sudo openssl
   if ! zpool list -H "$pool" >/dev/null 2>&1; then
+    if [[ "$default_config" == true && $(get confirmPoolCreation) == False ]]; then
+      python3 "$here/disk_discovery.py" "$config"
+    fi
     [[ $(get confirmPoolCreation) == True ]] || die "Create/import pool or explicitly confirm pool creation"
     local devices
     devices=$(python3 -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1]))["poolDevices"]))' "$config")
@@ -14,7 +17,17 @@ install_storage() {
     while IFS= read -r disk; do
       [[ "$disk" == /dev/disk/by-id/* && -b "$disk" ]] || die "Invalid disk"
       [[ $(lsblk -nr -o TYPE "$disk") == disk ]] || die "Disk has partitions or children"
-      [[ -z $(wipefs -n --noheadings -o TYPE "$disk") ]] || die "Disk has signatures"
+      local signatures
+      signatures=$(wipefs -n --noheadings -o TYPE "$disk") || die "Cannot inspect disk signatures"
+      [[ -z "$signatures" ]] || die "Disk has signatures"
+      local mounts
+      mounts=$(lsblk -nr -o MOUNTPOINTS "$disk" | tr -d '[:space:]') || die "Cannot inspect disk mounts"
+      [[ -z "$mounts" ]] || die "Disk is mounted"
+      [[ $(lsblk -dn -o RO,RM "$disk" | tr -d '[:space:]') == 00 ]] || die "Disk is read-only or removable"
+      [[ -z $(ls -A "/sys/class/block/$(basename "$(readlink -f "$disk")")/holders") ]] || die "Disk has active holders"
+      for previous in "${disks[@]}"; do
+        [[ $(readlink -f "$previous") != $(readlink -f "$disk") ]] || die "Duplicate disk alias"
+      done
       disks+=("$disk")
     done <<< "$devices"
     if ((${#disks[@]} == 1)); then zpool create "$pool" "${disks[@]}";
@@ -25,7 +38,13 @@ install_storage() {
     zfs list -H "$pool/$dataset" >/dev/null 2>&1 || zfs create "$pool/$dataset"
   done
   for dataset in home apache; do
-    zfs set "mountpoint=/srv/hosting/$dataset" "$pool/hosting/$dataset"
+    local current
+    current=$(zfs get -H -o value mountpoint "$pool/hosting/$dataset")
+    if [[ "$current" != "/srv/hosting/$dataset" ]]; then
+      [[ "$current" == "/$pool/hosting/$dataset" ]] || die "Unexpected existing mountpoint: $current"
+      zfs set "mountpoint=/srv/hosting/$dataset" "$pool/hosting/$dataset"
+    fi
+    mountpoint -q "/srv/hosting/$dataset" || die "Dataset is not mounted"
   done
   chown 1654:1654 /srv/hosting/home /srv/hosting/apache
   chmod 0755 /srv/hosting/home /srv/hosting/apache
@@ -33,6 +52,7 @@ install_storage() {
   printf '/srv/hosting/home %s(rw,sync,root_squash,no_subtree_check)\n/srv/hosting/apache %s(rw,sync,root_squash,no_subtree_check)\n' "$network" "$network" > /etc/exports.d/hostingpanel.exports
   local base
   base=$(dirname "$config")
+  [[ -f "$base/iscsi-chap" ]] || openssl rand -hex 8 > "$base/iscsi-chap"
   [[ -f "$base/csi-key" ]] || ssh-keygen -q -t rsa -b 3072 -m PEM -N '' -f "$base/csi-key"
   id hosting-csi >/dev/null 2>&1 || useradd -m -s /bin/bash hosting-csi
   install -d -m 0700 -o hosting-csi -g hosting-csi /home/hosting-csi/.ssh
@@ -72,8 +92,52 @@ EOF
   systemctl restart hosting-storage-firewall
   systemctl enable --now nfs-kernel-server ssh
   exportfs -ra
-  python3 "$here/generate.py" "$config" generate
+  # The control plane generates Helm inputs after receiving storage credentials.
+  if [[ -n $(get acmeEmail) ]]; then python3 "$here/generate.py" "$config" generate; fi
   targetcli saveconfig
   systemctl enable rtslib-fb-targetctl.service || die "Cannot enable persistent iSCSI targets"
+  install_snapshot_retention "$pool"
+  install_clamav
   echo "Storage ready: $host:/srv/hosting/home and $host:/srv/hosting/apache"
+}
+
+install_snapshot_retention() {
+  local pool=$1 tier schedule
+  install -d -m 0755 /usr/local/lib/hostingpanel
+  install -m 0755 "$here/zfs-retention.py" /usr/local/lib/hostingpanel/zfs-retention.py
+  for tier in hourly daily weekly; do
+    case "$tier" in
+      hourly) schedule="*-*-* *:00:00 UTC" ;;
+      daily) schedule="*-*-* 00:00:00 UTC" ;;
+      weekly) schedule="Sun *-*-* 00:00:00 UTC" ;;
+    esac
+    cat > "/etc/systemd/system/hosting-zfs-$tier.service" <<EOF
+[Unit]
+Description=HostingPanel $tier ZFS snapshots and retention
+After=zfs-mount.service
+Requires=zfs-mount.service
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/hostingpanel/zfs-retention.py $pool/hosting $tier
+UMask=0077
+EOF
+    cat > "/etc/systemd/system/hosting-zfs-$tier.timer" <<EOF
+[Unit]
+Description=HostingPanel $tier ZFS snapshot schedule
+[Timer]
+OnCalendar=$schedule
+Persistent=true
+AccuracySec=1s
+[Install]
+WantedBy=timers.target
+EOF
+  done
+  systemctl daemon-reload
+  for tier in hourly daily weekly; do
+    systemctl enable --now "hosting-zfs-$tier.timer"
+  done
+  systemctl start hosting-zfs-hourly.service hosting-zfs-daily.service
+  if [[ $(date -u +%u) == 7 ]]; then
+    systemctl start hosting-zfs-weekly.service
+  fi
 }

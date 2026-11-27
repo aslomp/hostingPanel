@@ -16,13 +16,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          bash -n installer/install.sh
+          for script in installer/*.sh; do bash -n "$script"; done
           for script in installer/lib/*.sh; do bash -n "$script"; done
           bash installer/install.sh --help
-          python3 -m py_compile installer/generate.py
+          python3 -m py_compile installer/generate.py installer/zfs-retention.py
+          python3 -m unittest discover -s installer -p 'test_*.py'
           tmp=$(mktemp -d)
           python3 -c 'import json,sys; c=json.load(open("installer/cluster.example.json")); c["acmeEmail"]="test@invalid.test"; json.dump(c,open(sys.argv[1],"w"))' "$tmp/cluster.json"
           printf test-key > "$tmp/csi-key"
+          printf 0123456789abcdef > "$tmp/iscsi-chap"
           python3 installer/generate.py "$tmp/cluster.json" generate
           python3 - "$tmp" <<'PY'
           import json, pathlib, sys
@@ -32,4 +34,5 @@ jobs:
               assert f.stat().st_mode & 0o777 == 0o600
               json.loads(f.read_text())
           assert json.loads((p/"hosting-values.json").read_text())["sqlite"]["storageClassName"] == "zfs-iscsi"
+          assert json.loads((p/"csi-iscsi.json").read_text())["driver"]["config"]["iscsi"]["shareStrategyTargetCli"]["tpg"]["attributes"]["authentication"] == 1
           PY
