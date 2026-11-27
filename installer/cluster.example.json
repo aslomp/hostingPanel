@@ -1,0 +1,12 @@
+{
+  "clusterHost": "10.0.0.10",
+  "storageHost": "10.0.0.20",
+  "storageNetwork": "10.0.0.0/24",
+  "localStorage": false,
+  "pool": "tank",
+  "agentTokenFile": "agent-token",
+  "k3sVersion": "REPLACE",
+  "csiVersion": "REPLACE",
+  "envoyVersion": "REPLACE",
+  "certManagerVersion": "REPLACE"
+}
