@@ -44,3 +44,15 @@ The storage installer enables three persistent systemd timers for POOL/hosting a
     journalctl -u hosting-zfs-hourly.service
     zfs list -t snapshot -r tank/hosting
     sudo python3 /usr/local/lib/hostingpanel/zfs-retention.py tank/hosting hourly --dry-run
+
+## Storage antivirus
+
+Local storage and dedicated storage installations install ClamAV and enable FreshClam for automatic signature updates. The installer waits for the initial main and daily signature databases. The daily scan runs at 03:00 UTC (up to 15 minutes randomized delay) and scans the complete live /srv/hosting/home tree, including hidden files. It does not follow symlinks, enter .zfs snapshot directories or cross into other filesystems. The current installation stores all customer directories on one ZFS dataset; separately mounted customer datasets would need explicit scan coverage. Scans are read-only: detections and errors are reported as distinct nonzero service exits in the systemd journal, not automatically deleted or quarantined. No on-access interception is installed by this feature; existing on-access configuration is left unchanged. Scan size, archive and other engine limits still apply. The standalone clamscan engine loads signatures once per scan and does not require a separate resident clamd daemon.
+
+    sudo clam-on-demand
+    sudo systemctl start hosting-clamav-scan.service
+    systemctl list-timers hosting-clamav-scan.timer
+    sudo journalctl -u hosting-clamav-scan.service
+    sudo journalctl -u clamav-freshclam.service
+
+Verify a harmless EICAR test file in an isolated test account before production and verify that the service reports exit 1. Never use live malware to test the scanner. Configure monitoring for failed scan services and outdated signature updates.
