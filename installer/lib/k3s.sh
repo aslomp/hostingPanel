@@ -1,6 +1,6 @@
 install_node_dependencies() {
   apt-get update
-  apt-get install -y curl ca-certificates nfs-common open-iscsi
+  apt-get install -y curl ca-certificates nfs-common open-iscsi openssl
   modprobe iscsi_tcp
   printf 'iscsi_tcp\n' > /etc/modules-load.d/hostingpanel-iscsi.conf
   systemctl enable --now iscsid
@@ -24,6 +24,7 @@ install_server() {
   export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
   k3s kubectl wait --for=condition=Ready node --all --timeout=300s
   install -m 0600 /var/lib/rancher/k3s/server/agent-token "$(dirname "$config")/agent-token"
+  python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); json.dump({k:c[k] for k in ("clusterHost","k3sVersion","agentTokenFile")},sys.stdout,indent=2)' "$config" > "$(dirname "$config")/worker.json"
 }
 install_worker() {
   install_node_dependencies
