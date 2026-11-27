@@ -61,10 +61,13 @@ def complete(c):
         c["acmeEmail"] = ask_email()
     if not c.get("ns1"):
         c["ns1"] = ask_hostname("Primary DNS nameserver (FQDN): ")
+    if not c.get("ns2"):
+        print("The secondary nameserver may be this same server under a different DNS name (same IP is allowed).")
+        c["ns2"] = ask_hostname("Secondary DNS nameserver (FQDN): ")
     if not c.get("panelHostname"):
         c["panelHostname"] = ask_hostname("HostingPanel hostname (FQDN): ")
-    if c["ns1"] == c["panelHostname"]:
-        raise ValueError("Primary DNS and panel hostnames must be distinct")
+    if len({c["ns1"], c["ns2"], c["panelHostname"]}) != 3:
+        raise ValueError("Primary DNS, secondary DNS and panel hostnames must be distinct")
     validate(c)
     return c
 
