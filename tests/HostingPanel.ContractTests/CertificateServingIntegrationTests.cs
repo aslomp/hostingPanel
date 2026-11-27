@@ -66,8 +66,8 @@ internal static class CertificateServingIntegrationTests
             await db.SaveChangesAsync(ct);
         }
 
-        using var root = X509Certificate2.CreateFromPemFile(
-            Environment.GetEnvironmentVariable("TEST_CA_CERT") ?? throw new InvalidOperationException("TEST_CA_CERT missing"));
+        using var root = X509Certificate2.CreateFromPem(await File.ReadAllTextAsync(
+            Environment.GetEnvironmentVariable("TEST_CA_CERT") ?? throw new InvalidOperationException("TEST_CA_CERT missing"), ct));
         using var handler = new SocketsHttpHandler
         {
             UseProxy = false,
