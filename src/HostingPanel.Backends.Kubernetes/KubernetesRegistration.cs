@@ -26,6 +26,7 @@ public static class KubernetesRegistration
     services.AddScoped<KubernetesIdentityService>();
     services.AddSingleton<MailMutationGate>();
     services.AddScoped<StalwartMailProvider>();
+    services.AddScoped<StalwartDnsProvisioning>();
     services.AddScoped<IMailProvider>(sp => sp.GetRequiredService<StalwartMailProvider>());
     services.AddScoped<IMailForwarders>(sp => sp.GetRequiredService<StalwartMailProvider>());
     services.AddHttpClient("stalwart-management", http => http.Timeout = TimeSpan.FromSeconds(15))

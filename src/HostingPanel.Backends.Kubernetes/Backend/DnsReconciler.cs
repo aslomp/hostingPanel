@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using System.Text.Json;
 using HostingPanel.Api.Adapters;
 using HostingPanel.Api.Persistence;
@@ -60,6 +61,55 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
             catch (Exception ex) when (!ct.IsCancellationRequested)
             { logger.LogWarning(ex, "Deferred DNS provisioning failed for operation {Id}", id); }
         }
+        var config = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+        if (config.GetValue<bool>("Stalwart:Enabled") && config.GetValue("Stalwart:AutoProvisionDns", true))
+        {
+            var cutoff = DateTimeOffset.UtcNow.AddMinutes(-Math.Clamp(config.GetValue("Stalwart:DnsSyncMinutes", 60), 5, 1440));
+            var history = await db.ReconciliationOperations.AsNoTracking().Where(x => x.ResourceType == "mail-dns").ToListAsync(ct);
+            var active = await db.Domains.AsNoTracking().Where(x => !x.Suspended).Select(x => new { x.Id, x.Name }).ToListAsync(ct);
+            foreach (var domain in active)
+            {
+                var jobs = history.Where(x => x.ResourceId == domain.Id).ToArray();
+                if (jobs.Length == 0 || jobs.Any(x => x.Status == "pending") || jobs.Any(x => x.CreatedAt >= cutoff)) continue;
+                scope.ServiceProvider.GetRequiredService<KubernetesOperationQueue>().Schedule("mail-dns", domain.Id, "update", new { domain.Name });
+            }
+            await db.SaveChangesAsync(ct);
+        }
+        var mailJobs = await db.ReconciliationOperations.AsNoTracking()
+            .Where(x => x.ResourceType == "mail-dns" && x.Status == "pending")
+            .Select(x => x.Id).ToListAsync(ct);
+        foreach (var id in mailJobs)
+        {
+            using var mailScope = scopes.CreateScope();
+            var mailDb = mailScope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
+            var job = await mailDb.ReconciliationOperations.SingleOrDefaultAsync(x => x.Id == id && x.Status == "pending", ct);
+            if (job is null) continue;
+            try
+            {
+                var stage = mailScope.ServiceProvider.GetRequiredService<StalwartDnsProvisioning>();
+                job.LastError = await stage.StageAsync(job.ResourceId, ct);
+                if (job.LastError is null)
+                {
+                    job.Status = "completed";
+                    job.CompletedAt = DateTimeOffset.UtcNow;
+                }
+                else job.Attempts++;
+                await mailDb.SaveChangesAsync(ct);
+                notifications.Publish();
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                mailDb.ChangeTracker.Clear();
+                var failed = await mailDb.ReconciliationOperations.SingleOrDefaultAsync(x => x.Id == id && x.Status == "pending", ct);
+                if (failed is not null)
+                {
+                    failed.Attempts++;
+                    failed.LastError = "MAIL_DNS_RECONCILIATION_FAILED";
+                    await mailDb.SaveChangesAsync(ct);
+                }
+                logger.LogWarning("Mail DNS reconciliation failed for operation {Id}: {ErrorType}", id, ex.GetType().Name);
+            }
+        }
         var pending = await db.ReconciliationOperations.Where(x => x.ResourceType == "dns-zone" && x.Status == "pending").ToListAsync(ct);
         foreach (var group in pending.GroupBy(x => x.ResourceId))
         {
@@ -75,7 +125,9 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
                 else
                 {
                     var rows = await db.DnsRecords.AsNoTracking().Where(x => x.ZoneId == zone.Id).ToListAsync(ct);
-                    await provider.ProvisionAsync(name, rows.Select(x => new DnsRecord(x.Type, x.Name, x.Value, x.Ttl.ToString())).ToArray(), ct);
+                    var delegated = zone.DomainId.HasValue && StalwartDnsProviderRegistration.Enabled(config)
+                        && await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "mail-dns" && x.ResourceId == zone.DomainId.Value, ct);
+                    await provider.ProvisionAsync(name, rows.Select(x => new DnsRecord(x.Type, x.Name, x.Value, x.Ttl.ToString())).ToArray(), ct, delegated);
                 }
                 foreach (var row in group)
                 {

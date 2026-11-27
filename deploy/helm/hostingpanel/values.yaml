@@ -88,6 +88,11 @@ stalwart:
   enabled: false
   api:
     enabled: false
+    autoProvisionDns: true
+    dnsSyncMinutes: 60
+    autoRegisterDnsProvider: true
+    # ID of an existing Stalwart DnsServer configured for this PowerDNS service.
+    dkimDnsServerId: ""
     # HTTPS origin matching the Stalwart TLS certificate, reachable from the panel.
     baseUrl: ""
     # Existing Secret with key api-key; dedicated restricted management identity.
