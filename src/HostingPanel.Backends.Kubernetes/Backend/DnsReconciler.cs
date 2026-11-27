@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using System.Text.Json;
 using HostingPanel.Api.Adapters;
 using HostingPanel.Api.Persistence;
@@ -59,6 +60,20 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             { logger.LogWarning(ex, "Deferred DNS provisioning failed for operation {Id}", id); }
+        }
+        var config = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+        if (config.GetValue<bool>("Stalwart:Enabled") && config.GetValue("Stalwart:AutoProvisionDns", true))
+        {
+            var cutoff = DateTimeOffset.UtcNow.AddMinutes(-Math.Clamp(config.GetValue("Stalwart:DnsSyncMinutes", 60), 5, 1440));
+            var history = await db.ReconciliationOperations.AsNoTracking().Where(x => x.ResourceType == "mail-dns").ToListAsync(ct);
+            var active = await db.Domains.AsNoTracking().Where(x => !x.Suspended).Select(x => new { x.Id, x.Name }).ToListAsync(ct);
+            foreach (var domain in active)
+            {
+                var jobs = history.Where(x => x.ResourceId == domain.Id).ToArray();
+                if (jobs.Length == 0 || jobs.Any(x => x.Status == "pending") || jobs.Any(x => x.CreatedAt >= cutoff)) continue;
+                scope.ServiceProvider.GetRequiredService<KubernetesOperationQueue>().Schedule("mail-dns", domain.Id, "update", new { domain.Name });
+            }
+            await db.SaveChangesAsync(ct);
         }
         var mailJobs = await db.ReconciliationOperations.AsNoTracking()
             .Where(x => x.ResourceType == "mail-dns" && x.Status == "pending")
