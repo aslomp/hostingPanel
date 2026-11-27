@@ -80,3 +80,5 @@ Helm-managed MariaDB (Kubernetes only): optional dedicated MariaDB StatefulSet, 
 - Website, DNS and certificate reconciliation share a coalescing channel loop; certificate work preserves domain keys and LIST/WATCH.
 
 - Website reconciliation has no idle timer; committed changes and resource watches trigger staged NFS, PHP and Apache work. External NFS mutations are not automatically detected.
+
+- Native Stalwart mail DNS delegates MX/SPF/DKIM/DMARC directly to PowerDNS; the panel protects reserved RRsets and reads them live. Manual periodic import is opt-in and disabled in native mode. Other mail record types are not delegated. Existing reserved local records require explicit resolution; live validation pending.

@@ -58,7 +58,7 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
         foreach (var record in additions)
             db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = record.Name, Type = record.Type,
                 Value = record.Value, Ttl = int.Parse(record.Ttl!) });
-        // Even if already staged, ensure an authoritative DNS apply is queued.
+        // Manual imports need a publication operation; native mail DNS waits for the existing zone publication.
         if ((!nativeRotation || additions.Count > 0) && !await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "dns-zone" && x.ResourceId == zone.Id && x.Status == "pending", ct))
             operations.Schedule("dns-zone", zone.Id, "update", new { zone.Name });
         await db.SaveChangesAsync(ct);
@@ -78,6 +78,7 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
             if (mode == "Automatic")
             {
                 if (management.GetProperty("dnsServerId").GetString() != dnsServerId
+                    || (management.TryGetProperty("origin", out var origin) && origin.GetString() != domain.Name)
                     || !management.TryGetProperty("publishRecords", out var published)
                     || published.EnumerateObject().Any(x => !MailDnsOwnership.PublishRecords.Contains(x.Name) && x.Value.ValueKind == JsonValueKind.True))
                     return "MAIL_DNS_MANAGEMENT_CONFLICT";
