@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Text.Json;
 using HostingPanel.Api.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,7 +7,7 @@ namespace HostingPanel.Api;
 
 // Subdomain website intent uses the existing shared website worker.
 public sealed class KubernetesSubdomainService(SubdomainOwnership ownership, HostingPanelDbContext db,
-    KubernetesProvisioningService provisioning, KubernetesOperationQueue operations, HostingOperationNotifications notifications) : ISubdomains
+    KubernetesProvisioningService provisioning, KubernetesOperationQueue operations, HostingOperationNotifications notifications, CertificateWork certificateWork) : ISubdomains
 {
     public async Task<SubdomainInventory> ListAsync(string domain, AuthenticationHeaderValue auth, CancellationToken ct)
     {
@@ -38,13 +39,29 @@ public sealed class KubernetesSubdomainService(SubdomainOwnership ownership, Hos
             });
         db.Domains.Add(child);
         db.Set<SubdomainBinding>().Add(binding);
+        // Copy certificate intent, not the parent's certificate, wildcard or secret.
+        // The child has its own lifecycle and can subsequently change its own settings.
+        var parentAcme = await KubernetesCertificateProvider.DomainAcmeAsync(db, parent.Id, ct);
+        var childAcme = InitialCertificateIntent(parentAcme);
+        db.Configuration.Add(new PanelConfiguration {
+            Key = KubernetesCertificateProvider.AcmeKey(child.Id),
+            ValueJson = JsonSerializer.Serialize(childAcme)
+        });
         operations.Schedule("domain", child.Id, "create", new { child.Name });
         await provisioning.ScheduleWebsiteAsync(child, "create", ct);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
+        certificateWork.DomainChanged(child.Id);
         notifications.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
         return new(202, null);
     }
+
+    internal static DomainAcmeConfiguration InitialCertificateIntent(DomainAcmeConfiguration parent) =>
+        DomainAcmeConfiguration.Default with {
+            Enabled = parent.Enabled,
+            Provider = parent.Provider,
+            KeyType = parent.KeyType
+        };
 
     public Task<SubdomainMutation> DeleteAsync(string domain, string label, string confirmation, AuthenticationHeaderValue auth, CancellationToken ct)
         => ValidateAsync(domain, label, confirmation, true, auth, ct);

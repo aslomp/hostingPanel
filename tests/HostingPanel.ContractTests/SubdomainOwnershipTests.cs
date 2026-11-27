@@ -1,5 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
+using HostingPanel.Providers.CertManager;
 using HostingPanel.Api;
 using HostingPanel.Api.Persistence;
 using HostingPanel.Providers.PowerDNS;
@@ -34,15 +36,19 @@ internal static class SubdomainOwnershipTests
         db.Set<SubdomainBinding>().Add(link);
         var zone = new DnsZone { Name = parent.Name, DomainId = parent.Id, OwnerId = owner.Id };
         db.DnsZones.Add(zone);
+        db.Configuration.Add(new PanelConfiguration { Key = KubernetesCertificateProvider.AcmeKey(parent.Id),
+            ValueJson = JsonSerializer.Serialize(DomainAcmeConfiguration.Default with { Enabled = true, Provider = "private-ca", KeyType = "ec384", PreferWildcard = true, SkipDNSNames = [parent.Name] }) });
         db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "busy.example.test.", Type = "A", Value = "192.0.2.5" });
         await db.SaveChangesAsync();
         var identity = new KubernetesIdentityService(db);
         var operations = new KubernetesOperationQueue(db);
         var notifications = new HostingOperationNotifications();
         using var http = new HttpClient { BaseAddress = new Uri("https://dns.invalid/") };
+        var certificateWork = new CertificateWork();
+        certificateWork.Take(); // consume startup full invalidation
         var service = new KubernetesSubdomainService(new SubdomainOwnership(db, identity), db,
             new KubernetesProvisioningService(db, new KubernetesSettingsService(db, new KubernetesBackendSettings(), identity), operations, new PowerDnsClient(http)),
-            operations, notifications);
+            operations, notifications, certificateWork);
         AuthenticationHeaderValue Auth(string name, string password = "test-password") =>
             new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(name + ":" + password)));
         var ct = CancellationToken.None;
@@ -58,6 +64,17 @@ internal static class SubdomainOwnershipTests
         Check((await service.CreateAsync(parent.Name, "new", Auth("reseller"), ct)).Status == 202);
         var created = await db.Domains.SingleAsync(x => x.Name == "new.example.test");
         Check(created.OwnerId == owner.Id);
+        Check(certificateWork.Take()!.SequenceEqual([created.Id]));
+        var acme = await KubernetesCertificateProvider.DomainAcmeAsync(db, created.Id, ct);
+        Check(acme.Enabled && acme.Provider == "private-ca" && acme.KeyType == "ec384");
+        Check(!acme.PreferWildcard && acme.SkipDNSNames.Length == 0);
+        Check(KubernetesCertificateProvider.CertificateNames(created, acme).SequenceEqual([created.Name]));
+        Check(!KubernetesSubdomainService.InitialCertificateIntent(DomainAcmeConfiguration.Default).Enabled);
+        using var resources = new KubernetesResourceClient();
+        var client = new CertManagerClient(resources, "hosting");
+        using var manifest = JsonDocument.Parse(client.BuildManifest(created.Id, [created.Name], "private-ca", "Issuer", acme.KeyType));
+        Check(manifest.RootElement.GetProperty("spec").GetProperty("dnsNames")[0].GetString() == created.Name);
+        Check(CertManagerClient.Name(created.Id) != CertManagerClient.Name(parent.Id));
         Check(await db.Set<SubdomainBinding>().AnyAsync(x => x.ChildId == created.Id && x.ParentId == parent.Id));
         Check(await db.ReconciliationOperations.AnyAsync(x => x.ResourceId == created.Id && x.ResourceType == "website" && x.Status == "pending"));
         Check(notifications.Reader(ReconciliationTarget.Website).TryRead(out _));
