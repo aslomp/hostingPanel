@@ -42,3 +42,18 @@ Open http://127.0.0.1:8080/admin, complete the setup wizard with the real mail h
 
 The external service exposes TCP 25, 465, 993 and 4190. Optional 587 and 995 require matching Stalwart listeners. HTTPS is disabled externally by default because it also serves administration; enabling it for ACME TLS-ALPN-01 or JMAP requires reviewing administration access controls. Otherwise configure trusted certificates manually or use DNS-based ACME. Configure public mail IP, PTR, inbound and outbound TCP 25, MX, SPF, DKIM and DMARC before accepting customer traffic. Verify source-IP preservation and outbound SMTP IP with the actual load balancer and network. No HTTPRoute is required for mail TCP ports. The chart does not configure listeners, DNS or mail accounts automatically. See [official Stalwart installation](https://www.stalwart.email/docs/install/platform/docker/).
 
+
+### Mail management API (initial integration)
+
+Enable `stalwart.api.enabled`, set `stalwart.api.baseUrl` to an HTTPS origin reachable by the panel with a trusted matching certificate, and set `stalwart.api.existingSecret` to a Secret with key `api-key`. This is independent of the bundled workload, so an external dedicated Stalwart v1 instance is supported. Never reuse the bootstrap recovery identity. Configure a restricted management identity with domain query/get/create and account query/get/create/update/destroy permissions; Stalwart also requires sufficient permissions for managed users. Do not mix infrastructure administrator accounts with customer mail domains. TLS verification remains enabled, and redirects are disabled.
+
+All endpoints require panel Basic authentication and a visible, non-suspended hosted domain. The first mailbox creation creates the Stalwart domain if absent. Existing matching mail domains are treated as managed; use a dedicated instance and verify ownership before enabling. No local mailbox mirror is maintained.
+
+| Method | Path | Body / query |
+| --- | --- | --- |
+| GET | /hosting/mail/{domain}/accounts | Lists ordinary users and disk usage |
+| POST | /hosting/mail/{domain}/accounts | name, password (12+ characters), quotaBytes (positive) |
+| PATCH | /hosting/mail/{domain}/accounts/{name} | quotaBytes (positive) |
+| DELETE | /hosting/mail/{domain}/accounts/{name} | confirmation=name@domain |
+
+Password reset, aliases, forwarding, aggregate hosting package limits, mail DNS, suspension propagation and domain deletion cleanup are pending. Do not expose this initial API to untrusted customers before aggregate resource limits and lifecycle integration have been completed. An upstream failure may leave a newly created mail domain; no automatic destructive rollback is attempted. DirectAdmin does not implement these new routes.
