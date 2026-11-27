@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HostingPanel.Api;
 
-public sealed class KubernetesDomainService(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesProvisioningService provisioning, KubernetesOperationQueue operations) : IDomains, IAccessibleDomains, IDomainPreview
+public sealed class KubernetesDomainService(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesProvisioningService provisioning, KubernetesOperationQueue operations, HostingOperationNotifications? notifications = null) : IDomains, IAccessibleDomains, IDomainPreview
 {
     public async Task<VisibleDomainsResult> ListAccessibleDomains(AuthenticationHeaderValue auth, CancellationToken ct)
     {
@@ -105,6 +105,7 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
             else return new(400, "INVALID_OPERATION");
         }
         await db.SaveChangesAsync(ct);
+        notifications?.Publish();
         return new(202, null);
     }
 
@@ -169,6 +170,7 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
         operations.Schedule("domain", row.Id, "update", new { row.Name, setting });
         await provisioning.ScheduleWebsiteAsync(row, "update", ct);
         await db.SaveChangesAsync(ct);
+        notifications?.Publish();
         return new(202, null);
     }
     public IResult PreviewDomain(DomainCreatePreview input)
