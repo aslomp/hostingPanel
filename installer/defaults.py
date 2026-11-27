@@ -39,9 +39,24 @@ def defaults(template, address, network, email, mode):
     return c
 
 
+def ask_email():
+    if not sys.stdin.isatty():
+        raise SystemExit("ACME email requires an interactive terminal or explicit --config")
+    email = input("ACME email address: ").strip()
+    if not email_valid(email):
+        raise SystemExit("A valid ACME email address is required")
+    return email
+
+
 def main():
     destination = pathlib.Path(sys.argv[1])
     mode = sys.argv[2]
+    if mode == "--email-only":
+        c = json.loads(destination.read_text())
+        c["acmeEmail"] = ask_email()
+        validate(c)
+        write(destination, c)
+        return
     template = json.loads(pathlib.Path(__file__).with_name("cluster.example.json").read_text())
     routes = json.loads(subprocess.check_output(["ip", "-j", "-4", "route", "get", "1.1.1.1"], text=True))
     interfaces = json.loads(subprocess.check_output(["ip", "-j", "-4", "address", "show"], text=True))
@@ -50,11 +65,7 @@ def main():
         # No ACME registration occurs on a dedicated storage host.
         email = ""
     else:
-        if not sys.stdin.isatty():
-            raise SystemExit("ACME email requires an interactive terminal or explicit --config")
-        email = input("ACME email address: ").strip()
-        if not email_valid(email):
-            raise SystemExit("A valid ACME email address is required")
+        email = ask_email()
     c = defaults(template, address, network, email, mode)
     write(destination, c)
     print(f"Configuration saved to {destination}")
