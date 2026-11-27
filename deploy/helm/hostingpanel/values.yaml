@@ -50,6 +50,8 @@ kubernetesHosting:
 powerDns:
   enabled: true
   image: powerdns/pdns-auth-49:latest
+  # Supplemental group granting the non-root init and server containers access to the PVC.
+  fsGroup: 953
   storageClassName: ""
   size: 1Gi
   existingClaim: ""
