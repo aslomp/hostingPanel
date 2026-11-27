@@ -20,12 +20,17 @@ done
 [[ "$new" == false || "$mode" == --full-server ]] || die "--new-cluster requires --full-server"
 [[ $EUID == 0 ]] || die "Run as root"
 [[ -f "$config" ]] || die "Copy installer/cluster.example.json and configure it first"
-command -v python3 >/dev/null || die "Install python3 first"
+command -v python3 >/dev/null || { apt-get update; apt-get install -y python3; }
+[[ $(stat -c %u "$config") == 0 ]] || die "Config must be owned by root"
+chmod 600 "$config"
 config=$(realpath "$config")
 # Parse data, never source user configuration as shell code.
 get() { python3 -c 'import json,sys; v=json.load(open(sys.argv[1])); print(v[sys.argv[2]])' "$config" "$1"; }
 require() { local v; v=$(get "$1"); [[ -n "$v" && "$v" != null ]] || die "Missing $1"; printf '%s' "$v"; }
 export DEBIAN_FRONTEND=noninteractive
+[[ "$mode" == --worker ]] || python3 "$here/generate.py" "$config"
+[[ "$mode" != --full-server || "$new" != true || ! -e /etc/rancher/k3s/k3s.yaml ]] || die "Existing cluster: omit --new-cluster"
+[[ "$mode" != --full-server || ! -e /etc/systemd/system/k3s-agent.service ]] || die "This host is a worker"
 source "$here/lib/storage.sh"
 source "$here/lib/k3s.sh"
 source "$here/lib/platform.sh"
