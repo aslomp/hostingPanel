@@ -1,0 +1,35 @@
+name: Installer checks
+on:
+  pull_request:
+    paths:
+      - 'installer/**'
+      - '.github/workflows/installer-check.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'installer/**'
+permissions:
+  contents: read
+jobs:
+  installer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          bash -n installer/install.sh
+          for script in installer/lib/*.sh; do bash -n "$script"; done
+          bash installer/install.sh --help
+          python3 -m py_compile installer/generate.py
+          tmp=$(mktemp -d)
+          python3 -c 'import json,sys; c=json.load(open("installer/cluster.example.json")); c["acmeEmail"]="test@invalid.test"; json.dump(c,open(sys.argv[1],"w"))' "$tmp/cluster.json"
+          printf test-key > "$tmp/csi-key"
+          python3 installer/generate.py "$tmp/cluster.json" generate
+          python3 - "$tmp" <<'PY'
+          import json, pathlib, sys
+          p=pathlib.Path(sys.argv[1])
+          for name in ("csi-nfs","csi-iscsi","gateways","issuer","hosting-values"):
+              f=p/(name+".json")
+              assert f.stat().st_mode & 0o777 == 0o600
+              json.loads(f.read_text())
+          assert json.loads((p/"hosting-values.json").read_text())["sqlite"]["storageClassName"] == "zfs-iscsi"
+          PY
