@@ -145,6 +145,8 @@ spec:
               value: {{ .Values.stalwart.api.autoProvisionDns | quote }}
             - name: Stalwart__DnsSyncMinutes
               value: {{ .Values.stalwart.api.dnsSyncMinutes | quote }}
+            - name: Stalwart__AutoRegisterDnsProvider
+              value: {{ .Values.stalwart.api.autoRegisterDnsProvider | quote }}
             - name: Stalwart__DkimDnsServerId
               value: {{ .Values.stalwart.api.dkimDnsServerId | quote }}
             - name: Stalwart__BaseUrl
