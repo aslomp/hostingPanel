@@ -70,3 +70,5 @@ Helm-managed MariaDB (Kubernetes only): optional dedicated MariaDB StatefulSet, 
 - MudBlazor mailbox frontend: accessible domain selection, mailbox inventory, create, quota edit and confirmed delete using the shared mail capability; DirectAdmin typed mail management uses CMD_API_POP with upstream read-back. Live browser verification pending.
 
 - Stalwart mailbox creation enforces the owning account's `nemails` package limit and account override across all current hosted domains, including suspended domains. Missing entitlement denies creation. Single-panel-process writes are serialized; external writers, orphaned domains, aggregate disk limits and lifecycle reconciliation remain outside this guarantee.
+
+- Automatic Stalwart mail DNS: first mailbox/forwarder create request durably schedules import of generated MX/SPF/DKIM/DMARC into the existing owned zone. Conflicting records are retained and block import; the existing DNS worker publishes staged records. Requires PowerDNS and Stalwart management configuration. Existing domains are imported on subsequent create requests; automatic DKIM rotation is not implemented.
