@@ -3,7 +3,7 @@ set -Eeuo pipefail
 umask 077
 here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 die() { printf '%s\n' "$*" >&2; exit 1; }
-mode= config= new=false
+mode= config= new=false default_config=false
 while (($#)); do
   case "$1" in
     --full-server|--storage-server|--storage|--worker)
@@ -35,6 +35,7 @@ esac
 trap 'printf "Installation failed at %s:%s (exit %s). Inspect systemd and Kubernetes logs; no automatic deletion is performed.\\n" "${BASH_SOURCE[0]}" "$LINENO" "$?" >&2' ERR
 command -v python3 >/dev/null && command -v ip >/dev/null || { apt-get update; apt-get install -y python3 iproute2; }
 if [[ -z "$config" ]]; then
+  default_config=true
   base=/etc/hostingpanel/installer
   [[ ! -L "$base" && ! -L /etc/hostingpanel ]] || die "Unsafe default configuration path"
   install -d -m 0700 -o root -g root "$base"
@@ -54,8 +55,12 @@ config=$(realpath "$config")
 [[ $(stat -c %u "$(dirname "$config")") == 0 ]] || die "Config directory must be owned by root"
 [[ $(stat -c %a "$(dirname "$config")") == 700 ]] || die "Config directory must have mode 0700"
 chmod 600 "$config"
-if [[ "$mode" == --full-server && -z $(get acmeEmail) ]]; then
-  python3 "$here/defaults.py" "$config" --email-only
+if [[ "$mode" == --full-server ]]; then
+  if [[ "$default_config" == true ]]; then
+    python3 "$here/defaults.py" "$config" --complete
+  else
+    [[ -n $(get acmeEmail) ]] || die "Explicit configuration requires acmeEmail"
+  fi
 fi
 if [[ "$mode" == --worker ]]; then
   python3 -c 'import json,sys,ipaddress,re; c=json.load(open(sys.argv[1])); assert ipaddress.ip_address(c["clusterHost"]).version==4; assert re.fullmatch(r"v\d+\.\d+\.\d+\+k3s\d+",c["k3sVersion"]); assert c["agentTokenFile"]=="agent-token"' "$config"
