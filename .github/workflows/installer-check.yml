@@ -35,6 +35,7 @@ jobs:
           for script in installer/*.sh; do bash -n "$script"; done
           for script in installer/lib/*.sh; do bash -n "$script"; done
           bash installer/install.sh --help
+          bash installer/test-build-runtime.sh
           source installer/lib/apparmor-compat.sh
           needs_apparmor_compat ubuntu 26.04 7.0.0-44-generic v1.35.10+k3s1
           ! needs_apparmor_compat ubuntu 24.04 7.0.0-44-generic v1.35.10+k3s1
