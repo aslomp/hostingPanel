@@ -35,6 +35,11 @@ jobs:
           for script in installer/*.sh; do bash -n "$script"; done
           for script in installer/lib/*.sh; do bash -n "$script"; done
           bash installer/install.sh --help
+          # Exercise the actual wipefs CLI on a disposable regular file, without writing signatures.
+          image=$(mktemp)
+          truncate -s 16M "$image"
+          test -z "$(wipefs --no-act --noheadings --output TYPE "$image")"
+          rm -f "$image"
           python3 -m py_compile installer/generate.py installer/zfs-retention.py
           python3 -m unittest discover -s installer -p 'test_*.py'
           tmp=$(mktemp -d)
