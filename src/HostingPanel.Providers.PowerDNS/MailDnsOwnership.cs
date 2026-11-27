@@ -4,7 +4,7 @@ namespace HostingPanel.Providers.PowerDNS;
 public static class MailDnsOwnership
 {
     public static IReadOnlySet<string> PublishRecords { get; } =
-        new HashSet<string>(StringComparer.Ordinal) { "dkim" };
+        new HashSet<string>(StringComparer.Ordinal) { "mx", "spf", "dkim", "dmarc" };
 
     public static bool Reserved(string domain, string name, string type)
     {

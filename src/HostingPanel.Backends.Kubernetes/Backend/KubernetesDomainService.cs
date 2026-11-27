@@ -101,7 +101,11 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
             }
             else if (input.Action == "modify")
             {
-                existing.SettingsJson = JsonSerializer.Serialize(new { php = input.Php, ssl = input.Ssl, cgi = input.Cgi });
+                var settings = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(existing.SettingsJson) ?? new();
+                settings["php"] = JsonSerializer.SerializeToElement(input.Php);
+                settings["ssl"] = JsonSerializer.SerializeToElement(input.Ssl);
+                settings["cgi"] = JsonSerializer.SerializeToElement(input.Cgi);
+                existing.SettingsJson = JsonSerializer.Serialize(settings);
                 operations.Schedule("domain", existing.Id, "update", new { name });
                 await provisioning.ScheduleWebsiteAsync(existing, "update", ct);
             }
@@ -124,6 +128,8 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
         var properties = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(row.SettingsJson) ?? new();
         var settings = properties.ToDictionary(x => x.Key, x => x.Value.ToString());
         settings["domain"] = row.Name;
+        settings[MailDnsPolicy.PublicationKey] = MailDnsPolicy.Read(row.SettingsJson).Publish ? "ON" : "OFF";
+        settings[MailDnsPolicy.RotationKey] = MailDnsPolicy.Read(row.SettingsJson).Rotate ? "ON" : "OFF";
         settings["username"] = await db.Accounts.Where(x => x.Id == row.OwnerId).Select(x => x.Username).SingleAsync(ct);
         settings["provisioning"] = (await ReadProvisioningAsync([row.Id], ct))[row.Id];
         return new(200, settings, null);
@@ -166,11 +172,20 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
         var row = await db.Domains.FirstOrDefaultAsync(x => x.Name == domain.ToLowerInvariant(), ct);
         if (row is null) return new(404, "DOMAIN_NOT_FOUND");
         if (!ids.Contains(row.OwnerId)) return new(403, "ACCESS_DENIED");
-        if (setting is not ("php" or "ssl" or "cgi") || value is not ("ON" or "OFF"))
+        if (setting is not ("php" or "ssl" or "cgi" or MailDnsPolicy.PublicationKey or MailDnsPolicy.RotationKey) || value is not ("ON" or "OFF"))
             return new(400, "INVALID_SETTING");
         var values = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(row.SettingsJson) ?? new();
         values[setting] = JsonSerializer.SerializeToElement(value == "ON");
         row.SettingsJson = JsonSerializer.Serialize(values);
+        if (setting is MailDnsPolicy.PublicationKey or MailDnsPolicy.RotationKey)
+        {
+            if (await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "mail-dns" && x.ResourceId == row.Id, ct) &&
+                !await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "mail-dns" && x.ResourceId == row.Id && x.Status == "pending", ct))
+                operations.Schedule("mail-dns", row.Id, "update", new { row.Name });
+            await db.SaveChangesAsync(ct);
+            notifications?.PublishChange(ReconciliationTarget.Dns);
+            return new(202, null);
+        }
         operations.Schedule("domain", row.Id, "update", new { row.Name, setting });
         await provisioning.ScheduleWebsiteAsync(row, "update", ct);
         await db.SaveChangesAsync(ct);

@@ -30,39 +30,26 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
             new[] { "id", "name", "dnsZoneFile", "dnsManagement", "dkimManagement" }, ct))
             .Where(x => x.GetProperty("name").GetString() == domain.Name).ToArray();
         if (matches.Length != 1) return "MAIL_DNS_NOT_READY";
+        var policy = MailDnsPolicy.Read(domain.SettingsJson);
         var nativeRotation = StalwartDnsProviderRegistration.Enabled(configuration);
         IReadOnlyList<DnsRecord> desired = [];
-        if (!nativeRotation)
+        if (!nativeRotation && policy.Publish)
         {
             if (!matches[0].TryGetProperty("dnsZoneFile", out var file) || file.ValueKind != JsonValueKind.String)
                 return "MAIL_DNS_NOT_READY";
             desired = StalwartDnsRecords.Parse(domain.Name, file.GetString()!);
         }
-        var dnsServerId = nativeRotation ? await StalwartDnsProviderRegistration.EnsureAsync(client, configuration, ct) : null;
+        var dnsServerId = nativeRotation && policy.Publish ? await StalwartDnsProviderRegistration.EnsureAsync(client, configuration, ct) : null;
         // No network requests inside the database transaction.
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var current = await db.Domains.AsNoTracking().SingleOrDefaultAsync(d => d.Id == domainId, ct);
         if (current is null) return null;
-        if (current.OwnerId != domain.OwnerId || current.Name != domain.Name || current.Suspended)
+        if (current.OwnerId != domain.OwnerId || current.Name != domain.Name || current.Suspended || MailDnsPolicy.Read(current.SettingsJson) != policy)
             return "MAIL_DOMAIN_CHANGED";
         var zone = await db.DnsZones.SingleOrDefaultAsync(z => z.Name == domain.Name, ct);
         if (zone is null) return "MAIL_DNS_ZONE_NOT_READY";
         if (zone.OwnerId != domain.OwnerId || zone.DomainId != domain.Id) return "MAIL_DNS_ZONE_OWNERSHIP_CONFLICT";
         var existing = await db.DnsRecords.Where(x => x.ZoneId == zone.Id).ToListAsync(ct);
-        // Bootstrap MX/SPF/DMARC once, without replacing existing customer records.
-        // Subsequent mailbox creation must not recreate deliberately deleted records.
-        if (nativeRotation && !await db.ReconciliationOperations.AnyAsync(x =>
-            x.ResourceType == "mail-dns" && x.ResourceId == domain.Id && x.Status == "completed", ct))
-        {
-            if (!matches[0].TryGetProperty("dnsZoneFile", out var initialFile) || initialFile.ValueKind != JsonValueKind.String)
-                return "MAIL_DNS_NOT_READY";
-            desired = StalwartDnsRecords.Parse(domain.Name, initialFile.GetString()!)
-                .Where(x => !IsDkim(domain.Name, x.Name, x.Type))
-                .Where(x => !existing.Any(e => e.Type.Equals(x.Type, StringComparison.OrdinalIgnoreCase) &&
-                    (x.Type == "MX" || e.Value.TrimStart('"').StartsWith("v=spf1", StringComparison.OrdinalIgnoreCase) && x.Value.TrimStart('"').StartsWith("v=spf1", StringComparison.OrdinalIgnoreCase) ||
-                    e.Value.TrimStart('"').StartsWith("v=DMARC1", StringComparison.OrdinalIgnoreCase) && x.Value.TrimStart('"').StartsWith("v=DMARC1", StringComparison.OrdinalIgnoreCase))))
-                .ToArray();
-        }
         var additions = Plan(domain.Name, existing, desired);
         if (additions is null) return "MAIL_DNS_RECORD_CONFLICT";
         foreach (var record in additions)
@@ -73,11 +60,11 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
             operations.Schedule("dns-zone", zone.Id, "update", new { zone.Name });
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        if (nativeRotation)
+        if (nativeRotation || !policy.Publish)
         {
             // Publish the zone before Stalwart enables automatic management.
             // A pending dns-zone operation is processed later in this same pass.
-            if (await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "dns-zone" &&
+            if (policy.Publish && await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "dns-zone" &&
                     x.ResourceId == zone.Id && x.Status == "pending", ct))
                 return "MAIL_DNS_PUBLICATION_PENDING";
             // The DNS reconciler must preserve delegated mail records before this is enabled.
@@ -87,7 +74,7 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
             var mode = management.GetProperty("@type").GetString();
             if (mode == "Automatic")
             {
-                if (management.GetProperty("dnsServerId").GetString() != dnsServerId
+                if (policy.Publish && management.GetProperty("dnsServerId").GetString() != dnsServerId
                     || (management.TryGetProperty("origin", out var origin) && origin.GetString() != domain.Name)
                     || !management.TryGetProperty("publishRecords", out var published)
                     || published.EnumerateObject().Any(x => x.Name is not ("mx" or "spf" or "dkim" or "dmarc") && x.Value.ValueKind == JsonValueKind.True))
@@ -97,11 +84,18 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
             var signing = upstream.GetProperty("dkimManagement");
             var automatic = signing.GetProperty("@type").GetString() == "Automatic";
             var patch = new Dictionary<string, object>();
-            if (mode == "Manual" || MailDnsOwnership.PublishRecords.Any(key => !management.GetProperty("publishRecords").TryGetProperty(key, out var value) || value.ValueKind != JsonValueKind.True) || management.GetProperty("publishRecords").EnumerateObject().Any(x => !MailDnsOwnership.PublishRecords.Contains(x.Name) && x.Value.ValueKind == JsonValueKind.True)) patch["dnsManagement"] = new Dictionary<string, object> {
-                ["@type"] = "Automatic", ["dnsServerId"] = dnsServerId!, ["origin"] = domain.Name,
-                ["publishRecords"] = new Dictionary<string, bool> { ["dkim"] = true, ["mx"] = false, ["spf"] = false, ["dmarc"] = false }
-            };
-            if (!automatic) patch["dkimManagement"] = new Dictionary<string, object> { ["@type"] = "Automatic" };
+            if (!policy.Publish)
+            {
+                if (mode != "Manual") patch["dnsManagement"] = new Dictionary<string, object> { ["@type"] = "Manual" };
+            }
+            else if (mode == "Manual" || MailDnsOwnership.PublishRecords.Any(key =>
+                !management.GetProperty("publishRecords").TryGetProperty(key, out var value) || value.ValueKind != JsonValueKind.True))
+                patch["dnsManagement"] = new Dictionary<string, object> {
+                    ["@type"] = "Automatic", ["dnsServerId"] = dnsServerId!, ["origin"] = domain.Name,
+                    ["publishRecords"] = MailDnsOwnership.PublishRecords.ToDictionary(key => key, _ => true)
+                };
+            if (automatic != policy.Rotate)
+                patch["dkimManagement"] = new Dictionary<string, object> { ["@type"] = policy.Rotate ? "Automatic" : "Manual" };
             if (patch.Count > 0)
             {
                 var id = upstream.GetProperty("id").GetString()!;
