@@ -1,7 +1,9 @@
 install_clamav() {
   apt-get install -y clamav clamav-freshclam clamav-daemon clamdscan
   install -d -m 0755 /usr/local/lib/hostingpanel
+  [[ ! -L /var/lib/hostingpanel && ! -L /var/lib/hostingpanel/quarantine ]] || die "Unsafe quarantine path"
   install -d -m 0700 -o root -g root /var/lib/hostingpanel/quarantine
+  [[ $(stat -c "%u:%a" /var/lib/hostingpanel/quarantine) == 0:700 ]] || die "Unsafe quarantine permissions"
   install -m 0755 "$here/clam-on-demand.sh" /usr/local/lib/hostingpanel/clam-on-demand.sh
   ln -sfn /usr/local/lib/hostingpanel/clam-on-demand.sh /usr/local/sbin/clam-on-demand
   systemctl enable --now clamav-freshclam.service
@@ -19,7 +21,8 @@ install_clamav() {
     sleep 5
   done
   ((attempt<60)) || die "ClamAV daemon not ready"
-  command -v clamonacc >/dev/null || die "ClamAV on-access client missing"
+  local onaccess
+  onaccess=$(command -v clamonacc) || die "ClamAV on-access client missing"
   local socket
   socket=$(awk '$1 == "LocalSocket" {print $2}' /etc/clamav/clamd.conf)
   [[ "$socket" == /* && -S "$socket" ]] || die "Local clamd socket required"
@@ -30,8 +33,9 @@ OnAccessExcludePath /srv/hosting/home/.zfs
 OnAccessExcludeUname clamav
 OnAccessPrevention yes
 OnAccessExtraScanning yes
+OnAccessDenyOnError yes
 EOF
-  cat > /etc/systemd/system/hosting-clamav-onaccess.service <<'EOF'
+  cat > /etc/systemd/system/hosting-clamav-onaccess.service <<EOF
 [Unit]
 Description=HostingPanel realtime malware protection
 After=clamav-daemon.service zfs-mount.service
@@ -39,7 +43,7 @@ Requires=clamav-daemon.service
 RequiresMountsFor=/srv/hosting/home
 [Service]
 Type=simple
-ExecStart=/usr/sbin/clamonacc --foreground --fdpass --config-file=/etc/clamav/hosting-onaccess.conf --move=/var/lib/hostingpanel/quarantine
+ExecStart=$onaccess --foreground --fdpass --config-file=/etc/clamav/hosting-onaccess.conf --move=/var/lib/hostingpanel/quarantine
 Restart=on-failure
 RestartSec=5s
 UMask=0077
@@ -78,6 +82,7 @@ EOF
   systemctl daemon-reload
   systemctl enable --now hosting-clamav-onaccess.service
   systemctl restart hosting-clamav-onaccess.service
+  sleep 3
   systemctl is-active --quiet hosting-clamav-onaccess.service
   systemctl enable --now hosting-clamav-scan.timer
 }
