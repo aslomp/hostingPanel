@@ -102,11 +102,10 @@ check_panel_https() (
   trap 'rm -rf -- "$tmp"' EXIT
   hostname=$(require panelHostname)
   k3s kubectl -n envoy-gateway-system get secret hosting-panel-tls -o jsonpath='{.data.tls\.crt}' | base64 -d > "$tmp/cert.pem"
-  openssl x509 -in "$tmp/cert.pem" -noout -checkhost "$hostname"
-  openssl x509 -in "$tmp/cert.pem" -noout -checkend 0
+  openssl verify -partial_chain -trusted "$tmp/cert.pem" -verify_hostname "$hostname" "$tmp/cert.pem"
   openssl x509 -in "$tmp/cert.pem" -pubkey -noout > "$tmp/pubkey.pem"
   # Trust the key obtained through the authenticated Kubernetes API, not public DNS.
   curl --fail --silent --show-error --retry 5 --retry-all-errors --connect-timeout 10 --max-time 30 \
-    --noproxy '*' --resolve "$hostname:443:$(require webIp)" --insecure --pinnedpubkey "$tmp/pubkey.pem" "https://$hostname/healthz"
+    --noproxy '*' --resolve "$hostname:443:$(require clusterHost)" --insecure --pinnedpubkey "$tmp/pubkey.pem" "https://$hostname/healthz"
   echo "Panel HTTPS ready. Bootstrap certificates are not publicly trusted; configure ACME when public DNS and ingress are ready."
 )
