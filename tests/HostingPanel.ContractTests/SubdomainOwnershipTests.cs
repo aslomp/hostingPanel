@@ -32,7 +32,12 @@ internal static class SubdomainOwnershipTests
         db.Domains.AddRange(parent, child, unrelated);
         db.Set<SubdomainBinding>().Add(link);
         await db.SaveChangesAsync();
-        var service = new KubernetesSubdomainService(new SubdomainOwnership(db, new KubernetesIdentityService(db)));
+        var identity = new KubernetesIdentityService(db);
+        var operations = new KubernetesOperationQueue(db);
+        var notifications = new HostingOperationNotifications();
+        var service = new KubernetesSubdomainService(new SubdomainOwnership(db, identity), db,
+            new KubernetesProvisioningService(db, new KubernetesSettingsService(db, new KubernetesBackendSettings(), identity), operations),
+            operations, notifications);
         AuthenticationHeaderValue Auth(string name, string password = "test-password") =>
             new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(name + ":" + password)));
         var ct = CancellationToken.None;
@@ -43,11 +48,24 @@ internal static class SubdomainOwnershipTests
         Check((await service.ListAsync(child.Name, Auth("owner"), ct)).Status == 400);
         Check((await service.CreateAsync(parent.Name, "new", Auth("stranger"), ct)).Status == 403);
         Check((await service.CreateAsync(parent.Name, "bad.label", Auth("owner"), ct)).Status == 400);
-        Check((await service.CreateAsync(parent.Name, "new", Auth("owner"), ct)).Status == 501);
+        Check((await service.CreateAsync(parent.Name, "unrelated", Auth("owner"), ct)).Status == 409);
+        Check((await service.CreateAsync(parent.Name, "new", Auth("reseller"), ct)).Status == 202);
+        var created = await db.Domains.SingleAsync(x => x.Name == "new.example.test");
+        Check(created.OwnerId == owner.Id);
+        Check(await db.Set<SubdomainBinding>().AnyAsync(x => x.ChildId == created.Id && x.ParentId == parent.Id));
+        Check(await db.ReconciliationOperations.AnyAsync(x => x.ResourceId == created.Id && x.ResourceType == "website" && x.Status == "pending"));
+        Check(notifications.Reader(ReconciliationTarget.Website).TryRead(out _));
+        Check(!notifications.Reader(ReconciliationTarget.Dns).TryRead(out _));
+        var php = new PhpAccountIdentity { AccountId = owner.Id, Number = 10000 };
+        var vhost = WebsiteReconciler.BuildVirtualHost(created, owner.Username, php).Apache;
+        Check(vhost.Contains("ServerName new.example.test"));
+        Check(vhost.Contains("/home/owner/domains/new.example.test/public_html"));
+        Check(vhost.Contains(AccountPhpRuntime.Name(owner.Id)));
         Check((await service.DeleteAsync(parent.Name, "shop", "other.test", Auth("owner"), ct)).Status == 400);
         Check((await service.DeleteAsync(parent.Name, "shop", child.Name, Auth("stranger"), ct)).Status == 403);
         Check((await service.DeleteAsync(parent.Name, "shop", child.Name, Auth("owner"), ct)).Status == 501);
-        Check(await db.Domains.CountAsync() == 3 && !await db.ReconciliationOperations.AnyAsync());
+        Check(await db.Domains.CountAsync() == 4 && await db.ReconciliationOperations.CountAsync() == 2);
+        Check(!await db.DnsZones.AnyAsync());
     }
 
     private static void Check(bool condition)
