@@ -46,7 +46,9 @@ install_platform() {
   helm upgrade --install admin "$here/../deploy/helm/hostingpanel" -n hosting -f "$base/hosting-values.json" --wait --timeout 10m
   k3s kubectl -n envoy-gateway-system wait --for=condition=Ready certificate/hosting-panel-tls --timeout=600s
   k3s kubectl -n envoy-gateway-system wait --for=condition=Programmed gateway/external --timeout=300s
-  curl --fail --silent --show-error --retry 5 --retry-all-errors --connect-timeout 10 --max-time 30 "$([[ $(get acmeStaging) == True ]] && printf https || printf https)://$(require panelHostname)/healthz" $([[ $(get acmeStaging) == True ]] && printf %s --insecure || true)
+  local -a tls_options=()
+  [[ $(get acmeStaging) != True ]] || tls_options+=(--insecure)
+  curl --fail --silent --show-error --retry 5 --retry-all-errors --connect-timeout 10 --max-time 30 "${tls_options[@]}" "https://$(require panelHostname)/healthz"
 }
 
 ensure_secret() {
