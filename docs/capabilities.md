@@ -68,3 +68,5 @@ Helm-managed MariaDB (Kubernetes only): optional dedicated MariaDB StatefulSet, 
 - The additive `/hosting/mail` JSON routes reuse the Stalwart mail provider and are separately documented at `/openapi/hosting-mail.json`. DirectAdmin supports the official legacy passthrough and additive typed mailbox inventory, create, quota modification and delete.
 
 - MudBlazor mailbox frontend: accessible domain selection, mailbox inventory, create, quota edit and confirmed delete using the shared mail capability; DirectAdmin typed mail management uses CMD_API_POP with upstream read-back. Live browser verification pending.
+
+- Stalwart mailbox creation enforces the owning account's `nemails` package limit and account override across all current hosted domains, including suspended domains. Missing entitlement denies creation. Single-panel-process writes are serialized; external writers, orphaned domains, aggregate disk limits and lifecycle reconciliation remain outside this guarantee.
