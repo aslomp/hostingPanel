@@ -9,7 +9,7 @@ using Microsoft.Extensions.Configuration;
 namespace HostingPanel.Api;
 
 internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesIdentityService identity,
-    IHttpClientFactory clients, IConfiguration configuration, MailMutationGate gate) : IMailProvider, IMailForwarders
+    IHttpClientFactory clients, IConfiguration configuration, MailMutationGate gate, KubernetesOperationQueue operations) : IMailProvider, IMailForwarders
 {
     private static bool ValidName(string? name) => name is { Length: > 0 and <= 64 }
         && Regex.IsMatch(name, @"^[a-z0-9][a-z0-9._+-]*$", RegexOptions.CultureInvariant)
@@ -79,6 +79,16 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
             var matches = domains.Where(d => Field(d, "name") == row.Name).ToArray();
             if (matches.Length > 1) return new(502, "MAIL_UPSTREAM_ERROR");
             var domainId = matches.Length == 1 ? Field(matches[0], "id") : null;
+            // Persist the DNS intent before any external domain creation. An ambiguous
+            // upstream outcome must still be discoverable by reconciliation.
+            if (createDomain && configuration.GetValue<bool>("PowerDns:Enabled") && configuration.GetValue("Stalwart:AutoProvisionDns", true))
+            {
+                if (!await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "mail-dns" && x.ResourceId == row.Id && x.Status == "pending", ct))
+                {
+                    operations.Schedule("mail-dns", row.Id, "update", new { row.Name });
+                    await db.SaveChangesAsync(ct);
+                }
+            }
             if (domainId is null && createDomain)
             {
                 var response = await Call(client, "x:Domain/set", new { create = new { item = new { name = row.Name } } }, ct);
@@ -95,7 +105,7 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
         catch (KeyNotFoundException) { return new(502, "MAIL_UPSTREAM_ERROR"); }
     }
 
-    private static async Task<JsonElement> Call(HttpClient client, string method, object arguments, CancellationToken ct)
+    internal static async Task<JsonElement> Call(HttpClient client, string method, object arguments, CancellationToken ct)
     {
         using var response = await client.PostAsJsonAsync("jmap/", new {
             @using = new[] { "urn:ietf:params:jmap:core", "urn:stalwart:jmap" },
@@ -109,7 +119,7 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
         return result[1].Clone();
     }
 
-    private static async Task<List<JsonElement>> Query(HttpClient client, string type, object filter, string[] properties, CancellationToken ct)
+    internal static async Task<List<JsonElement>> Query(HttpClient client, string type, object filter, string[] properties, CancellationToken ct)
     {
         var results = new List<JsonElement>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
