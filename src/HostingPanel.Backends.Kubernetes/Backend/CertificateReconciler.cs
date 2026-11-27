@@ -7,21 +7,21 @@ using System.Text.Json;
 namespace HostingPanel.Api;
 
 // Only labelled Certificate resources are managed. cert-manager handles renewal.
-public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<CertificateReconciler> logger, KubernetesResourceClient resources) : BackgroundService
+public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfiguration configuration, ILogger<CertificateReconciler> logger, KubernetesResourceClient resources, HostingOperationNotifications notifications) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         if (!configuration.GetValue<bool>("CertManager:Enabled") || !configuration.GetValue<bool>("KubernetesHosting:Enabled")) return;
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
-        do
-        {
-            try { await ReconcileAsync(ct); }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
-            catch (Exception ex) { logger.LogWarning(ex, "Certificate reconciliation failed"); }
-        } while (await timer.WaitForNextTickAsync(ct));
+        await ReconciliationLoop.RunAsync(notifications,
+            (changed, token) => resources.WatchCustomResourcesAsync("cert-manager.io", "v1",
+                configuration["KubernetesHosting:Namespace"] ?? "hosting", "certificates",
+                "hostingpanel/component=certificate", changed, token),
+            ReconcileAsync, logger, TimeSpan.FromHours(1), ct);
     }
-    private async Task ReconcileAsync(CancellationToken ct)
+
+    private async Task<bool> ReconcileAsync(CancellationToken ct)
     {
+        var retry = false;
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
         var backend = scope.ServiceProvider.GetRequiredService<IKubernetesSettingsReader>();
@@ -32,7 +32,8 @@ public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfigur
         using var actual = JsonDocument.Parse(await client.ListAsync(ct));
         var keep = new HashSet<string>(StringComparer.Ordinal);
         var readyListeners = new List<(Guid Id, string Host)>();
-        var readyCertificates = actual.RootElement.GetProperty("items").EnumerateArray().Where(IsReady).Select(x => x.GetProperty("metadata").GetProperty("name").GetString()).ToHashSet();
+        var certificates = actual.RootElement.GetProperty("items").EnumerateArray()
+            .ToDictionary(x => x.GetProperty("metadata").GetProperty("name").GetString()!, StringComparer.Ordinal);
         foreach (var domain in domains)
         {
             var acme = await KubernetesCertificateProvider.DomainAcmeAsync(db, domain.Id, ct);
@@ -42,11 +43,15 @@ public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfigur
             var names = KubernetesCertificateProvider.CertificateNames(domain, acme);
             if (issuer is null || names.Length == 0 || (acme.PreferWildcard && !issuer.SupportsWildcard)) continue;
             try {
-                await client.ApplyAsync(domain.Id, names, issuer.IssuerName, issuer.IssuerKind, acme.KeyType, ct);
-                if (readyCertificates.Contains(CertManagerClient.Name(domain.Id)) && names.Contains(domain.Name))
+                var name = CertManagerClient.Name(domain.Id);
+                using var desired = JsonDocument.Parse(client.BuildManifest(domain.Id, names, issuer.IssuerName, issuer.IssuerKind, acme.KeyType));
+                if (!certificates.TryGetValue(name, out var observed) ||
+                    !MatchesDesired(desired.RootElement.GetProperty("spec"), observed.GetProperty("spec")))
+                    await resources.ApplyAsync(desired.RootElement.GetRawText(), configuration["KubernetesHosting:Namespace"] ?? "hosting", "hostingpanel-certificate", ct);
+                else if (IsReady(observed) && names.Contains(domain.Name))
                     readyListeners.Add((domain.Id, domain.Name));
             }
-            catch (Exception ex) when (!ct.IsCancellationRequested) { logger.LogWarning(ex, "Certificate request failed for {Id}", domain.Id); }
+            catch (Exception ex) when (!ct.IsCancellationRequested) { retry = true; logger.LogWarning(ex, "Certificate request failed for {Id}", domain.Id); }
         }
         var set = configuration["CertManager:ListenerSetName"];
         if (!string.IsNullOrEmpty(set))
@@ -63,10 +68,31 @@ public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfigur
             if (name.StartsWith("site-", StringComparison.Ordinal) && Guid.TryParseExact(name[5..], "N", out _) && !keep.Contains(name))
                 await client.DeleteAsync(name, ct);
         }
+        return retry;
     }
-    private static bool IsReady(JsonElement cert) =>
+
+    // Compare only fields owned by HostingPanel; API defaults and other
+    // controllers' fields must not cause repeated server-side apply.
+    internal static bool MatchesDesired(JsonElement desired, JsonElement observed)
+    {
+        if (desired.ValueKind != observed.ValueKind) return false;
+        if (desired.ValueKind == JsonValueKind.Object)
+            return desired.EnumerateObject().All(p => observed.TryGetProperty(p.Name, out var value) && MatchesDesired(p.Value, value));
+        if (desired.ValueKind == JsonValueKind.Array)
+        {
+            var a = desired.EnumerateArray().ToArray();
+            var b = observed.EnumerateArray().ToArray();
+            return a.Length == b.Length && a.Zip(b).All(pair => MatchesDesired(pair.First, pair.Second));
+        }
+        return JsonElement.DeepEquals(desired, observed);
+    }
+
+    internal static bool IsReady(JsonElement cert) =>
         cert.TryGetProperty("status", out var status) && status.TryGetProperty("conditions", out var conditions) &&
-        conditions.EnumerateArray().Any(c => c.GetProperty("type").GetString() == "Ready" && c.GetProperty("status").GetString() == "True");
+        conditions.EnumerateArray().Any(c => c.GetProperty("type").GetString() == "Ready" && c.GetProperty("status").GetString() == "True" &&
+                (!c.TryGetProperty("observedGeneration", out var generation) ||
+                 !cert.GetProperty("metadata").TryGetProperty("generation", out var current) ||
+                 JsonElement.DeepEquals(generation, current)));
     private static bool SslEnabled(HostedDomain domain)
     {
         using var doc = JsonDocument.Parse(domain.SettingsJson);

@@ -20,52 +20,9 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         if (!configuration.GetValue<bool>("KubernetesHosting:Enabled")) return;
-        var wake = Channel.CreateBounded<bool>(new BoundedChannelOptions(1)
-        {
-            FullMode = BoundedChannelFullMode.DropWrite,
-            SingleReader = true
-        });
-        void Notify() => wake.Writer.TryWrite(true);
-        notifications.Changed += Notify;
-        using var watchCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var watch = WatchApachePodsAsync(Notify, watchCancellation.Token);
-        try
-        {
-            while (!ct.IsCancellationRequested)
-            {
-                var needsRetry = true;
-                try { needsRetry = await ReconcileAsync(ct); }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
-                catch (Exception ex) { logger.LogError(ex, "Website reconciliation failed"); }
-
-                // Coalesce invalidations. Keep periodic recovery for failed durable work
-                // and settings changes which do not publish notifications.
-                using var delay = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                delay.CancelAfter(TimeSpan.FromSeconds(needsRetry ? 5 : 60));
-                try { await wake.Reader.ReadAsync(delay.Token); }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
-                while (wake.Reader.TryRead(out _)) { }
-            }
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
-        finally
-        {
-            notifications.Changed -= Notify;
-            await watchCancellation.CancelAsync();
-            await watch;
-        }
-    }
-
-    private async Task WatchApachePodsAsync(Action notify, CancellationToken ct)
-    {
-        while (!ct.IsCancellationRequested)
-        {
-            try { await resources.WatchApachePodsAsync(Namespace, notify, ct); }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
-            catch (Exception ex) { logger.LogWarning(ex, "Apache pod watch disconnected"); }
-            try { await Task.Delay(TimeSpan.FromSeconds(5), ct); }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
-        }
+        await ReconciliationLoop.RunAsync(notifications,
+            (changed, token) => resources.WatchApachePodsAsync(Namespace, changed, token),
+            ReconcileAsync, logger, TimeSpan.FromSeconds(60), ct);
     }
 
     private async Task<bool> ReconcileAsync(CancellationToken ct)

@@ -174,6 +174,27 @@ public sealed class KubernetesResourceClient : IDisposable
         }
     }
 
+    // Custom resources use the same list/watch recovery contract as pods.
+    public async Task WatchCustomResourcesAsync(string group, string version, string ns,
+        string plural, string selector, Action changed, CancellationToken ct)
+    {
+        using var initial = JsonDocument.Parse(await ListAsync(group, version, ns, plural, selector, ct));
+        var resourceVersion = initial.RootElement.GetProperty("metadata").GetProperty("resourceVersion").GetString();
+        changed();
+        var response = Api.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(
+            group, version, ns, plural, labelSelector: selector, resourceVersion: resourceVersion,
+            watch: true, timeoutSeconds: 300, cancellationToken: ct);
+        await foreach (var (kind, _) in response.WatchAsync<object, object>(
+            onError: error => throw new InvalidOperationException("Custom resource watch failed.", error),
+            cancellationToken: ct))
+        {
+            if (kind == WatchEventType.Error)
+                throw new InvalidOperationException("Custom resource watch returned an error.");
+            if (kind is WatchEventType.Added or WatchEventType.Modified or WatchEventType.Deleted)
+                changed();
+        }
+    }
+
     // Deliberately expose only the two platform Apache operations, not a
     // general-purpose command execution API.
     public Task ValidateApacheRevisionAsync(string ns, string pod, string revision, CancellationToken ct)

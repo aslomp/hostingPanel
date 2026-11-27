@@ -5,7 +5,7 @@ using HostingPanel.Providers.CertManager;
 using Microsoft.EntityFrameworkCore;
 namespace HostingPanel.Api;
 
-public sealed partial class KubernetesCertificateProvider(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesSettingsService settingsProvider, IConfiguration? configuration = null, KubernetesResourceClient? resources = null) : ICertificateProvider
+public sealed partial class KubernetesCertificateProvider(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesSettingsService settingsProvider, IConfiguration? configuration = null, KubernetesResourceClient? resources = null, HostingOperationNotifications? notifications = null) : ICertificateProvider
 {
     internal static string AcmeKey(Guid id) => "Acme:Domain:" + id.ToString("N");
     internal static async Task<DomainAcmeConfiguration> DomainAcmeAsync(HostingPanelDbContext db, Guid id, CancellationToken ct)
@@ -93,6 +93,7 @@ public sealed partial class KubernetesCertificateProvider(HostingPanelDbContext 
                     if (row is null) { row = new PanelConfiguration { Key = key }; db.Configuration.Add(row); }
                     row.ValueJson = JsonSerializer.Serialize(input);
                     await db.SaveChangesAsync(ct);
+                    notifications?.Publish();
                     await Results.NoContent().ExecuteAsync(context); return;
                 }
             }
