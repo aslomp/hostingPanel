@@ -6,6 +6,9 @@ install_storage() {
   apt-get update
   apt-get install -y zfsutils-linux nfs-kernel-server targetcli-fb openssh-server sudo openssl
   if ! zpool list -H "$pool" >/dev/null 2>&1; then
+    if [[ "$default_config" == true && $(get confirmPoolCreation) == False ]]; then
+      python3 "$here/disk_discovery.py" "$config"
+    fi
     [[ $(get confirmPoolCreation) == True ]] || die "Create/import pool or explicitly confirm pool creation"
     local devices
     devices=$(python3 -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1]))["poolDevices"]))' "$config")
@@ -14,8 +17,13 @@ install_storage() {
     while IFS= read -r disk; do
       [[ "$disk" == /dev/disk/by-id/* && -b "$disk" ]] || die "Invalid disk"
       [[ $(lsblk -nr -o TYPE "$disk") == disk ]] || die "Disk has partitions or children"
-      [[ -z $(wipefs -n --noheadings -o TYPE "$disk") ]] || die "Disk has signatures"
-      [[ -z $(lsblk -nr -o MOUNTPOINTS "$disk" | tr -d '[:space:]') ]] || die "Disk is mounted"
+      local signatures
+      signatures=$(wipefs -n --noheadings -o TYPE "$disk") || die "Cannot inspect disk signatures"
+      [[ -z "$signatures" ]] || die "Disk has signatures"
+      local mounts
+      mounts=$(lsblk -nr -o MOUNTPOINTS "$disk" | tr -d '[:space:]') || die "Cannot inspect disk mounts"
+      [[ -z "$mounts" ]] || die "Disk is mounted"
+      [[ $(lsblk -dn -o RO,RM "$disk" | tr -d '[:space:]') == 00 ]] || die "Disk is read-only or removable"
       [[ -z $(ls -A "/sys/class/block/$(basename "$(readlink -f "$disk")")/holders") ]] || die "Disk has active holders"
       for previous in "${disks[@]}"; do
         [[ $(readlink -f "$previous") != $(readlink -f "$disk") ]] || die "Duplicate disk alias"
