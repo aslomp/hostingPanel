@@ -20,6 +20,18 @@ public sealed class DomainOperations(BackendOperationScope scope)
     public Task<DomainMutationResult> UpdateSettingAsync(string domain, string setting, string value, CancellationToken ct = default) =>
         scope.RunAsync<IDomains, DomainMutationResult>((p, auth, token) => p.UpdateSettingAsync(domain, setting, value, auth, token), ct);
 
+    public Task<SubdomainInventory> ListSubdomainsAsync(string domain, CancellationToken ct = default) =>
+        scope.RunOptionalAsync<ISubdomains, SubdomainInventory>((p, auth, token) => p.ListAsync(domain, auth, token),
+            new(501, null, "SUBDOMAINS_UNSUPPORTED"), ct);
+
+    public Task<SubdomainMutation> CreateSubdomainAsync(string domain, string label, CancellationToken ct = default) =>
+        scope.RunOptionalAsync<ISubdomains, SubdomainMutation>((p, auth, token) => p.CreateAsync(domain, label, auth, token),
+            new(501, "SUBDOMAINS_UNSUPPORTED"), ct);
+
+    public Task<SubdomainMutation> DeleteSubdomainAsync(string domain, string label, string confirmation, CancellationToken ct = default) =>
+        scope.RunOptionalAsync<ISubdomains, SubdomainMutation>((p, auth, token) => p.DeleteAsync(domain, label, confirmation, auth, token),
+            new(501, "SUBDOMAINS_UNSUPPORTED"), ct);
+
     public async Task<string?> GetProvisioningStatusAsync(string domain, CancellationToken ct = default)
     {
         var result = await GetAsync(domain, ct);
