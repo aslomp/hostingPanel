@@ -23,6 +23,7 @@ public static class KubernetesRegistration
         throw new InvalidOperationException("Invalid BackendSettings: " + string.Join("; ", errors.Select(x => x.Key + ": " + string.Join(", ", x.Value))));
     services.AddSingleton(settings);
     services.AddSingleton<KubernetesResourceClient>();
+    services.AddSingleton<CertificateWork>();
     services.AddScoped<KubernetesIdentityService>();
     services.AddSingleton<MailMutationGate>();
     services.AddScoped<StalwartMailProvider>();

@@ -19,31 +19,9 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         if (!configuration.GetValue<bool>("KubernetesHosting:Enabled")) return;
-        void Notify() => notifications.Signal(ReconciliationTarget.Website);
-        using var watchCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var watch = WatchApachePodsAsync(Notify, watchCancellation.Token);
-        try
-        {
-            await ReconciliationLoop.RunAsync(notifications.Reader(ReconciliationTarget.Website),
-                ReconcileAsync, TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(15), logger, ct);
-        }
-        finally
-        {
-            await watchCancellation.CancelAsync();
-            await watch;
-        }
-    }
-
-    private async Task WatchApachePodsAsync(Action notify, CancellationToken ct)
-    {
-        while (!ct.IsCancellationRequested)
-        {
-            try { await resources.WatchApachePodsAsync(Namespace, notify, ct); }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
-            catch (Exception ex) { logger.LogWarning(ex, "Apache pod watch disconnected"); }
-            try { await Task.Delay(TimeSpan.FromSeconds(5), ct); }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
-        }
+        await ReconciliationLoop.RunAsync(notifications.Reader(ReconciliationTarget.Website),
+            (changed, token) => resources.WatchApachePodsAsync(Namespace, changed, token),
+            ReconcileAsync, logger, TimeSpan.FromMinutes(15), ct, signal: () => notifications.Signal(ReconciliationTarget.Website));
     }
 
     private async Task<bool> ReconcileAsync(CancellationToken ct)

@@ -174,6 +174,48 @@ public sealed class KubernetesResourceClient : IDisposable
         }
     }
 
+    // Custom resources use the same list/watch recovery contract as pods.
+    public async Task WatchCustomResourcesAsync(string group, string version, string ns,
+        string plural, string selector, Action reset, Action<string> changed, CancellationToken ct)
+    {
+        using var initial = JsonDocument.Parse(await ListAsync(group, version, ns, plural, selector, ct));
+        var resourceVersion = initial.RootElement.GetProperty("metadata").GetProperty("resourceVersion").GetString();
+        reset();
+        var response = Api.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(
+            group, version, ns, plural, labelSelector: selector, resourceVersion: resourceVersion,
+            watch: true, timeoutSeconds: 300, cancellationToken: ct);
+        await foreach (var (kind, item) in response.WatchAsync<object, object>(
+            onError: error => throw new InvalidOperationException("Custom resource watch failed.", error),
+            cancellationToken: ct))
+        {
+            if (kind == WatchEventType.Error)
+                throw new InvalidOperationException("Custom resource watch returned an error.");
+            if (kind is WatchEventType.Added or WatchEventType.Modified or WatchEventType.Deleted)
+            {
+                using var doc = JsonDocument.Parse(KubernetesJson.Serialize(item));
+                changed(doc.RootElement.GetProperty("metadata").GetProperty("name").GetString()!);
+            }
+        }
+    }
+
+    public async Task<string?> TryGetAsync(string group, string version, string ns, string plural, string name, CancellationToken ct)
+    {
+        try { return await GetAsync(group, version, ns, plural, name, ct); }
+        catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.NotFound) { return null; }
+    }
+
+    public async Task DeleteObservedAsync(string group, string version, string ns, string plural, JsonElement item, CancellationToken ct)
+    {
+        var meta = item.GetProperty("metadata");
+        try
+        {
+            await Api.CustomObjects.DeleteNamespacedCustomObjectAsync(group, version, ns, plural,
+                meta.GetProperty("name").GetString()!, body: new V1DeleteOptions { Preconditions = new V1Preconditions
+                { Uid = meta.GetProperty("uid").GetString(), ResourceVersion = meta.GetProperty("resourceVersion").GetString() } }, cancellationToken: ct);
+        }
+        catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.NotFound) { }
+    }
+
     // Deliberately expose only the two platform Apache operations, not a
     // general-purpose command execution API.
     public Task ValidateApacheRevisionAsync(string ns, string pod, string revision, CancellationToken ct)

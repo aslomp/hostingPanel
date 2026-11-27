@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HostingPanel.Api;
 
-public sealed class KubernetesDomainService(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesProvisioningService provisioning, KubernetesOperationQueue operations, HostingOperationNotifications? notifications = null) : IDomains, IAccessibleDomains, IDomainPreview
+public sealed class KubernetesDomainService(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesProvisioningService provisioning, KubernetesOperationQueue operations, HostingOperationNotifications? notifications = null, CertificateWork? certificateWork = null) : IDomains, IAccessibleDomains, IDomainPreview
 {
     public async Task<VisibleDomainsResult> ListAccessibleDomains(AuthenticationHeaderValue auth, CancellationToken ct)
     {
@@ -55,12 +55,14 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
         if (!KubernetesInputValidation.ValidDomain(input.Domain) || input.Confirmation != input.Domain) return new(400, "CONFIRMATION_REQUIRED");
         var name = input.Domain.ToLowerInvariant();
         var existing = await db.Domains.FirstOrDefaultAsync(x => x.Name == name, ct);
+        Guid changedId;
         if (input.Action == "create")
         {
             if (await db.Configuration.AnyAsync(x => x.Key == "DeletingDomain:" + name, ct)) return new(409, "DOMAIN_DELETION_PENDING");
             if (existing is not null) return new(409, "DOMAIN_EXISTS");
             var created = new HostedDomain { OwnerId = principal.Id, Name = name,
                 SettingsJson = JsonSerializer.Serialize(new { php = input.Php, ssl = input.Ssl, cgi = input.Cgi }) };
+            changedId = created.Id;
             db.Domains.Add(created);
             if (await provisioning.StageDomainDnsAsync(created, ct) is { } dnsError)
             {
@@ -73,6 +75,7 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
         else
         {
             if (existing is null) return new(404, "DOMAIN_NOT_FOUND");
+            changedId = existing.Id;
             var ids = await identity.VisibleAccountsAsync(principal, ct);
             if (!ids.Contains(existing.OwnerId)) return new(403, "ACCESS_DENIED");
             if (input.Action == "delete")
@@ -105,7 +108,8 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
             else return new(400, "INVALID_OPERATION");
         }
         await db.SaveChangesAsync(ct);
-        notifications?.PublishChange(ReconciliationTarget.All);
+        certificateWork?.DomainChanged(changedId);
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
         return new(202, null);
     }
 
@@ -170,7 +174,8 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
         operations.Schedule("domain", row.Id, "update", new { row.Name, setting });
         await provisioning.ScheduleWebsiteAsync(row, "update", ct);
         await db.SaveChangesAsync(ct);
-        notifications?.PublishChange(ReconciliationTarget.All);
+        certificateWork?.DomainChanged(row.Id);
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
         return new(202, null);
     }
     public IResult PreviewDomain(DomainCreatePreview input)

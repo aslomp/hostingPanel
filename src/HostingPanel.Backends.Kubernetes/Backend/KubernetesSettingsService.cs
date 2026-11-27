@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace HostingPanel.Api;
 
 /// <summary>Owns persisted Kubernetes settings and network inventory.</summary>
-public sealed class KubernetesSettingsService(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, KubernetesIdentityService identity, IConfiguration? configuration = null, KubernetesResourceClient? resources = null, HostingOperationNotifications? notifications = null) : IBackendSettingsAccess, IHostingNetworkAccess, IKubernetesSettingsReader
+public sealed class KubernetesSettingsService(HostingPanelDbContext db, KubernetesBackendSettings configuredSettings, KubernetesIdentityService identity, IConfiguration? configuration = null, KubernetesResourceClient? resources = null, HostingOperationNotifications? notifications = null, CertificateWork? certificateWork = null) : IBackendSettingsAccess, IHostingNetworkAccess, IKubernetesSettingsReader
 {
     private const string SettingsKey = "BackendSettings:Kubernetes";
 
@@ -84,7 +84,8 @@ public sealed class KubernetesSettingsService(HostingPanelDbContext db, Kubernet
             await db.SaveChangesAsync(ct);
         }
         await tx.CommitAsync(ct);
-        notifications?.PublishChange(ReconciliationTarget.All);
+        certificateWork?.AllChanged();
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
         return Results.Ok(BackendSettingsSchema.Describe("Kubernetes", await GetEffectiveSettingsAsync(ct)));
     }
 

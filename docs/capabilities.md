@@ -12,7 +12,7 @@ Source-reviewed against main at 510684cd. "Implemented" means code exists, not t
 | DNS zones and records | Upstream legacy adapters | SQLite CRUD and PowerDNS reconciliation when enabled |
 | Automatic DNS for new domains | Upstream | StageDomainDnsAsync; deferred retries for missing settings |
 | Account nameserver management | Read-only own profile via upstream session config; editing not implemented | Existing IP/reseller/default resolution; profile displays effective nameservers (read-only) |
-| TLS / ACME | Upstream operations | cert-manager Certificate reconciliation and automatic dedicated ListenerSet lifecycle; shim opt-out requires cert-manager 1.21+ |
+| TLS / ACME | Upstream operations | domain-keyed event-driven cert-manager Certificate reconciliation with hourly recovery and automatic dedicated ListenerSet lifecycle; shim opt-out requires cert-manager 1.21+ |
 | Database inventory | Upstream | SQLite inventory; MariaDB create/delete when configured, otherwise 501 |
 | File access | Upstream operations where supported | FTP operations explicitly return 501; SSH/SFTP not established |
 | Tickets | Upstream | Owner-scoped SQLite tickets/replies/status and recipient messages; full support routing not established |
@@ -58,7 +58,7 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 
 Helm-managed MariaDB (Kubernetes only): optional dedicated MariaDB StatefulSet, independent PVC, internal service, separate provisioning Secret and first-initialization account bootstrap. Existing volumes require manual account initialization; deployment/runtime validation is pending.
 
-- Shared Apache configuration is published as immutable revisions on a dedicated direct NFS export (apacheConfigPath on nfsServer, no Apache PV/PVC) by the Kubernetes reconciler; named StatefulSet pods support scoped SDK validation and graceful reload. Website reconciliation uses operation notifications and an Apache pod watch, with a fifteen-minute integrity sweep and five-second failure retries. Live migration and runtime acceptance are pending.
+- Shared Apache configuration is published as immutable revisions on a dedicated direct NFS export (apacheConfigPath on nfsServer, no Apache PV/PVC) by the Kubernetes reconciler; named StatefulSet pods support scoped SDK validation and graceful reload. Live migration and runtime acceptance are pending.
 
 - Optional Stalwart v1 Helm infrastructure (Kubernetes only): single StatefulSet, persistent configuration and data, internal administration service and separate mail service. Mailbox CRUD, DNS automation, quotas and panel API integration are not implemented. See [Kubernetes hosting](kubernetes-hosting.md#mail-infrastructure).
 - Kubernetes account PHP-FPM settings: authorized admin/reseller edits image and resource limits; trusted images are managed by admins in BackendSettings. Package defaults and account overrides are stored in existing limits JSON. Runtime acceptance pending; unsupported by DirectAdmin.
@@ -77,4 +77,4 @@ Helm-managed MariaDB (Kubernetes only): optional dedicated MariaDB StatefulSet, 
 
 - Clean-server installer: local Docker build services are stopped and disabled after image import only when installer ownership was established before package installation. Existing runtimes are preserved; K3s embedded containerd remains active. See installer README.
 
-- Kubernetes website, DNS and certificate workers share targeted coalescing reconciliation channels; durable operation state remains in SQLite. Certificate observation retains its periodic fallback.
+- Website, DNS and certificate reconciliation share a coalescing channel loop; certificate work preserves domain keys and LIST/WATCH.
