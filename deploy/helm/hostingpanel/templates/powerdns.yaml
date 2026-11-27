@@ -45,6 +45,9 @@ spec:
       labels: {app.kubernetes.io/instance: {{ .Release.Name | quote }}, app.kubernetes.io/component: powerdns}
     spec:
       automountServiceAccountToken: false
+      securityContext:
+        fsGroup: {{ .Values.powerDns.fsGroup }}
+        fsGroupChangePolicy: OnRootMismatch
       initContainers:
         - name: init-db
           image: {{ .Values.powerDns.image | quote }}
