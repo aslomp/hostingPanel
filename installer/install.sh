@@ -73,6 +73,7 @@ fi
 source "$here/lib/clamav.sh"
 source "$here/lib/storage.sh"
 source "$here/lib/k3s.sh"
+source "$here/lib/build-runtime.sh"
 source "$here/lib/platform.sh"
 case "$mode" in
   --storage-server) install_storage ;;
