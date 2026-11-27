@@ -1,0 +1,115 @@
+@using HostingPanel.Api
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject PanelSession Session
+@inject DomainOperations DomainOps
+@inject IDialogService Dialogs
+@implements IDisposable
+
+<MudPaper Class="pa-4 my-3" Elevation="1">
+    <h2>@L["Subdomains"]</h2>
+    <p>@L["Manage subdomains of this domain."]</p>
+    <MudStack Row="true" Spacing="2">
+        <CrudAddButton Disabled="@(busy || read.Loading || names is null)" OnClick="OpenCreate">@L["Add subdomain"]</CrudAddButton>
+        <MudButton Variant="Variant.Outlined" Disabled="@(busy || read.Loading)" OnClick="Refresh">@L["Refresh"]</MudButton>
+    </MudStack>
+    @if (read.Loading) { <PanelLoading>@L["Retrieving subdomains…"]</PanelLoading> }
+    @if (error is not null) { <MudAlert Severity="Severity.Warning" Class="my-2">@error</MudAlert> }
+    @if (message is not null) { <MudAlert Severity="@(failed ? Severity.Error : Severity.Success)" Class="my-2">@message</MudAlert> }
+    @if (names is not null)
+    {
+        <MudSimpleTable Dense="true" Hover="true" Striped="true">
+            <thead><tr><th>@L["Subdomains"]</th><th>@L["Actions"]</th></tr></thead>
+            <tbody>
+                @foreach (var label in names.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                {
+                    <tr @key="label"><td>@FullName(label)</td><td><CrudDeleteButton Label="@L["Delete subdomain"].Value" Disabled="@busy" OnClick="() => Delete(label)" /></td></tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+        @if (names.Count == 0) { <PanelEmptyState>@L["No subdomains found."]</PanelEmptyState> }
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public string Domain { get; set; } = "";
+    private readonly LatestRead read = new();
+    private IReadOnlyList<string>? names;
+    private string? error, message;
+    private bool disposed, busy, failed;
+    private string FullName(string label) => label + "." + Domain;
+    protected override void OnInitialized() => Session.Changed += SessionChanged;
+    protected override Task OnParametersSetAsync() { names = null; message = null; return Refresh(); }
+    private bool Current(string domain, string? channel) => !disposed && Session.Connected && Domain == domain && Session.TicketChannel == channel;
+    private void SessionChanged() => _ = InvokeAsync(async () =>
+    {
+        if (disposed) return;
+        names = null; error = null; message = null; read.Cancel();
+        var task = Refresh();
+        StateHasChanged();
+        await task;
+        if (!disposed) StateHasChanged();
+    });
+    private Task Refresh()
+    {
+        if (disposed || !Session.Connected) { read.Cancel(); names = null; return Task.CompletedTask; }
+        var target = Domain; var channel = Session.TicketChannel;
+        error = null;
+        return read.RunAsync(ct => DomainOps.ListSubdomainsAsync(target, ct), () => Current(target, channel),
+            result =>
+            {
+                names = result.Status == 200 ? result.Names : null;
+                error = result.Status == 501 ? L["Subdomain management is not supported by this backend."].Value
+                    : names is null ? L["Subdomain operation failed: HTTP {0}.", result.Status].Value : null;
+            }, ex => { names = null; error = ex.Message; });
+    }
+    private void Feedback(int status, string? code)
+    {
+        failed = code is not null || status is < 200 or >= 300;
+        message = failed ? L["Subdomain operation failed: HTTP {0}.", status].Value + " " + code
+            : status == 202 ? L["Subdomain operation accepted. Provisioning is pending."].Value
+            : L["Subdomain operation completed."].Value;
+    }
+    private async Task OpenCreate()
+    {
+        if (busy || names is null || !Session.Connected) return;
+        busy = true; message = null;
+        var target = Domain; var channel = Session.TicketChannel;
+        try
+        {
+            var dialog = await Dialogs.ShowAsync<SubdomainCreateDialog>(L["Add subdomain"].Value,
+                new DialogParameters { [nameof(SubdomainCreateDialog.Domain)] = target },
+                new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = false, BackdropClick = false, CloseOnEscapeKey = false });
+            var result = await dialog.Result;
+            if (Current(target, channel) && result is { Canceled: false, Data: int status })
+            { Feedback(status, null); await Refresh(); }
+        }
+        finally { busy = false; }
+    }
+    private async Task Delete(string label)
+    {
+        if (busy || names is null || !Session.Connected) return;
+        busy = true; message = null;
+        var target = Domain; var channel = Session.TicketChannel;
+        var full = FullName(label);
+        try
+        {
+            var confirmed = await Dialogs.ConfirmResourceDeletionAsync(
+                L["Delete subdomain"].Value + ": " + full, full,
+                L["Permanently delete this subdomain?"].Value,
+                L["Enter the exact subdomain name to confirm."].Value,
+                "");
+            if (!confirmed || !Current(target, channel)) return;
+            var result = await DomainOps.DeleteSubdomainAsync(target, label, full);
+            if (!Current(target, channel)) return;
+            Feedback(result.Status, result.Error);
+            if (!failed) await Refresh();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or ArgumentException or UnauthorizedAccessException)
+        {
+            if (Current(target, channel)) { failed = true; message = ex.Message; }
+        }
+        finally { busy = false; }
+    }
+    public void Dispose() { disposed = true; Session.Changed -= SessionChanged; read.Dispose(); }
+}

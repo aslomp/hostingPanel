@@ -798,4 +798,16 @@
   <data name="Automatic mail DNS publication" xml:space="preserve"><value>Automatic mail DNS publication</value></data>
   <data name="Automatic DKIM rotation" xml:space="preserve"><value>Automatic DKIM rotation</value></data>
   <data name="Without automatic DNS publication, Stalwart cannot rotate DKIM keys automatically." xml:space="preserve"><value>Without automatic DNS publication, Stalwart cannot rotate DKIM keys automatically.</value></data>
+  <data name="Add subdomain" xml:space="preserve"><value>Add subdomain</value></data>
+  <data name="Delete subdomain" xml:space="preserve"><value>Delete subdomain</value></data>
+  <data name="Subdomain label" xml:space="preserve"><value>Subdomain label</value></data>
+  <data name="No subdomains found." xml:space="preserve"><value>No subdomains found.</value></data>
+  <data name="Subdomain management is not supported by this backend." xml:space="preserve"><value>Subdomain management is not supported by this backend.</value></data>
+  <data name="Subdomain operation failed: HTTP {0}." xml:space="preserve"><value>Subdomain operation failed: HTTP {0}.</value></data>
+  <data name="Enter the exact subdomain name to confirm." xml:space="preserve"><value>Enter the exact subdomain name to confirm.</value></data>
+  <data name="Permanently delete this subdomain?" xml:space="preserve"><value>Permanently delete this subdomain?</value></data>
+  <data name="Subdomain operation accepted. Provisioning is pending." xml:space="preserve"><value>Subdomain operation accepted. Provisioning is pending.</value></data>
+  <data name="Subdomain operation completed." xml:space="preserve"><value>Subdomain operation completed.</value></data>
+  <data name="Manage subdomains of this domain." xml:space="preserve"><value>Manage subdomains of this domain.</value></data>
+  <data name="Retrieving subdomains…" xml:space="preserve"><value>Retrieving subdomains…</value></data>
 </root>
