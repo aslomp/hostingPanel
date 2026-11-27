@@ -23,7 +23,7 @@ DirectAdmin owns users, resellers, packages, resource limits, domains, websites,
 | --- | --- | --- |
 | Official /api/* | Explicit controllers, IApiCompatibilityHandler, DirectAdminTransport | Pinned Swagger method/path/body/status contract, upstream response authoritative |
 | HostingPanel /hosting/* | Capability-specific controllers/services | Provider-neutral workflows; may adapt documented legacy operations |
-| Legacy CMD_* / CMD_API_* | Internal DirectAdmin services/adapters | Never exposed as arbitrary public proxy endpoints |
+| Legacy CMD_* / CMD_API_* | Internal DirectAdmin services/adapters | No arbitrary public proxy; explicitly allowlisted official CMD_API_POP is exposed |
 
 DirectAdminTransport forwards original method, query, content, authorization/cookies and response status/body, excluding hop-by-hop headers. It rejects unsafe paths and does not automatically follow redirects. A timeout or upstream application error is not permission to replay a mutation. Modern route coverage is not equivalent to complete UI functionality or support by every DirectAdmin version.
 
@@ -83,7 +83,7 @@ These controllers live in HostingPanel.Web/Controllers and generally forward doc
 | TicketController | Support workflows |
 | DatabaseController / DomainController / DnsController / WebHostingController | Provider-neutral hosting operations and applicable compatibility routes |
 
-The corresponding Razor areas are Accounts, Administration, Domains, Dns, Databases, Files, Support and Profile. A route mapping does not guarantee a dedicated complete UI. Email account management and any unverified upstream operation must not be marked complete solely because a route exists.
+The corresponding Razor areas are Accounts, Administration, Domains, Dns, Databases, Files, Support and Profile. A route mapping does not guarantee a dedicated complete UI. The explicit CMD_API_POP endpoint forwards the original request to DirectAdmin. Email account management and any unverified upstream operation must not be marked complete solely because a route exists.
 
 ## Configuration and operating DirectAdmin
 
