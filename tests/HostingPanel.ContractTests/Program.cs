@@ -4,6 +4,18 @@ using HostingPanel.Api.Services;
 using System.Net.Http.Headers;
 using System.Text;
 
+if (args.Contains("--certificate-serving-integration"))
+{
+    await CertificateServingIntegrationTests.RunAsync();
+    return 0;
+}
+
+if (args.Contains("--certificate-watch-integration"))
+{
+    await CertificateWatchIntegrationTests.RunAsync();
+    return 0;
+}
+
 var checks = new List<(string Description, Action Test)>
 {
     ("Legacy DNS administration enforces admin access and persists existing DNS intent", LegacyDnsAdminTests.Run),
@@ -11,6 +23,7 @@ var checks = new List<(string Description, Action Test)>
     ("Mailbox package entitlements fail closed and respect overrides", MailLimitPolicyTests.Run),
     ("DirectAdmin mailbox adapter verifies mutations and preserves caller credentials", DirectAdminMailTests.Run),
     ("Account PHP runtime manifests isolate account identities and storage", AccountPhpRuntimeTests.Run),
+    ("Certificate desired fields and observed generation gate writes and readiness", CertificateReconciliationTests.Run),
     ("ListenerSet shim exclusions converge without replacing unrelated annotations", ListenerSetOptOutTests.Run),
     ("Session HTTP transport preserves routes, credentials and disconnect boundaries", PanelHttpTransportTests.Run),
     ("Administrative mutations retain a cancellable API boundary", () =>

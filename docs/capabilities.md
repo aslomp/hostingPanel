@@ -12,7 +12,7 @@ Source-reviewed against main at 510684cd. "Implemented" means code exists, not t
 | DNS zones and records | Upstream legacy adapters | SQLite CRUD and PowerDNS reconciliation when enabled |
 | Automatic DNS for new domains | Upstream | StageDomainDnsAsync; deferred retries for missing settings |
 | Account nameserver management | Read-only own profile via upstream session config; editing not implemented | Existing IP/reseller/default resolution; profile displays effective nameservers (read-only) |
-| TLS / ACME | Upstream operations | cert-manager Certificate reconciliation and automatic dedicated ListenerSet lifecycle; shim opt-out requires cert-manager 1.21+ |
+| TLS / ACME | Upstream operations | domain-keyed event-driven cert-manager Certificate reconciliation with hourly recovery and automatic dedicated ListenerSet lifecycle; shim opt-out requires cert-manager 1.21+ |
 | Database inventory | Upstream | SQLite inventory; MariaDB create/delete when configured, otherwise 501 |
 | File access | Upstream operations where supported | FTP operations explicitly return 501; SSH/SFTP not established |
 | Tickets | Upstream | Owner-scoped SQLite tickets/replies/status and recipient messages; full support routing not established |

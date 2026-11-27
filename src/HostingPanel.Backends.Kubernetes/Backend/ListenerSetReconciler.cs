@@ -29,7 +29,7 @@ internal sealed class ListenerSetReconciler(KubernetesResourceClient client, str
     private static string Name(Guid id) => Prefix + id.ToString("N");
     private static bool Managed(string? name) => name is not null && name.StartsWith(Prefix, StringComparison.Ordinal) &&
         Guid.TryParseExact(name[Prefix.Length..], "N", out _);
-    public async Task ReconcileAsync(string set, string gateway, string gatewayNamespace, IReadOnlyList<(Guid Id, string Host)> domains, CancellationToken ct)
+    public async Task ReconcileAsync(string set, string gateway, string gatewayNamespace, IReadOnlyList<(Guid Id, string Host)> domains, CancellationToken ct, Guid[]? targets = null)
     {
         var desired = domains.ToDictionary(x => Name(x.Id), StringComparer.Ordinal);
         var existing = await client.GetListenerSetAsync(ns, set, ct);
@@ -73,18 +73,47 @@ internal sealed class ListenerSetReconciler(KubernetesResourceClient client, str
         }
         foreach (var pair in desired)
         {
+            if (targets is not null && !targets.Contains(pair.Value.Id)) continue;
             var manifest = JsonSerializer.Serialize(new { apiVersion = "gateway.networking.k8s.io/v1", kind = "HTTPRoute",
                 metadata = new { name = pair.Key, @namespace = ns, labels = new Dictionary<string,string> { ["hostingpanel/component"] = "tls-route" } },
                 spec = new { parentRefs = new[] { new { group = "gateway.networking.k8s.io", kind = "ListenerSet", name = set, sectionName = pair.Key } },
                     hostnames = new[] { pair.Value.Host }, rules = new[] { new { backendRefs = new[] { new { name = "apache-baseline", port = 80 } } } } } });
+            var raw = await client.TryGetAsync(Group, "v1", ns, "httproutes", pair.Key, ct);
+            if (raw is not null)
+            {
+                using var observed = JsonDocument.Parse(raw);
+                using var wanted = JsonDocument.Parse(manifest);
+                var meta = observed.RootElement.GetProperty("metadata");
+                if (!meta.TryGetProperty("labels", out var labels) ||
+                    !labels.TryGetProperty("hostingpanel/component", out var label) || label.GetString() != "tls-route")
+                    throw new InvalidOperationException("Refusing to modify an unowned TLS route.");
+                if (CertificateReconciler.MatchesDesired(wanted.RootElement.GetProperty("spec"), observed.RootElement.GetProperty("spec")))
+                    continue;
+            }
             await client.ApplyAsync(manifest, ns, "hostingpanel-tls", ct);
+        }
+        if (targets is not null)
+        {
+            foreach (var id in targets)
+            {
+                var name = Name(id);
+                if (desired.ContainsKey(name)) continue;
+                var raw = await client.TryGetAsync(Group, "v1", ns, "httproutes", name, ct);
+                if (raw is null) continue;
+                using var route = JsonDocument.Parse(raw);
+                var meta = route.RootElement.GetProperty("metadata");
+                if (meta.TryGetProperty("labels", out var labels) &&
+                    labels.TryGetProperty("hostingpanel/component", out var label) && label.GetString() == "tls-route")
+                    await client.DeleteObservedAsync(Group, "v1", ns, "httproutes", route.RootElement, ct);
+            }
+            return;
         }
         using var routes = JsonDocument.Parse(await client.ListAsync(Group, "v1", ns, "httproutes", "hostingpanel/component=tls-route", ct));
         foreach (var item in routes.RootElement.GetProperty("items").EnumerateArray())
         {
             var name = item.GetProperty("metadata").GetProperty("name").GetString()!;
             if (Managed(name) && !desired.ContainsKey(name))
-                await client.DeleteAsync(Group, "v1", ns, "httproutes", name, ct);
+                await client.DeleteObservedAsync(Group, "v1", ns, "httproutes", item, ct);
         }
     }
 }

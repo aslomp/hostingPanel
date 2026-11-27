@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HostingPanel.Api;
 
-public sealed class KubernetesAccountService(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesProvisioningService provisioning, KubernetesOperationQueue operations) : IAccountCatalog, IAccountMutations, IAccountOverview, IUserDetails, IImpersonation
+public sealed class KubernetesAccountService(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesProvisioningService provisioning, KubernetesOperationQueue operations, HostingOperationNotifications? notifications = null, CertificateWork? certificateWork = null) : IAccountCatalog, IAccountMutations, IAccountOverview, IUserDetails, IImpersonation
 {
     public async Task<AccountCatalogResult> ListAsync(AuthenticationHeaderValue auth, CancellationToken ct)
     {
@@ -62,6 +62,8 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         await provisioning.ScheduleWebsiteAsync(domain, "create", ct);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+        certificateWork?.DomainChanged(domain.Id);
+        notifications?.Publish();
         return new(202, null);
     }
 
@@ -85,6 +87,7 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         db.Accounts.Remove(target);
         operations.Schedule("account", target.Id, "delete", new { target.Username });
         await db.SaveChangesAsync(ct);
+        notifications?.Publish();
         return new(202, null);
     }
 
@@ -102,8 +105,11 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
             .OrderByDescending(p => p.OwnerId == principal.Id).FirstOrDefault();
         if (assigned is null) return new(404, "PACKAGE_NOT_FOUND");
         account.PackageId = assigned.Id;
+        var affectedDomains = await db.Domains.AsNoTracking().Where(x => x.OwnerId == account.Id).Select(x => x.Id).ToListAsync(ct);
         operations.Schedule("account", account.Id, "update", new { account.Username, package });
         await db.SaveChangesAsync(ct);
+        foreach (var id in affectedDomains) certificateWork?.DomainChanged(id);
+        notifications?.Publish();
         return new(202, null);
     }
 
@@ -123,6 +129,7 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         account.LimitsJson = JsonSerializer.Serialize(limits);
         operations.Schedule("account", account.Id, "update", new { account.Username, change.Field });
         await db.SaveChangesAsync(ct);
+        notifications?.Publish();
         return new(202, null);
     }
 
@@ -138,6 +145,7 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         target.Suspended = suspended;
         operations.Schedule("account", target.Id, "update", new { target.Username, suspended });
         await db.SaveChangesAsync(ct);
+        notifications?.Publish();
         return new(202, null);
     }
     public async Task<AccountOverviewResult> GetAsync(string username, AuthenticationHeaderValue auth, CancellationToken ct)

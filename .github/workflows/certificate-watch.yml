@@ -1,0 +1,24 @@
+name: Kubernetes certificate watch integration
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  watch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: helm/kind-action@v1.12.0
+      - name: Install isolated Certificate test CRD
+        run: |
+          kubectl create namespace certificate-watch-test
+          kubectl apply -f tests/fixtures/certificate-watch-crd.yaml
+          kubectl wait --for=condition=Established --timeout=60s crd/certificates.cert-manager.io
+      - name: Exercise actual Kubernetes API watch and reconnect
+        run: dotnet run --project tests/HostingPanel.ContractTests -c Release -- --certificate-watch-integration
