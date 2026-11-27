@@ -51,7 +51,7 @@ install_platform() {
       revision=$(git -C "$here/.." rev-parse HEAD)
     fi
     if [[ -f "$stamp" ]]; then cached=$(cat "$stamp"); fi
-    if [[ -n "$revision" && "$cached" == "$revision $image" ]] && k3s ctr images check "name==docker.io/library/$image" | grep -q "complete"; then
+    if [[ -n "$revision" && "$cached" == "$revision $image" ]] && k3s ctr images check "name==docker.io/library/$image" | awk -v ref="docker.io/library/$image" '$1 == ref && $3 == "complete" {found=1} END {exit !found}'; then
       echo "Reusing previously imported panel image for $revision"
     else
       docker build -t "$image" "$here/.."
@@ -144,7 +144,8 @@ install_panel_with_progress() (
   if ((status)); then
     k3s kubectl --request-timeout=10s -n hosting get pods,pvc -o wide || true
     k3s kubectl --request-timeout=10s -n hosting get events --sort-by=.lastTimestamp || true
-    k3s kubectl --request-timeout=10s get nodes || true
+    k3s kubectl --request-timeout=10s get nodes -o wide || true
+    k3s kubectl --request-timeout=10s describe nodes | sed -n '/Conditions:/,/Addresses:/p' || true
     df -h /
   fi
   return "$status"
