@@ -8,7 +8,6 @@ namespace HostingPanel.Api;
 internal sealed class ApacheReconciliation(IConfiguration configuration, KubernetesResourceClient resources, ILogger logger)
 {
     private string? stagedApacheRevision;
-    private string? activatedReplicaFingerprint;
     private string Namespace => configuration["KubernetesHosting:Namespace"] ?? "hosting";
     private string Required(string key) => configuration["KubernetesHosting:" + key] is { Length: > 0 } value
         ? value : throw new InvalidOperationException("Missing KubernetesHosting:" + key);
@@ -27,17 +26,15 @@ internal sealed class ApacheReconciliation(IConfiguration configuration, Kuberne
         var revision = new ApacheConfigurationRevision(domains.Select(domain =>
             KeyValuePair.Create(domain.Id, WebsiteReconciler.BuildVirtualHost(domain,
                 accounts[domain.OwnerId].Username, identities[domain.OwnerId]).Apache)));
+        if (revision.Id == stagedApacheRevision) return;
         var store = new ApacheCandidateStore(Required("ApacheConfigPath"));
         var runtime = new ApacheRevisionRuntime(resources, Namespace);
         var fingerprint = await runtime.GetReplicaFingerprintAsync(ct);
-        if (revision.Id == stagedApacheRevision && fingerprint == activatedReplicaFingerprint &&
-            await store.ReadActiveAsync(ct) == revision.Id) return;
         await new ApacheRevisionActivator(store).ActivateAsync(revision,
             runtime.ValidateAsync, runtime.ReloadAsync, ct);
         if (fingerprint != await runtime.GetReplicaFingerprintAsync(ct))
             throw new InvalidOperationException("Apache replica set changed during activation; retry required.");
         stagedApacheRevision = revision.Id;
-        activatedReplicaFingerprint = fingerprint;
         logger.LogInformation("Activated Apache configuration revision {Revision} with {Count} virtualhosts",
             revision.Id, revision.VirtualHosts.Count);
     }

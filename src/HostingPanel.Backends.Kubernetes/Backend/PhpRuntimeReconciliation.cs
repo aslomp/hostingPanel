@@ -7,6 +7,7 @@ namespace HostingPanel.Api;
 internal sealed class PhpRuntimeReconciliation(IConfiguration configuration, KubernetesResourceClient resources)
 {
     private readonly Dictionary<string, string> applied = new(StringComparer.Ordinal);
+    private HashSet<string>? retiredAgainst;
 
     internal async Task<HashSet<string>> EnsureAsync(string ns,
         IEnumerable<(string Username, PhpAccountIdentity Identity, PhpRuntimeSettings Settings)> sites, CancellationToken ct)
@@ -27,11 +28,13 @@ internal sealed class PhpRuntimeReconciliation(IConfiguration configuration, Kub
         return desired;
     }
 
-    internal void InvalidateAll() => applied.Clear();
+    internal void InvalidateAll() { applied.Clear(); retiredAgainst = null; }
 
     internal async Task RetireAsync(string ns, IReadOnlySet<string> desired, CancellationToken ct)
     {
+        if (retiredAgainst is not null && retiredAgainst.SetEquals(desired)) return;
         await resources.RetireAccountPhpResourcesAsync(ns, desired, ct);
+        retiredAgainst = new HashSet<string>(desired, StringComparer.Ordinal);
         foreach (var name in applied.Keys.Where(name => !desired.Contains(name)).ToArray()) applied.Remove(name);
     }
 }

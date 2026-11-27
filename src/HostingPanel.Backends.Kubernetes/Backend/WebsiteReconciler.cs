@@ -17,6 +17,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
     private bool migrated;
     private int runtimeDrift;
     private int routeDrift;
+    private int apacheDrift;
     private bool legacyApacheRetired;
 
     protected override async Task ExecuteAsync(CancellationToken ct)
@@ -33,7 +34,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         void RouteChanged() { Interlocked.Exchange(ref routeDrift, 1); changed(); }
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var tasks = new[] {
-            resources.WatchApachePodsAsync(Namespace, changed, lifetime.Token),
+            resources.WatchApachePodsAsync(Namespace, () => { Interlocked.Exchange(ref apacheDrift, 1); changed(); }, lifetime.Token),
             resources.WatchAccountPhpAsync(Namespace, PhpChanged, lifetime.Token),
             resources.WatchWebsiteRoutesAsync(Namespace, RouteChanged, lifetime.Token)
         };
@@ -48,6 +49,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
 
     private async Task<bool> ReconcileAsync(CancellationToken ct)
     {
+        if (Interlocked.Exchange(ref apacheDrift, 0) != 0) apache.Invalidate();
         if (Interlocked.Exchange(ref runtimeDrift, 0) != 0) php.InvalidateAll();
         if (Interlocked.Exchange(ref routeDrift, 0) != 0) migrated = false;
         using var scope = scopes.CreateScope();
