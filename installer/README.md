@@ -13,15 +13,15 @@ Set clusterHost and storageHost to the same private IPv4 address, storageNetwork
 
     sudo bash installer/install.sh --full-server --new-cluster --config /root/hosting-cluster/cluster.json
 
-After an interrupted installation that created K3s, omit --new-cluster. Never uninstall K3s or destroy storage merely to retry. DNS must resolve the panel hostname to the ingress address; TCP 80/443 must be reachable for ACME. Staging is the default and does not provide a browser-trusted certificate. Set acmeStaging=false for production only after successful validation; use a separate ACME account Secret when switching environments (delete the old issuer account Secret only after confirming the change, never the TLS Secret).
+After an interrupted installation that created K3s, omit --new-cluster. Never uninstall K3s or destroy storage merely to retry. DNS must resolve the panel hostname to the ingress address; TCP 80/443 must be reachable for ACME. Staging is the default and does not provide a browser-trusted certificate. Set acmeStaging=false for production only after successful validation; separate ACME account Secrets are generated for staging and production.
 
 ## Separate storage and worker
 
-Set localStorage=false and storageHost to the private storage address. Run --storage-server on storage first. Transfer cluster.json and csi-key securely to the root-only configuration directory on the control-plane machine. Then run --full-server --new-cluster there. The storage role does not install K3s. The control plane writes worker.json and agent-token; transfer only those two files to the worker's root-only configuration directory and run:
+Set localStorage=false and storageHost to the private storage address. Run --storage-server on storage first. Transfer cluster.json, csi-key and iscsi-chap securely to the root-only configuration directory on the control-plane machine. Then run --full-server --new-cluster there. The storage role does not install K3s. The control plane writes worker.json and agent-token; transfer only those two files to the worker's root-only configuration directory and run:
 
     sudo bash installer/install.sh --worker --config /root/hosting-cluster/worker.json
 
-The generic CSI controller uses a dedicated SSH key with root-equivalent sudo privileges. Treat this key as a storage administrator credential, not an ordinary account. Restrict SSH and all NFS/iSCSI traffic to trusted nodes on a private network. The installer adds an nftables rule for ports 111, 2049 and 3260; review existing firewall, RPC services, IPv6 and cloud firewall independently. iSCSI does not use CHAP in this initial lab profile. Do not expose storage publicly. CSI host-key pinning is not implemented yet.
+The generic CSI controller uses a dedicated SSH key with root-equivalent sudo privileges. Treat this key as a storage administrator credential, not an ordinary account. Restrict SSH and all NFS/iSCSI traffic to trusted nodes on a private network. The installer adds an nftables rule for ports 111, 2049 and 3260; review existing firewall, RPC services, IPv6 and cloud firewall independently. iSCSI uses a generated CHAP secret shared by trusted cluster nodes; this is not per-tenant authentication. Do not expose storage publicly. CSI host-key pinning is not implemented yet.
 
 ## Verification
 
@@ -34,4 +34,4 @@ The generic CSI controller uses a dedicated SSH key with root-equivalent sudo pr
 
 Login username is admin. Keep credentials private. Verify HTTP and HTTPS, provisioning a test site, database creation and PVC persistence. The panel chart enables PowerDNS and MariaDB; mail/Stalwart is optional and not automatically enabled. Domain ACME provider mappings may need configuration in the panel. Storage classes retain volumes on claim deletion; review and clean up lab volumes explicitly.
 
-This is a test candidate, not a production-ready deployment. Runtime validation of ZFS, NFS permissions, iSCSI attach, Gateway API, certificate issuance and application provisioning is outstanding.
+The installer now gates success on dynamic NFS and iSCSI write/remount tests, certificate readiness, Gateway programming and the panel health endpoint. Failed storage checks retain the isolated diagnostic namespace. K3s secrets encryption is enabled for new clusters. This remains a test candidate until live acceptance passes. Runtime validation of ZFS, NFS permissions, iSCSI attach, Gateway API, certificate issuance and application provisioning is outstanding. For production require off-host backups and tested restore of etcd, ZFS datasets and application databases; verify isolation and network policies on the actual CNI. No automatic backup or disaster recovery is provided.
