@@ -27,7 +27,7 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 ## Validation boundaries
 
 - Shared Apache and dedicated account PHP workloads, NFS permissions and tenant isolation require actual cluster testing. Legacy shared PHP workloads require operator retirement after migration.
-- Gateway, cert-manager, authoritative delegation and PowerDNS infrastructure are external operational prerequisites as applicable.
+- Gateway, cert-manager, authoritative delegation and PowerDNS infrastructure are external operational prerequisites as applicable. The bundled PowerDNS deployment uses configurable `powerDns.fsGroup` (default 953) for its non-root init and server containers; persistent storage must support that filesystem group or be prepared with compatible permissions.
 - No claim that every Swagger operation has a dedicated UI or Kubernetes implementation.
 - Plans are tracked under [plans](plans/README.md); open PRs are not included in current main capabilities.
 - Contract tests, fake upstream integration and browser smoke coverage are in tests/ and CI. Live production verification is separate.
