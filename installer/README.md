@@ -35,3 +35,12 @@ The generic CSI controller uses a dedicated SSH key with root-equivalent sudo pr
 Login username is admin. Keep credentials private. Verify HTTP and HTTPS, provisioning a test site, database creation and PVC persistence. The panel chart enables PowerDNS and MariaDB; mail/Stalwart is optional and not automatically enabled. Domain ACME provider mappings may need configuration in the panel. Storage classes retain volumes on claim deletion; review and clean up lab volumes explicitly.
 
 The installer now gates success on dynamic NFS and iSCSI write/remount tests, certificate readiness, Gateway programming and the panel health endpoint. Failed storage checks retain the isolated diagnostic namespace. K3s secrets encryption is enabled for new clusters. This remains a test candidate until live acceptance passes. Runtime validation of ZFS, NFS permissions, iSCSI attach, Gateway API, certificate issuance and application provisioning is outstanding. For production require off-host backups and tested restore of etcd, ZFS datasets and application databases; verify isolation and network policies on the actual CNI. Local etcd snapshots are scheduled automatically. Encrypted off-host exports for etcd, ZFS and MariaDB are available; see [backup and recovery](RECOVERY.md). Off-host scheduling, coordinated checkpoints and verified recovery remain operator responsibilities.
+
+## Automatic local ZFS snapshots
+
+The storage installer enables three persistent systemd timers for POOL/hosting and its descendants. Schedules use UTC. Hourly snapshots retain the current and previous 71 hourly slots; daily snapshots retain the current and previous six calendar days; weekly snapshots run Sunday at 00:00 and retain a rolling calendar month (four or five Sundays). Expired snapshots are removed automatically on timer runs, only if they have the exact HostingPanel retention name and ownership marker. Manual, CSI and export snapshots are not selected. Holds and dependent clones block deletion; failures appear in the systemd journal. A missed run cannot reconstruct a historical snapshot. Local snapshots are crash-consistent and are not off-host backups. Inspect with:
+
+    systemctl list-timers 'hosting-zfs-*'
+    journalctl -u hosting-zfs-hourly.service
+    zfs list -t snapshot -r tank/hosting
+    sudo python3 /usr/local/lib/hostingpanel/zfs-retention.py tank/hosting hourly --dry-run
