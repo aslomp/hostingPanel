@@ -59,3 +59,5 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 Helm-managed MariaDB (Kubernetes only): optional dedicated MariaDB StatefulSet, independent PVC, internal service, separate provisioning Secret and first-initialization account bootstrap. Existing volumes require manual account initialization; deployment/runtime validation is pending.
 
 - Shared Apache configuration is published as immutable revisions on a dedicated direct NFS export (apacheConfigPath on nfsServer, no Apache PV/PVC) by the Kubernetes reconciler; named StatefulSet pods support scoped SDK validation and graceful reload. Live migration and runtime acceptance are pending.
+
+- Optional Stalwart v1 Helm infrastructure (Kubernetes only): single StatefulSet, persistent configuration and data, internal administration service and separate mail service. Mailbox CRUD, DNS automation, quotas and panel API integration are not implemented. See [Kubernetes hosting](kubernetes-hosting.md#mail-infrastructure).
