@@ -56,4 +56,4 @@ All endpoints require panel Basic authentication and a visible, non-suspended ho
 | PATCH | /hosting/mail/{domain}/accounts/{name} | quotaBytes (positive) |
 | DELETE | /hosting/mail/{domain}/accounts/{name} | confirmation=name@domain |
 
-Password reset, aliases, forwarding, aggregate hosting package limits, mail DNS, suspension propagation and domain deletion cleanup are pending. Do not expose this initial API to untrusted customers before aggregate resource limits and lifecycle integration have been completed. An upstream failure may leave a newly created mail domain; no automatic destructive rollback is attempted. DirectAdmin does not implement these new routes.
+Password reset, aliases, forwarding, aggregate hosting package limits, mail DNS, suspension propagation and domain deletion cleanup are pending. Mutations are administrator-only until aggregate resource limits and lifecycle integration have been completed; resellers and users can only list accounts for their visible domains. An upstream failure may leave a newly created mail domain; no automatic destructive rollback is attempted. DirectAdmin does not implement these new routes.
