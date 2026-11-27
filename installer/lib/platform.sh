@@ -45,8 +45,19 @@ install_platform() {
     apt-get install -y docker.io
     systemctl start docker
     local image="$(require panelImage):$(require panelTag)"
-    docker build -t "$image" "$here/.."
-    docker save "$image" | k3s ctr images import -
+    # Build inputs may change even at the same mutable installer tag. Cache by a clean Git revision only.
+    local revision="" cached="" stamp="$base/panel-image-revision"
+    if command -v git >/dev/null && [[ -z $(git -C "$here/.." status --porcelain --untracked-files=all) ]]; then
+      revision=$(git -C "$here/.." rev-parse HEAD)
+    fi
+    if [[ -f "$stamp" ]]; then cached=$(cat "$stamp"); fi
+    if [[ -n "$revision" && "$cached" == "$revision $image" ]] && k3s ctr images check "name==docker.io/library/$image" | grep -q "complete"; then
+      echo "Reusing previously imported panel image for $revision"
+    else
+      docker build -t "$image" "$here/.."
+      docker save "$image" | k3s ctr images import -
+      printf "%s %s\n" "$revision" "$image" > "$stamp"
+    fi
   fi
   helm template admin "$here/../deploy/helm/hostingpanel" -n hosting -f "$base/hosting-values.json" >/dev/null
   install_panel_with_progress "$base"
@@ -113,7 +124,7 @@ check_panel_https() (
 
 # Keep Helm readiness gating, but expose progress and diagnostics while it waits.
 install_panel_with_progress() (
-  local base=$1 pid status=0
+  local base=$1 pid status=0 i
   helm upgrade --install admin "$here/../deploy/helm/hostingpanel" -n hosting -f "$base/hosting-values.json" --wait --timeout 10m &
   pid=$!
   trap 'kill "$pid" 2>/dev/null || true' EXIT
