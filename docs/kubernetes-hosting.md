@@ -70,3 +70,5 @@ The additional provider-neutral API uses the same IMailProvider and authorizatio
 | PATCH, DELETE | /hosting/mail/{domain}/accounts/{name} |
 
 DELETE requires confirmation=name@domain. The additional API uses DirectAdminMailProvider on the DirectAdmin backend; CMD_API_POP still forwards unchanged to DirectAdmin. No new modern DirectAdmin /api operations are claimed.
+
+Mailbox creation now requires an explicit `nemails` entitlement in the existing hosting package or account override (nonnegative integer, or explicit package `unlimited`). All current domains owned by the account are counted, including suspended domains. Missing limits deny creation. A process-wide gate serializes panel mail mutations; only a single panel replica with no external mailbox writers is supported for this limit. Deleted/orphaned domains, aggregate disk quota and lifecycle synchronization still require separate implementation. Administrators remain the only permitted Stalwart mutators.
