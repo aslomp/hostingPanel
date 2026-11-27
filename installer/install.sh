@@ -30,6 +30,19 @@ config=$(realpath "$config")
 get() { python3 -c 'import json,sys; v=json.load(open(sys.argv[1])); print(v[sys.argv[2]])' "$config" "$1"; }
 require() { local v; v=$(get "$1"); [[ -n "$v" && "$v" != null ]] || die "Missing $1"; printf '%s' "$v"; }
 export DEBIAN_FRONTEND=noninteractive
+exec 9>/run/lock/hostingpanel-installer.lock
+flock -n 9 || die "Another installer is running"
+[[ -d /run/systemd/system ]] || die "A systemd Linux host is required"
+source /etc/os-release
+case "$ID:$VERSION_ID" in
+  ubuntu:24.04|debian:12|debian:13) ;;
+  *) die "Unsupported host distribution: $ID $VERSION_ID" ;;
+esac
+[[ $(uname -m) == x86_64 || $(uname -m) == aarch64 ]] || die "Unsupported CPU architecture"
+trap 'printf "Installation failed at %s:%s (exit %s). Inspect systemd and Kubernetes logs; no automatic deletion is performed.\\n" "${BASH_SOURCE[0]}" "$LINENO" "$?" >&2' ERR
+if [[ "$mode" == --worker ]]; then
+  python3 -c 'import json,sys,ipaddress,re; c=json.load(open(sys.argv[1])); assert ipaddress.ip_address(c["clusterHost"]).version==4; assert re.fullmatch(r"v\d+\.\d+\.\d+\+k3s\d+",c["k3sVersion"]); assert c["agentTokenFile"]=="agent-token"' "$config"
+fi
 [[ "$mode" == --worker ]] || python3 "$here/generate.py" "$config"
 [[ "$mode" != --full-server || "$new" != true || ! -e /etc/rancher/k3s/k3s.yaml ]] || die "Existing cluster: omit --new-cluster"
 [[ "$mode" != --full-server || ! -e /etc/systemd/system/k3s-agent.service ]] || die "This host is a worker"
