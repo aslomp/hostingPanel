@@ -5,6 +5,15 @@ namespace HostingPanel.Web.Services;
 
 public sealed class AccountOperations(BackendOperationScope scope)
 {
+    public Task<PhpRuntimeView> PhpAsync(string username, CancellationToken ct = default) =>
+        scope.RunOptionalAsync<IAccountPhpSettings, PhpRuntimeView>((p, auth, token) => p.ReadAsync(username, auth, token), new(501, null, []), ct);
+
+    public Task<PhpRuntimeView> PhpDefaultsAsync(CancellationToken ct = default) =>
+        scope.RunOptionalAsync<IAccountPhpSettings, PhpRuntimeView>((p, auth, token) => p.DefaultsAsync(auth, token), new(501, null, []), ct);
+
+    public Task<AccountOperationResult> SavePhpAsync(string username, PhpRuntimeSettings? settings, CancellationToken ct = default) =>
+        scope.RunOptionalAsync<IAccountPhpSettings, AccountOperationResult>((p, auth, token) => p.WriteAsync(username, settings, auth, token), new(501, "UNSUPPORTED"), ct);
+
     public Task<AccountOverviewResult> OverviewAsync(string username, CancellationToken ct = default) =>
         scope.RunAsync<IAccountOverview, AccountOverviewResult>((p, auth, token) => p.GetAsync(username, auth, token), ct);
 

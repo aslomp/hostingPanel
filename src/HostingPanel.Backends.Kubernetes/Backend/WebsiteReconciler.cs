@@ -74,7 +74,6 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
         var rows = await db.ReconciliationOperations.Where(x => x.ResourceType == "website"
             && x.Status == "pending").ToListAsync(ct);
-        var cleanupPending = await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "domain-cleanup" && x.Status == "pending", ct);
         var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
         var identities = await PhpIdentityModel.AllocateAsync(db, domains.Select(x => x.OwnerId), ct);
         var ownerIds = domains.Select(d => d.OwnerId).Distinct().ToArray();
@@ -141,9 +140,14 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             await db.SaveChangesAsync(ct);
             if (latest?.LastError is not null && latest.Attempts == 1) notifications.Publish();
         }
+        var backendSettings = await scope.ServiceProvider.GetRequiredService<IKubernetesSettingsReader>().GetEffectiveSettingsAsync(ct);
+        var packageIds = accounts.Values.Where(x => x.PackageId.HasValue).Select(x => x.PackageId!.Value).Distinct().ToArray();
+        var packages = await db.Packages.AsNoTracking().Where(x => packageIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, ct);
         var phpRuntime = new AccountPhpRuntime(configuration, resources, Namespace);
         var desiredPhp = await phpRuntime.EnsureAsync(usable.Where(HasPhp)
-            .Select(domain => (accounts[domain.OwnerId].Username, identities[domain.OwnerId], PhpVersion(domain))), ct);
+            .Select(domain => (accounts[domain.OwnerId].Username, identities[domain.OwnerId], PhpRuntimePolicy.Resolve(backendSettings,
+                accounts[domain.OwnerId].PackageId is { } packageId ? packages.GetValueOrDefault(packageId)?.LimitsJson : null,
+                accounts[domain.OwnerId].LimitsJson))), ct);
         try
         {
             await ActivateApacheConfigurationAsync(domains, accounts, identities, storageErrors, ct);
@@ -289,10 +293,6 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         if (Flag("cgi", false)) throw new InvalidOperationException("CGI is not supported");
         var siteRoot = "/home/" + username + "/domains/" + host;
         var root = siteRoot + "/public_html";
-        var phpVersion = PhpVersion(domain);
-        if (phpVersion is not ("7" or "8")) throw new InvalidOperationException("Unsupported PHP version");
-        if (php && phpVersion == "7" && !configuration.GetValue<bool>("KubernetesHosting:EnablePhp7"))
-            throw new InvalidOperationException("PHP 7 is disabled");
         // Only the canonical hostname is served; aliases require explicit routing.
         // Keep executable extensions and sensitive metadata out of static responses.
         var deniedPhp = php
@@ -304,7 +304,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             "<DirectoryMatch \"/[.](?!well-known(?:/|$))[^/]+(?:/|$)\">\nRequire all denied\n</DirectoryMatch>\n" +
             "<FilesMatch \"(?i)(?:^[.]|[.](?:bak|backup|old|orig|swp|sql|ini|log|dist|save)$|~$|^(?:composer[.](?:json|lock)|wp-config[.]php)$)\">\nRequire all denied\n</FilesMatch>\n" +
             "<FilesMatch \"" + deniedPhp + "\">\nRequire all denied\n</FilesMatch>\n" +
-            (php ? "<FilesMatch \"[.]php$\">\nSetHandler \"proxy:fcgi://" + AccountPhpRuntime.Name(identity.AccountId, phpVersion) + ":9000" + "\"\n</FilesMatch>\n" : "") +
+            (php ? "<FilesMatch \"[.]php$\">\nSetHandler \"proxy:fcgi://" + AccountPhpRuntime.Name(identity.AccountId) + ":9000" + "\"\n</FilesMatch>\n" : "") +
             "</VirtualHost>\n";
         return (apache, tls);
     }
@@ -322,10 +322,6 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         };
         return JsonSerializer.Serialize(new { apiVersion = "v1", kind = "List", items = resources });
     }
-
-    private string PhpVersion(HostedDomain domain) =>
-        configuration["KubernetesHosting:SitePhpVersions:" + domain.Name]
-        ?? configuration["KubernetesHosting:DefaultPhpVersion"] ?? "8";
 
     private static bool HasPhp(HostedDomain domain)
     {

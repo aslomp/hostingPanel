@@ -131,8 +131,8 @@ public sealed class KubernetesResourceClient : IDisposable
             foreach (var meta in objects)
             {
                 var name = meta.Name;
-                if (name is null || name.Length != 41 || !name.StartsWith("hp-fpm-", StringComparison.Ordinal) ||
-                    !Guid.TryParseExact(name[7..39], "N", out _) || name[39..] is not ("-7" or "-8") ||
+                if (name is null || name.Length is not (39 or 41) || !name.StartsWith("hp-fpm-", StringComparison.Ordinal) ||
+                    !Guid.TryParseExact(name[7..39], "N", out _) || (name.Length == 41 && name[39..] is not ("-7" or "-8")) ||
                     desired.Contains(name) || string.IsNullOrEmpty(meta.Uid) || string.IsNullOrEmpty(meta.ResourceVersion)) continue;
                 try { await delete(name, new V1DeleteOptions { Preconditions = new V1Preconditions {
                     Uid = meta.Uid, ResourceVersion = meta.ResourceVersion } }); }
