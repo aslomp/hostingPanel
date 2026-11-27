@@ -23,11 +23,11 @@ public sealed class SubdomainModel : IHostingPanelModelExtension, IHostingPanelS
                 "ChildId" TEXT NOT NULL PRIMARY KEY REFERENCES "Domains" ("Id") ON DELETE CASCADE,
                 "ParentId" TEXT NOT NULL REFERENCES "Domains" ("Id") ON DELETE RESTRICT,
                 "Label" TEXT NOT NULL,
+                "GeneratedDnsRecordId" TEXT NULL,
                 CHECK ("ChildId" <> "ParentId"),
                 UNIQUE ("ParentId", "Label")
             );
-            """),
-        new(2, """ALTER TABLE "SubdomainBindings" ADD COLUMN "GeneratedDnsRecordId" TEXT NULL;""")
+            """)
     ];
 
     public void Configure(ModelBuilder model)
