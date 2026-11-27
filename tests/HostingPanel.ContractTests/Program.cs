@@ -7,7 +7,7 @@ using System.Text;
 if (args.Contains("--certificate-watch-integration"))
 {
     await CertificateWatchIntegrationTests.RunAsync();
-    return;
+    return 0;
 }
 
 var checks = new List<(string Description, Action Test)>
