@@ -80,7 +80,7 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
                 }
                 else
                 {
-                    if (DnsRetryPolicy.RequiresRetry(job.LastError)) retry = true;
+                    if (DnsRetryPolicy.RequiresRetry(job.LastError) && job.LastError != "MAIL_DNS_PUBLICATION_PENDING") retry = true;
                     if (DnsRetryPolicy.RequiresRetry(job.LastError) || previousError != job.LastError) job.Attempts++;
                 }
                 await mailDb.SaveChangesAsync(ct);
@@ -134,7 +134,13 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
             }
             await db.SaveChangesAsync(ct);
             notifications.Publish();
-            if (group.All(row => row.Status == "completed")) notifications.Signal(ReconciliationTarget.Website);
+            if (group.All(row => row.Status == "completed"))
+            {
+                notifications.Signal(ReconciliationTarget.Website);
+                // Publication can unblock mail configuration in the next pass.
+                if (await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "mail-dns" && x.Status == "pending" && x.LastError == "MAIL_DNS_PUBLICATION_PENDING", ct))
+                    notifications.Signal(ReconciliationTarget.Dns);
+            }
         }
         // Execute explicit shared-record commands in chronological order, never
         // coalesce them into a desired-state replacement of the whole zone.

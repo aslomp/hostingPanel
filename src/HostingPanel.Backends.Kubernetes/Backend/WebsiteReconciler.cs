@@ -32,19 +32,10 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
     {
         void PhpChanged() { Interlocked.Exchange(ref runtimeDrift, 1); changed(); }
         void RouteChanged() { Interlocked.Exchange(ref routeDrift, 1); changed(); }
-        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var tasks = new[] {
-            resources.WatchApachePodsAsync(Namespace, () => { Interlocked.Exchange(ref apacheDrift, 1); changed(); }, lifetime.Token),
-            resources.WatchAccountPhpAsync(Namespace, PhpChanged, lifetime.Token),
-            resources.WatchWebsiteRoutesAsync(Namespace, RouteChanged, lifetime.Token)
-        };
-        try { await await Task.WhenAny(tasks); }
-        finally
-        {
-            await lifetime.CancelAsync();
-            try { await Task.WhenAll(tasks); }
-            catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
-        }
+        await Task.WhenAll(
+            resources.WatchApachePodsAsync(Namespace, () => { Interlocked.Exchange(ref apacheDrift, 1); changed(); }, ct),
+            resources.WatchAccountPhpAsync(Namespace, PhpChanged, ct),
+            resources.WatchWebsiteRoutesAsync(Namespace, RouteChanged, ct));
     }
 
     private async Task<bool> ReconcileAsync(CancellationToken ct)
@@ -153,13 +144,14 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         }
         await db.SaveChangesAsync(ct);
         if (completed.Count > 0) notifications.Publish();
-        await CleanupDeletedDomainsAsync(db, ct);
-        return migrationFailed || !legacyApacheRetired || await db.ReconciliationOperations.AnyAsync(x =>
-            x.Status == "pending" && (x.ResourceType == "website" || x.ResourceType == "domain-cleanup"), ct);
+        var cleanupRetry = await CleanupDeletedDomainsAsync(db, ct);
+        return cleanupRetry || migrationFailed || !legacyApacheRetired || await db.ReconciliationOperations.AnyAsync(x =>
+            x.Status == "pending" && x.ResourceType == "website", ct);
     }
 
-    private async Task CleanupDeletedDomainsAsync(HostingPanelDbContext db, CancellationToken ct)
+    private async Task<bool> CleanupDeletedDomainsAsync(HostingPanelDbContext db, CancellationToken ct)
     {
+        var retry = false;
         var pending = await db.ReconciliationOperations.Where(x => x.ResourceType == "domain-cleanup" && x.Status == "pending").ToListAsync(ct);
         foreach (var operation in pending)
         {
@@ -177,10 +169,8 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 if (marker is null) throw new InvalidOperationException("Missing deletion authorization.");
                 if (configuration.GetValue<bool>("CertManager:Enabled"))
                 {
-                    var client = new CertManagerClient(resources, Namespace);
                     var certName = HostingPanel.Providers.CertManager.CertManagerClient.Name(operation.ResourceId);
-                    using var certs = JsonDocument.Parse(await client.ListAsync(ct));
-                    if (certs.RootElement.GetProperty("items").EnumerateArray().Any(x => x.GetProperty("metadata").GetProperty("name").GetString() == certName))
+                    if (await resources.TryGetAsync("cert-manager.io", "v1", Namespace, "certificates", certName, ct) is not null)
                         continue;
                     var routeName = "hp-tls-" + operation.ResourceId.ToString("N");
                     await resources.DeleteAsync("gateway.networking.k8s.io", "v1", Namespace, "httproutes", routeName, ct);
@@ -195,6 +185,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
+                retry = true;
                 operation.Attempts++;
                 operation.LastError = "Domain deletion incomplete; see application log.";
                 logger.LogWarning(ex, "Domain cleanup failed for {Id}", operation.ResourceId);
@@ -202,6 +193,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             await db.SaveChangesAsync(ct);
             if (operation.Status == "completed" || operation.Attempts == 1) notifications.Publish();
         }
+        return retry;
     }
 
     private string Required(string key) => configuration["KubernetesHosting:" + key] is { Length: > 0 } value
