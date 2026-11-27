@@ -10,6 +10,16 @@ build_runtime_present() {
   return 1
 }
 
+stop_managed_build_runtime() {
+  local unit failed=0
+  for unit in docker.socket docker.service containerd.service; do
+    if [[ $(systemctl show -p LoadState --value "$unit") == loaded ]]; then
+      systemctl disable --now "$unit" || failed=1
+    fi
+  done
+  return "$failed"
+}
+
 build_panel_image() (
   set -Eeuo pipefail
   local image=$1 marker=$2 managed=false
@@ -24,12 +34,7 @@ build_panel_image() (
     local rc=$? cleanup_rc=0
     trap - EXIT
     if [[ "$managed" == true ]]; then
-      local unit
-      for unit in docker.socket docker.service containerd.service; do
-        if [[ $(systemctl show -p LoadState --value "$unit") == loaded ]]; then
-          systemctl disable --now "$unit" || cleanup_rc=1
-        fi
-      done
+      stop_managed_build_runtime || cleanup_rc=1
       if ((cleanup_rc)); then
         echo "Failed to stop installer-owned Docker runtime; inspect systemd" >&2
         if ((rc == 0)); then rc=1; fi
