@@ -857,4 +857,16 @@
   <data name="Uptime" xml:space="preserve"><value>Uptime</value></data>
   <data name="Services" xml:space="preserve"><value>Services</value></data>
   <data name="dashboard" xml:space="preserve"><value>dashboard</value></data>
+  <data name="PHP-FPM image" xml:space="preserve"><value>PHP-FPM-image</value></data>
+  <data name="CPU request (millicores)" xml:space="preserve"><value>CPU-aanvraag (millicores)</value></data>
+  <data name="CPU limit (millicores)" xml:space="preserve"><value>CPU-limiet (millicores)</value></data>
+  <data name="Memory request (MiB)" xml:space="preserve"><value>Geheugenaanvraag (MiB)</value></data>
+  <data name="Memory limit (MiB)" xml:space="preserve"><value>Geheugenlimiet (MiB)</value></data>
+  <data name="Maximum PHP workers" xml:space="preserve"><value>Maximum PHP-workers</value></data>
+  <data name="Worker idle timeout (seconds)" xml:space="preserve"><value>Worker-inactiviteitstime-out (seconden)</value></data>
+  <data name="PHP-FPM settings" xml:space="preserve"><value>PHP-FPM-instellingen</value></data>
+  <data name="Use package defaults" xml:space="preserve"><value>Pakketstandaard gebruiken</value></data>
+  <data name="PHP-FPM update accepted." xml:space="preserve"><value>PHP-FPM-wijziging geaccepteerd.</value></data>
+  <data name="Use package PHP-FPM settings" xml:space="preserve"><value>PHP-FPM-instellingen voor pakket gebruiken</value></data>
+  <data name="Invalid PHP-FPM settings." xml:space="preserve"><value>Ongeldige PHP-FPM-instellingen.</value></data>
 </root>

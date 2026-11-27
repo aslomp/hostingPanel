@@ -763,4 +763,16 @@
   <data name="IP addresses" xml:space="preserve"><value>IP addresses</value></data>
   <data name="Unlimited" xml:space="preserve"><value>Unlimited</value></data>
   <data name="Kubernetes package settings are stored; enforcement is not yet complete." xml:space="preserve"><value>Kubernetes package settings are stored; enforcement is not yet complete.</value></data>
+  <data name="PHP-FPM image" xml:space="preserve"><value>PHP-FPM image</value></data>
+  <data name="CPU request (millicores)" xml:space="preserve"><value>CPU request (millicores)</value></data>
+  <data name="CPU limit (millicores)" xml:space="preserve"><value>CPU limit (millicores)</value></data>
+  <data name="Memory request (MiB)" xml:space="preserve"><value>Memory request (MiB)</value></data>
+  <data name="Memory limit (MiB)" xml:space="preserve"><value>Memory limit (MiB)</value></data>
+  <data name="Maximum PHP workers" xml:space="preserve"><value>Maximum PHP workers</value></data>
+  <data name="Worker idle timeout (seconds)" xml:space="preserve"><value>Worker idle timeout (seconds)</value></data>
+  <data name="PHP-FPM settings" xml:space="preserve"><value>PHP-FPM settings</value></data>
+  <data name="Use package defaults" xml:space="preserve"><value>Use package defaults</value></data>
+  <data name="PHP-FPM update accepted." xml:space="preserve"><value>PHP-FPM update accepted.</value></data>
+  <data name="Use package PHP-FPM settings" xml:space="preserve"><value>Use package PHP-FPM settings</value></data>
+  <data name="Invalid PHP-FPM settings." xml:space="preserve"><value>Invalid PHP-FPM settings.</value></data>
 </root>

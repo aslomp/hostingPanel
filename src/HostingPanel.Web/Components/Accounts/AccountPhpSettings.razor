@@ -1,0 +1,62 @@
+@using HostingPanel.Api
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject AccountOperations Accounts
+@inject PanelSession Session
+@implements IDisposable
+
+@if (value is not null)
+{
+    <MudPaper Class="pa-4 my-3" Elevation="1">
+        <h2>@L["PHP-FPM settings"]</h2>
+        <PhpRuntimeFields @bind-Value="value" Images="images" Disabled="busy" />
+        <MudStack Row="true" Class="mt-3">
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(busy || !value.Valid(images))" OnClick="Save">@L["Save"]</MudButton>
+            <MudButton Disabled="busy" OnClick="Reset">@L["Use package defaults"]</MudButton>
+        </MudStack>
+        @if (message is not null) { <MudAlert Severity="@(failed ? Severity.Error : Severity.Success)">@message</MudAlert> }
+    </MudPaper>
+}
+@code {
+    [Parameter, EditorRequired] public string Username { get; set; } = "";
+    private PhpRuntimeSettings? value;
+    private string[] images = [];
+    private bool busy, failed, disposed;
+    private string? message;
+    private readonly LatestRead read = new();
+    protected override void OnInitialized() => Session.Changed += Changed;
+    protected override Task OnParametersSetAsync() => Load();
+    private void Changed() => _ = InvokeAsync(async () => { if (!disposed) { await Load(); StateHasChanged(); } });
+    private Task Load()
+    {
+        value = null;
+        if (!Session.Connected) { read.Cancel(); return Task.CompletedTask; }
+        var target = Username;
+        var channel = Session.TicketChannel;
+        return read.RunAsync(ct => Accounts.PhpAsync(target, ct),
+            () => !disposed && Username == target && Session.TicketChannel == channel,
+            result => { if (result.Status == 200) { value = result.Settings; images = result.Images; } },
+            ex => { failed = true; message = ex.Message; });
+    }
+    private Task Save() => Write(value);
+    private Task Reset() => Write(null);
+    private async Task Write(PhpRuntimeSettings? proposed)
+    {
+        if (busy || !Session.Connected) return;
+        var target = Username;
+        var channel = Session.TicketChannel;
+        busy = true; message = null;
+        try
+        {
+            var result = await Accounts.SavePhpAsync(target, proposed);
+            if (disposed || Username != target || Session.TicketChannel != channel) return;
+            failed = result.Status != 202;
+            message = failed ? result.Error ?? L["Backend HTTP {0}.", result.Status].Value : L["PHP-FPM update accepted."].Value;
+            if (!failed) await Load();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        { if (!disposed && Username == target && Session.TicketChannel == channel) { failed = true; message = ex.Message; } }
+        finally { busy = false; }
+    }
+    public void Dispose() { disposed = true; Session.Changed -= Changed; read.Dispose(); }
+}

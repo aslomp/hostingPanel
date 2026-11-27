@@ -49,6 +49,9 @@ public sealed class KubernetesBackendSettings : IBackendSettings
     [Display(Name = "TLS ListenerSet", Description = "Dedicated HostingPanel ListenerSet in the hosting namespace. Must match the Helm listenerSetName permission.")]
     public string TlsListenerSetName { get; set; } = "";
 
+    [Display(Name = "Allowed PHP-FPM images", Description = "Trusted FPM images; first entry is the default.")]
+    public string[] PhpImages { get; set; } = ["php:8.6.0-fpm"];
+
     [JsonIgnore]
     public IBackendSettingsValidator Validator { get; } = new KubernetesBackendSettingsValidator();
 }
@@ -60,6 +63,10 @@ public sealed class KubernetesBackendSettingsValidator : IBackendSettingsValidat
         if (settings is not KubernetesBackendSettings typed)
             return new() { ["Values"] = ["Wrong settings contract."] };
         var errors = new Dictionary<string, string[]>();
+        if (typed.PhpImages is not { Length: > 0 and <= 128 } || typed.PhpImages.Any(x =>
+            string.IsNullOrWhiteSpace(x) || x.Length > 512 || x.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('.' or '/' or ':' or '-' or '_' or '@'))) ||
+            typed.PhpImages.Distinct(StringComparer.Ordinal).Count() != typed.PhpImages.Length)
+            errors[nameof(typed.PhpImages)] = ["Enter a nonempty list of distinct trusted container images."];
         if (!Enum.IsDefined(typed.IngressProvider))
             errors[nameof(typed.IngressProvider)] = ["Select a supported ingress provider."];
         if (typed.DnsWebIp.Length != 0 && (!System.Net.IPAddress.TryParse(typed.DnsWebIp, out var ip) ||

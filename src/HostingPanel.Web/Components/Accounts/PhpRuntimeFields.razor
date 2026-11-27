@@ -1,0 +1,23 @@
+@using HostingPanel.Api
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+
+<MudSelect T="string" Label="@L["PHP-FPM image"].Value" Value="@Value.Image" ValueChanged="@((string x) => Change(Value with { Image = x }))" Disabled="@Disabled">
+    @foreach (var image in Images)
+    {
+        <MudSelectItem T="string" Value="@image">@image</MudSelectItem>
+    }
+</MudSelect>
+<MudNumericField T="int" Label="@L["CPU request (millicores)"].Value" Value="@Value.CpuRequest" ValueChanged="@((int x) => Change(Value with { CpuRequest = x }))" Min="1" Max="64000" Disabled="@Disabled" />
+<MudNumericField T="int" Label="@L["CPU limit (millicores)"].Value" Value="@Value.CpuLimit" ValueChanged="@((int x) => Change(Value with { CpuLimit = x }))" Min="1" Max="64000" Disabled="@Disabled" />
+<MudNumericField T="int" Label="@L["Memory request (MiB)"].Value" Value="@Value.MemoryRequest" ValueChanged="@((int x) => Change(Value with { MemoryRequest = x }))" Min="16" Max="65536" Disabled="@Disabled" />
+<MudNumericField T="int" Label="@L["Memory limit (MiB)"].Value" Value="@Value.MemoryLimit" ValueChanged="@((int x) => Change(Value with { MemoryLimit = x }))" Min="16" Max="65536" Disabled="@Disabled" />
+<MudNumericField T="int" Label="@L["Maximum PHP workers"].Value" Value="@Value.MaxWorkers" ValueChanged="@((int x) => Change(Value with { MaxWorkers = x }))" Min="1" Max="256" Disabled="@Disabled" />
+<MudNumericField T="int" Label="@L["Worker idle timeout (seconds)"].Value" Value="@Value.IdleSeconds" ValueChanged="@((int x) => Change(Value with { IdleSeconds = x }))" Min="1" Max="3600" Disabled="@Disabled" />
+@code {
+    [Parameter, EditorRequired] public PhpRuntimeSettings Value { get; set; } = default!;
+    [Parameter] public EventCallback<PhpRuntimeSettings> ValueChanged { get; set; }
+    [Parameter] public string[] Images { get; set; } = [];
+    [Parameter] public bool Disabled { get; set; }
+    private Task Change(PhpRuntimeSettings value) => ValueChanged.InvokeAsync(value);
+}
