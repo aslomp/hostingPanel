@@ -54,6 +54,8 @@ jobs:
               f=p/(name+".json")
               assert f.stat().st_mode & 0o777 == 0o600
               json.loads(f.read_text())
+          for protocol in ("nfs", "iscsi"):
+              assert json.loads((p/("csi-"+protocol+".json")).read_text())["controller"] == {"hostNetwork": True, "dnsPolicy": "ClusterFirstWithHostNet"}
           assert json.loads((p/"hosting-values.json").read_text())["sqlite"]["storageClassName"] == "zfs-iscsi"
           assert json.loads((p/"csi-iscsi.json").read_text())["driver"]["config"]["iscsi"]["shareStrategyTargetCli"]["tpg"]["attributes"]["authentication"] == 1
           PY

@@ -27,7 +27,7 @@ Set localStorage=false and storageHost to the private storage address. Run --sto
 
     sudo bash installer/install.sh --worker --config /root/hosting-cluster/worker.json
 
-The generic CSI controller uses a dedicated SSH key with root-equivalent sudo privileges. Treat this key as a storage administrator credential, not an ordinary account. Restrict SSH and all NFS/iSCSI traffic to trusted nodes on a private network. The installer adds an nftables rule for ports 111, 2049 and 3260; review existing firewall, RPC services, IPv6 and cloud firewall independently. iSCSI uses a generated CHAP secret shared by trusted cluster nodes; this is not per-tenant authentication. Do not expose storage publicly. CSI host-key pinning is not implemented yet.
+Both CSI controllers use host networking so SSH originates from the node address rather than the pod CIDR. The storageNetwork must authorize the actual source address of every node eligible to run a controller. Host networking is limited to these infrastructure controllers; it is not tenant isolation. The generic CSI controller uses a dedicated SSH key with root-equivalent sudo privileges. Treat this key as a storage administrator credential, not an ordinary account. Restrict SSH and all NFS/iSCSI traffic to trusted nodes on a private network. The installer adds an nftables rule for ports 111, 2049 and 3260; review existing firewall, RPC services, IPv6 and cloud firewall independently. iSCSI uses a generated CHAP secret shared by trusted cluster nodes; this is not per-tenant authentication. Do not expose storage publicly. CSI host-key pinning is not implemented yet.
 
 ## Verification
 
