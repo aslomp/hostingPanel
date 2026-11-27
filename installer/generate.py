@@ -36,6 +36,8 @@ def validate(c):
     for k in ("panelHostname", "ns1", "ns2"):
         if c[k] and not hostname_valid(c[k]):
             raise ValueError(f"Invalid {k}")
+    if c.get("panelDnsZone") and (not hostname_valid(c["panelDnsZone"]) or not c["panelHostname"].endswith("." + c["panelDnsZone"])):
+        raise ValueError("panelDnsZone must be a DNS suffix of panelHostname")
     if c["ns1"] and c["ns1"] == c["ns2"]:
         raise ValueError("Primary and secondary nameserver hostnames must be distinct")
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", c["pool"]):
