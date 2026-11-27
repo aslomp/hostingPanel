@@ -12,9 +12,17 @@ permissions:
   contents: read
 jobs:
   installer:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-26.04]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check host package availability
+        run: |
+          sudo apt-get update
+          sudo apt-get -s install python3 iproute2 zfsutils-linux nfs-kernel-server targetcli-fb openssh-server sudo openssl nftables clamav clamav-freshclam clamav-daemon clamdscan curl ca-certificates nfs-common open-iscsi docker.io
       - run: |
           for script in installer/*.sh; do bash -n "$script"; done
           for script in installer/lib/*.sh; do bash -n "$script"; done
