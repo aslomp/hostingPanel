@@ -43,8 +43,6 @@ install_platform() {
   ensure_secret hostingpanel-mariadb-provisioning password
   [[ -s "$base/hosting-values.json" ]] || die "Missing hosting-values.json"
   if [[ $(get buildPanelImage) == True ]]; then
-    apt-get install -y docker.io
-    systemctl start docker
     local image="$(require panelImage):$(require panelTag)"
     # Build inputs may change even at the same mutable installer tag. Cache by a clean Git revision only.
     local revision="" cached="" stamp="$base/panel-image-revision"
@@ -55,8 +53,7 @@ install_platform() {
     if [[ -n "$revision" && "$cached" == "$revision $image" ]] && k3s ctr images check "name==docker.io/library/$image" | awk -v ref="docker.io/library/$image" '$1 == ref && $3 == "complete" {found=1} END {exit !found}'; then
       echo "Reusing previously imported panel image for $revision"
     else
-      docker build -t "$image" "$here/.."
-      docker save "$image" | k3s ctr images import -
+      build_panel_image "$image" "$base/installer-owned-docker"
       printf "%s %s\n" "$revision" "$image" > "$stamp"
     fi
   fi
