@@ -31,8 +31,6 @@ install_storage() {
   chmod 0755 /srv/hosting/home /srv/hosting/apache
   install -d /etc/exports.d
   printf '/srv/hosting/home %s(rw,sync,root_squash,no_subtree_check)\n/srv/hosting/apache %s(rw,sync,root_squash,no_subtree_check)\n' "$network" "$network" > /etc/exports.d/hostingpanel.exports
-  systemctl enable --now nfs-kernel-server ssh
-  exportfs -ra
   local base
   base=$(dirname "$config")
   [[ -f "$base/csi-key" ]] || ssh-keygen -q -t rsa -b 3072 -m PEM -N '' -f "$base/csi-key"
@@ -72,7 +70,10 @@ EOF
   systemctl daemon-reload
   systemctl enable hosting-storage-firewall
   systemctl restart hosting-storage-firewall
+  systemctl enable --now nfs-kernel-server ssh
+  exportfs -ra
   python3 "$here/generate.py" "$config" generate
   targetcli saveconfig
+  systemctl enable rtslib-fb-targetctl.service || die "Cannot enable persistent iSCSI targets"
   echo "Storage ready: $host:/srv/hosting/home and $host:/srv/hosting/apache"
 }
