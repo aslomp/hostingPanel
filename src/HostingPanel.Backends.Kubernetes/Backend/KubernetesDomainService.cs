@@ -81,7 +81,7 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
             if (input.Action == "delete")
             {
                 if (await db.Set<SubdomainBinding>().AnyAsync(x => x.ParentId == existing.Id || x.ChildId == existing.Id, ct))
-                    return new(409, "SUBDOMAIN_LIFECYCLE_REQUIRED");
+                    return new(409, "REMOVE_SUBDOMAINS_FIRST");
                 var owner = await db.Accounts.SingleAsync(x => x.Id == existing.OwnerId, ct);
                 var zones = await db.DnsZones.Where(x => x.DomainId == existing.Id).ToListAsync(ct);
                 if (zones.Any(x => x.OwnerId != existing.OwnerId)) return new(409, "DNS_OWNERSHIP_CONFLICT");

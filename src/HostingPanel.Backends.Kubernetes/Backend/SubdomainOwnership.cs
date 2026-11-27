@@ -11,6 +11,7 @@ public sealed class SubdomainBinding
     public Guid ChildId { get; set; }
     public Guid ParentId { get; set; }
     public string Label { get; set; } = "";
+    public Guid? GeneratedDnsRecordId { get; set; }
 }
 
 public sealed class SubdomainModel : IHostingPanelModelExtension, IHostingPanelSchemaExtension
@@ -25,7 +26,8 @@ public sealed class SubdomainModel : IHostingPanelModelExtension, IHostingPanelS
                 CHECK ("ChildId" <> "ParentId"),
                 UNIQUE ("ParentId", "Label")
             );
-            """)
+            """),
+        new(2, """ALTER TABLE "SubdomainBindings" ADD COLUMN "GeneratedDnsRecordId" TEXT NULL;""")
     ];
 
     public void Configure(ModelBuilder model)

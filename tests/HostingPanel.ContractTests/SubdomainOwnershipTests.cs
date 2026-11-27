@@ -88,8 +88,15 @@ internal static class SubdomainOwnershipTests
         Check(vhost.Contains(AccountPhpRuntime.Name(owner.Id)));
         Check((await service.DeleteAsync(parent.Name, "shop", "other.test", Auth("owner"), ct)).Status == 400);
         Check((await service.DeleteAsync(parent.Name, "shop", child.Name, Auth("stranger"), ct)).Status == 403);
-        Check((await service.DeleteAsync(parent.Name, "shop", child.Name, Auth("owner"), ct)).Status == 501);
-        Check(await db.Domains.CountAsync() == 4 && await db.ReconciliationOperations.CountAsync() == 3);
+        Check((await service.DeleteAsync(parent.Name, "shop", child.Name, Auth("owner"), ct)).Status == 202);
+        Check(await db.Domains.CountAsync() == 3 && await db.ReconciliationOperations.CountAsync() == 6);
+        Check((await service.DeleteAsync(parent.Name, "new", created.Name, Auth("owner"), ct)).Status == 202);
+        Check(!await db.DnsRecords.AnyAsync(x => x.Name == "new"));
+        Check(await db.DnsRecords.AnyAsync(x => x.Name == "busy.example.test."));
+        Check(await db.Configuration.AnyAsync(x => x.Key == "DeletingDomain:" + created.Name));
+        Check(!await db.Configuration.AnyAsync(x => x.Key == KubernetesCertificateProvider.AcmeKey(created.Id)));
+        Check(await db.ReconciliationOperations.AnyAsync(x => x.ResourceId == created.Id && x.ResourceType == "domain-cleanup" && x.Status == "pending"));
+        Check(await db.Domains.AnyAsync(x => x.Id == parent.Id));
         Check(await db.DnsZones.CountAsync() == 1);
     }
 

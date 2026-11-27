@@ -26,9 +26,10 @@ public sealed class KubernetesProvisioningService(HostingPanelDbContext db, Kube
     }
 
     // The parent zone is authoritative for the child. Never create a child zone.
-    internal async Task<string?> StageSubdomainDnsAsync(HostedDomain parent, HostedDomain child, string label, CancellationToken ct)
+    internal async Task<string?> StageSubdomainDnsAsync(HostedDomain parent, HostedDomain child, SubdomainBinding binding, CancellationToken ct)
     {
         if (powerDns is null) return null;
+        var label = binding.Label;
         if (parent.OwnerId != child.OwnerId || !SubdomainNames.ValidLabel(label) ||
             child.Name != label + "." + parent.Name)
             return "SUBDOMAIN_DNS_OWNERSHIP_CONFLICT";
@@ -47,6 +48,7 @@ public sealed class KubernetesProvisioningService(HostingPanelDbContext db, Kube
         var record = new DnsRecordEntity { ZoneId = zone.Id, Name = label,
             Type = "CNAME", Value = parent.Name + ".", Ttl = zone.DefaultTtl };
         db.DnsRecords.Add(record);
+        binding.GeneratedDnsRecordId = record.Id;
         operations.Schedule("dns-zone", zone.Id, "update", new { zone.Name });
         return null;
     }
@@ -72,7 +74,7 @@ public sealed class KubernetesProvisioningService(HostingPanelDbContext db, Kube
         {
             var parentDomain = await db.Domains.SingleOrDefaultAsync(x => x.Id == binding.ParentId, ct);
             return parentDomain is null ? "SUBDOMAIN_DNS_OWNERSHIP_CONFLICT" :
-                await StageSubdomainDnsAsync(parentDomain, domain, binding.Label, ct);
+                await StageSubdomainDnsAsync(parentDomain, domain, binding, ct);
         }
         var dnsSettings = await settingsProvider.GetEffectiveSettingsAsync(ct);
         if (!dnsSettings.DnsAutoCreateZones && !retry) return null;
