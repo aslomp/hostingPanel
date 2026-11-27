@@ -19,9 +19,11 @@ install_server() {
   install_node_dependencies
   if [[ ! -e /etc/rancher/k3s/k3s.yaml ]]; then
     [[ "$new" == true ]] || die "Use --new-cluster to initialize"
-    run_k3s_installer server --cluster-init --disable traefik --tls-san "$(require clusterHost)"
+    run_k3s_installer server --cluster-init --secrets-encryption --disable traefik --tls-san "$(require clusterHost)"
   fi
   export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+  k3s secrets-encrypt status
+  [[ "$(k3s --version | head -n1 | awk '{print $3}')" == "$(require k3sVersion)" ]] || die "K3s version mismatch; perform a planned upgrade separately"
   k3s kubectl wait --for=condition=Ready node --all --timeout=300s
   install -m 0600 /var/lib/rancher/k3s/server/agent-token "$(dirname "$config")/agent-token"
   python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); json.dump({k:c[k] for k in ("clusterHost","k3sVersion","agentTokenFile")},sys.stdout,indent=2)' "$config" > "$(dirname "$config")/worker.json"
@@ -32,7 +34,8 @@ install_worker() {
   local token
   token=$(require agentTokenFile)
   [[ "$token" == /* ]] || token="$(dirname "$config")/$token"
-  [[ -s "$token" ]] || die "Missing agent token"
+  [[ -s "$token" && $(stat -c %u "$token") == 0 && $(stat -c %a "$token") == 600 ]] || die "Missing or insecure agent token"
+  grep -q "^K10" "$token" || die "Secure K3s token with CA hash required"
   export K3S_URL="https://$(require clusterHost):6443"
   export K3S_TOKEN_FILE="$token"
   run_k3s_installer agent
