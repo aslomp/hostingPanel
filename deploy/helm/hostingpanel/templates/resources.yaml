@@ -138,6 +138,17 @@ spec:
                   name: {{ required "mariadb.provisioningSecret is required when MariaDB is enabled" .Values.mariadb.provisioningSecret | quote }}
                   key: password
             {{- end }}
+            {{- if and (eq .Values.backend "Kubernetes") .Values.stalwart.api.enabled }}
+            - name: Stalwart__Enabled
+              value: "true"
+            - name: Stalwart__BaseUrl
+              value: {{ required "stalwart.api.baseUrl is required" .Values.stalwart.api.baseUrl | quote }}
+            - name: Stalwart__ApiKey
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "stalwart.api.existingSecret is required" .Values.stalwart.api.existingSecret | quote }}
+                  key: api-key
+            {{- end }}
             - name: ConnectionStrings__HostingPanel
               value: "Data Source=/data/hostingpanel.db;Foreign Keys=True;Default Timeout=5"
             {{- if and (eq .Values.backend "Kubernetes") .Values.bootstrap.existingSecret }}
