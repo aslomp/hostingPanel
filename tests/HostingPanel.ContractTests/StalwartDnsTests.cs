@@ -15,8 +15,9 @@ internal static class StalwartDnsTests
         Check(DnsRetryPolicy.RequiresRetry("MAIL_DNS_NOT_READY"));
         Check(DnsRetryPolicy.RequiresRetry("MAIL_DNS_RECONCILIATION_FAILED"));
         const string domain = "example.test";
-        Check(MailDnsOwnership.PublishRecords.SetEquals(["mx", "spf", "dkim", "dmarc"]));
+        Check(MailDnsOwnership.PublishRecords.SetEquals(["dkim"]));
         Check(MailDnsOwnership.Reserved(domain, "@", "MX"));
+        Check(MailDnsOwnership.Reserved(domain, "mail", "MX"));
         Check(MailDnsOwnership.Reserved(domain, domain + ".", "TXT"));
         Check(MailDnsOwnership.Reserved(domain, "mail._domainkey", "TXT"));
         Check(MailDnsOwnership.Reserved(domain, "_dmarc", "TXT"));

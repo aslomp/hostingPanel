@@ -99,7 +99,7 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
             var patch = new Dictionary<string, object>();
             if (mode == "Manual" || MailDnsOwnership.PublishRecords.Any(key => !management.GetProperty("publishRecords").TryGetProperty(key, out var value) || value.ValueKind != JsonValueKind.True) || management.GetProperty("publishRecords").EnumerateObject().Any(x => !MailDnsOwnership.PublishRecords.Contains(x.Name) && x.Value.ValueKind == JsonValueKind.True)) patch["dnsManagement"] = new Dictionary<string, object> {
                 ["@type"] = "Automatic", ["dnsServerId"] = dnsServerId!, ["origin"] = domain.Name,
-                ["publishRecords"] = MailDnsOwnership.PublishRecords.ToDictionary(key => key, _ => true)
+                ["publishRecords"] = new Dictionary<string, bool> { ["dkim"] = true, ["mx"] = false, ["spf"] = false, ["dmarc"] = false }
             };
             if (!automatic) patch["dkimManagement"] = new Dictionary<string, object> { ["@type"] = "Automatic" };
             if (patch.Count > 0)
