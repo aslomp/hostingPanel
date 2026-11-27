@@ -16,6 +16,10 @@ internal static class StalwartDnsTests
             """;
         var records = StalwartDnsRecords.Parse(domain, source);
         Check(records.Count == 4);
+        Check(StalwartDnsProvisioning.IsDkim(domain, "mail._domainkey.example.test.", "TXT"));
+        Check(StalwartDnsProvisioning.IsDkim(domain, "mail._domainkey", "TXT"));
+        Check(!StalwartDnsProvisioning.IsDkim(domain, "_dmarc", "TXT"));
+        Check(!StalwartDnsProvisioning.IsDkim(domain, "mail._domainkey", "CNAME"));
         Check(records.Any(x => x.Name == "mail._domainkey.example.test."));
         var existing = new List<DnsRecordEntity> {
             new() { Name = "@", Type = "A", Value = "192.0.2.1" },
