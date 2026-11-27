@@ -109,7 +109,7 @@ def generate(c, base):
         write(base/"panel-bootstrap-tls.json", dict(apiVersion="v1", kind="List", items=[
             dict(apiVersion="cert-manager.io/v1", kind="Issuer", metadata=dict(name="hosting-panel-selfsigned", namespace=namespace), spec=dict(selfSigned={})),
             dict(apiVersion="cert-manager.io/v1", kind="Certificate", metadata=dict(name="hosting-panel-tls", namespace=namespace),
-                 spec=dict(secretName="hosting-panel-tls", dnsNames=[c["panelHostname"]],
+                 spec=dict(secretName="hosting-panel-tls", dnsNames=[c["panelHostname"]], subject=dict(organizations=["HostingPanel"]),
                            issuerRef=dict(name="hosting-panel-selfsigned", kind="Issuer", group="cert-manager.io")))]))
     # Internal gateway uses a ClusterIP proxy, selected via its own GatewayClass.
     internal = gateway("internal", [http])
