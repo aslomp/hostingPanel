@@ -75,11 +75,6 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var rows = await db.ReconciliationOperations.Where(x => x.ResourceType == "website"
             && x.Status == "pending").ToListAsync(ct);
         var cleanupPending = await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "domain-cleanup" && x.Status == "pending", ct);
-        var stagePending = stagedApacheRevision is null;
-        var runtime = new ApacheRevisionRuntime(resources, Namespace);
-        if (!stagePending && rows.Count == 0 && migrated && !cleanupPending)
-            stagePending = activatedReplicaFingerprint != await runtime.GetReplicaFingerprintAsync(ct);
-        if (rows.Count == 0 && !shared && migrated && !cleanupPending && !stagePending && legacyApacheRetired) return false;
         var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
         var identities = await PhpIdentityModel.AllocateAsync(db, domains.Select(x => x.OwnerId), ct);
         var ownerIds = domains.Select(d => d.OwnerId).Distinct().ToArray();
