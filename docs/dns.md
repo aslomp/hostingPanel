@@ -38,3 +38,7 @@ Kubernetes domain deletion schedules owned DNS, website and cleanup operations; 
 ## Infrastructure
 
 See [PowerDNS deployment](powerdns.md) and [configuration ownership](configuration.md). Use a dedicated managed authoritative server/database, configure public delegation separately, and protect the management API. Do not expose its API key to tenants.
+
+## Official legacy admin DNS API
+
+`GET` and `POST /CMD_API_DNS_ADMIN` accept the documented URL-encoded `action=exists&domain=...`, `action=create&domain=...&ip=...&ns1=...&ns2=...`, and `action=add&domain=...&type=...&name=...&value=...` (optional TTL) operations. DirectAdmin receives the original request unchanged and decides authorization and supported operations. Kubernetes requires authenticated admin accounts and reuses IDNSProvider with its existing ownership checks, validation, SQLite and reconciliation queue. Exists returns `exists=1` or `exists=0` for desired-state zone existence, not a DNS publication guarantee. Mutations use URL-encoded `error=0|1&text=...&details=...`; accepted asynchronous changes explicitly say DNS publication is pending. Other Kubernetes actions and unsupported parameters (including reverse zone creation and rawsave) return 501 rather than silently ignoring them. Existing /hosting DNS routes and the pinned modern Swagger are unchanged. Authoritative responses must be verified separately.
