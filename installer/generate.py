@@ -34,11 +34,13 @@ def validate(c):
     if net.version != 4 or net.prefixlen == 0 or ipaddress.ip_address(c["storageHost"]) not in net:
         raise ValueError("storageNetwork must be a restricted IPv4 network containing storageHost")
     for k in ("panelHostname", "ns1", "ns2"):
-        if not re.fullmatch(r"[a-z0-9][a-z0-9.-]*\.[a-z0-9-]+", c[k]):
+        if c[k] and not hostname_valid(c[k]):
             raise ValueError(f"Invalid {k}")
+    if c["ns1"] and c["ns1"] == c["ns2"]:
+        raise ValueError("Primary and secondary nameserver hostnames must be distinct")
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", c["pool"]):
         raise ValueError("Invalid pool")
-    if c["acmeEmail"] and (not re.fullmatch(r"[^\\s@]+@[^\\s@]+\\.[^\\s@]+", c["acmeEmail"]) or c["acmeEmail"].split("@")[-1].lower() in {"example.com","example.net","example.org","example.invalid"}):
+    if c["acmeEmail"] and (not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", c["acmeEmail"]) or c["acmeEmail"].split("@")[-1].lower() in {"example.com","example.net","example.org","example.invalid"}):
         raise ValueError("Set real ACME email")
     for k in ("localStorage", "acmeStaging", "confirmPoolCreation", "buildPanelImage"):
         if type(c[k]) is not bool:
