@@ -123,6 +123,32 @@ public sealed class KubernetesResourceClient : IDisposable
         }
     }
 
+    public async Task RetireAccountPhpResourcesAsync(string ns, IReadOnlySet<string> desired, CancellationToken ct)
+    {
+        const string selector = "hostingpanel/component=account-php";
+        async Task RetireAsync(IEnumerable<V1ObjectMeta> objects, Func<string, V1DeleteOptions, Task> delete)
+        {
+            foreach (var meta in objects)
+            {
+                var name = meta.Name;
+                if (name is null || name.Length != 41 || !name.StartsWith("hp-fpm-", StringComparison.Ordinal) ||
+                    !Guid.TryParseExact(name[7..39], "N", out _) || name[39..] is not ("-7" or "-8") ||
+                    desired.Contains(name) || string.IsNullOrEmpty(meta.Uid) || string.IsNullOrEmpty(meta.ResourceVersion)) continue;
+                try { await delete(name, new V1DeleteOptions { Preconditions = new V1Preconditions {
+                    Uid = meta.Uid, ResourceVersion = meta.ResourceVersion } }); }
+                catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.NotFound) { }
+            }
+        }
+        await RetireAsync((await Api.AppsV1.ListNamespacedDeploymentAsync(ns, labelSelector: selector, cancellationToken: ct)).Items.Select(x => x.Metadata),
+            async (name, body) => { await Api.AppsV1.DeleteNamespacedDeploymentAsync(name, ns, body: body, cancellationToken: ct); });
+        await RetireAsync((await Api.CoreV1.ListNamespacedServiceAsync(ns, labelSelector: selector, cancellationToken: ct)).Items.Select(x => x.Metadata),
+            async (name, body) => { await Api.CoreV1.DeleteNamespacedServiceAsync(name, ns, body: body, cancellationToken: ct); });
+        await RetireAsync((await Api.CoreV1.ListNamespacedConfigMapAsync(ns, labelSelector: selector, cancellationToken: ct)).Items.Select(x => x.Metadata),
+            async (name, body) => { await Api.CoreV1.DeleteNamespacedConfigMapAsync(name, ns, body: body, cancellationToken: ct); });
+        // Keep policies in place until the corresponding pods have terminated.
+        // Policy retirement is deliberately deferred to a subsequent implementation.
+    }
+
     public async Task<string> ListPodsAsync(string ns, string selector, CancellationToken ct) =>
         KubernetesJson.Serialize(await Api.CoreV1.ListNamespacedPodAsync(ns, labelSelector: selector, cancellationToken: ct));
 

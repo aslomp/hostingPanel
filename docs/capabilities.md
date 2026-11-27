@@ -26,7 +26,7 @@ See [support and realtime](support.md), [certificates](certificates.md), [authen
 
 ## Validation boundaries
 
-- Shared Apache/PHP, NFS permissions and tenant isolation require actual cluster testing; shared PHP is trusted-only opt-in.
+- Shared Apache and dedicated account PHP workloads, NFS permissions and tenant isolation require actual cluster testing. Legacy shared PHP workloads require operator retirement after migration.
 - Gateway, cert-manager, authoritative delegation and PowerDNS infrastructure are external operational prerequisites as applicable.
 - No claim that every Swagger operation has a dedicated UI or Kubernetes implementation.
 - Plans are tracked under [plans](plans/README.md); open PRs are not included in current main capabilities.

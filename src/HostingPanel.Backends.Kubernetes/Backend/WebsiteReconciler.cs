@@ -1,8 +1,4 @@
 using HostingPanel.Providers.CertManager;
-using System.Net;
-using System.Net.Sockets;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using HostingPanel.Api.Persistence;
@@ -16,7 +12,6 @@ namespace HostingPanel.Api;
 public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguration configuration,
     ILogger<WebsiteReconciler> logger, NfsDirectoryProvisioner storage, HostingOperationNotifications notifications, KubernetesResourceClient resources) : BackgroundService
 {
-    private string? appliedRuntimeHash;
     private string? stagedApacheRevision;
     private string? activatedReplicaFingerprint;
     private bool migrated;
@@ -79,11 +74,10 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
         var rows = await db.ReconciliationOperations.Where(x => x.ResourceType == "website"
             && x.Status == "pending").ToListAsync(ct);
-        var shared = configuration.GetValue<bool>("KubernetesHosting:AllowSharedPhpRuntime");
         var cleanupPending = await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "domain-cleanup" && x.Status == "pending", ct);
         var stagePending = stagedApacheRevision is null;
         var runtime = new ApacheRevisionRuntime(resources, Namespace);
-        if (!stagePending && !shared && rows.Count == 0 && migrated && !cleanupPending)
+        if (!stagePending && rows.Count == 0 && migrated && !cleanupPending)
             stagePending = activatedReplicaFingerprint != await runtime.GetReplicaFingerprintAsync(ct);
         if (rows.Count == 0 && !shared && migrated && !cleanupPending && !stagePending && legacyApacheRetired) return false;
         var domains = await db.Domains.AsNoTracking().ToListAsync(ct);
@@ -152,19 +146,9 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             await db.SaveChangesAsync(ct);
             if (latest?.LastError is not null && latest.Attempts == 1) notifications.Publish();
         }
-        if (shared)
-        {
-            // FPM itself enforces source IPs, including connections originating
-            // inside the same runtime pod where NetworkPolicy cannot help.
-            var sources = await GetApacheSourcesAsync(usable, ct);
-            var manifest = BuildRuntimeManifest(usable, identities, sources);
-            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(manifest)));
-            if (hash != appliedRuntimeHash)
-            {
-                await resources.ApplyAsync(manifest, Namespace, "hostingpanel", ct);
-                appliedRuntimeHash = hash;
-            }
-        }
+        var phpRuntime = new AccountPhpRuntime(configuration, resources, Namespace);
+        var desiredPhp = await phpRuntime.EnsureAsync(usable.Where(HasPhp)
+            .Select(domain => (accounts[domain.OwnerId].Username, identities[domain.OwnerId], PhpVersion(domain))), ct);
         try
         {
             await ActivateApacheConfigurationAsync(domains, accounts, identities, storageErrors, ct);
@@ -182,6 +166,8 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             logger.LogWarning(ex, "Apache configuration activation failed; will retry");
             return true;
         }
+        // Keep obsolete runtimes until the new Apache configuration has been activated.
+        await resources.RetireAccountPhpResourcesAsync(Namespace, desiredPhp, ct);
         // Only remove obsolete transport objects after the NFS activation succeeded.
         if (!legacyApacheRetired)
         {
@@ -309,8 +295,6 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var siteRoot = "/home/" + username + "/domains/" + host;
         var root = siteRoot + "/public_html";
         var phpVersion = PhpVersion(domain);
-        if (php && !configuration.GetValue<bool>("KubernetesHosting:AllowSharedPhpRuntime"))
-            throw new InvalidOperationException("Shared PHP requires explicit trust in all hosted PHP applications.");
         if (phpVersion is not ("7" or "8")) throw new InvalidOperationException("Unsupported PHP version");
         if (php && phpVersion == "7" && !configuration.GetValue<bool>("KubernetesHosting:EnablePhp7"))
             throw new InvalidOperationException("PHP 7 is disabled");
@@ -325,7 +309,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             "<DirectoryMatch \"/[.](?!well-known(?:/|$))[^/]+(?:/|$)\">\nRequire all denied\n</DirectoryMatch>\n" +
             "<FilesMatch \"(?i)(?:^[.]|[.](?:bak|backup|old|orig|swp|sql|ini|log|dist|save)$|~$|^(?:composer[.](?:json|lock)|wp-config[.]php)$)\">\nRequire all denied\n</FilesMatch>\n" +
             "<FilesMatch \"" + deniedPhp + "\">\nRequire all denied\n</FilesMatch>\n" +
-            (php ? "<FilesMatch \"[.]php$\">\nSetHandler \"proxy:fcgi://php-fpm-" + phpVersion + ":" + identity.Port + "\"\n</FilesMatch>\n" : "") +
+            (php ? "<FilesMatch \"[.]php$\">\nSetHandler \"proxy:fcgi://" + AccountPhpRuntime.Name(identity.AccountId, phpVersion) + ":9000" + "\"\n</FilesMatch>\n" : "") +
             "</VirtualHost>\n";
         return (apache, tls);
     }
@@ -352,100 +336,6 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
     {
         using var doc = JsonDocument.Parse(domain.SettingsJson);
         return !doc.RootElement.TryGetProperty("php", out var flag) || (flag.ValueKind != JsonValueKind.False && !(flag.ValueKind == JsonValueKind.String && flag.GetString() is "OFF" or "False" or "false"));
-    }
-
-    private string BuildRuntimeManifest(IReadOnlyList<HostedDomain> domains,
-        IReadOnlyDictionary<Guid, PhpAccountIdentity> identities,
-        IReadOnlyDictionary<Guid, string[]> sources)
-    {
-        var resources = new List<object>();
-        foreach (var version in new[] { "8", "7" })
-        {
-            if (version == "7" && !configuration.GetValue<bool>("KubernetesHosting:EnablePhp7")) continue;
-            var name = "php-fpm-" + version;
-            var labels = new Dictionary<string,string> { ["app.kubernetes.io/name"] = name };
-            object Meta() => new { name, @namespace = Namespace, labels };
-            var owners = domains.Where(x => HasPhp(x) && PhpVersion(x) == version)
-                .Select(x => x.OwnerId).Distinct().Order().Select(x => identities[x]).ToArray();
-            var pools = new StringBuilder("[global]\nerror_log = /proc/self/fd/2\ndaemonize = no\n");
-            var passwd = new StringBuilder();
-            var group = new StringBuilder();
-            if (owners.Length == 0)
-                pools.Append("[idle]\nuser = www-data\ngroup = www-data\nlisten = 127.0.0.1:9000\nlisten.allowed_clients = 0.0.0.0\npm = ondemand\npm.max_children = 1\nclear_env = yes\nsecurity.limit_extensions = .php\n");
-            foreach (var owner in owners)
-            {
-                passwd.AppendLine($"{owner.UnixName}:x:{owner.Uid}:{owner.Gid}:Hosting account:/nonexistent:/usr/sbin/nologin");
-                group.AppendLine($"{owner.UnixName}:x:{owner.Gid}:");
-                pools.AppendLine($"[{owner.UnixName}]");
-                pools.AppendLine($"user = {owner.UnixName}");
-                pools.AppendLine($"group = {owner.UnixName}");
-                pools.AppendLine($"listen = 0.0.0.0:{owner.Port}");
-                // An unset allowlist accepts all clients. Use a non-routable
-                // source address when no matching Apache pod is available.
-                var allowed = sources.GetValueOrDefault(owner.AccountId) ?? [];
-                pools.AppendLine("listen.allowed_clients = " + (allowed.Length == 0 ? "0.0.0.0" : string.Join(",", allowed)));
-                pools.AppendLine("pm = ondemand\npm.max_children = 8\npm.process_idle_timeout = 10s\nclear_env = yes\nsecurity.limit_extensions = .php");
-            }
-            var data = new Dictionary<string,string> { ["php-fpm.conf"] = pools.ToString(), ["passwd"] = passwd.ToString(), ["group"] = group.ToString() };
-            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data))));
-            var image = version == "7" ? Required("Php7Image") : configuration["KubernetesHosting:Php8Image"] ?? "php:8.6.0-fpm";
-            resources.Add(new { apiVersion = "v1", kind = "ConfigMap", metadata = Meta(), data });
-            resources.Add(new { apiVersion = "apps/v1", kind = "Deployment", metadata = Meta(), spec = new {
-                replicas = configuration.GetValue<int?>("KubernetesHosting:Php" + version + "Replicas") ?? 1,
-                selector = new { matchLabels = labels }, template = new {
-                    metadata = new { labels, annotations = new Dictionary<string,string> { ["hostingpanel/config-sha256"] = hash } }, spec = new {
-                        automountServiceAccountToken = false,
-                        containers = new[] { new { name = "php-fpm", image,
-                            command = new[] { "/bin/sh", "-ec" },
-                            args = new[] { "cat /etc/hostingpanel/passwd >> /etc/passwd; cat /etc/hostingpanel/group >> /etc/group; php-fpm -t -y /etc/hostingpanel/php-fpm.conf; exec php-fpm -F -y /etc/hostingpanel/php-fpm.conf" },
-                            securityContext = new { runAsUser = 0, allowPrivilegeEscalation = false,
-                                capabilities = new { drop = new[] { "ALL" }, add = new[] { "SETUID", "SETGID", "CHOWN", "KILL", "DAC_OVERRIDE" } } },
-                            readinessProbe = owners.Length == 0
-                                ? (object)new { exec = new { command = new[] { "php", "-r", "exit(@fsockopen('127.0.0.1',9000)?0:1);" } } }
-                                : new { tcpSocket = new { port = owners[0].Port } },
-                            volumeMounts = new object[] { new { name = "sites", mountPath = "/home" },
-                                new { name = "config", mountPath = "/etc/hostingpanel", readOnly = true } } } },
-                        volumes = new object[] { new { name = "sites", nfs = new { server = Required("NfsServer"), path = Required("NfsPath") } },
-                            new { name = "config", configMap = new { name } } }
-                    }
-                }
-            } });
-            resources.Add(new { apiVersion = "networking.k8s.io/v1", kind = "NetworkPolicy", metadata = Meta(), spec = new {
-                podSelector = new { matchLabels = labels }, policyTypes = new[] { "Ingress" },
-                ingress = owners.Select(owner => new {
-                    from = new[] { new { podSelector = new { matchLabels = new Dictionary<string,string> {
-                        ["app.kubernetes.io/name"] = "apache-baseline" } } } },
-                    ports = new[] { new { protocol = "TCP", port = owner.Port } }
-                }).ToArray()
-            } });
-            // One service per version, with one named TCP port per account.
-            var ports = owners.Select(owner => new { name = owner.UnixName, port = owner.Port, targetPort = owner.Port }).ToList();
-            // Kubernetes requires a nonempty service port list.
-            if (ports.Count == 0) ports.Add(new { name = "health", port = 9000, targetPort = 9000 });
-            resources.Add(new { apiVersion = "v1", kind = "Service", metadata = Meta(), spec = new {
-                type = "ClusterIP", selector = labels, ports
-            } });
-        }
-        return JsonSerializer.Serialize(new { apiVersion = "v1", kind = "List", items = resources });
-    }
-
-    private async Task<Dictionary<Guid, string[]>> GetApacheSourcesAsync(
-        IReadOnlyList<HostedDomain> domains, CancellationToken ct)
-    {
-        var json = await resources.ListPodsAsync(Namespace, "app.kubernetes.io/name=apache-baseline", ct);
-        using var doc = JsonDocument.Parse(json);
-        var sources = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var pod in doc.RootElement.GetProperty("items").EnumerateArray())
-        {
-            if (pod.GetProperty("metadata").TryGetProperty("deletionTimestamp", out _) ||
-                !pod.TryGetProperty("status", out var status) ||
-                !status.TryGetProperty("podIP", out var address) ||
-                !IPAddress.TryParse(address.GetString(), out var ip) ||
-                ip.AddressFamily != AddressFamily.InterNetwork ||
-                IPAddress.IsLoopback(ip) || ip.Equals(IPAddress.Any)) continue;
-            sources.Add(ip.ToString());
-        }
-        return domains.Select(x => x.OwnerId).Distinct().ToDictionary(x => x, _ => sources.ToArray());
     }
 
 }
