@@ -83,6 +83,7 @@ def generate(c, base):
                 shareStrategyTargetCli=dict(sudoEnabled=True, basename="iqn.2026-11.local.hosting",
                     tpg=dict(attributes=dict(authentication=1, generate_node_acls=1, cache_dynamic_acls=1, demo_mode_write_protect=0), auth=dict(userid="hosting-csi", password=chap))))
         values = dict(csiDriver=dict(name="org.democratic-csi."+protocol),
+            controller=dict(hostNetwork=True, dnsPolicy="ClusterFirstWithHostNet"),
             driver=dict(config=driver),
             storageClasses=[dict(name="zfs-"+protocol, reclaimPolicy="Retain", volumeBindingMode="Immediate",
                 allowVolumeExpansion=True, parameters=dict(fsType="nfs" if protocol=="nfs" else "ext4"),
