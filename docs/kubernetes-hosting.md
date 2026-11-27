@@ -69,4 +69,4 @@ The additional provider-neutral API uses the same IMailProvider and authorizatio
 | GET, POST | /hosting/mail/{domain}/accounts |
 | PATCH, DELETE | /hosting/mail/{domain}/accounts/{name} |
 
-DELETE requires confirmation=name@domain. The additional API returns 501 on the DirectAdmin backend until a typed mail adapter is implemented; CMD_API_POP still forwards to DirectAdmin. No new modern DirectAdmin /api operations are claimed.
+DELETE requires confirmation=name@domain. The additional API uses DirectAdminMailProvider on the DirectAdmin backend; CMD_API_POP still forwards unchanged to DirectAdmin. No new modern DirectAdmin /api operations are claimed.
