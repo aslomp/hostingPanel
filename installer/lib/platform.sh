@@ -52,6 +52,9 @@ install_platform() {
     if [[ -f "$stamp" ]]; then cached=$(cat "$stamp"); fi
     if [[ -n "$revision" && "$cached" == "$revision $image" ]] && k3s ctr images check "name==docker.io/library/$image" | awk -v ref="docker.io/library/$image" '$1 == ref && $3 == "complete" {found=1} END {exit !found}'; then
       echo "Reusing previously imported panel image for $revision"
+      if [[ -f "$base/installer-owned-docker" ]]; then
+        stop_managed_build_runtime
+      fi
     else
       build_panel_image "$image" "$base/installer-owned-docker"
       printf "%s %s\n" "$revision" "$image" > "$stamp"
