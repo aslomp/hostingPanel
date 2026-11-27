@@ -246,7 +246,8 @@ public sealed class KubernetesResourceClient : IDisposable
         var json = KubernetesJson.Serialize(list);
         using var initial = JsonDocument.Parse(json);
         ObserveList(key, json, _ => true, reset, fingerprint);
-        statusChanged?.Invoke();
+        if (statusChanged is not null)
+            ObserveList(key + "/status", json, _ => true, statusChanged, StatusFingerprint);
         var response = Api.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(group, "v1", ns, plural,
             labelSelector: selector, fieldSelector: fieldSelector,
             resourceVersion: initial.RootElement.GetProperty("metadata").GetProperty("resourceVersion").GetString(),
@@ -273,9 +274,28 @@ public sealed class KubernetesResourceClient : IDisposable
                     changed(name);
                 }
             }
-            statusChanged?.Invoke();
+            if (statusChanged is not null)
+            {
+                var statuses = watchSnapshots[key + "/status"];
+                if (kind == WatchEventType.Deleted)
+                {
+                    if (statuses.Remove(name)) statusChanged();
+                }
+                else
+                {
+                    var next = StatusFingerprint(resource);
+                    if (!statuses.TryGetValue(name, out var previous) || next != previous)
+                    {
+                        statuses[name] = next;
+                        statusChanged();
+                    }
+                }
+            }
         }
     }
+
+    private static string StatusFingerprint(JsonElement item) =>
+        Fingerprint(item) + "|" + (item.TryGetProperty("status", out var status) ? status.GetRawText() : "");
 
     // Compare desired-state fingerprints, not status or resourceVersion. A normal
     // relist or a controller's status update must not invalidate workloads.
