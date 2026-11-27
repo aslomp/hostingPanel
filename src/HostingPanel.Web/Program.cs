@@ -121,7 +121,8 @@ app.UseSwaggerUI(options =>
 {
     options.RoutePrefix = "swagger";
     options.SwaggerEndpoint("/openapi/directadmin.json", "DirectAdmin API — full pinned contract");
-    options.DocumentTitle = "HostingPanel | DirectAdmin API documentation";
+    options.SwaggerEndpoint("/openapi/hosting-mail.json", "HostingPanel Mail API");
+    options.DocumentTitle = "HostingPanel | API documentation";
     options.DefaultModelsExpandDepth(-1);
 });
 
@@ -171,6 +172,13 @@ app.MapGet("/swagger/v1/swagger.json", (IWebHostEnvironment environment) =>
     return File.Exists(filename)
         ? Results.File(filename, "application/json")
         : Results.Problem("Pinned OpenAPI specification unavailable.", statusCode: 503);
+});
+app.MapGet("/openapi/hosting-mail.json", (IWebHostEnvironment environment) =>
+{
+    var filename = Path.Combine(environment.ContentRootPath, "spec", "hosting-mail.openapi.json");
+    return File.Exists(filename)
+        ? Results.File(filename, "application/json")
+        : Results.Problem("HostingPanel Mail OpenAPI specification unavailable.", statusCode: 503);
 });
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 app.MapControllers();
