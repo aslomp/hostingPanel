@@ -82,6 +82,10 @@ else
             @if (saveMessage is not null) { <p role="status">@saveMessage</p> }
         </MudPaper></MudItem>
     </MudGrid>
+    @if (fields is not null)
+    {
+        <DomainSubdomains @key="Domain" Domain="@Domain" />
+    }
     <DomainAcmeSettings @key="Domain" Domain="@Domain" />
     <MudPaper Class="pa-4 my-3" Elevation="1">
         <h2>@L["Additional domain settings"]</h2>
