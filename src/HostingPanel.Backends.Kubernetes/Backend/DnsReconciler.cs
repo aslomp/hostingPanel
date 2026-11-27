@@ -80,7 +80,7 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
                 }
                 else
                 {
-                    if (DnsRetryPolicy.RequiresRetry(job.LastError)) retry = true;
+                    if (DnsRetryPolicy.RequiresRetry(job.LastError) && job.LastError != "MAIL_DNS_PUBLICATION_PENDING") retry = true;
                     if (DnsRetryPolicy.RequiresRetry(job.LastError) || previousError != job.LastError) job.Attempts++;
                 }
                 await mailDb.SaveChangesAsync(ct);
@@ -137,8 +137,9 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
             if (group.All(row => row.Status == "completed"))
             {
                 notifications.Signal(ReconciliationTarget.Website);
-                if (await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "domain-dns" &&
-                    x.Status == "pending" && x.LastError == "SUBDOMAIN_PARENT_ZONE_NOT_READY", ct))
+                // Publication can unblock mail and subdomain DNS in the next pass.
+                if (await db.ReconciliationOperations.AnyAsync(x => x.Status == "pending" && ((x.ResourceType == "mail-dns" && x.LastError == "MAIL_DNS_PUBLICATION_PENDING") ||
+                    (x.ResourceType == "domain-dns" && x.LastError == "SUBDOMAIN_PARENT_ZONE_NOT_READY")), ct))
                     notifications.Signal(ReconciliationTarget.Dns);
             }
         }
