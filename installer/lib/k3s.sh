@@ -19,10 +19,10 @@ install_server() {
   install_node_dependencies
   if [[ ! -e /etc/rancher/k3s/k3s.yaml ]]; then
     [[ "$new" == true ]] || die "Use --new-cluster to initialize"
-    run_k3s_installer server --cluster-init --secrets-encryption --disable traefik --tls-san "$(require clusterHost)"
+    run_k3s_installer server --cluster-init --secrets-encryption --etcd-snapshot-schedule-cron "0 */6 * * *" --etcd-snapshot-retention 14 --disable traefik --tls-san "$(require clusterHost)"
   fi
   export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-  k3s secrets-encrypt status
+  k3s secrets-encrypt status | grep -q "Encryption Status: Enabled" || die "K3s secrets encryption must be enabled"
   [[ "$(k3s --version | head -n1 | awk '{print $3}')" == "$(require k3sVersion)" ]] || die "K3s version mismatch; perform a planned upgrade separately"
   k3s kubectl wait --for=condition=Ready node --all --timeout=300s
   install -m 0600 /var/lib/rancher/k3s/server/agent-token "$(dirname "$config")/agent-token"
@@ -38,6 +38,9 @@ install_worker() {
   grep -q "^K10" "$token" || die "Secure K3s token with CA hash required"
   export K3S_URL="https://$(require clusterHost):6443"
   export K3S_TOKEN_FILE="$token"
+  install -d -m 0700 /etc/rancher/k3s
+  install -m 0600 "$token" /etc/rancher/k3s/hosting-agent-token
+  export K3S_TOKEN_FILE=/etc/rancher/k3s/hosting-agent-token
   run_k3s_installer agent
   systemctl is-active --quiet k3s-agent
 }
