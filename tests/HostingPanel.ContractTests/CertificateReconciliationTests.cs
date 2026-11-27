@@ -5,6 +5,22 @@ internal static class CertificateReconciliationTests
 {
     public static void Run()
     {
+        var work = new CertificateWork();
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        Require(work.Take() is null);
+        work.DomainChanged(a);
+        work.DomainChanged(a);
+        work.DomainChanged(b);
+        Require(work.Take()!.ToHashSet().SetEquals([a, b]));
+        work.DomainChanged(a);
+        work.AllChanged();
+        Require(work.Take() is null);
+        Require(work.Take()!.Length == 0);
+        work.Recover();
+        Require(work.Take() is null);
+        Require(CertificateReconciler.TryDomainId("site-" + a.ToString("N"), out var parsed) && parsed == a);
+        Require(!CertificateReconciler.TryDomainId("unmanaged", out _));
         using var desired = JsonDocument.Parse("""{"dnsNames":["example.com"],"issuerRef":{"name":"issuer"}}""");
         using var observed = JsonDocument.Parse("""{"dnsNames":["example.com"],"issuerRef":{"name":"issuer","group":"cert-manager.io"},"duration":"2160h"}""");
         Require(CertificateReconciler.MatchesDesired(desired.RootElement, observed.RootElement));
