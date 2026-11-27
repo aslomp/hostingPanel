@@ -51,12 +51,15 @@ install_platform() {
   curl --fail --silent --show-error --retry 5 --retry-all-errors --connect-timeout 10 --max-time 30 "${tls_options[@]}" "https://$(require panelHostname)/healthz"
 }
 
-ensure_secret() {
+ensure_secret() (
   local name=$1
   shift
-  if k3s kubectl -n hosting get secret "$name" >/dev/null 2>&1; then return; fi
+  local existing
+  existing=$(k3s kubectl -n hosting get secret "$name" --ignore-not-found -o name)
+  if [[ -n "$existing" ]]; then return; fi
   local tmp
   tmp=$(mktemp -d)
+  trap 'rm -rf -- "$tmp"' EXIT
   if [[ "$name" == hostingpanel-bootstrap ]]; then
     printf admin > "$tmp/username"
     openssl rand -hex 32 | tr -d '\n' > "$tmp/password"
@@ -65,5 +68,4 @@ ensure_secret() {
     openssl rand -hex 32 | tr -d '\n' > "$tmp/$1"
     k3s kubectl -n hosting create secret generic "$name" --from-file="$1=$tmp/$1"
   fi
-  rm -rf "$tmp"
-}
+)
