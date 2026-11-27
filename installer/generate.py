@@ -25,7 +25,7 @@ def validate(c):
             raise ValueError(f"Invalid {k}")
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", c["pool"]):
         raise ValueError("Invalid pool")
-    if "@" not in c["acmeEmail"] or c["acmeEmail"].endswith("example.com"):
+    if "@" not in c["acmeEmail"] or c["acmeEmail"].split("@")[-1] in {"example.com","example.net","example.org"}:
         raise ValueError("Set real ACME email")
     if c["localStorage"] and c["clusterHost"] != c["storageHost"]:
         raise ValueError("Local storage must use the cluster host address")
@@ -61,8 +61,7 @@ def generate(c, base):
         return dict(apiVersion="gateway.networking.k8s.io/v1", kind="Gateway",
             metadata=dict(name=name, namespace=namespace),
             spec=dict(gatewayClassName="eg", listeners=listeners))
-    http = dict(name="http", protocol="HTTP", port=80, allowedRoutes=dict(namespaces=dict(from_="All")))
-    http["allowedRoutes"]["namespaces"] = {"from":"All"}
+    http = dict(name="http", protocol="HTTP", port=80, allowedRoutes={"namespaces":{"from":"All"}})
     https = dict(name="https", protocol="HTTPS", port=443, hostname=c["panelHostname"],
         tls=dict(mode="Terminate", certificateRefs=[dict(name="hosting-panel-tls")]),
         allowedRoutes=http["allowedRoutes"])
