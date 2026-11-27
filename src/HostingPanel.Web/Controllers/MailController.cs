@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Http.Extensions;
 namespace HostingPanel.Api.Controllers;
 
 [ApiController]
-public sealed class MailController(IEnumerable<IMailProvider> providers, IApiCompatibilityHandler compatibility) : BackendController
+public sealed class MailController(IEnumerable<IMailProvider> providers, IApiCompatibilityHandler compatibility, IConfiguration configuration) : BackendController
 {
     private static IResult Encoded(IEnumerable<KeyValuePair<string, string?>> fields, int status = 200) =>
         Results.Text(new QueryBuilder(fields.Select(x => new KeyValuePair<string, string>(x.Key, x.Value ?? ""))).ToQueryString().Value?.TrimStart('?') ?? "",
@@ -22,11 +22,12 @@ public sealed class MailController(IEnumerable<IMailProvider> providers, IApiCom
     {
         if (!TryGetBasic(HttpContext, out var auth)) return Error("UNAUTHORIZED", 401);
         var provider = providers.SingleOrDefault();
-        if (provider is null)
+        if (string.Equals(configuration["HostingPanel:Backend"] ?? "DirectAdmin", "DirectAdmin", StringComparison.OrdinalIgnoreCase))
         {
             await compatibility.ForwardAsync(HttpContext);
             return Results.Empty;
         }
+        if (provider is null) return Error("MAIL_NOT_SUPPORTED", 501);
         var post = HttpMethods.IsPost(Request.Method);
         if (post && !Request.HasFormContentType) return Error("INVALID_FORM", 400);
         var form = post ? await Request.ReadFormAsync(ct) : null;
