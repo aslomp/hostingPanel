@@ -78,3 +78,5 @@ Helm-managed MariaDB (Kubernetes only): optional dedicated MariaDB StatefulSet, 
 - Clean-server installer: local Docker build services are stopped and disabled after image import only when installer ownership was established before package installation. Existing runtimes are preserved; K3s embedded containerd remains active. See installer README.
 
 - Website, DNS and certificate reconciliation share a coalescing channel loop; certificate work preserves domain keys and LIST/WATCH.
+
+- Website reconciliation has no idle timer; committed changes and resource watches trigger staged NFS, PHP and Apache work. External NFS mutations are not automatically detected.
