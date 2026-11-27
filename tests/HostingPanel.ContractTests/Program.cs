@@ -6,6 +6,7 @@ using System.Text;
 
 var checks = new List<(string Description, Action Test)>
 {
+    ("DirectAdmin mailbox adapter verifies mutations and preserves caller credentials", DirectAdminMailTests.Run),
     ("Account PHP runtime manifests isolate account identities and storage", AccountPhpRuntimeTests.Run),
     ("ListenerSet shim exclusions converge without replacing unrelated annotations", ListenerSetOptOutTests.Run),
     ("Session HTTP transport preserves routes, credentials and disconnect boundaries", PanelHttpTransportTests.Run),
