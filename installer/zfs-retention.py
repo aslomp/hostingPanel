@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Create and expire only HostingPanel-owned ZFS snapshots."""
 import argparse
+import calendar
 import datetime as dt
 import fcntl
 import re
@@ -8,7 +9,7 @@ import subprocess
 
 OWNER = "org.hostingpanel:retention"
 PREFIX = "hp-retention"
-RETENTION = {"hourly": 72, "daily": 7, "weekly": 4}
+RETENTION = ("hourly", "daily", "weekly")
 NAME = re.compile(r"hp-retention-(hourly|daily|weekly)-([0-9]{8}T[0-9]{6}Z)")
 
 
@@ -43,14 +44,22 @@ def due(tier, now, existing, root):
 
 
 def expired(existing, now):
-    # Count distinct creation slots by root snapshot suffix; never delete CSI or manual snapshots.
-    # Keep the latest 72 hours, 7 days and 4 Sundays, respectively, including the current slot.
-    for tier, keep in RETENTION.items():
-        names = {name.split("@", 1)[1] for name, _, kind in existing if kind == tier}
-        old = set(sorted(names, reverse=True)[keep:])
-        for name, created, kind in existing:
-            if kind == tier and name.split("@", 1)[1] in old and created <= now.timestamp():
-                yield name
+    # Calendar-aligned rolling windows; a month may contain four or five Sundays.
+    year, month = now.year, now.month - 1
+    if month == 0:
+        year, month = year - 1, 12
+    month_start = now.date().replace(year=year, month=month,
+        day=min(now.day, calendar.monthrange(year, month)[1]))
+    hour_start = now.replace(minute=0, second=0, microsecond=0) - dt.timedelta(hours=71)
+    day_start = now.date() - dt.timedelta(days=6)
+    for name, created, tier in existing:
+        t = dt.datetime.fromtimestamp(created, dt.timezone.utc)
+        if t > now:
+            continue
+        if ((tier == "hourly" and t < hour_start)
+                or (tier == "daily" and t.date() < day_start)
+                or (tier == "weekly" and t.date() < month_start)):
+            yield name
 
 
 def run(root, tier, dry_run):
