@@ -40,7 +40,7 @@ internal static class ReconciliationLoop
         TimeSpan retry, TimeSpan maintenance, ILogger logger, CancellationToken ct)
         => RunAsync(reader, null, reconcile, logger, maintenance, ct);
 
-    private static async Task WatchAsync(Func<Action, CancellationToken, Task> watch,
+    internal static async Task WatchAsync(Func<Action, CancellationToken, Task> watch,
         Action notify, ILogger logger, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
