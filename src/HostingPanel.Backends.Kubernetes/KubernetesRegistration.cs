@@ -14,6 +14,9 @@ public static class KubernetesRegistration
     settings.DnsWebIp = configuration["PowerDns:WebIp"] ?? "";
     settings.DnsNs1 = configuration["PowerDns:Ns1"] ?? "";
     settings.DnsNs2 = configuration["PowerDns:Ns2"] ?? "";
+    settings.PhpImages = [configuration["KubernetesHosting:Php8Image"] ?? "php:8.6.0-fpm"];
+    if (configuration.GetValue<bool>("KubernetesHosting:EnablePhp7") && configuration["KubernetesHosting:Php7Image"] is { Length: > 0 } php7)
+        settings.PhpImages = [..settings.PhpImages, php7];
     configuration.GetSection("BackendSettings").Bind(settings, options => options.ErrorOnUnknownConfiguration = true);
     var errors = settings.Validator.Validate(settings);
     if (errors.Count != 0)
@@ -31,6 +34,7 @@ public static class KubernetesRegistration
     services.AddScoped<KubernetesProvisioningService>();
     services.AddScoped<IDomainDnsStaging>(sp => sp.GetRequiredService<KubernetesProvisioningService>());
     services.AddScoped<KubernetesAccountService>();
+    services.AddScoped<IAccountPhpSettings, KubernetesAccountPhpSettings>();
     services.AddScoped<IAccountCatalog>(sp => sp.GetRequiredService<KubernetesAccountService>());
     services.AddScoped<KubernetesPackageManagement>();
     services.AddScoped<IPackageManagement>(sp => sp.GetRequiredService<KubernetesPackageManagement>());

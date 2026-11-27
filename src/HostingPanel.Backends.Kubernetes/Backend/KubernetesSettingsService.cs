@@ -22,7 +22,7 @@ public sealed class KubernetesSettingsService(HostingPanelDbContext db, Kubernet
         // Discard the redundant setting introduced by PR #34, including persisted copies.
         stored.Remove("DnsAccountNameservers");
         using var defaults = JsonDocument.Parse(BackendSettingsSchema.Serialize(configuredSettings));
-        foreach (var key in new[] { nameof(KubernetesBackendSettings.DnsAutoCreateZones), nameof(KubernetesBackendSettings.DnsWebIp), nameof(KubernetesBackendSettings.DnsNs1), nameof(KubernetesBackendSettings.DnsNs2), nameof(KubernetesBackendSettings.IpAddresses), nameof(KubernetesBackendSettings.AcmeProviders), nameof(KubernetesBackendSettings.AcmeDefaultProvider), nameof(KubernetesBackendSettings.AcmeUserProviders), nameof(KubernetesBackendSettings.AcmePackageProviders), nameof(KubernetesBackendSettings.TlsListenerSetName) })
+        foreach (var key in new[] { nameof(KubernetesBackendSettings.DnsAutoCreateZones), nameof(KubernetesBackendSettings.DnsWebIp), nameof(KubernetesBackendSettings.DnsNs1), nameof(KubernetesBackendSettings.DnsNs2), nameof(KubernetesBackendSettings.IpAddresses), nameof(KubernetesBackendSettings.AcmeProviders), nameof(KubernetesBackendSettings.AcmeDefaultProvider), nameof(KubernetesBackendSettings.AcmeUserProviders), nameof(KubernetesBackendSettings.AcmePackageProviders), nameof(KubernetesBackendSettings.TlsListenerSetName), nameof(KubernetesBackendSettings.PhpImages) })
             stored.TryAdd(key, defaults.RootElement.GetProperty(key).Clone());
         if (!BackendSettingsSchema.TryRead<KubernetesBackendSettings>(JsonSerializer.SerializeToElement(stored),
             out var settings, out _))
@@ -50,6 +50,12 @@ public sealed class KubernetesSettingsService(HostingPanelDbContext db, Kubernet
         var current = await GetEffectiveSettingsAsync(ct);
         if (update.Revision != BackendSettingsSchema.Revision(current))
             return Results.Conflict(new { type = "SETTINGS_CHANGED" });
+        var runtimeFields = (await db.Accounts.AsNoTracking().Select(x => x.LimitsJson).ToListAsync(ct))
+            .Concat(await db.Packages.AsNoTracking().Select(x => x.LimitsJson).ToListAsync(ct));
+        foreach (var fields in runtimeFields)
+            if (PhpRuntimePolicy.Fields(fields).TryGetValue(PhpRuntimePolicy.Key, out var raw) &&
+                (JsonSerializer.Deserialize<PhpRuntimeSettings>(raw) is not { } runtime || !runtime.Valid(proposed!.PhpImages)))
+                return Results.Conflict(new { type = "PHP_IMAGE_IN_USE" });
         var accounts = await db.Accounts.AsNoTracking().Where(x => x.Kind == "reseller" || x.Kind == "admin").Select(x => x.Username).ToListAsync(ct);
         if (proposed!.IpAddresses.Any(x => (x.Resellers ?? []).Any(r => !accounts.Contains(r))))
             return Results.ValidationProblem(new Dictionary<string, string[]> { ["IpAddresses"] = ["Unknown reseller."] });

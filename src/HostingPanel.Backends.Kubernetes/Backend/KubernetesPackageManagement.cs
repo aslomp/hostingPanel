@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HostingPanel.Api;
 
-public sealed class KubernetesPackageManagement(HostingPanelDbContext db, KubernetesIdentityService identity) : IPackageManagement
+public sealed class KubernetesPackageManagement(HostingPanelDbContext db, KubernetesIdentityService identity, IKubernetesSettingsReader? runtimeSettings = null) : IPackageManagement
 {
     // Existing packages without a kind marker are user packages.
     // Keep the marker in the existing package settings, not in a second inventory.
@@ -56,7 +56,7 @@ public sealed class KubernetesPackageManagement(HostingPanelDbContext db, Kubern
     {
         var (status, principal) = await Authorize(kind, auth, ct);
         if (principal is null) return new(status, Error(status));
-        if (!PackageFields.ValidName(package.Name) || !PackageFields.ValidSettings(kind, package.Settings))
+        if (!PackageFields.ValidName(package.Name) || !PackageFields.ValidSettings(kind, package.Settings.Where(x => x.Key != PhpRuntimePolicy.Key).ToDictionary(x => x.Key, x => x.Value)))
             return new(400, "INVALID_PACKAGE");
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var rows = await Available(principal, ct);
@@ -72,7 +72,19 @@ public sealed class KubernetesPackageManagement(HostingPanelDbContext db, Kubern
         else if (row.OwnerId != principal.Id && !(row.OwnerId == null && principal.Kind == "admin"))
             return new(403, "ACCESS_DENIED");
         var fields = Settings(row);
-        foreach (var field in package.Settings) fields[field.Key] = field.Value;
+        foreach (var field in package.Settings)
+        {
+            if (field.Key != PhpRuntimePolicy.Key) { fields[field.Key] = field.Value; continue; }
+            if (field.Value == "") { fields.Remove(field.Key); continue; }
+            try
+            {
+                var runtime = JsonSerializer.Deserialize<PhpRuntimeSettings>(field.Value);
+                var config = runtimeSettings is null ? new KubernetesBackendSettings() : await runtimeSettings.GetEffectiveSettingsAsync(ct);
+                if (runtime is null || !runtime.Valid(config.PhpImages)) return new(400, "INVALID_PHP_RUNTIME");
+                fields[field.Key] = JsonSerializer.Serialize(runtime);
+            }
+            catch (JsonException) { return new(400, "INVALID_PHP_RUNTIME"); }
+        }
         fields[KindKey] = kind;
         row.LimitsJson = JsonSerializer.Serialize(fields);
         try { await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct); }

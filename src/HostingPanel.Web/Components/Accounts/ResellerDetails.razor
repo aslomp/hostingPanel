@@ -19,6 +19,7 @@ else
 {
     @if (busy) { <PanelLoading>@L["Loading…"]</PanelLoading> }
     @if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+    <AccountPhpSettings @key="Username" Username="@Username" />
     @if (configuration is not null)
     {
         <MudPaper Class="pa-4 my-3">
