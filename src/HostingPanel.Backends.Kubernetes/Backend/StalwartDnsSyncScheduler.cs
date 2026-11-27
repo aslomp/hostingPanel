@@ -35,20 +35,23 @@ internal sealed class StalwartDnsSyncScheduler(IServiceScopeFactory scopes, ICon
         var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
         var operations = scope.ServiceProvider.GetRequiredService<KubernetesOperationQueue>();
         await using var tx = await db.Database.BeginTransactionAsync(ct);
-        // SQLite compares DateTimeOffset poorly in SQL. Project only the latest
-        // relevant operation per domain using a correlated existence query and
-        // compare UTC timestamps in memory, not a full historical scan.
-        var jobs = db.ReconciliationOperations.AsNoTracking().Where(x => x.ResourceType == "mail-dns");
-        var candidates = await db.Domains.AsNoTracking().Where(d => !d.Suspended &&
-                jobs.Any(j => j.ResourceId == d.Id) &&
-                !jobs.Any(j => j.ResourceId == d.Id && j.Status == "pending"))
-            .Select(d => new { d.Id, d.Name }).ToListAsync(ct);
+        // Use SQLite's date conversion for DateTimeOffset instead of loading
+        // historical operations or issuing one history query per domain.
         var cutoff = DateTimeOffset.UtcNow - interval;
+        var dueIds = await db.Database.SqlQuery<Guid>($"""
+            SELECT d.Id AS Value FROM Domains d
+            WHERE d.Suspended = 0
+              AND EXISTS (SELECT 1 FROM ReconciliationOperations j
+                  WHERE j.ResourceType = 'mail-dns' AND j.ResourceId = d.Id)
+              AND NOT EXISTS (SELECT 1 FROM ReconciliationOperations j
+                  WHERE j.ResourceType = 'mail-dns' AND j.ResourceId = d.Id
+                    AND (j.Status = 'pending' OR julianday(j.CreatedAt) >= julianday({cutoff.ToString("O")})))
+            """).ToListAsync(ct);
+        var candidates = await db.Domains.AsNoTracking().Where(d => dueIds.Contains(d.Id))
+            .Select(d => new { d.Id, d.Name }).ToListAsync(ct);
         var count = 0;
         foreach (var domain in candidates)
         {
-            var dates = await jobs.Where(j => j.ResourceId == domain.Id).Select(j => j.CreatedAt).ToListAsync(ct);
-            if (dates.Any(date => date >= cutoff)) continue;
             operations.Schedule("mail-dns", domain.Id, "update", new { domain.Name });
             count++;
         }

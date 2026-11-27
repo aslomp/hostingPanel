@@ -95,9 +95,14 @@ internal sealed class StalwartMailProvider(HostingPanelDbContext db, KubernetesI
                 var response = await Call(client, "x:Domain/set", new { create = new { item = new { name = row.Name } } }, ct);
                 domainId = CreatedId(response);
                 if (domainId is null) return new(409, "MAIL_DOMAIN_CREATE_FAILED");
+                // The durable intent may have been attempted before upstream creation.
+                notifications?.Signal(ReconciliationTarget.Dns);
             }
             if (domainId is null) return mutation ? new(404, "MAIL_DOMAIN_NOT_FOUND") : new(200, Accounts: Array.Empty<MailAccount>());
-            return await action(client, domainId);
+            var result = await action(client, domainId);
+            if (mutation && configuration.GetValue<bool>("PowerDns:Enabled"))
+                notifications?.Signal(ReconciliationTarget.Dns);
+            return result;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return new(503, "MAIL_UPSTREAM_TIMEOUT"); }
         catch (HttpRequestException) { return new(502, "MAIL_UPSTREAM_ERROR"); }

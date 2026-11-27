@@ -5,6 +5,14 @@ internal static class StalwartDnsTests
 {
     internal static void Run()
     {
+        Check(!DnsRetryPolicy.RequiresRetry(null));
+        Check(!DnsRetryPolicy.RequiresRetry("NO_ASSIGNED_IP"));
+        Check(!DnsRetryPolicy.RequiresRetry("DNS_NAMESERVERS_NOT_CONFIGURED"));
+        Check(!DnsRetryPolicy.RequiresRetry("MAIL_DOMAIN_SUSPENDED"));
+        Check(!DnsRetryPolicy.RequiresRetry("MAIL_DNS_ZONE_NOT_READY"));
+        Check(!DnsRetryPolicy.RequiresRetry("MAIL_DNS_RECORD_CONFLICT"));
+        Check(DnsRetryPolicy.RequiresRetry("MAIL_DNS_NOT_READY"));
+        Check(DnsRetryPolicy.RequiresRetry("MAIL_DNS_RECONCILIATION_FAILED"));
         const string domain = "example.test";
         const string source = """
             $ORIGIN example.test.
