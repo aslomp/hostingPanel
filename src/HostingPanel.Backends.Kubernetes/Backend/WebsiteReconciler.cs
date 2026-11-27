@@ -38,10 +38,10 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
                 catch (Exception ex) { logger.LogError(ex, "Website reconciliation failed"); }
 
-                // Coalesce invalidations. Keep periodic recovery for failed durable work
-                // and settings changes which do not publish notifications.
+                // Coalesce invalidations. Retry failed durable work promptly; retain a
+                // low-frequency integrity sweep for NFS and out-of-band changes.
                 using var delay = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                delay.CancelAfter(TimeSpan.FromSeconds(needsRetry ? 5 : 60));
+                delay.CancelAfter(needsRetry ? TimeSpan.FromSeconds(5) : TimeSpan.FromMinutes(15));
                 try { await wake.Reader.ReadAsync(delay.Token); }
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
                 while (wake.Reader.TryRead(out _)) { }
