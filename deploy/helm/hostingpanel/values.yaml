@@ -82,3 +82,29 @@ mariadb:
   resources:
     requests: {cpu: 100m, memory: 256Mi}
     limits: {cpu: "2", memory: 2Gi}
+
+# Optional Stalwart v1 mail infrastructure (Kubernetes backend only).
+stalwart:
+  enabled: false
+  image: stalwartlabs/stalwart:v1
+  imagePullPolicy: IfNotPresent
+  storageClassName: ""
+  configSize: 1Gi
+  dataSize: 20Gi
+  # Existing independent ReadWriteOnce filesystem claims (optional).
+  existingConfigClaim: ""
+  existingDataClaim: ""
+  # Optional Secret key recovery-admin containing username:password.
+  # Remove after initial setup.
+  existingSecret: ""
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "2", memory: 2Gi}
+  service:
+    type: LoadBalancer
+    annotations: {}
+    externalTrafficPolicy: Local
+    # HTTPS also serves JMAP and the admin UI; enable only with suitable access controls.
+    httpsEnabled: false
+    submissionEnabled: false
+    pop3Enabled: false
