@@ -62,3 +62,5 @@ Helm-managed MariaDB (Kubernetes only): optional dedicated MariaDB StatefulSet, 
 
 - Optional Stalwart v1 Helm infrastructure (Kubernetes only): single StatefulSet, persistent configuration and data, internal administration service and separate mail service. Mailbox CRUD, DNS automation, quotas and panel API integration are not implemented. See [Kubernetes hosting](kubernetes-hosting.md#mail-infrastructure).
 - Kubernetes account PHP-FPM settings: authorized admin/reseller edits image and resource limits; trusted images are managed by admins in BackendSettings. Package defaults and account overrides are stored in existing limits JSON. Runtime acceptance pending; unsupported by DirectAdmin.
+
+- Stalwart v1: optional Kubernetes-only `/hosting/mail/{domain}/accounts` API for listing, creating, setting individual quotas and deleting ordinary mail users. DirectAdmin returns 501 on these new routes. Password reset, alias/forwarder changes, aggregate package quota enforcement, DNS publication and domain lifecycle integration are not implemented. See [mail infrastructure](kubernetes-hosting.md#mail-infrastructure).
