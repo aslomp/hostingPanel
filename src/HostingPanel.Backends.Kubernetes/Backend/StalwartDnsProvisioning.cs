@@ -60,7 +60,6 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
             operations.Schedule("dns-zone", zone.Id, "update", new { zone.Name });
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        if (nativeRotation || !policy.Publish || !policy.Rotate)
         {
             // Publish the zone before Stalwart enables automatic management.
             // A pending dns-zone operation is processed later in this same pass.
