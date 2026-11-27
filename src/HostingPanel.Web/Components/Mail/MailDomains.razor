@@ -1,0 +1,52 @@
+@page "/email-accounts"
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject PanelSession Session
+@inject DomainOperations Domains
+@implements IDisposable
+
+<PageTitle>@L["Email accounts"]</PageTitle>
+<PanelPageHeader>
+    <TitleContent>@L["Email accounts"]</TitleContent>
+    <Description>@L["Select a domain to manage its email accounts."]</Description>
+    <Actions><MudButton OnClick="Refresh" Disabled="@read.Loading">@L["Refresh"]</MudButton></Actions>
+</PanelPageHeader>
+@if (!Session.Connected) { <MudAlert Severity="Severity.Info">@L["Sign in first."]</MudAlert> }
+else if (read.Loading) { <PanelLoading>@L["Retrieving domains…"]</PanelLoading> }
+else if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+else if (items.Count == 0) { <PanelEmptyState>@L["No domains found for this account."]</PanelEmptyState> }
+else
+{
+    @if (warning is not null) { <MudAlert Severity="Severity.Warning">@warning</MudAlert> }
+    <MudSimpleTable Dense="true" Hover="true">
+        <thead><tr><th>@L["Domain"]</th><th>@L["Owner"]</th></tr></thead>
+        <tbody>
+        @foreach (var item in items)
+        {
+            <tr><td><a href="@($"/domains/{Uri.EscapeDataString(item.Domain)}/mail")">@item.Domain</a></td><td>@item.Owner</td></tr>
+        }
+        </tbody>
+    </MudSimpleTable>
+}
+@code {
+    private readonly LatestRead read = new();
+    private IReadOnlyList<(string Domain, string Owner)> items = [];
+    private string? error, warning;
+    private bool disposed;
+    protected override Task OnInitializedAsync() { Session.Changed += SessionChanged; return Refresh(); }
+    private Task Refresh()
+    {
+        items = []; error = warning = null;
+        if (disposed || !Session.Connected) { read.Cancel(); return Task.CompletedTask; }
+        var channel = Session.TicketChannel;
+        return read.RunAsync(ct => Domains.ListAccessibleAsync(ct),
+            () => Session.Connected && Session.TicketChannel == channel,
+            result => {
+                if (result.Status != 200 || result.Items is null) { error = L["Domain list unavailable: HTTP {0}.", result.Status].Value; return; }
+                items = result.Items.Select(x => (x.Domain, x.Owner)).OrderBy(x => x.Domain).ToArray();
+                warning = result.Warning;
+            }, _ => error = L["Mail operation unavailable."].Value);
+    }
+    private void SessionChanged() => _ = InvokeAsync(async () => { if (disposed) return; var task = Refresh(); StateHasChanged(); await task; if (!disposed) StateHasChanged(); });
+    public void Dispose() { disposed = true; Session.Changed -= SessionChanged; read.Dispose(); }
+}
