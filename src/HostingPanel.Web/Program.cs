@@ -89,6 +89,8 @@ builder.Services.AddHttpClient("hosting-api", (services, client) =>
     UseCookies = false
 });
 builder.Services.AddSingleton<TicketChannelRegistry>();
+builder.Services.AddSingleton<TicketEvents>();
+builder.Services.AddHostedService<TicketSignalDispatcher>();
 builder.Services.AddScoped<PanelSession>();
 builder.Services.AddScoped<BackendOperationScope>();
 builder.Services.AddScoped<AccountOperations>();
