@@ -134,7 +134,13 @@ public sealed class DnsReconciler(IServiceScopeFactory scopes, ILogger<DnsReconc
             }
             await db.SaveChangesAsync(ct);
             notifications.Publish();
-            if (group.All(row => row.Status == "completed")) notifications.Signal(ReconciliationTarget.Website);
+            if (group.All(row => row.Status == "completed"))
+            {
+                notifications.Signal(ReconciliationTarget.Website);
+                if (await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "domain-dns" &&
+                    x.Status == "pending" && x.LastError == "SUBDOMAIN_PARENT_ZONE_NOT_READY", ct))
+                    notifications.Signal(ReconciliationTarget.Dns);
+            }
         }
         // Execute explicit shared-record commands in chronological order, never
         // coalesce them into a desired-state replacement of the whole zone.

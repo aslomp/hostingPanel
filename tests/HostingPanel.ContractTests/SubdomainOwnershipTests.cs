@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using HostingPanel.Api;
 using HostingPanel.Api.Persistence;
+using HostingPanel.Providers.PowerDNS;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -31,12 +32,16 @@ internal static class SubdomainOwnershipTests
         Check(link.ChildId == child.Id && link.ParentId == parent.Id && link.Label == "shop");
         db.Domains.AddRange(parent, child, unrelated);
         db.Set<SubdomainBinding>().Add(link);
+        var zone = new DnsZone { Name = parent.Name, DomainId = parent.Id, OwnerId = owner.Id };
+        db.DnsZones.Add(zone);
+        db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = "busy.example.test.", Type = "A", Value = "192.0.2.5" });
         await db.SaveChangesAsync();
         var identity = new KubernetesIdentityService(db);
         var operations = new KubernetesOperationQueue(db);
         var notifications = new HostingOperationNotifications();
+        using var http = new HttpClient { BaseAddress = new Uri("https://dns.invalid/") };
         var service = new KubernetesSubdomainService(new SubdomainOwnership(db, identity), db,
-            new KubernetesProvisioningService(db, new KubernetesSettingsService(db, new KubernetesBackendSettings(), identity), operations),
+            new KubernetesProvisioningService(db, new KubernetesSettingsService(db, new KubernetesBackendSettings(), identity), operations, new PowerDnsClient(http)),
             operations, notifications);
         AuthenticationHeaderValue Auth(string name, string password = "test-password") =>
             new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(name + ":" + password)));
@@ -49,13 +54,16 @@ internal static class SubdomainOwnershipTests
         Check((await service.CreateAsync(parent.Name, "new", Auth("stranger"), ct)).Status == 403);
         Check((await service.CreateAsync(parent.Name, "bad.label", Auth("owner"), ct)).Status == 400);
         Check((await service.CreateAsync(parent.Name, "unrelated", Auth("owner"), ct)).Status == 409);
+        Check((await service.CreateAsync(parent.Name, "busy", Auth("owner"), ct)).Status == 409);
         Check((await service.CreateAsync(parent.Name, "new", Auth("reseller"), ct)).Status == 202);
         var created = await db.Domains.SingleAsync(x => x.Name == "new.example.test");
         Check(created.OwnerId == owner.Id);
         Check(await db.Set<SubdomainBinding>().AnyAsync(x => x.ChildId == created.Id && x.ParentId == parent.Id));
         Check(await db.ReconciliationOperations.AnyAsync(x => x.ResourceId == created.Id && x.ResourceType == "website" && x.Status == "pending"));
         Check(notifications.Reader(ReconciliationTarget.Website).TryRead(out _));
-        Check(!notifications.Reader(ReconciliationTarget.Dns).TryRead(out _));
+        Check(notifications.Reader(ReconciliationTarget.Dns).TryRead(out _));
+        Check(await db.DnsRecords.AnyAsync(x => x.ZoneId == zone.Id && x.Name == "new" && x.Type == "CNAME" && x.Value == "example.test."));
+        Check(await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "dns-zone" && x.ResourceId == zone.Id));
         var php = new PhpAccountIdentity { AccountId = owner.Id, Number = 10000 };
         var vhost = WebsiteReconciler.BuildVirtualHost(created, owner.Username, php).Apache;
         Check(vhost.Contains("ServerName new.example.test"));
@@ -64,8 +72,8 @@ internal static class SubdomainOwnershipTests
         Check((await service.DeleteAsync(parent.Name, "shop", "other.test", Auth("owner"), ct)).Status == 400);
         Check((await service.DeleteAsync(parent.Name, "shop", child.Name, Auth("stranger"), ct)).Status == 403);
         Check((await service.DeleteAsync(parent.Name, "shop", child.Name, Auth("owner"), ct)).Status == 501);
-        Check(await db.Domains.CountAsync() == 4 && await db.ReconciliationOperations.CountAsync() == 2);
-        Check(!await db.DnsZones.AnyAsync());
+        Check(await db.Domains.CountAsync() == 4 && await db.ReconciliationOperations.CountAsync() == 3);
+        Check(await db.DnsZones.CountAsync() == 1);
     }
 
     private static void Check(bool condition)

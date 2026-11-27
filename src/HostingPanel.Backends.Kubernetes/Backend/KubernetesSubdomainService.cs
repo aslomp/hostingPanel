@@ -29,13 +29,20 @@ public sealed class KubernetesSubdomainService(SubdomainOwnership ownership, Hos
             return new(409, "SUBDOMAIN_EXISTS");
         if (await db.Configuration.AnyAsync(x => x.Key == "DeletingDomain:" + child.Name, ct))
             return new(409, "DOMAIN_DELETION_PENDING");
+        var dnsError = await provisioning.StageSubdomainDnsAsync(parent, child, binding.Label, ct);
+        if (dnsError is "SUBDOMAIN_DNS_CONFLICT" or "SUBDOMAIN_DNS_OWNERSHIP_CONFLICT")
+            return new(409, dnsError);
+        if (dnsError is not null)
+            db.ReconciliationOperations.Add(new ReconciliationOperation {
+                ResourceType = "domain-dns", ResourceId = child.Id, Action = "create", LastError = dnsError
+            });
         db.Domains.Add(child);
         db.Set<SubdomainBinding>().Add(binding);
         operations.Schedule("domain", child.Id, "create", new { child.Name });
         await provisioning.ScheduleWebsiteAsync(child, "create", ct);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        notifications.PublishChange(ReconciliationTarget.Website);
+        notifications.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
         return new(202, null);
     }
 

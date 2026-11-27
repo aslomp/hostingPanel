@@ -25,10 +25,55 @@ public sealed class KubernetesProvisioningService(HostingPanelDbContext db, Kube
         });
     }
 
+    // The parent zone is authoritative for the child. Never create a child zone.
+    internal async Task<string?> StageSubdomainDnsAsync(HostedDomain parent, HostedDomain child, string label, CancellationToken ct)
+    {
+        if (powerDns is null) return null;
+        if (parent.OwnerId != child.OwnerId || !SubdomainNames.ValidLabel(label) ||
+            child.Name != label + "." + parent.Name)
+            return "SUBDOMAIN_DNS_OWNERSHIP_CONFLICT";
+        var zone = await db.DnsZones.SingleOrDefaultAsync(x => x.Name == parent.Name, ct);
+        if (zone is null) return "SUBDOMAIN_PARENT_ZONE_NOT_READY";
+        if (zone.OwnerId != parent.OwnerId || zone.DomainId != parent.Id)
+            return "SUBDOMAIN_DNS_OWNERSHIP_CONFLICT";
+        if (await db.DnsZones.AnyAsync(x => x.Name == child.Name, ct))
+            return "SUBDOMAIN_DNS_CONFLICT";
+        var records = await db.DnsRecords.Where(x => x.ZoneId == zone.Id).ToListAsync(ct);
+        var atOwner = records.Where(x => SubdomainDnsOwnerMatches(parent.Name, child.Name, x.Name)).ToArray();
+        if (atOwner.Length > 0)
+            return atOwner.All(x => x.Type == "CNAME" &&
+                x.Value.TrimEnd('.').Equals(parent.Name, StringComparison.OrdinalIgnoreCase))
+                ? null : "SUBDOMAIN_DNS_CONFLICT";
+        var record = new DnsRecordEntity { ZoneId = zone.Id, Name = label,
+            Type = "CNAME", Value = parent.Name + ".", Ttl = zone.DefaultTtl };
+        db.DnsRecords.Add(record);
+        operations.Schedule("dns-zone", zone.Id, "update", new { zone.Name });
+        return null;
+    }
+
+    internal static bool SubdomainDnsOwnerMatches(string zone, string fqdn, string owner)
+    {
+        var normalized = owner.TrimEnd('.');
+        if (normalized == "@") normalized = zone;
+        else if (!owner.EndsWith('.') && !normalized.Equals(zone, StringComparison.OrdinalIgnoreCase) &&
+            !normalized.EndsWith("." + zone, StringComparison.OrdinalIgnoreCase))
+            normalized += "." + zone;
+        return normalized.Equals(fqdn, StringComparison.OrdinalIgnoreCase);
+    }
+
     // Stage DNS and website desired state in the same SaveChanges transaction.
     public async Task<string?> StageDomainDnsAsync(HostedDomain domain, CancellationToken ct, bool retry = false)
     {
         if (powerDns is null) return null;
+        // Deferred child DNS uses the same durable domain-dns operation, but
+        // resolves the persisted parent relation instead of creating a zone.
+        var binding = await db.Set<SubdomainBinding>().SingleOrDefaultAsync(x => x.ChildId == domain.Id, ct);
+        if (binding is not null)
+        {
+            var parentDomain = await db.Domains.SingleOrDefaultAsync(x => x.Id == binding.ParentId, ct);
+            return parentDomain is null ? "SUBDOMAIN_DNS_OWNERSHIP_CONFLICT" :
+                await StageSubdomainDnsAsync(parentDomain, domain, binding.Label, ct);
+        }
         var dnsSettings = await settingsProvider.GetEffectiveSettingsAsync(ct);
         if (!dnsSettings.DnsAutoCreateZones && !retry) return null;
         var existing = await db.DnsZones.SingleOrDefaultAsync(z => z.Name == domain.Name, ct);
