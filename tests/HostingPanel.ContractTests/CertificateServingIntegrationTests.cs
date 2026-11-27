@@ -137,6 +137,20 @@ internal static class CertificateServingIntegrationTests
         {
             await Eventually("Both certificates issued by cert-manager", async () => await Ready(a.Id) && await Ready(b.Id));
             await Eventually("Both HTTPS hosts validate against private CA", async () => await Https(HostA) && await Https(HostB));
+            // No timer or desired-state notification: deleting routing resources
+            // must converge through the independent routing watches.
+            await resources.DeleteAsync(Group, "v1", Ns, "httproutes", "hp-tls-" + a.Id.ToString("N"), ct);
+            await Eventually("Deleted HTTPS route restored by watch", async () =>
+                await resources.TryGetAsync(Group, "v1", Ns, "httproutes", "hp-tls-" + a.Id.ToString("N"), ct) is not null && await Https(HostA));
+            var originalSet = await resources.GetListenerSetAsync(Ns, Set, ct) ?? throw new Exception("Missing ListenerSet");
+            using (var doc = JsonDocument.Parse(originalSet))
+            {
+                var meta = doc.RootElement.GetProperty("metadata");
+                await resources.DeleteListenerSetAsync(Ns, Set, meta.GetProperty("uid").GetString()!,
+                    meta.GetProperty("resourceVersion").GetString()!, ct);
+            }
+            await Eventually("Deleted ListenerSet restored by watch", async () =>
+                await resources.GetListenerSetAsync(Ns, Set, ct) is not null && await Https(HostA) && await Https(HostB));
             await Remove(a);
             await Eventually("First certificate and route removed", () => Gone(a.Id));
             await Eventually("Other domain remains serving", async () =>
