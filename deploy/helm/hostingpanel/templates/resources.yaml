@@ -141,6 +141,8 @@ spec:
             {{- if and (eq .Values.backend "Kubernetes") .Values.stalwart.api.enabled }}
             - name: Stalwart__Enabled
               value: "true"
+            - name: Stalwart__AutoProvisionDns
+              value: {{ .Values.stalwart.api.autoProvisionDns | quote }}
             - name: Stalwart__BaseUrl
               value: {{ required "stalwart.api.baseUrl is required" .Values.stalwart.api.baseUrl | quote }}
             - name: Stalwart__ApiKey
