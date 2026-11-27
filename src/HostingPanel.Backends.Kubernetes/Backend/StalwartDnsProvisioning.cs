@@ -1,4 +1,5 @@
 using HostingPanel.Api.Adapters;
+using HostingPanel.Providers.PowerDNS;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using HostingPanel.Api.Persistence;
@@ -28,13 +29,16 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
         var matches = (await StalwartMailProvider.Query(client, "Domain", new { name = domain.Name },
             new[] { "id", "name", "dnsZoneFile", "dnsManagement", "dkimManagement" }, ct))
             .Where(x => x.GetProperty("name").GetString() == domain.Name).ToArray();
-        if (matches.Length != 1 || !matches[0].TryGetProperty("dnsZoneFile", out var file)
-            || file.ValueKind != JsonValueKind.String) return "MAIL_DNS_NOT_READY";
-        var desired = StalwartDnsRecords.Parse(domain.Name, file.GetString()!);
+        if (matches.Length != 1) return "MAIL_DNS_NOT_READY";
         var nativeRotation = StalwartDnsProviderRegistration.Enabled(configuration);
+        IReadOnlyList<DnsRecord> desired = [];
+        if (!nativeRotation)
+        {
+            if (!matches[0].TryGetProperty("dnsZoneFile", out var file) || file.ValueKind != JsonValueKind.String)
+                return "MAIL_DNS_NOT_READY";
+            desired = StalwartDnsRecords.Parse(domain.Name, file.GetString()!);
+        }
         var dnsServerId = nativeRotation ? await StalwartDnsProviderRegistration.EnsureAsync(client, configuration, ct) : null;
-        if (nativeRotation)
-            desired = desired.Where(x => !IsDkim(domain.Name, x.Name, x.Type)).ToArray();
         // No network requests inside the database transaction.
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var current = await db.Domains.AsNoTracking().SingleOrDefaultAsync(d => d.Id == domainId, ct);
@@ -45,19 +49,28 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
         if (zone is null) return "MAIL_DNS_ZONE_NOT_READY";
         if (zone.OwnerId != domain.OwnerId || zone.DomainId != domain.Id) return "MAIL_DNS_ZONE_OWNERSHIP_CONFLICT";
         var existing = await db.DnsRecords.Where(x => x.ZoneId == zone.Id).ToListAsync(ct);
+        // Native mail ownership is exclusive for the delegated RRsets. Do not
+        // discard existing non-mail TXT records or silently migrate old zones.
+        if (nativeRotation && existing.Any(x => MailDnsOwnership.Reserved(domain.Name, x.Name, x.Type)))
+            return "MAIL_DNS_RECORD_CONFLICT";
         var additions = Plan(domain.Name, existing, desired);
         if (additions is null) return "MAIL_DNS_RECORD_CONFLICT";
         foreach (var record in additions)
             db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = record.Name, Type = record.Type,
                 Value = record.Value, Ttl = int.Parse(record.Ttl!) });
         // Even if already staged, ensure an authoritative DNS apply is queued.
-        if (!await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "dns-zone" && x.ResourceId == zone.Id && x.Status == "pending", ct))
+        if ((!nativeRotation || additions.Count > 0) && !await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "dns-zone" && x.ResourceId == zone.Id && x.Status == "pending", ct))
             operations.Schedule("dns-zone", zone.Id, "update", new { zone.Name });
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         if (nativeRotation)
         {
-            // The DNS reconciler must preserve delegated DKIM records before this is enabled.
+            // Publish the zone before Stalwart enables automatic management.
+            // A pending dns-zone operation is processed later in this same pass.
+            if (await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "dns-zone" &&
+                    x.ResourceId == zone.Id && x.Status == "pending", ct))
+                return "MAIL_DNS_PUBLICATION_PENDING";
+            // The DNS reconciler must preserve delegated mail records before this is enabled.
             // Never replace an unrelated automatic DNS configuration.
             var upstream = matches[0];
             var management = upstream.GetProperty("dnsManagement");
@@ -66,17 +79,16 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
             {
                 if (management.GetProperty("dnsServerId").GetString() != dnsServerId
                     || !management.TryGetProperty("publishRecords", out var published)
-                    || !published.TryGetProperty("dkim", out var dkim) || dkim.ValueKind != JsonValueKind.True
-                    || published.EnumerateObject().Any(x => x.Name != "dkim" && x.Value.ValueKind == JsonValueKind.True))
+                    || published.EnumerateObject().Any(x => !MailDnsOwnership.PublishRecords.Contains(x.Name) && x.Value.ValueKind == JsonValueKind.True))
                     return "MAIL_DNS_MANAGEMENT_CONFLICT";
             }
             else if (mode != "Manual") return "MAIL_DNS_MANAGEMENT_CONFLICT";
             var signing = upstream.GetProperty("dkimManagement");
             var automatic = signing.GetProperty("@type").GetString() == "Automatic";
             var patch = new Dictionary<string, object>();
-            if (mode == "Manual") patch["dnsManagement"] = new Dictionary<string, object> {
+            if (mode == "Manual" || MailDnsOwnership.PublishRecords.Any(key => !management.GetProperty("publishRecords").TryGetProperty(key, out var value) || value.ValueKind != JsonValueKind.True)) patch["dnsManagement"] = new Dictionary<string, object> {
                 ["@type"] = "Automatic", ["dnsServerId"] = dnsServerId!, ["origin"] = domain.Name,
-                ["publishRecords"] = new Dictionary<string, bool> { ["dkim"] = true }
+                ["publishRecords"] = MailDnsOwnership.PublishRecords.ToDictionary(key => key, _ => true)
             };
             if (!automatic) patch["dkimManagement"] = new Dictionary<string, object> { ["@type"] = "Automatic" };
             if (patch.Count > 0)

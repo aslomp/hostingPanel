@@ -54,16 +54,19 @@ public sealed class PowerDnsClient(HttpClient http)
         response.EnsureSuccessStatusCode();
         return JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
     }
-    public async Task<IReadOnlyList<DnsRecord>> ReadDkimAsync(string domain, CancellationToken ct)
+    public Task<IReadOnlyList<DnsRecord>> ReadDkimAsync(string domain, CancellationToken ct) => ReadMailAsync(domain, ct, false);
+    public Task<IReadOnlyList<DnsRecord>> ReadManagedMailAsync(string domain, CancellationToken ct) => ReadMailAsync(domain, ct, true);
+
+    private async Task<IReadOnlyList<DnsRecord>> ReadMailAsync(string domain, CancellationToken ct, bool all)
     {
         var zone = Fqdn(domain);
         using var actual = await ReadAsync(zone, ct) ?? throw new InvalidOperationException("DNS zone unavailable.");
         return actual.RootElement.GetProperty("rrsets").EnumerateArray()
-            .Where(x => x.GetProperty("type").GetString() == "TXT" &&
-                x.GetProperty("name").GetString()!.EndsWith("._domainkey." + zone, StringComparison.OrdinalIgnoreCase))
+            .Where(x => all ? MailDnsOwnership.Reserved(zone, x.GetProperty("name").GetString()!, x.GetProperty("type").GetString()!) :
+                x.GetProperty("type").GetString() == "TXT" && x.GetProperty("name").GetString()!.EndsWith("._domainkey." + zone, StringComparison.OrdinalIgnoreCase))
             .SelectMany(x => x.GetProperty("records").EnumerateArray()
                 .Where(r => !r.GetProperty("disabled").GetBoolean())
-                .Select(r => new DnsRecord("TXT", x.GetProperty("name").GetString()!,
+                .Select(r => new DnsRecord(x.GetProperty("type").GetString()!, x.GetProperty("name").GetString()!,
                     r.GetProperty("content").GetString()!, x.GetProperty("ttl").GetInt32().ToString(System.Globalization.CultureInfo.InvariantCulture))))
             .ToArray();
     }
@@ -77,7 +80,7 @@ public sealed class PowerDnsClient(HttpClient http)
                 g.Select(r => int.TryParse(r.Ttl, out var ttl) ? ttl : 3600).Min(), "REPLACE",
                 g.Select(r => new Entry(Content(r), false)).Distinct().OrderBy(r => r.content, StringComparer.Ordinal).ToArray()));
         bool ExternallyManaged(string name, string type) => preserveDkim
-            && type == "TXT" && name.EndsWith("._domainkey." + zone, StringComparison.Ordinal);
+            && MailDnsOwnership.Reserved(zone, name, type);
         foreach (var key in desired.Keys.Where(k => ExternallyManaged(k.name, k.type)).ToArray())
             desired.Remove(key);
         var ns = desired.GetValueOrDefault((zone, "NS"))?.records.Select(r => r.content).ToArray() ?? [];

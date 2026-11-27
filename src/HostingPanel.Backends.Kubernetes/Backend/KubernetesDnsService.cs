@@ -50,15 +50,15 @@ public sealed class KubernetesDnsService(HostingPanelDbContext db, KubernetesIde
         var result = records.Select(r => new DnsRecord(r.Type, r.Name, r.Value, r.Ttl.ToString())).ToList();
         if (await DelegatedAsync(zone, ct))
         {
-            if (powerDns is null) return new(503, null, "DKIM_DNS_UNAVAILABLE");
+            if (powerDns is null) return new(503, null, "MAIL_DNS_UNAVAILABLE");
             try
             {
-                var current = await powerDns.ReadDkimAsync(zone.Name, ct);
-                result.RemoveAll(r => StalwartDnsProvisioning.IsDkim(zone.Name, r.Name, r.Type));
+                var current = await powerDns.ReadManagedMailAsync(zone.Name, ct);
+                result.RemoveAll(r => MailDnsOwnership.Reserved(zone.Name, r.Name, r.Type));
                 result.AddRange(current);
             }
             catch (Exception ex) when (!ct.IsCancellationRequested && ex is HttpRequestException or InvalidOperationException or JsonException or OperationCanceledException or KeyNotFoundException)
-            { return new(503, null, "DKIM_DNS_UNAVAILABLE"); }
+            { return new(503, null, "MAIL_DNS_UNAVAILABLE"); }
         }
         return new(200, result.OrderBy(x => x.Name).ThenBy(x => x.Type).ToArray(), null);
     }
@@ -81,9 +81,9 @@ public sealed class KubernetesDnsService(HostingPanelDbContext db, KubernetesIde
         if (zone is null) return new(404, "ZONE_NOT_FOUND");
         if (!ids.Contains(zone.OwnerId)) return new(403, "ACCESS_DENIED");
         if (await DelegatedAsync(zone, ct) &&
-            (StalwartDnsProvisioning.IsDkim(zone.Name, change.Record.Name, change.Record.Type)
-             || change.Previous is not null && StalwartDnsProvisioning.IsDkim(zone.Name, change.Previous.Name, change.Previous.Type)))
-            return new(409, "DKIM_MANAGED_BY_STALWART");
+            (MailDnsOwnership.Reserved(zone.Name, change.Record.Name, change.Record.Type)
+             || change.Previous is not null && MailDnsOwnership.Reserved(zone.Name, change.Previous.Name, change.Previous.Type)))
+            return new(409, "MAIL_DNS_MANAGED_BY_STALWART");
         var prev = change.Action == "add" ? null : change.Previous;
         var previous = prev is null ? null : await db.DnsRecords.FirstOrDefaultAsync(x =>
             x.ZoneId == zone.Id && x.Name == prev.Name && x.Type == prev.Type && x.Value == prev.Value, ct);

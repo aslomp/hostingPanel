@@ -14,7 +14,8 @@ internal sealed class StalwartDnsSyncScheduler(IServiceScopeFactory scopes, ICon
     {
         if (!configuration.GetValue<bool>("Stalwart:Enabled") ||
             !configuration.GetValue("Stalwart:AutoProvisionDns", true) ||
-            !configuration.GetValue("Stalwart:PeriodicDnsSync", true)) return;
+            !configuration.GetValue("Stalwart:PeriodicDnsSync", false) ||
+            StalwartDnsProviderRegistration.Enabled(configuration)) return;
         try
         {
             while (!ct.IsCancellationRequested)
