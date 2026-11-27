@@ -15,18 +15,41 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
     private readonly PhpRuntimeReconciliation php = new(configuration, resources);
     private readonly ApacheReconciliation apache = new(configuration, resources, logger);
     private bool migrated;
+    private int runtimeDrift;
+    private int routeDrift;
     private bool legacyApacheRetired;
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         if (!configuration.GetValue<bool>("KubernetesHosting:Enabled")) return;
         await ReconciliationLoop.RunAsync(notifications.Reader(ReconciliationTarget.Website),
-            (changed, token) => resources.WatchApachePodsAsync(Namespace, changed, token),
+            (changed, token) => WatchResourcesAsync(changed, token),
             ReconcileAsync, logger, Timeout.InfiniteTimeSpan, ct, signal: () => notifications.Signal(ReconciliationTarget.Website));
+    }
+
+    private async Task WatchResourcesAsync(Action changed, CancellationToken ct)
+    {
+        void PhpChanged() { Interlocked.Exchange(ref runtimeDrift, 1); changed(); }
+        void RouteChanged() { Interlocked.Exchange(ref routeDrift, 1); changed(); }
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var tasks = new[] {
+            resources.WatchApachePodsAsync(Namespace, changed, lifetime.Token),
+            resources.WatchAccountPhpAsync(Namespace, PhpChanged, lifetime.Token),
+            resources.WatchWebsiteRoutesAsync(Namespace, RouteChanged, lifetime.Token)
+        };
+        try { await await Task.WhenAny(tasks); }
+        finally
+        {
+            await lifetime.CancelAsync();
+            try { await Task.WhenAll(tasks); }
+            catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+        }
     }
 
     private async Task<bool> ReconcileAsync(CancellationToken ct)
     {
+        if (Interlocked.Exchange(ref runtimeDrift, 0) != 0) php.InvalidateAll();
+        if (Interlocked.Exchange(ref routeDrift, 0) != 0) migrated = false;
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
         var rows = await db.ReconciliationOperations.Where(x => x.ResourceType == "website"
@@ -37,6 +60,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var accounts = await db.Accounts.AsNoTracking().Where(x => ownerIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id, ct);
         var (usable, storageErrors) = await nfs.EnsureAsync(domains, accounts, identities, ct);
+        foreach (var (id, error) in storageErrors) logger.LogWarning(error, "Storage unavailable for website {Id}", id);
         var completed = new List<ReconciliationOperation>();
         var byId = rows.GroupBy(x => x.ResourceId).ToDictionary(x => x.Key, x => x.ToArray());
         var targets = byId.Keys.Concat(migrated ? Array.Empty<Guid>() : domains.Select(x => x.Id)).Distinct();
@@ -58,7 +82,10 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
                     if (storageErrors.TryGetValue(domain.Id, out var storageError))
                         throw new InvalidOperationException("Website storage unavailable.", storageError);
                     var manifest = BuildManifest(domain);
-                    await resources.ApplyAsync(manifest, Namespace, "hostingpanel", ct);
+                    using var desired = JsonDocument.Parse(manifest);
+                    var existing = await resources.TryGetAsync("gateway.networking.k8s.io", "v1", Namespace, "httproutes", name, ct);
+                    if (existing is null || !RouteMatches(desired.RootElement.GetProperty("items")[0], existing))
+                        await resources.ApplyAsync(manifest, Namespace, "hostingpanel", ct);
                 }
                 completed.AddRange(group);
             }
@@ -214,6 +241,12 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
             (php ? "<FilesMatch \"[.]php$\">\nSetHandler \"proxy:fcgi://" + AccountPhpRuntime.Name(identity.AccountId) + ":9000" + "\"\n</FilesMatch>\n" : "") +
             "</VirtualHost>\n";
         return (apache, tls);
+    }
+
+    private static bool RouteMatches(JsonElement desired, string existing)
+    {
+        using var observed = JsonDocument.Parse(existing);
+        return CertificateReconciler.MatchesDesired(desired.GetProperty("spec"), observed.RootElement.GetProperty("spec"));
     }
 
     private string BuildManifest(HostedDomain domain)
