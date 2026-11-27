@@ -3,7 +3,7 @@
   "info": {
     "title": "HostingPanel Mail API",
     "version": "1.0",
-    "description": "Additional provider-neutral mail operations. Separate from the pinned DirectAdmin Swagger. Kubernetes/Stalwart only initially. Mutations require administrator privileges. Password changes currently return 501."
+    "description": "Additional provider-neutral mail operations. Separate from the pinned DirectAdmin Swagger. Both backends support the documented subset. Kubernetes/Stalwart mutations require administrator privileges; DirectAdmin applies upstream permissions. Password changes currently return 501."
   },
   "security": [
     {
