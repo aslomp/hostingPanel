@@ -56,11 +56,11 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
             db.DnsRecords.Add(new DnsRecordEntity { ZoneId = zone.Id, Name = record.Name, Type = record.Type,
                 Value = record.Value, Ttl = int.Parse(record.Ttl!) });
         // Manual imports need a publication operation; native mail DNS waits for the existing zone publication.
-        if ((!nativeRotation || additions.Count > 0) && !await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "dns-zone" && x.ResourceId == zone.Id && x.Status == "pending", ct))
+        if (policy.Publish && (!nativeRotation || additions.Count > 0) && !await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "dns-zone" && x.ResourceId == zone.Id && x.Status == "pending", ct))
             operations.Schedule("dns-zone", zone.Id, "update", new { zone.Name });
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        if (nativeRotation || !policy.Publish)
+        if (nativeRotation || !policy.Publish || !policy.Rotate)
         {
             // Publish the zone before Stalwart enables automatic management.
             // A pending dns-zone operation is processed later in this same pass.
@@ -74,7 +74,7 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
             var mode = management.GetProperty("@type").GetString();
             if (mode == "Automatic")
             {
-                if (policy.Publish && management.GetProperty("dnsServerId").GetString() != dnsServerId
+                if (policy.Publish && nativeRotation && management.GetProperty("dnsServerId").GetString() != dnsServerId
                     || (management.TryGetProperty("origin", out var origin) && origin.GetString() != domain.Name)
                     || !management.TryGetProperty("publishRecords", out var published)
                     || published.EnumerateObject().Any(x => x.Name is not ("mx" or "spf" or "dkim" or "dmarc") && x.Value.ValueKind == JsonValueKind.True))
@@ -84,7 +84,7 @@ internal sealed class StalwartDnsProvisioning(HostingPanelDbContext db, IHttpCli
             var signing = upstream.GetProperty("dkimManagement");
             var automatic = signing.GetProperty("@type").GetString() == "Automatic";
             var patch = new Dictionary<string, object>();
-            if (!policy.Publish)
+            if (!policy.Publish || !nativeRotation)
             {
                 if (mode != "Manual") patch["dnsManagement"] = new Dictionary<string, object> { ["@type"] = "Manual" };
             }

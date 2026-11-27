@@ -42,6 +42,7 @@ internal sealed class StalwartDnsSyncScheduler(IServiceScopeFactory scopes, ICon
         var dueIds = await db.Database.SqlQuery<Guid>($"""
             SELECT d.Id AS Value FROM Domains d
             WHERE d.Suspended = 0
+              AND COALESCE(json_extract(d.SettingsJson, '$.mailAutoPublish'), 1) != 0
               AND EXISTS (SELECT 1 FROM ReconciliationOperations j
                   WHERE j.ResourceType = 'mail-dns' AND j.ResourceId = d.Id)
               AND NOT EXISTS (SELECT 1 FROM ReconciliationOperations j

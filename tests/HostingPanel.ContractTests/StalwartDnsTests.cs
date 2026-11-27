@@ -14,8 +14,12 @@ internal static class StalwartDnsTests
         Check(!DnsRetryPolicy.RequiresRetry("MAIL_DNS_RECORD_CONFLICT"));
         Check(DnsRetryPolicy.RequiresRetry("MAIL_DNS_NOT_READY"));
         Check(DnsRetryPolicy.RequiresRetry("MAIL_DNS_RECONCILIATION_FAILED"));
+        Check(MailDnsPolicy.Read("{}") == new MailDnsPolicy(true, true));
+        Check(MailDnsPolicy.Read("""{"mailAutoPublish":false,"mailAutoRotate":false}""") == new MailDnsPolicy(false, false));
+        Check(MailDnsPolicy.Read("""{"mailAutoPublish":false}""") == new MailDnsPolicy(false, true));
+        Check(MailDnsPolicy.Read("""{"mailAutoRotate":false}""") == new MailDnsPolicy(true, false));
         const string domain = "example.test";
-        Check(MailDnsOwnership.PublishRecords.SetEquals(["dkim"]));
+        Check(MailDnsOwnership.PublishRecords.SetEquals(["mx", "spf", "dkim", "dmarc"]));
         Check(MailDnsOwnership.Reserved(domain, "@", "MX"));
         Check(MailDnsOwnership.Reserved(domain, "mail", "MX"));
         Check(MailDnsOwnership.Reserved(domain, domain + ".", "TXT"));

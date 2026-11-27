@@ -179,8 +179,7 @@ public sealed class KubernetesDomainService(HostingPanelDbContext db, Kubernetes
         row.SettingsJson = JsonSerializer.Serialize(values);
         if (setting is MailDnsPolicy.PublicationKey or MailDnsPolicy.RotationKey)
         {
-            if (await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "mail-dns" && x.ResourceId == row.Id, ct) &&
-                !await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "mail-dns" && x.ResourceId == row.Id && x.Status == "pending", ct))
+            if (await db.ReconciliationOperations.AnyAsync(x => x.ResourceType == "mail-dns" && x.ResourceId == row.Id, ct))
                 operations.Schedule("mail-dns", row.Id, "update", new { row.Name });
             await db.SaveChangesAsync(ct);
             notifications?.PublishChange(ReconciliationTarget.Dns);
