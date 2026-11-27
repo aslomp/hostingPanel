@@ -50,10 +50,17 @@ jobs:
           python3 - "$tmp" <<'PY'
           import json, pathlib, sys
           p=pathlib.Path(sys.argv[1])
-          for name in ("csi-nfs","csi-iscsi","gateways","issuer","hosting-values"):
+          for name in ("csi-nfs","csi-iscsi","gateways","issuer","panel-bootstrap-tls","hosting-values"):
               f=p/(name+".json")
               assert f.stat().st_mode & 0o777 == 0o600
               json.loads(f.read_text())
+          tls = json.loads((p/"panel-bootstrap-tls.json").read_text())["items"]
+          assert tls[0]["spec"] == {"selfSigned": {}}
+          assert tls[1]["spec"]["issuerRef"]["name"] == "hosting-panel-selfsigned"
+          assert tls[1]["spec"]["secretName"] == "hosting-panel-tls"
+          gateway = next(x for x in json.loads((p/"gateways.json").read_text())["items"] if x["kind"] == "Gateway" and x["metadata"]["name"] == "external")
+          assert "cert-manager.io/cluster-issuer" not in gateway["metadata"].get("annotations", {})
+          assert gateway["spec"]["listeners"][1]["tls"]["certificateRefs"][0]["name"] == tls[1]["spec"]["secretName"]
           for protocol in ("nfs", "iscsi"):
               assert json.loads((p/("csi-"+protocol+".json")).read_text())["controller"] == {"hostNetwork": True, "dnsPolicy": "ClusterFirstWithHostNet"}
           assert json.loads((p/"hosting-values.json").read_text())["sqlite"]["storageClassName"] == "zfs-iscsi"

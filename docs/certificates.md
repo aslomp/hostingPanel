@@ -27,3 +27,7 @@ Domain deletion removes ACME intent and schedules cleanup; the cleanup worker wa
 Source map: KubernetesCertificateProvider.cs, KubernetesCertificateProvider.Status.cs, CertificateReconciler.cs, ListenerSetReconciler.cs; provider library CertManagerClient.cs, CertificateSnapshot.cs, KubernetesResourceClient.cs. Install cert-manager and required Gateway API support separately; HostingPanel does not install those controllers or their CRDs.
 
 Website HTTPRoutes always attach to the configured Gateway HTTP listener, independently of SSL intent or certificate readiness. The certificate reconciler owns the separate HTTPS routes. Existing website routes are reconciled on controller startup. Global Gateway redirects are not managed by HostingPanel.
+
+## Installer panel bootstrap TLS
+
+The standalone installer creates a namespace-local self-signed Issuer and an explicit panel Certificate, independent of public DNS or ACME availability. The external Gateway references the panel TLS Secret directly; no ACME gateway-shim annotation is used. Domain certificate reconciliation is unchanged. The operator can promote the panel Certificate to the Let's Encrypt ClusterIssuer after public DNS and ingress are ready, without changing the Gateway TLS Secret reference. See [installer documentation](../installer/README.md).
