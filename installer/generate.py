@@ -20,6 +20,12 @@ def write(path, value):
         if os.path.exists(tmp):
             os.unlink(tmp)
 
+def hostname_valid(value):
+    return isinstance(value, str) and len(value) <= 253 and "." in value and all(
+        re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+        for label in value.split(".")) and not value.split(".")[-1].isdigit()
+
+
 def validate(c):
     for k in ("clusterHost", "storageHost", "webIp"):
         if ipaddress.ip_address(c[k]).version != 4:
@@ -117,7 +123,7 @@ def generate(c, base):
         bootstrap=dict(existingSecret="hostingpanel-bootstrap"),sqlite=dict(storageClassName="zfs-iscsi"),
         kubernetesHosting=dict(enabled=True,nfsServer=host,nfsPath="/srv/hosting/home",apacheConfigPath="/srv/hosting/apache",
             gatewayName="external",gatewayNamespace=namespace,panelRoute=dict(enabled=bool(c["panelHostname"]),hostname=c["panelHostname"],listener="https")),
-        powerDns=dict(enabled=True,storageClassName="zfs-iscsi",webIp=c["webIp"],ns1=c["ns1"],ns2=c["ns2"],autoCreateZones=bool(c["ns1"] and c["ns2"])),
+        powerDns=dict(enabled=True,storageClassName="zfs-iscsi",webIp=c["webIp"],ns1=c["ns1"],ns2=c["ns2"],autoCreateZones=bool(c["ns1"] and c["ns2"] and c["ns1"] != c["ns2"])),
         certManager=dict(enabled=True),mariadb=dict(enabled=True,storageClassName="zfs-iscsi",existingSecret="hostingpanel-mariadb",provisioningSecret="hostingpanel-mariadb-provisioning"))
     write(base/"hosting-values.json",values)
 
