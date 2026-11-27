@@ -46,6 +46,7 @@ fi
 [[ "$mode" == --worker ]] || python3 "$here/generate.py" "$config"
 [[ "$mode" != --full-server || "$new" != true || ! -e /etc/rancher/k3s/k3s.yaml ]] || die "Existing cluster: omit --new-cluster"
 [[ "$mode" != --full-server || ! -e /etc/systemd/system/k3s-agent.service ]] || die "This host is a worker"
+source "$here/lib/clamav.sh"
 source "$here/lib/storage.sh"
 source "$here/lib/k3s.sh"
 source "$here/lib/platform.sh"
