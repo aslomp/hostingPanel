@@ -41,6 +41,24 @@ See [current architecture](docs/architecture.md), [capabilities](docs/capabiliti
 
 ## Getting started
 
+### Install on a clean server (K3s)
+
+For a complete standalone hosting environment, use the automated [clean-server installation guide](installer/README.md). The installer supports Ubuntu 24.04/26.04 LTS and Debian 12/13 and sets up K3s, ZFS storage, NFS/iSCSI, democratic-csi, Envoy Gateway, cert-manager, PowerDNS, MariaDB and HostingPanel.
+
+Start on a dedicated test server or virtual machine with at least 8 GiB nominal RAM, 25 GiB available root filesystem space and an unused extra disk (or an existing suitable ZFS pool). Read the installation guide before proceeding; disk initialization requires explicit confirmation.
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git
+git clone https://github.com/aslomp/hostingPanel.git
+cd hostingPanel
+sudo bash installer/install.sh --full-server --new-cluster
+```
+
+The installer prompts for the ACME email, nameserver hostnames and panel hostname. Initial HTTPS uses a self-signed certificate. For retries on an existing cluster, omit `--new-cluster`.
+
+See the [installation guide](installer/README.md) for administrator login, verification, separate storage and additional worker nodes. If you already operate a Kubernetes cluster (including MicroOS nodes), use the Helm deployment instructions below instead; the clean-server installer is not a MicroOS installer. The automated setup remains experimental and requires live acceptance testing before production use.
+
 ### Run locally
 
 Requirements: Git and the .NET 10 SDK. Configure a trusted HTTPS development certificate for local use.
