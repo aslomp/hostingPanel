@@ -11,6 +11,7 @@ install_platform() {
     install -m 0755 "$tmp/linux-$arch/helm" /usr/local/bin/helm
     rm -rf "$tmp"
   fi
+  [[ "$(helm version --template '{{.Version}}')" == "$(require helmVersion)" ]] || die "Helm version mismatch"
   local base
   base=$(dirname "$config")
   python3 "$here/generate.py" "$config" generate
@@ -28,6 +29,7 @@ install_platform() {
   k3s kubectl apply -f "$base/issuer.json"
   k3s kubectl apply -f "$base/gateways.json"
   k3s kubectl wait --for=condition=Ready clusterissuer/lets-encrypt --timeout=180s
+  bash "$here/lib/storage-smoke.sh"
   k3s kubectl create namespace hosting --dry-run=client -o yaml | k3s kubectl apply -f -
   ensure_secret hostingpanel-bootstrap username admin password
   ensure_secret hostingpanel-mariadb root-password
@@ -42,6 +44,9 @@ install_platform() {
   fi
   helm template admin "$here/../deploy/helm/hostingpanel" -n hosting -f "$base/hosting-values.json" >/dev/null
   helm upgrade --install admin "$here/../deploy/helm/hostingpanel" -n hosting -f "$base/hosting-values.json" --wait --timeout 10m
+  k3s kubectl -n envoy-gateway-system wait --for=condition=Ready certificate/hosting-panel-tls --timeout=600s
+  k3s kubectl -n envoy-gateway-system wait --for=condition=Programmed gateway/external --timeout=300s
+  curl --fail --silent --show-error --retry 5 --retry-all-errors --connect-timeout 10 --max-time 30 "$([[ $(get acmeStaging) == True ]] && printf https || printf https)://$(require panelHostname)/healthz" $([[ $(get acmeStaging) == True ]] && printf %s --insecure || true)
 }
 
 ensure_secret() {
