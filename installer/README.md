@@ -1,6 +1,6 @@
 # Clean-server test installation
 
-Experimental installer; live end-to-end testing is required. Start on a disposable Ubuntu 24.04 LTS or Debian host with a private network and an unused extra disk. ZFS packages must be available in the OS package repositories (Debian: contrib). Do not use a production host or a disk containing data.
+Experimental installer; live end-to-end testing is required. Start on a disposable Ubuntu 24.04 LTS, Ubuntu 26.04 LTS or Debian 12/13 host with a private network and an unused extra disk. CI checks scripts and package resolution on Ubuntu 24.04 and 26.04; a full installation with the actual host kernel, storage and network still requires live acceptance testing. ZFS packages must be available in the OS package repositories (Debian: contrib). Do not use a production host or a disk containing data.
 
 ## Default installation (no template)
 

@@ -28,7 +28,7 @@ flock -n 9 || die "Another installer is running"
 [[ -d /run/systemd/system ]] || die "A systemd Linux host is required"
 source /etc/os-release
 case "$ID:$VERSION_ID" in
-  ubuntu:24.04|debian:12|debian:13) ;;
+  ubuntu:24.04|ubuntu:26.04|debian:12|debian:13) ;;
   *) die "Unsupported host distribution: $ID $VERSION_ID" ;;
 esac
 [[ $(uname -m) == x86_64 || $(uname -m) == aarch64 ]] || die "Unsupported CPU architecture"
