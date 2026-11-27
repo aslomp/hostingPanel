@@ -14,12 +14,34 @@ public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfigur
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         if (!configuration.GetValue<bool>("CertManager:Enabled") || !configuration.GetValue<bool>("KubernetesHosting:Enabled")) return;
-        await ReconciliationLoop.RunAsync(work.Wake.Reader(ReconciliationTarget.Certificate),
-            (_, token) => resources.WatchCustomResourcesAsync("cert-manager.io", "v1",
-                configuration["KubernetesHosting:Namespace"] ?? "hosting", "certificates",
-                "hostingpanel/component=certificate", work.AllChanged,
-                name => { if (TryDomainId(name, out var id)) work.DomainChanged(id); }, token),
-            ReconcileAsync, logger, TimeSpan.FromHours(1), ct, work.Recover, () => work.Wake.Signal(ReconciliationTarget.Certificate));
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var ns = configuration["KubernetesHosting:Namespace"] ?? "hosting";
+        var watches = new List<Task>
+        {
+            ReconciliationLoop.WatchAsync((_, token) => resources.WatchCertificateStateAsync(ns,
+                work.AllChanged, name => { if (TryDomainId(name, out var id)) work.DomainChanged(id); },
+                notifications.Publish, token), () => { }, logger, lifetime.Token)
+        };
+        if (configuration["CertManager:ListenerSetName"] is { Length: > 0 } set)
+        {
+            watches.Add(ReconciliationLoop.WatchAsync((_, token) => resources.WatchTlsRoutingAsync(ns,
+                "listenersets", set, work.AllChanged, _ => work.AllChanged(), token), () => { }, logger, lifetime.Token));
+            watches.Add(ReconciliationLoop.WatchAsync((_, token) => resources.WatchTlsRoutingAsync(ns,
+                "httproutes", null, work.AllChanged, name =>
+                {
+                    if (TryTlsDomainId(name, out var id)) work.DomainChanged(id);
+                }, token), () => { }, logger, lifetime.Token));
+        }
+        try
+        {
+            await ReconciliationLoop.RunAsync(work.Wake.Reader(ReconciliationTarget.Certificate), null,
+                ReconcileAsync, logger, Timeout.InfiniteTimeSpan, ct, work.Recover);
+        }
+        finally
+        {
+            await lifetime.CancelAsync();
+            await Task.WhenAll(watches);
+        }
     }
 
     private async Task<bool> ReconcileAsync(CancellationToken ct)
@@ -29,6 +51,13 @@ public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfigur
         if (keys is { Length: 0 }) return false;
         try { return await ReconcileCoreAsync(keys, ct); }
         catch { work.Recover(); throw; }
+    }
+
+    internal static bool TryTlsDomainId(string name, out Guid id)
+    {
+        id = default;
+        return name.StartsWith("hp-tls-", StringComparison.Ordinal) &&
+            Guid.TryParseExact(name[7..], "N", out id);
     }
 
     internal static bool TryDomainId(string name, out Guid id)
@@ -105,16 +134,20 @@ public sealed class CertificateReconciler(IServiceScopeFactory scopes, IConfigur
                 .ReconcileAsync(set, configuration["KubernetesHosting:GatewayName"] ?? throw new InvalidOperationException("Missing GatewayName."),
                     configuration["KubernetesHosting:GatewayNamespace"] ?? throw new InvalidOperationException("Missing GatewayNamespace."), next.Select(x => (x.Key, x.Value)).ToArray(), ct, keys);
         }
+        var removed = false;
         foreach (var (name, item) in certificates)
         {
             if (TryDomainId(name, out _) && !keep.Contains(name))
+            {
                 await resources.DeleteObservedAsync("cert-manager.io", "v1", ns, "certificates", item, ct);
+                removed = true;
+            }
         }
         var changed = ready.Count != next.Count || ready.Any(x => !next.TryGetValue(x.Key, out var host) || host != x.Value);
         ready.Clear();
         foreach (var pair in next) ready.Add(pair.Key, pair.Value);
         if (changed) notifications.Publish();
-        notifications.Signal(ReconciliationTarget.Website);
+        if (changed || removed) notifications.Signal(ReconciliationTarget.Website);
         if (retry) work.Recover();
         return retry;
     }

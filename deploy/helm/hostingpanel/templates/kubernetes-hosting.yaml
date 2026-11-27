@@ -43,7 +43,7 @@ rules:
   - apiGroups: ["gateway.networking.k8s.io"]
     resources: ["listenersets"]
     resourceNames: [{{ .Values.certManager.listenerSetName | quote }}]
-    verbs: ["get", "patch", "delete"]
+    verbs: ["get", "list", "watch", "patch", "delete"]
   - apiGroups: ["gateway.networking.k8s.io"]
     resources: ["listenersets"]
     verbs: ["create"]

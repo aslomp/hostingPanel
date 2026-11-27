@@ -196,6 +196,107 @@ public sealed class KubernetesResourceClient : IDisposable
         }
     }
 
+    // Certificate status queries remain independent. Only spec/identity/readiness
+    // transitions enqueue controller work; other certificate events invalidate UI reads.
+    public Task WatchCertificateStateAsync(string ns, Action reset, Action<string> changed,
+        Action statusChanged, CancellationToken ct) =>
+        WatchRelevantCustomAsync("cert-manager.io", ns, "certificates", "hostingpanel/component=certificate",
+            null, CertificateFingerprint, reset, changed, statusChanged, ct);
+
+    public Task WatchTlsRoutingAsync(string ns, string plural, string? name, Action reset,
+        Action<string> changed, CancellationToken ct)
+    {
+        if (plural == "listenersets" && !string.IsNullOrEmpty(name))
+            return WatchRelevantCustomAsync("gateway.networking.k8s.io", ns, plural, null,
+                "metadata.name=" + name, RoutingFingerprint, reset, changed, null, ct);
+        if (plural == "httproutes" && name is null)
+            return WatchRelevantCustomAsync("gateway.networking.k8s.io", ns, plural, "hostingpanel/component=tls-route",
+                null, RoutingFingerprint, reset, changed, null, ct);
+        throw new ArgumentException("Unsupported TLS routing watch.");
+    }
+
+    public static string CertificateFingerprint(JsonElement item)
+    {
+        var meta = item.GetProperty("metadata");
+        var ready = item.TryGetProperty("status", out var status) && status.TryGetProperty("conditions", out var conditions) &&
+            conditions.EnumerateArray().Any(condition =>
+                condition.GetProperty("type").GetString() == "Ready" && condition.GetProperty("status").GetString() == "True" &&
+                (!condition.TryGetProperty("observedGeneration", out var observed) ||
+                 !meta.TryGetProperty("generation", out var generation) || JsonElement.DeepEquals(observed, generation)));
+        return Fingerprint(item) + "|" + ready;
+    }
+
+    public static string RoutingFingerprint(JsonElement item)
+    {
+        var meta = item.GetProperty("metadata");
+        var ignored = meta.TryGetProperty("annotations", out var annotations) &&
+            annotations.TryGetProperty("cert-manager.io/ignore-tls-listeners", out var value) ? value.GetString() : null;
+        return Fingerprint(item) + "|" + ignored;
+    }
+
+    private async Task WatchRelevantCustomAsync(string group, string ns, string plural,
+        string? selector, string? fieldSelector, Func<JsonElement, string> fingerprint,
+        Action reset, Action<string> changed, Action? statusChanged, CancellationToken ct)
+    {
+        // The snapshot survives normal reconnects. A relist only schedules work
+        // when relevant state changed, including deletions while disconnected.
+        var key = ns + "/tls/" + plural + "/" + fieldSelector;
+        var list = await Api.CustomObjects.ListNamespacedCustomObjectAsync(group, "v1", ns, plural,
+            labelSelector: selector, fieldSelector: fieldSelector, cancellationToken: ct);
+        var json = KubernetesJson.Serialize(list);
+        using var initial = JsonDocument.Parse(json);
+        ObserveList(key, json, _ => true, reset, fingerprint);
+        if (statusChanged is not null)
+            ObserveList(key + "/status", json, _ => true, statusChanged, StatusFingerprint);
+        var response = Api.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(group, "v1", ns, plural,
+            labelSelector: selector, fieldSelector: fieldSelector,
+            resourceVersion: initial.RootElement.GetProperty("metadata").GetProperty("resourceVersion").GetString(),
+            watch: true, timeoutSeconds: 300, cancellationToken: ct);
+        await foreach (var (kind, item) in response.WatchAsync<object, object>(
+            onError: error => throw new InvalidOperationException("TLS resource watch failed.", error), cancellationToken: ct))
+        {
+            if (kind == WatchEventType.Error) throw new InvalidOperationException("TLS resource watch returned an error.");
+            if (kind is not (WatchEventType.Added or WatchEventType.Modified or WatchEventType.Deleted)) continue;
+            using var doc = JsonDocument.Parse(KubernetesJson.Serialize(item));
+            var resource = doc.RootElement;
+            var name = resource.GetProperty("metadata").GetProperty("name").GetString()!;
+            var snapshot = watchSnapshots[key];
+            if (kind == WatchEventType.Deleted)
+            {
+                if (snapshot.Remove(name)) changed(name);
+            }
+            else
+            {
+                var next = fingerprint(resource);
+                if (!snapshot.TryGetValue(name, out var previous) || next != previous)
+                {
+                    snapshot[name] = next;
+                    changed(name);
+                }
+            }
+            if (statusChanged is not null)
+            {
+                var statuses = watchSnapshots[key + "/status"];
+                if (kind == WatchEventType.Deleted)
+                {
+                    if (statuses.Remove(name)) statusChanged();
+                }
+                else
+                {
+                    var next = StatusFingerprint(resource);
+                    if (!statuses.TryGetValue(name, out var previous) || next != previous)
+                    {
+                        statuses[name] = next;
+                        statusChanged();
+                    }
+                }
+            }
+        }
+    }
+
+    private static string StatusFingerprint(JsonElement item) =>
+        Fingerprint(item) + "|" + (item.TryGetProperty("status", out var status) ? status.GetRawText() : "");
+
     // Compare desired-state fingerprints, not status or resourceVersion. A normal
     // relist or a controller's status update must not invalidate workloads.
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Dictionary<string, string>> watchSnapshots = new();
