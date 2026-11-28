@@ -2,9 +2,9 @@ using System.Net.Http.Headers;
 
 namespace HostingPanel.Api;
 
-public sealed record SftpAccountEntry(Guid Id, string Username, string Label, string RelativePath = "", string ProvisioningStatus = "pending", bool Blocked = false);
-public sealed record SftpAccountRequest(string Label, string PublicKey, string RelativePath = "");
-public sealed record SftpAccountUpdate(string Label, string RelativePath, bool Blocked, string? PublicKey = null);
+public sealed record SftpAccountEntry(Guid Id, string Username, string Label, string RelativePath = "", string ProvisioningStatus = "pending", bool Blocked = false, IReadOnlyList<string>? PublicKeys = null);
+public sealed record SftpAccountRequest(string Label, string PublicKey, string RelativePath = "", IReadOnlyList<string>? PublicKeys = null);
+public sealed record SftpAccountUpdate(string Label, string RelativePath, bool Blocked, string? PublicKey = null, IReadOnlyList<string>? PublicKeys = null);
 public sealed record SftpAccountResult(int Status, string? Error = null, IReadOnlyList<SftpAccountEntry>? Accounts = null, long Limit = 0);
 public interface ISftpAccounts
 {

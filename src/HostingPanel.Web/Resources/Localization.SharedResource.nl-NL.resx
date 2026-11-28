@@ -923,4 +923,6 @@
   <data name="Manage key-based SFTP access to your hosting directory." xml:space="preserve"><value>Beheer SFTP-toegang met SSH-sleutels tot je hostingdirectory.</value></data>
   <data name="Leave the key empty to retain it." xml:space="preserve"><value>Laat de sleutel leeg om deze te behouden.</value></data>
   <data name="Block access" xml:space="preserve"><value>Toegang blokkeren</value></data>
+  <data name="Public SSH keys" xml:space="preserve"><value>Publieke SSH-sleutels</value></data>
+  <data name="One public key per line." xml:space="preserve"><value>Eén publieke sleutel per regel.</value></data>
 </root>

@@ -76,9 +76,10 @@ internal sealed class SftpGoClient(IHttpClientFactory clients, IConfiguration co
 
     // Activation is explicitly gated by the storage acceptance configuration.
     // Never adopt or overwrite an unrelated upstream account.
-    internal async Task EnsureAsync(Guid accountId, string username, string hostingUsername, string relativePath, string publicKey, bool active, CancellationToken ct)
+    internal async Task EnsureAsync(Guid accountId, string username, string hostingUsername, string relativePath, string[] publicKeys, bool active, CancellationToken ct)
     {
         if (accountId == Guid.Empty) throw new ArgumentException("Missing account identity.", nameof(accountId));
+        if (KubernetesSftpAccounts.NormalizeKeys(publicKeys) is null) throw new InvalidOperationException("Invalid SFTP public keys.");
         var path = PathFor(username);
         var (uid, gid) = await storage.ValidateSftpHomeAsync(hostingUsername, relativePath, ct);
         var home = "/home/" + hostingUsername + (relativePath.Length == 0 ? "" : "/" + relativePath);
@@ -87,7 +88,7 @@ internal sealed class SftpGoClient(IHttpClientFactory clients, IConfiguration co
         var existing = await ReadAsync(client, username, ct);
         if (existing is not null && existing.Description != marker)
             throw new InvalidOperationException("SFTPGo user ownership conflict.");
-        if (existing is not null && (existing.HomeDirectory != home || existing.Status != (active ? 1 : 0) || !((existing.PublicKeys ?? []).SequenceEqual(active ? new[] { publicKey } : Array.Empty<string>()))))
+        if (existing is not null && (existing.HomeDirectory != home || existing.Status != (active ? 1 : 0) || !((existing.PublicKeys ?? []).SequenceEqual(active ? publicKeys : Array.Empty<string>()))))
         {
             // Remove old access before changing credentials or confinement.
             using var removed = await client.DeleteAsync(path, ct);
@@ -97,7 +98,7 @@ internal sealed class SftpGoClient(IHttpClientFactory clients, IConfiguration co
         }
         var payload = new {
             username, home_dir = home, uid, gid, status = active ? 1 : 0,
-            description = marker, public_keys = active ? new[] { publicKey } : Array.Empty<string>(),
+            description = marker, public_keys = active ? publicKeys : Array.Empty<string>(),
             permissions = new Dictionary<string, string[]> { ["/"] = active ? new[] { "list", "download", "upload", "overwrite", "delete", "rename", "create_dirs" } : new[] { "list", "download" } },
             filters = new { denied_login_methods = new[] { "password", "keyboard-interactive", "publickey+password", "publickey+keyboard-interactive" },
                 denied_protocols = new[] { "FTP", "DAV", "HTTP" } }

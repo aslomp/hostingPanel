@@ -829,4 +829,6 @@
   <data name="Manage key-based SFTP access to your hosting directory." xml:space="preserve"><value>Manage key-based SFTP access to your hosting directory.</value></data>
   <data name="Leave the key empty to retain it." xml:space="preserve"><value>Leave the key empty to retain it.</value></data>
   <data name="Block access" xml:space="preserve"><value>Block access</value></data>
+  <data name="Public SSH keys" xml:space="preserve"><value>Public SSH keys</value></data>
+  <data name="One public key per line." xml:space="preserve"><value>One public key per line.</value></data>
 </root>

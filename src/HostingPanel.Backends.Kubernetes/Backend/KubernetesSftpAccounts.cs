@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Text.Json;
 using HostingPanel.Api.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -51,7 +52,8 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         if (owner is null) return new(401, "UNAUTHORIZED");
         if (!Enabled) return new(501, "SFTP_NOT_CONFIGURED");
         var rows = await db.Set<SftpAccountRow>().AsNoTracking().Where(x => x.OwnerId == owner.Id)
-            .OrderBy(x => x.Label).Select(x => new SftpAccountEntry(x.Id, x.Username, x.Label, x.RelativePath)).ToListAsync(ct);
+            .OrderBy(x => x.Label).Select(x => new SftpAccountEntry(x.Id, x.Username, x.Label, x.RelativePath, "pending", false, null)).ToListAsync(ct);
+        var keys = await db.Set<SftpAccountRow>().AsNoTracking().Where(x => x.OwnerId == owner.Id).Select(x => new { x.Id, x.PublicKey }).ToDictionaryAsync(x => x.Id, x => x.PublicKey, ct);
         var ids = rows.Select(x => x.Id).ToArray();
         var jobs = await db.ReconciliationOperations.AsNoTracking()
             .Where(x => x.ResourceType == "sftp-account" && ids.Contains(x.ResourceId)).ToListAsync(ct);
@@ -60,7 +62,7 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
             var pending = jobs.Where(x => x.ResourceId == row.Id && x.Status == "pending").ToArray();
             var state = pending.Any(x => x.LastError != null) ? "failed" : pending.Length != 0 ? "pending"
                 : states.GetValueOrDefault(row.Id)?.Observed ?? "pending";
-            return row with { ProvisioningStatus = state, Blocked = states.GetValueOrDefault(row.Id)?.Blocked ?? false };
+            return row with { ProvisioningStatus = state, Blocked = states.GetValueOrDefault(row.Id)?.Blocked ?? false, PublicKeys = DecodeKeys(keys[row.Id]) };
         }).ToArray();
         return new(200, Accounts: observed, Limit: await LimitAsync(owner, ct));
     }
@@ -68,7 +70,7 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         (path.Length == 0 || path.Split('/').All(part => part.Length is > 0 and <= 255 && part is not ("." or "..") &&
             part.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.')));
 
-    private static bool ValidKey(string key)
+    internal static bool ValidKey(string key)
     {
         // Accept only a single bare Ed25519 public key, not authorized_keys options.
         if (key.Length > 4096 || key.Any(char.IsControl)) return false;
@@ -81,13 +83,28 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         }
         catch (FormatException) { return false; }
     }
+    // The existing column stores a JSON array; legacy single-key rows remain readable.
+    internal static string[] DecodeKeys(string stored) =>
+        stored.StartsWith('[') ? JsonSerializer.Deserialize<string[]>(stored) ?? throw new InvalidOperationException("Invalid SFTP keys.")
+            : [stored];
+
+    internal static string[]? NormalizeKeys(IReadOnlyList<string>? keys)
+    {
+        if (keys is null || keys.Count is < 1 or > 32 || keys.Any(k => k is null || !ValidKey(k))) return null;
+        var normalized = keys.Select(k => k.Trim()).ToArray();
+        // Compare key material rather than comments.
+        if (normalized.Select(k => k.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1]).Distinct(StringComparer.Ordinal).Count() != normalized.Length) return null;
+        return normalized;
+    }
+
     public async Task<SftpAccountResult> CreateAsync(SftpAccountRequest input, AuthenticationHeaderValue auth, CancellationToken ct)
     {
         var owner = await identity.AuthenticateAsync(auth, ct);
         if (owner is null) return new(401, "UNAUTHORIZED");
         if (!Enabled) return new(501, "SFTP_NOT_CONFIGURED");
+        var publicKeys = NormalizeKeys(input.PublicKeys ?? (input.PublicKey is null ? null : new[] { input.PublicKey }));
         if (input.Label is not { Length: > 0 and <= 24 } || !input.Label.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
-            || input.PublicKey is null || !ValidKey(input.PublicKey) || !ValidRelativePath(input.RelativePath)) return new(400, "INVALID_SFTP_ACCOUNT");
+            || publicKeys is null || !ValidRelativePath(input.RelativePath)) return new(400, "INVALID_SFTP_ACCOUNT");
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var currentOwner = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == owner.Id && !x.Suspended, ct);
         if (currentOwner is null) return new(403, "ACCESS_DENIED");
@@ -100,7 +117,7 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         { return new(503, "SFTP_STORAGE_TIMEOUT"); }
         var id = Guid.NewGuid();
-        rows.Add(new SftpAccountRow { Id = id, OwnerId = owner.Id, Username = "sftp-" + id.ToString("N"), Label = input.Label.ToLowerInvariant(), PublicKey = input.PublicKey.Trim(), RelativePath = input.RelativePath });
+        rows.Add(new SftpAccountRow { Id = id, OwnerId = owner.Id, Username = "sftp-" + id.ToString("N"), Label = input.Label.ToLowerInvariant(), PublicKey = JsonSerializer.Serialize(publicKeys), RelativePath = input.RelativePath });
         operations.Schedule("sftp-account", id, "create");
         try { await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); }
         catch (DbUpdateException) { return new(409, "SFTP_ACCOUNT_CONFLICT"); }
@@ -113,7 +130,7 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         if (owner is null) return new(401, "UNAUTHORIZED");
         if (!Enabled) return new(501, "SFTP_NOT_CONFIGURED");
         if (input.Label is not { Length: > 0 and <= 24 } || !input.Label.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
-            || !ValidRelativePath(input.RelativePath) || input.PublicKey is not null && !ValidKey(input.PublicKey))
+            || !ValidRelativePath(input.RelativePath) || (input.PublicKeys is not null || input.PublicKey is not null) && publicKeys is null)
             return new(400, "INVALID_SFTP_ACCOUNT");
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var row = await db.Set<SftpAccountRow>().SingleOrDefaultAsync(x => x.Id == id && x.OwnerId == owner.Id, ct);
@@ -130,7 +147,7 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         state.Observed = "pending";
         row.Label = input.Label.ToLowerInvariant();
         row.RelativePath = input.RelativePath;
-        if (input.PublicKey is not null) row.PublicKey = input.PublicKey.Trim();
+        if (publicKeys is not null) row.PublicKey = JsonSerializer.Serialize(publicKeys);
         operations.Schedule("sftp-account", id, "update");
         try { await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); }
         catch (DbUpdateException) { return new(409, "SFTP_ACCOUNT_CONFLICT"); }

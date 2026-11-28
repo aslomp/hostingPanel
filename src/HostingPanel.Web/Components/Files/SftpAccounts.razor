@@ -36,10 +36,10 @@
     <MudPaper Class="pa-4">
         <MudTextField T="string" Label="@L["Account label"].Value" @bind-Value="label" Immediate="true" Disabled="@busy" />
         <MudTextField T="string" Label="@L["Home directory (optional)"].Value" HelperText="@L["Relative to your hosting directory; leave empty for full access."].Value" @bind-Value="relativePath" Immediate="true" Disabled="@busy" />
-        <MudTextField T="string" Label="@L["Public SSH key"].Value" @bind-Value="key" Lines="3" Immediate="true" Disabled="@busy" />
+        <MudTextField T="string" Label="@L["Public SSH keys"].Value" @bind-Value="key" Lines="6" Immediate="true" Disabled="@busy" />
         <MudText>ssh-ed25519</MudText>
-        @if (editing is not null) { <MudText>@L["Leave the key empty to retain it."]</MudText><MudCheckBox T="bool" @bind-Value="blocked" Label="@L["Block access"].Value" Disabled="@busy" /> }
-        <MudButton Disabled="@(busy || (editing is null && (!CanCreate || string.IsNullOrWhiteSpace(key))) || string.IsNullOrWhiteSpace(label))" OnClick="Create">@L["Save"]</MudButton>
+        @if (editing is not null) { <MudText>@L["One public key per line."]</MudText><MudCheckBox T="bool" @bind-Value="blocked" Label="@L["Block access"].Value" Disabled="@busy" /> }
+        <MudButton Disabled="@(busy || (editing is null && (!CanCreate || string.IsNullOrWhiteSpace(key))) || string.IsNullOrWhiteSpace(label) || string.IsNullOrWhiteSpace(key))" OnClick="Create">@L["Save"]</MudButton>
         <MudButton Disabled="@busy" OnClick="Cancel">@L["Cancel"]</MudButton>
     </MudPaper>
 }
@@ -68,16 +68,17 @@
     private void ProvisioningChanged() => _ = InvokeAsync(async () => { if (disposed || !Session.Connected) return; await Refresh(); if (!disposed) StateHasChanged(); });
     private void SessionChanged() => _ = InvokeAsync(async () => { if (disposed) return; Cancel(); var task = Refresh(); StateHasChanged(); await task; if (!disposed) StateHasChanged(); });
     private void OpenCreate() { if (CanCreate) { Cancel(); creating = true; } }
-    private void OpenEdit(SftpAccountEntry account) { if (busy || !Session.Connected) return; editing = account.Id; label = account.Label; relativePath = account.RelativePath; blocked = account.Blocked; key = ""; creating = true; }
+    private void OpenEdit(SftpAccountEntry account) { if (busy || !Session.Connected) return; editing = account.Id; label = account.Label; relativePath = account.RelativePath; blocked = account.Blocked; key = string.Join("\n", account.PublicKeys ?? []); creating = true; }
     private void Cancel() { editing = null; blocked = false; creating = false; label = key = relativePath = ""; }
     private async Task Create()
     {
         if (busy || !Session.Connected || (editing is null && !CanCreate)) return;
         busy = true; error = null; var channel = Session.TicketChannel;
         try {
+            var keys = key.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             var result = editing is Guid id
-                ? await Operations.UpdateAsync(id, new(label, relativePath, blocked, string.IsNullOrWhiteSpace(key) ? null : key))
-                : await Operations.CreateAsync(new(label, key, relativePath));
+                ? await Operations.UpdateAsync(id, new(label, relativePath, blocked, PublicKeys: keys))
+                : await Operations.CreateAsync(new(label, "", relativePath, keys));
             if (!Current(channel)) return;
             if (result.Status == 202) { Cancel(); await Refresh(); }
             else error = result.Error ?? L["SFTP management is unavailable."].Value;

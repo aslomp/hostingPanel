@@ -68,7 +68,7 @@ internal sealed class SftpGoReconciler(IServiceScopeFactory scopes, IConfigurati
                 {
                     if (row!.Username != username) throw new InvalidOperationException("Unexpected SFTP identity.");
                     // Do not activate accounts until storage confinement is validated.
-                    await client.EnsureAsync(id, username, owner!.Username, row.RelativePath, row.PublicKey, active, ct);
+                    await client.EnsureAsync(id, username, owner!.Username, row.RelativePath, KubernetesSftpAccounts.DecodeKeys(row.PublicKey), active, ct);
                 }
                 if (row is not null)
                 {
