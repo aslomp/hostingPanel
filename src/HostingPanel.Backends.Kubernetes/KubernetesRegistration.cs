@@ -26,6 +26,9 @@ public static class KubernetesRegistration
     services.AddSingleton<CertificateWork>();
     services.AddScoped<KubernetesIdentityService>();
     services.AddSingleton<MailMutationGate>();
+    services.AddScoped<SftpGoClient>();
+    services.AddHttpClient("sftpgo-management", http => http.Timeout = TimeSpan.FromSeconds(15))
+        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false });
     services.AddScoped<StalwartMailProvider>();
     services.AddScoped<StalwartDnsProvisioning>();
     services.AddScoped<IMailProvider>(sp => sp.GetRequiredService<StalwartMailProvider>());
