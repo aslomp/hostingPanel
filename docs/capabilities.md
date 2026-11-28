@@ -105,3 +105,5 @@ Kubernetes subdomain ownership uses an explicit provider-owned `SubdomainBinding
 - SFTPGo reconciliation consumes durable account, owner and package operations through the shared channel loop; initial startup reconciles existing rows. Users remain disabled pending runtime filesystem validation. No idle polling.
 
 - SFTP account overview displays pending, failed or completed-disabled provisioning status from the outbox and refreshes on existing invalidations. Removal requests upstream connection termination and verifies no matching connections remain. Zero entitlement revokes users. Live validation pending; activation remains blocked.
+
+SFTPGo remains disabled by default; enabling it now defaults to write mode and public-key account activation. Set `sftpgo.enableWrites: false` to stage disabled users on read-only storage. Production isolation acceptance remains outstanding.

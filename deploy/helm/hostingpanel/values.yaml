@@ -126,11 +126,12 @@ stalwart:
     submissionEnabled: false
     pop3Enabled: false
 
-# Optional SFTPGo infrastructure; read-only storage until account isolation is validated.
+# Optional SFTPGo infrastructure. Enabling the service enables customer writes by default.
 sftpgo:
   enabled: false
-  # Opt in only on a dedicated, validated NFS export. Shared root process, not per-user impersonation.
-  enableWrites: false
+  # Shared root process, not per-user impersonation. Validate NFS isolation before production.
+  # Set false for disabled-user/read-only staging.
+  enableWrites: true
   image: drakkan/sftpgo:v2.7.6
   existingSecret: "" # username and password for internal management bootstrap
   existingClaim: ""

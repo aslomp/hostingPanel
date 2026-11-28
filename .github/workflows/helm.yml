@@ -39,4 +39,8 @@ jobs:
           grep -q 'kind: StatefulSet' /tmp/sftpgo.yaml
           grep -q 'kind: NetworkPolicy' /tmp/sftpgo.yaml
           grep -q 'SFTPGO_SFTPD__PASSWORD_AUTHENTICATION' /tmp/sftpgo.yaml
-          grep -q 'readOnly: true' /tmp/sftpgo.yaml
+          grep -q 'readOnly: false' /tmp/sftpgo.yaml
+          grep -q 'runAsUser: 0' /tmp/sftpgo.yaml
+          helm template admin deploy/helm/hostingpanel -n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.gatewayName=example-gateway --set sftpgo.enabled=true --set sftpgo.existingSecret=sftpgo-bootstrap --set sftpgo.enableWrites=false --show-only templates/sftpgo.yaml > /tmp/sftpgo-staging.yaml
+          grep -q 'readOnly: true' /tmp/sftpgo-staging.yaml
+          grep -q 'runAsNonRoot: true' /tmp/sftpgo-staging.yaml
