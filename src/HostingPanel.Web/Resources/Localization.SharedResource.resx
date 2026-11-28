@@ -821,4 +821,7 @@
   <data name="This removes the account, not its files." xml:space="preserve"><value>This removes the account, not its files.</value></data>
   <data name="Enter the exact login name to confirm." xml:space="preserve"><value>Enter the exact login name to confirm.</value></data>
   <data name="SFTP accounts are not active until provisioning is available." xml:space="preserve"><value>SFTP accounts are not active until provisioning is available.</value></data>
+  <data name="Home directory" xml:space="preserve"><value>Home directory</value></data>
+  <data name="Home directory (optional)" xml:space="preserve"><value>Home directory (optional)</value></data>
+  <data name="Relative to your hosting directory; leave empty for full access." xml:space="preserve"><value>Relative to your hosting directory; leave empty for full access.</value></data>
 </root>

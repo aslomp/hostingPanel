@@ -95,3 +95,5 @@ Kubernetes subdomain ownership uses an explicit provider-owned `SubdomainBinding
 - SFTPGo internal management client supports admin token exchange, exact user lookup, create/update/delete with read-back and disabled-by-default managed users. No public API, account lifecycle wiring or customer activation yet. Internal HTTP transport requires enforced NetworkPolicy and a trusted cluster network; TLS remains a deployment follow-up.
 
 - Kubernetes SFTP account UI stores owner-scoped pending account definitions and public keys in SQLite; the existing ftp package/account limit is enforced on creation. No upstream activation or reconciliation yet. DirectAdmin SFTP management is not supported by this UI.
+
+- Pending SFTP accounts support an optional relative home directory, stored in the provider schema. Absolute paths, empty path components, traversal and unsupported characters are rejected. Storage existence, ownership and symlink confinement must be verified before activation; no upstream user is activated by this feature.

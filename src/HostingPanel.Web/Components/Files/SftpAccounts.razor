@@ -20,11 +20,11 @@
     <MudText>@accounts.Count / @(limit == long.MaxValue ? L["Unlimited"].Value : limit.ToString())</MudText>
     @if (accounts.Count >= limit) { <MudAlert Severity="Severity.Info">@L["SFTP account limit reached."]</MudAlert> }
     <MudSimpleTable Dense="true" Hover="true">
-        <thead><tr><th>@L["Account label"]</th><th>@L["Username"]</th><th>@L["Status"]</th><th>@L["Actions"]</th></tr></thead>
+        <thead><tr><th>@L["Account label"]</th><th>@L["Username"]</th><th>@L["Home directory"]</th><th>@L["Status"]</th><th>@L["Actions"]</th></tr></thead>
         <tbody>
         @foreach (var account in accounts)
         {
-            <tr @key="account.Id"><td>@account.Label</td><td>@account.Username</td><td>@L["Pending provisioning"]</td>
+            <tr @key="account.Id"><td>@account.Label</td><td>@account.Username</td><td>@("/" + account.RelativePath)</td><td>@L["Pending provisioning"]</td>
                 <td><CrudDeleteButton Label="@L["Delete SFTP account"].Value" Disabled="@busy" OnClick="() => Delete(account)" /></td></tr>
         }
         </tbody>
@@ -34,6 +34,7 @@
 {
     <MudPaper Class="pa-4">
         <MudTextField T="string" Label="@L["Account label"].Value" @bind-Value="label" Immediate="true" Disabled="@busy" />
+        <MudTextField T="string" Label="@L["Home directory (optional)"].Value" HelperText="@L["Relative to your hosting directory; leave empty for full access."].Value" @bind-Value="relativePath" Immediate="true" Disabled="@busy" />
         <MudTextField T="string" Label="@L["Public SSH key"].Value" @bind-Value="key" Lines="3" Immediate="true" Disabled="@busy" />
         <MudText>ssh-ed25519</MudText>
         <MudButton Disabled="@(busy || !CanCreate || string.IsNullOrWhiteSpace(label) || string.IsNullOrWhiteSpace(key))" OnClick="Create">@L["Save"]</MudButton>
@@ -45,7 +46,7 @@
     private IReadOnlyList<SftpAccountEntry>? accounts;
     private long limit;
     private bool creating, busy, disposed;
-    private string label = "", key = "";
+    private string label = "", key = "", relativePath = "";
     private string? error;
     private bool CanCreate => Session.Connected && !busy && !read.Loading && accounts is not null && accounts.Count < limit;
     protected override Task OnInitializedAsync() { Session.Changed += SessionChanged; return Refresh(); }
@@ -62,13 +63,13 @@
     }
     private void SessionChanged() => _ = InvokeAsync(async () => { if (disposed) return; Cancel(); var task = Refresh(); StateHasChanged(); await task; if (!disposed) StateHasChanged(); });
     private void OpenCreate() { if (CanCreate) creating = true; }
-    private void Cancel() { creating = false; label = key = ""; }
+    private void Cancel() { creating = false; label = key = relativePath = ""; }
     private async Task Create()
     {
         if (!CanCreate) return;
         busy = true; error = null; var channel = Session.TicketChannel;
         try {
-            var result = await Operations.CreateAsync(new(label, key));
+            var result = await Operations.CreateAsync(new(label, key, relativePath));
             if (!Current(channel)) return;
             if (result.Status == 201) { Cancel(); await Refresh(); }
             else error = result.Error ?? L["SFTP management is unavailable."].Value;

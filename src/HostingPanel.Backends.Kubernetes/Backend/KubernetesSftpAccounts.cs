@@ -11,12 +11,14 @@ internal sealed class SftpAccountRow
     public string Username { get; set; } = "";
     public string Label { get; set; } = "";
     public string PublicKey { get; set; } = "";
+    public string RelativePath { get; set; } = "";
 }
 internal sealed class SftpAccountModel : IHostingPanelModelExtension, IHostingPanelSchemaExtension
 {
     public string Provider => "Kubernetes.Sftp";
     public IReadOnlyList<HostingPanelSchemaMigration> Migrations => [
-        new(1, """CREATE TABLE IF NOT EXISTS "SftpAccounts" ("Id" TEXT NOT NULL PRIMARY KEY, "OwnerId" TEXT NOT NULL, "Username" TEXT NOT NULL UNIQUE, "Label" TEXT NOT NULL, "PublicKey" TEXT NOT NULL, UNIQUE ("OwnerId", "Label"));""")
+        new(1, """CREATE TABLE IF NOT EXISTS "SftpAccounts" ("Id" TEXT NOT NULL PRIMARY KEY, "OwnerId" TEXT NOT NULL, "Username" TEXT NOT NULL UNIQUE, "Label" TEXT NOT NULL, "PublicKey" TEXT NOT NULL, UNIQUE ("OwnerId", "Label"));"""),
+        new(2, """ALTER TABLE "SftpAccounts" ADD COLUMN "RelativePath" TEXT NOT NULL DEFAULT '';""")
     ];
     public void Configure(ModelBuilder model)
     {
@@ -42,9 +44,13 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         if (owner is null) return new(401, "UNAUTHORIZED");
         if (!Enabled) return new(501, "SFTP_NOT_CONFIGURED");
         var rows = await db.Set<SftpAccountRow>().AsNoTracking().Where(x => x.OwnerId == owner.Id)
-            .OrderBy(x => x.Label).Select(x => new SftpAccountEntry(x.Id, x.Username, x.Label)).ToListAsync(ct);
+            .OrderBy(x => x.Label).Select(x => new SftpAccountEntry(x.Id, x.Username, x.Label, x.RelativePath)).ToListAsync(ct);
         return new(200, Accounts: rows, Limit: await LimitAsync(owner, ct));
     }
+    internal static bool ValidRelativePath(string? path) => path is not null && path.Length <= 1024 &&
+        (path.Length == 0 || path.Split('/').All(part => part.Length is > 0 and <= 255 && part is not ("." or "..") &&
+            part.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.')));
+
     private static bool ValidKey(string key)
     {
         // Accept only a single bare Ed25519 public key, not authorized_keys options.
@@ -64,7 +70,7 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         if (owner is null) return new(401, "UNAUTHORIZED");
         if (!Enabled) return new(501, "SFTP_NOT_CONFIGURED");
         if (input.Label is not { Length: > 0 and <= 24 } || !input.Label.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
-            || input.PublicKey is null || !ValidKey(input.PublicKey)) return new(400, "INVALID_SFTP_ACCOUNT");
+            || input.PublicKey is null || !ValidKey(input.PublicKey) || !ValidRelativePath(input.RelativePath)) return new(400, "INVALID_SFTP_ACCOUNT");
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var currentOwner = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == owner.Id && !x.Suspended, ct);
         if (currentOwner is null) return new(403, "ACCESS_DENIED");
@@ -72,7 +78,7 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         var rows = db.Set<SftpAccountRow>();
         if (await rows.LongCountAsync(x => x.OwnerId == owner.Id, ct) >= limit) return new(409, "SFTP_LIMIT_REACHED");
         var id = Guid.NewGuid();
-        rows.Add(new SftpAccountRow { Id = id, OwnerId = owner.Id, Username = "sftp-" + id.ToString("N"), Label = input.Label.ToLowerInvariant(), PublicKey = input.PublicKey.Trim() });
+        rows.Add(new SftpAccountRow { Id = id, OwnerId = owner.Id, Username = "sftp-" + id.ToString("N"), Label = input.Label.ToLowerInvariant(), PublicKey = input.PublicKey.Trim(), RelativePath = input.RelativePath });
         try { await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); }
         catch (DbUpdateException) { return new(409, "SFTP_ACCOUNT_CONFLICT"); }
         return new(201);

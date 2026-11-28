@@ -915,4 +915,7 @@
   <data name="This removes the account, not its files." xml:space="preserve"><value>Dit verwijdert het account, niet de bestanden.</value></data>
   <data name="Enter the exact login name to confirm." xml:space="preserve"><value>Voer de exacte inlognaam in ter bevestiging.</value></data>
   <data name="SFTP accounts are not active until provisioning is available." xml:space="preserve"><value>SFTP-accounts zijn niet actief totdat provisioning beschikbaar is.</value></data>
+  <data name="Home directory" xml:space="preserve"><value>Hoofddirectory</value></data>
+  <data name="Home directory (optional)" xml:space="preserve"><value>Hoofddirectory (optioneel)</value></data>
+  <data name="Relative to your hosting directory; leave empty for full access." xml:space="preserve"><value>Relatief aan je hostingdirectory; laat leeg voor volledige toegang.</value></data>
 </root>
