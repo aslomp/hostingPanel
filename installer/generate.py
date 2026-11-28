@@ -155,6 +155,8 @@ def generate(c, base):
         values["kubernetesHosting"]["accountingSpool"] = dict(enabled=True, path="/srv/hosting/accounting",
             image=c["accountingImage"], endpoint=c["accountingEndpoint"], existingSecret="hostingpanel-accounting")
     values["sftp"] = dict(image="hostingpanel-openssh:installer-local", jailExport="/srv/hosting/sftp-jails", existingSecret="hostingpanel-ssh-hostkeys", service=dict(port=c.get("sftpPort", 2223)))
+    # The canonical chart owns default mail enablement; supply the installer storage class.
+    values["stalwart"] = dict(storageClassName="zfs-iscsi")
     write(base/"hosting-values.json",values)
 
 if __name__ == "__main__":

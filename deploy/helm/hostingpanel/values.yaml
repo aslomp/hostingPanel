@@ -104,7 +104,7 @@ mariadb:
 
 # Optional Stalwart v1 mail infrastructure (Kubernetes backend only).
 stalwart:
-  enabled: false
+  enabled: true
   api:
     enabled: false
     autoProvisionDns: true
