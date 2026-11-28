@@ -30,7 +30,7 @@ internal sealed class SftpAccountModel : IHostingPanelModelExtension, IHostingPa
         });
     }
 }
-internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, KubernetesIdentityService identity, IConfiguration configuration) : ISftpAccounts
+internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, KubernetesIdentityService identity, IConfiguration configuration, NfsDirectoryProvisioner storage) : ISftpAccounts
 {
     private bool Enabled => !string.IsNullOrWhiteSpace(configuration["SftpGo:BaseUrl"]);
     private async Task<long> LimitAsync(HostingAccount owner, CancellationToken ct)
@@ -77,6 +77,11 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         var limit = await LimitAsync(currentOwner, ct);
         var rows = db.Set<SftpAccountRow>();
         if (await rows.LongCountAsync(x => x.OwnerId == owner.Id, ct) >= limit) return new(409, "SFTP_LIMIT_REACHED");
+        try { await storage.ValidateSftpHomeAsync(currentOwner.Username, input.RelativePath, ct); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        { return new(409, "SFTP_HOME_UNAVAILABLE_OR_UNSAFE"); }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        { return new(503, "SFTP_STORAGE_TIMEOUT"); }
         var id = Guid.NewGuid();
         rows.Add(new SftpAccountRow { Id = id, OwnerId = owner.Id, Username = "sftp-" + id.ToString("N"), Label = input.Label.ToLowerInvariant(), PublicKey = input.PublicKey.Trim(), RelativePath = input.RelativePath });
         try { await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); }

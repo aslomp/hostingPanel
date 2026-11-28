@@ -97,3 +97,5 @@ Kubernetes subdomain ownership uses an explicit provider-owned `SubdomainBinding
 - Kubernetes SFTP account UI stores owner-scoped pending account definitions and public keys in SQLite; the existing ftp package/account limit is enforced on creation. No upstream activation or reconciliation yet. DirectAdmin SFTP management is not supported by this UI.
 
 - Pending SFTP accounts support an optional relative home directory, stored in the provider schema. Absolute paths, empty path components, traversal and unsupported characters are rejected. Storage existence, ownership and symlink confinement must be verified before activation; no upstream user is activated by this feature.
+
+- SFTP directory preflight reuses NFS provisioning ownership and permission checks at account creation and before disabled-user provisioning. It rejects missing directories, symlink components, root ownership and mismatching descendant UID/GID; no storage changes are made. This is not a runtime confinement guarantee against concurrent renames. Activation remains disabled pending live filesystem isolation and ownership validation.

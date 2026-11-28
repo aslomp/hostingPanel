@@ -9,7 +9,7 @@ namespace HostingPanel.Api;
 
 // Internal transport only. Authorization and desired-state ownership belong
 // to the account capability/reconciler, not to this privileged client.
-internal sealed class SftpGoClient(IHttpClientFactory clients, IConfiguration configuration)
+internal sealed class SftpGoClient(IHttpClientFactory clients, IConfiguration configuration, NfsDirectoryProvisioner storage)
 {
     internal sealed record User(
         [property: JsonPropertyName("username")] string Username,
@@ -76,17 +76,19 @@ internal sealed class SftpGoClient(IHttpClientFactory clients, IConfiguration co
 
     // First infrastructure phase intentionally provisions disabled users only.
     // Never adopt or overwrite an unrelated upstream account.
-    internal async Task EnsureDisabledAsync(Guid accountId, string username, CancellationToken ct)
+    internal async Task EnsureDisabledAsync(Guid accountId, string username, string hostingUsername, string relativePath, CancellationToken ct)
     {
         if (accountId == Guid.Empty) throw new ArgumentException("Missing account identity.", nameof(accountId));
         var path = PathFor(username);
+        var (uid, gid) = await storage.ValidateSftpHomeAsync(hostingUsername, relativePath, ct);
+        var home = "/home/" + hostingUsername + (relativePath.Length == 0 ? "" : "/" + relativePath);
         var marker = OwnerMarker(accountId);
         using var client = await ConnectAsync(ct);
         var existing = await ReadAsync(client, username, ct);
         if (existing is not null && existing.Description != marker)
             throw new InvalidOperationException("SFTPGo user ownership conflict.");
         var payload = new {
-            username, home_dir = "/home/" + username, status = 0,
+            username, home_dir = home, uid, gid, status = 0,
             description = marker, public_keys = Array.Empty<string>(),
             permissions = new Dictionary<string, string[]> { ["/"] = new[] { "list", "download" } },
             filters = new { denied_login_methods = new[] { "password", "keyboard-interactive", "publickey+password", "publickey+keyboard-interactive" },
