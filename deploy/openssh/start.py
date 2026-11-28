@@ -35,7 +35,7 @@ def main():
     os.umask(0o022)
     raw=pathlib.Path("/etc/hostingpanel/accounts.json").read_bytes()
     revision=os.environ["HP_SFTP_REVISION"]
-    if not ((revision=="bootstrap" and raw==b"[]") or hashlib.sha256(raw).hexdigest()==revision):
+    if not ((revision=="bootstrap" and raw.strip()==b"[]") or hashlib.sha256(raw).hexdigest()==revision):
         raise ValueError("snapshot revision mismatch")
     rows=json.loads(raw)
     if not isinstance(rows,list):

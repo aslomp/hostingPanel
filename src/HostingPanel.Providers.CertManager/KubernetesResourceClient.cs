@@ -112,7 +112,7 @@ public sealed class KubernetesResourceClient : IDisposable
             new() { Name = "hostkeys", MountPath = "/run/hostingpanel-hostkeys", ReadOnlyProperty = true }
         };
         mounts.AddRange(homes.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => new V1VolumeMount {
-            Name = "sites", MountPath = "/jails/" + x.Key + "/data", SubPath = x.Value, ReadOnlyProperty = false
+            Name = "sites", MountPath = "/jails/" + x.Key + "/data", SubPath = x.Value, ReadOnlyProperty = pod.Spec.Volumes.Single(v => v.Name == "sites").Nfs.ReadOnlyProperty == true
         }));
         // Immutable revision data makes a restarted pod consume the exact snapshot for its mounts.
         var manifest = JsonSerializer.Serialize(new { apiVersion = "v1", kind = "ConfigMap",

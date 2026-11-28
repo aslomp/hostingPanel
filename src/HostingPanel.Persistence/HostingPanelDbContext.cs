@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace HostingPanel.Api.Persistence;
 
@@ -21,6 +22,13 @@ public sealed class HostingPanelDbContext(DbContextOptions<HostingPanelDbContext
     public DbSet<HostedTicketReply> TicketReplies => Set<HostedTicketReply>();
     public DbSet<HostedMessage> Messages => Set<HostedMessage>();
     public DbSet<ReconciliationOperation> ReconciliationOperations => Set<ReconciliationOperation>();
+
+    internal string ExtensionModelKey => string.Join("|", extensions.Select(x => x.GetType().AssemblyQualifiedName).OrderBy(x => x, StringComparer.Ordinal));
+
+    protected override void OnConfiguring(DbContextOptionsBuilder builder)
+    {
+        builder.ReplaceService<IModelCacheKeyFactory, HostingPanelModelCacheKeyFactory>();
+    }
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -105,6 +113,13 @@ public sealed class HostingPanelDbContext(DbContextOptions<HostingPanelDbContext
         foreach (var extension in extensions)
             extension.Configure(model);
     }
+}
+
+public sealed class HostingPanelModelCacheKeyFactory : IModelCacheKeyFactory
+{
+    public object Create(DbContext context, bool designTime) => context is HostingPanelDbContext panel
+        ? (context.GetType(), panel.ExtensionModelKey, designTime)
+        : (context.GetType(), "", designTime);
 }
 
 public sealed class HostingAccount {
