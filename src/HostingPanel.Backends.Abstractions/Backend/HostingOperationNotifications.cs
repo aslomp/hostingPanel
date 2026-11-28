@@ -8,7 +8,8 @@ public enum ReconciliationTarget
     Website = 1,
     Dns = 2,
     Certificate = 4,
-    All = Website | Dns | Certificate
+    Sftp = 8,
+    All = Website | Dns | Certificate | Sftp
 }
 
 /// <summary>Separate coalescing invalidation channels; SQLite remains authoritative.</summary>
@@ -17,6 +18,7 @@ public sealed class HostingOperationNotifications
     private readonly Channel<bool> website = Create();
     private readonly Channel<bool> dns = Create();
     private readonly Channel<bool> certificate = Create();
+    private readonly Channel<bool> sftp = Create();
 
     private static Channel<bool> Create() => Channel.CreateBounded<bool>(new BoundedChannelOptions(1)
     {
@@ -29,6 +31,7 @@ public sealed class HostingOperationNotifications
         ReconciliationTarget.Website => website.Reader,
         ReconciliationTarget.Dns => dns.Reader,
         ReconciliationTarget.Certificate => certificate.Reader,
+        ReconciliationTarget.Sftp => sftp.Reader,
         _ => throw new ArgumentOutOfRangeException(nameof(target))
     };
 
@@ -37,6 +40,7 @@ public sealed class HostingOperationNotifications
         if ((targets & ReconciliationTarget.Website) != 0) website.Writer.TryWrite(true);
         if ((targets & ReconciliationTarget.Dns) != 0) dns.Writer.TryWrite(true);
         if ((targets & ReconciliationTarget.Certificate) != 0) certificate.Writer.TryWrite(true);
+        if ((targets & ReconciliationTarget.Sftp) != 0) sftp.Writer.TryWrite(true);
     }
 
     // Call only after durable mutation commit. Status-only publications must not

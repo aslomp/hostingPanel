@@ -1,0 +1,93 @@
+@using HostingPanel.Api
+@using HostingPanel.Api.Services
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject SftpOperations Operations
+@inject PanelSession Session
+@inject IDialogService Dialogs
+@implements IDisposable
+
+<PanelPageHeader><TitleContent>@L["FTP accounts"]</TitleContent></PanelPageHeader>
+<MudTextField T="string" Label="@L["Domain"].Value" @bind-Value="domain" Disabled="@busy" />
+<MudButton OnClick="Load" Disabled="@busy">@L["Refresh"]</MudButton>
+@if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+@if (loaded)
+{
+    <CrudAddButton OnClick="NewAccount" Disabled="@busy">@L["Create FTP account"]</CrudAddButton>
+    <MudSimpleTable><thead><tr><th>@L["Username"]</th><th>@L["Actions"]</th></tr></thead><tbody>
+    @foreach(var account in accounts)
+    {
+        <tr><td>@account</td><td><MudButton OnClick="() => Edit(account)" Disabled="@busy">@L["Edit"]</MudButton><CrudDeleteButton Label="@L["Delete"].Value" OnClick="() => Delete(account)" Disabled="@busy" /></td></tr>
+    }
+    </tbody></MudSimpleTable>
+}
+@if (editing)
+{
+    <MudTextField T="string" Label="@L["Username"].Value" @bind-Value="user" Disabled="@(busy || existing)" />
+    <MudSelect T="string" Label="@L["Home directory"].Value" @bind-Value="type" Disabled="@busy">
+        @foreach(var option in new[]{"domain","ftp","user","custom"}) { <MudSelectItem T="string" Value="@option">@option</MudSelectItem> }
+    </MudSelect>
+    @if (type == "custom") { <MudTextField T="string" Label="@L["Home directory"].Value" @bind-Value="path" Disabled="@busy" /> }
+    <MudTextField T="string" Label="@L["Password"].Value" InputType="InputType.Password" @bind-Value="password" Disabled="@busy" />
+    <MudButton OnClick="Save" Disabled="@(busy || string.IsNullOrWhiteSpace(password))">@L["Save"]</MudButton>
+    <MudButton OnClick="Cancel" Disabled="@busy">@L["Cancel"]</MudButton>
+}
+@code {
+    private string domain="", loadedDomain="", user="", type="domain", path="", password="";
+    private string? error;
+    private bool loaded, editing, existing, busy, disposed;
+    private IReadOnlyList<string> accounts=[];
+    protected override void OnInitialized() => Session.Changed += Changed;
+    private void Changed() => _ = InvokeAsync(() => { loaded=false; accounts=[]; Cancel(); StateHasChanged(); });
+    private bool Current(string? channel) => !disposed && Session.Connected && Session.TicketChannel == channel;
+    private async Task Load()
+    {
+        if (busy || !Session.Connected) return;
+        busy=true; loaded=false; error=null; Cancel(); var channel=Session.TicketChannel; var selected=domain;
+        try {
+            var result=await Operations.ListFtpAsync(selected);
+            if (!Current(channel)) return;
+            if (result.Status != 200) { error="FTP_LIST_FAILED"; return; }
+            var values=Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(result.Body);
+            if (values.TryGetValue("error",out var e) && e.ToString() != "0") { error="FTP_LIST_FAILED"; return; }
+            accounts=values.Where(x=>x.Key.StartsWith("list[",StringComparison.Ordinal)).SelectMany(x=>x.Value).OfType<string>().Distinct().ToArray();
+            if (values.Count != 0 && accounts.Count == 0 && !values.ContainsKey("error")) { error="INVALID_LEGACY_RESPONSE"; return; }
+            loadedDomain=selected; loaded=true;
+        } catch(HttpRequestException) { if(Current(channel)) error="UPSTREAM_UNAVAILABLE"; }
+        finally { busy=false; }
+    }
+    private void NewAccount() { Cancel(); editing=true; }
+    private void Edit(string account) { Cancel(); user=account; existing=true; editing=true; }
+    private void Cancel() { editing=existing=false; user=password=path=""; type="domain"; }
+    private async Task Save()
+    {
+        if(busy || !loaded || !Session.Connected) return;
+        var channel=Session.TicketChannel; busy=true; error=null;
+        try {
+            var input=new FtpAccountRequest(loadedDomain,user,type,password,path);
+            var result=existing ? await Operations.UpdateFtpAsync(user,input) : await Operations.CreateFtpAsync(input);
+            if(!Current(channel)) return;
+            if(result.Status is < 200 or >= 300) { error="FTP_MUTATION_FAILED"; return; }
+            HostingPanel.Api.Adapters.LegacyDomainsAdapter.AssertMutationSucceeded(result.Body);
+            Cancel(); domain=loadedDomain;
+        } catch(Exception ex) when(ex is HttpRequestException or FormatException or InvalidOperationException or HostingPanel.Api.Adapters.LegacyApiException) { if(Current(channel)) error="FTP_MUTATION_FAILED"; return; }
+        finally { password=""; busy=false; }
+        if(Current(channel)) await Load();
+    }
+    private async Task Delete(string account)
+    {
+        if(busy || !loaded || !Session.Connected) return;
+        var channel=Session.TicketChannel; busy=true; error=null;
+        try {
+            if(!await Dialogs.ConfirmResourceDeletionAsync(L["Delete"].Value,account,L["This removes the account, not its files."].Value,L["Enter the exact login name to confirm."].Value) || !Current(channel)) return;
+            var result=await Operations.DeleteFtpAsync(loadedDomain,account);
+            if(!Current(channel)) return;
+            if(result.Status is < 200 or >= 300) { error="FTP_MUTATION_FAILED"; return; }
+            HostingPanel.Api.Adapters.LegacyDomainsAdapter.AssertMutationSucceeded(result.Body);
+            domain=loadedDomain;
+        } catch(Exception ex) when(ex is HttpRequestException or FormatException or InvalidOperationException or HostingPanel.Api.Adapters.LegacyApiException) { if(Current(channel)) error="FTP_MUTATION_FAILED"; return; }
+        finally { busy=false; }
+        if(Current(channel)) await Load();
+    }
+    public void Dispose() { disposed=true; Session.Changed-=Changed; }
+}

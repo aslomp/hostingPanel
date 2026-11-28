@@ -96,6 +96,7 @@ internal static class NavigationCatalog
             Live("Domain management", "◎", "/domains"),
             Live("Email accounts", "✉", "/email-accounts"),
             Planned("File management", "▤", "file-manager"),
+            Live("SFTP accounts", "⚿", "/sftp-accounts"),
             Live("Databases", "▦", "/databases"),
             Planned("SSL certificates", "♢", "domain-ssl"),
             Live("DNS management", "◎", "/dns-zones"),

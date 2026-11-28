@@ -63,7 +63,7 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         certificateWork?.DomainChanged(domain.Id);
-        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns | ReconciliationTarget.Sftp);
         return new(202, null);
     }
 
@@ -84,10 +84,16 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
             || await db.DatabaseUsers.AnyAsync(x => x.OwnerId == target.Id, ct)
             || await db.FileAccessAccounts.AnyAsync(x => x.OwnerId == target.Id, ct))
             return new(409, "ACCOUNT_HAS_RESOURCES");
+        var sftpAccounts = await db.Set<SftpAccountRow>().Where(x => x.OwnerId == target.Id).ToListAsync(ct);
+        foreach (var sftp in sftpAccounts)
+        {
+            operations.Schedule("sftp-account", sftp.Id, "delete");
+            db.Remove(sftp);
+        }
         db.Accounts.Remove(target);
         operations.Schedule("account", target.Id, "delete", new { target.Username });
         await db.SaveChangesAsync(ct);
-        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns | ReconciliationTarget.Sftp);
         return new(202, null);
     }
 
@@ -105,11 +111,12 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
             .OrderByDescending(p => p.OwnerId == principal.Id).FirstOrDefault();
         if (assigned is null) return new(404, "PACKAGE_NOT_FOUND");
         account.PackageId = assigned.Id;
+        operations.Schedule("sftp-owner", account.Id, "update");
         var affectedDomains = await db.Domains.AsNoTracking().Where(x => x.OwnerId == account.Id).Select(x => x.Id).ToListAsync(ct);
         operations.Schedule("account", account.Id, "update", new { account.Username, package });
         await db.SaveChangesAsync(ct);
         foreach (var id in affectedDomains) certificateWork?.DomainChanged(id);
-        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns | ReconciliationTarget.Sftp);
         return new(202, null);
     }
 
@@ -118,7 +125,7 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
     {
         var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
-        if (change.Field is not ("bandwidth" or "quota" or "inode" or "nemails")
+        if (change.Field is not ("bandwidth" or "quota" or "inode" or "nemails" or "ftp")
             || !long.TryParse(change.Value, out var amount) || amount < 0) return new(400, "INVALID_LIMIT");
         var ids = await identity.VisibleAccountsAsync(principal, ct);
         var account = await db.Accounts.FirstOrDefaultAsync(x => x.Username == username && x.Kind == kind, ct);
@@ -127,9 +134,10 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         var limits = JsonSerializer.Deserialize<Dictionary<string, string>>(account.LimitsJson ?? "{}") ?? new();
         limits[change.Field] = change.Value;
         account.LimitsJson = JsonSerializer.Serialize(limits);
+        if (change.Field == "ftp") operations.Schedule("sftp-owner", account.Id, "update");
         operations.Schedule("account", account.Id, "update", new { account.Username, change.Field });
         await db.SaveChangesAsync(ct);
-        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns | ReconciliationTarget.Sftp);
         return new(202, null);
     }
 
@@ -143,9 +151,10 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         if (target is null) return new(404, "ACCOUNT_NOT_FOUND");
         if (target.Id == principal.Id || !ids.Contains(target.Id)) return new(403, "ACCESS_DENIED");
         target.Suspended = suspended;
+        operations.Schedule("sftp-owner", target.Id, "update");
         operations.Schedule("account", target.Id, "update", new { target.Username, suspended });
         await db.SaveChangesAsync(ct);
-        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns | ReconciliationTarget.Sftp);
         return new(202, null);
     }
     public async Task<AccountOverviewResult> GetAsync(string username, AuthenticationHeaderValue auth, CancellationToken ct)

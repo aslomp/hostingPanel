@@ -15,10 +15,10 @@
             <MudAlert Severity="Severity.Info">@L["Kubernetes package settings are stored; enforcement is not yet complete."]</MudAlert>
         }
         <MudTextField T="string" Label="@L["Package name"].Value" @bind-Value="name" Immediate="true" Disabled="@(busy || Package is not null)" />
-        @foreach (var key in PackageFields.Limits)
+        @foreach (var key in EffectiveLimits)
         {
             <MudStack Row="true" AlignItems="AlignItems.Center">
-                <MudNumericField T="long" Label="@L[FieldLabel(key)].Value" Value="@Number(key)" ValueChanged="@((long value) => SetNumber(key,value))" Min="0" Disabled="@(busy || Unlimited(key))" />
+                <MudNumericField T="long" Label="@L[key == "ftp" && Configuration["HostingPanel:Backend"] == "Kubernetes" ? "SFTP accounts" : FieldLabel(key)].Value" Value="@Number(key)" ValueChanged="@((long value) => SetNumber(key,value))" Min="0" Disabled="@(busy || Unlimited(key))" />
                 <MudCheckBox T="bool" Label="@L["Unlimited"].Value" Value="@Unlimited(key)" ValueChanged="@((bool value) => SetUnlimited(key,value))" Disabled="@busy" />
             </MudStack>
         }
@@ -65,7 +65,7 @@
     {
         channel = Session.TicketChannel;
         name = Package?.Name ?? "";
-        foreach (var key in PackageFields.Limits) settings[key] = Package?.Settings.GetValueOrDefault(key) ?? "0";
+        foreach (var key in EffectiveLimits) settings[key] = Package?.Settings.GetValueOrDefault(key) ?? "0";
         foreach (var key in PackageFields.Flags.Concat(Kind == "reseller" ? PackageFields.ResellerFlags : Array.Empty<string>()))
             settings[key] = Package?.Settings.GetValueOrDefault(key)?.ToUpperInvariant() == "ON" ? "ON" : "OFF";
         if (Kind == "reseller") { settings["ips"] = Package?.Settings.GetValueOrDefault("ips") ?? "0"; settings["dns"] = Package?.Settings.GetValueOrDefault("dns") ?? "OFF"; }
@@ -81,6 +81,7 @@
             }
         }
     }
+    private IEnumerable<string> EffectiveLimits => Configuration["HostingPanel:Backend"] == "Kubernetes" ? PackageFields.Limits.Concat(new[] { "sftpKeys" }) : PackageFields.Limits;
     private bool Unlimited(string key) => settings.GetValueOrDefault(key) == "unlimited";
     private long Number(string key) => long.TryParse(settings.GetValueOrDefault(key),out var n) ? n : 0;
     private void SetNumber(string key, long value) => settings[key] = value.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -90,7 +91,7 @@
         "quota" => "Disk space (MB)", "bandwidth" => "Bandwidth (MB)", "vdomains" => "Domains", "nsubdomains" => "Subdomains",
         "domainptr" => "Domain pointers", "mysql" => "Databases", "nemails" => "Email accounts", "nemailf" => "Email forwarders",
         "nemailml" => "Mailing lists", "nemailr" => "Autoresponders", "ftp" => "FTP accounts",
-        "aftp" => "Anonymous FTP", "dnscontrol" => "DNS management", "suspend_at_limit" => "Suspend at limit",
+        "sftpKeys" => "SSH keys per SFTP account", "aftp" => "Anonymous FTP", "dnscontrol" => "DNS management", "suspend_at_limit" => "Suspend at limit",
         "userssh" => "User SSH", "serverip" => "Server IP", _ => key.ToUpperInvariant()
     };
     private void Cancel() => MudDialog.Cancel();

@@ -51,6 +51,38 @@ public sealed class NfsDirectoryProvisioner(IConfiguration configuration)
         return (uid, gid);
     }
 
+    // Read-only preflight. The runtime filesystem implementation must independently
+    // enforce confinement on every operation; this check cannot prevent concurrent renames.
+    internal async Task<(int Uid, int Gid)> ValidateSftpHomeAsync(
+        string username, string relativePath, CancellationToken ct)
+    {
+        if (!ValidPart(username, false) || !KubernetesSftpAccounts.ValidRelativePath(relativePath))
+            throw new InvalidOperationException("Invalid SFTP storage path.");
+        var configured = configuration["KubernetesHosting:NfsProvisioningPath"];
+        if (!OperatingSystem.IsLinux() || string.IsNullOrWhiteSpace(configured) || !Path.IsPathFullyQualified(configured))
+            throw new InvalidOperationException("Missing authorized storage mount.");
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(configured));
+        if (root == "/" || !Directory.Exists(root))
+            throw new InvalidOperationException("Storage root unavailable.");
+        for (DirectoryInfo? ancestor = new(root); ancestor is not null; ancestor = ancestor.Parent)
+            if (ancestor.LinkTarget is not null || !ancestor.Exists)
+                throw new InvalidOperationException("Unsafe storage ancestor.");
+        if ((File.GetUnixFileMode(root) & (UnixFileMode.GroupWrite | UnixFileMode.OtherWrite)) != 0)
+            throw new InvalidOperationException("Unsafe storage root permissions.");
+        var current = Path.Combine(root, username);
+        var (uid, gid) = await OwnershipAsync(current, ct);
+        if (uid <= 0 || gid <= 0) throw new InvalidOperationException("Invalid hosted account identity.");
+        await ValidateDirectoryAsync(current, uid, gid, ct);
+        if (relativePath.Length != 0)
+            foreach (var component in relativePath.Split('/'))
+            {
+                ct.ThrowIfCancellationRequested();
+                current = Path.Combine(current, component);
+                await ValidateDirectoryAsync(current, uid, gid, ct);
+            }
+        return (uid, gid);
+    }
+
     // Fail closed on unsafe ancestors. GNU rm does not follow symlinks within
     // the tree; --one-file-system prevents crossing nested mounts.
     public async Task DeleteAsync(string username, string domain, CancellationToken ct)

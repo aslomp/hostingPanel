@@ -89,3 +89,25 @@ Domain settings `mailAutoPublish` and `mailAutoRotate` are independent desired-s
 - Subdomain UI uses `ISubdomains`; both Kubernetes and DirectAdmin register providers. The legacy CMD_API_SUBDOMAINS endpoint supports list, create and single deletion with contents=yes in Kubernetes; DirectAdmin forwards upstream.
 
 Kubernetes subdomain ownership uses an explicit provider-owned `SubdomainBindings` relation (child HostedDomain, parent HostedDomain, normalized label). The parent determines the hosting account; the caller cannot specify an owner. The scoped capability authenticates and checks the existing account hierarchy before inventory or mutation validation. Nested subdomains are not supported in this stage. Generic domain deletion refuses linked children and parents; remove children using the subdomain workflow first. Create persists the child and relation atomically with website intent, then signals the existing website channel. The worker provisions the separate full-hostname documentroot, shared Apache vhost, HTTPRoute and account PHP runtime. DNS uses a CNAME in the owned parent zone; missing parent zones defer durable domain-dns work until DNS invalidation. Subdomain creation copies the parent's certificate enablement, provider and key type into independent child ACME intent, queues the child ID after commit, and uses the existing CertificateReconciler. Subdomain deletion stages website, certificate, DNS and storage cleanup using existing workers. HTTP 202 indicates accepted desired state, not DNS or serving readiness.
+
+- Optional SFTPGo Helm infrastructure: one StatefulSet, persistent state and host keys, separate internal management service and SFTP service. NFS is deliberately read-only pending UID/GID and tenant-isolation validation. No account provisioning or customer access is implemented yet.
+
+- SFTPGo internal management client supports admin token exchange, exact user lookup, create/update/delete with read-back and disabled-by-default managed users. No public API, account lifecycle wiring or customer activation yet. Internal HTTP transport requires enforced NetworkPolicy and a trusted cluster network; TLS remains a deployment follow-up.
+
+- Kubernetes SFTP account UI stores owner-scoped pending account definitions and public keys in SQLite; the existing ftp package/account limit is enforced on creation. No upstream activation or reconciliation yet. DirectAdmin SFTP management is not supported by this UI.
+
+- Pending SFTP accounts support an optional relative home directory, stored in the provider schema. Absolute paths, empty path components, traversal and unsupported characters are rejected. Storage existence, ownership and symlink confinement must be verified before activation; no upstream user is activated by this feature.
+
+- SFTP directory preflight reuses NFS provisioning ownership and permission checks at account creation and before disabled-user provisioning. It rejects missing directories, symlink components, root ownership and mismatching descendant UID/GID; no storage changes are made. This is not a runtime confinement guarantee against concurrent renames. Activation remains disabled pending live filesystem isolation and ownership validation.
+
+- Official legacy CMD_API_SSH_KEYS GET/POST is forwarded unchanged to DirectAdmin using caller credentials. Kubernetes rejects that operation (system SSH keys are not virtual SFTP accounts). Separate /hosting/file-access/sftp routes expose the owner-scoped pending SFTP account capability; no pinned Swagger changes or FTP password compatibility translation.
+
+- SFTPGo reconciliation consumes durable account, owner and package operations through the shared channel loop; initial startup reconciles existing rows. Users remain disabled pending runtime filesystem validation. No idle polling.
+
+- SFTP account overview displays pending, failed or completed-disabled provisioning status from the outbox and refreshes on existing invalidations. Removal requests upstream connection termination and verifies no matching connections remain. Zero entitlement revokes users. Live validation pending; activation remains blocked.
+
+SFTPGo remains disabled by default; enabling it now defaults to write mode and public-key account activation. Set `sftpgo.enableWrites: false` to stage disabled users on read-only storage. Production isolation acceptance remains outstanding.
+
+DirectAdmin native SSH authorized-key management: `ISshAuthorizedKeys`, `/hosting/file-access/ssh-keys`, caller-scoped upstream read/authorize/revoke with read-back. Does not grant SFTP-only confinement; server SSH policy remains authoritative. Virtual SFTP accounts remain Kubernetes-only.
+
+File transfer compatibility: DirectAdmin uses native FTP; Kubernetes exposes domain-scoped FTP compatibility reads/deletes and public-key-only creates/updates through the SFTP outbox. The legacy FTP controller forwards to the selected backend. Kubernetes does not accept FTP passwords or claim to implement the FTP wire protocol.
