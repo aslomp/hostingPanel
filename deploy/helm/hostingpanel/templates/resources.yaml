@@ -254,7 +254,7 @@ spec:
         - name: sftp-jails
           nfs:
             server: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}
-            path: {{ required "sftp.jailExport is required" .Values.sftp.jailExport | quote }}
+            path: {{ default "/srv/hosting/sftp-jails" .Values.sftp.jailExport | quote }}
             readOnly: true
         {{- end }}
         - name: data
