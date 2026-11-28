@@ -40,7 +40,9 @@ jobs:
           grep -q 'kind: StatefulSet' /tmp/openssh.yaml
           grep -q 'type: LoadBalancer' /tmp/openssh.yaml
           grep -q 'externalTrafficPolicy: Local' /tmp/openssh.yaml
-          grep -q 'port: 2222, targetPort: sftp' /tmp/openssh.yaml
+          grep -q 'port: 2223, targetPort: sftp' /tmp/openssh.yaml
+          helm template admin deploy/helm/hostingpanel -n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.gatewayName=example-gateway --set sftp.jailExport=/exports/sftp-jails --set sftp.image=example.invalid/openssh:ci --set sftp.existingSecret=ssh-hostkeys --set sftp.service.port=2300 --show-only templates/openssh.yaml > /tmp/openssh-custom.yaml
+          grep -q 'port: 2300, targetPort: sftp' /tmp/openssh-custom.yaml
           grep -q 'kind: NetworkPolicy' /tmp/openssh.yaml
           grep -q 'SYS_CHROOT' /tmp/openssh.yaml
           ! grep -q 'SYS_ADMIN\|DAC_OVERRIDE\|CHOWN\|sftpgo' /tmp/openssh.yaml

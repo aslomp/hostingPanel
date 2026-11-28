@@ -150,7 +150,7 @@ sftp:
   existingSecret: "" # ssh_host_ed25519_key
   service:
     type: LoadBalancer
-    port: 2222 # host administration keeps TCP 22
+    port: 2223 # TCP 22 is host SSH; TCP 2222 is DirectAdmin
     externalTrafficPolicy: Local
   resources:
     requests: {cpu: 100m, memory: 128Mi}
