@@ -22,7 +22,7 @@ stop_managed_build_runtime() {
 
 build_panel_image() (
   set -Eeuo pipefail
-  local image=$1 marker=$2 managed=false
+  local image=$1 marker=$2 dockerfile=${3:-Dockerfile} managed=false
   if [[ -f "$marker" ]]; then
     managed=true
   elif ! build_runtime_present; then
@@ -50,6 +50,6 @@ build_panel_image() (
   apt-get install -y docker.io
   systemctl start docker.service
   # Always use the local Docker socket, not an operator's remote Docker context.
-  docker --host unix:///var/run/docker.sock build -t "$image" "$here/.."
+  docker --host unix:///var/run/docker.sock build -f "$here/../$dockerfile" -t "$image" "$here/.."
   docker --host unix:///var/run/docker.sock save "$image" | k3s ctr images import -
 )

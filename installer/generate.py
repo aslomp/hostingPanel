@@ -7,6 +7,7 @@ import re
 import sys
 import os
 import tempfile
+from urllib.parse import urlsplit
 
 def write(path, value):
     path = pathlib.Path(path)
@@ -58,6 +59,17 @@ def validate(c):
         raise ValueError("Duplicate pool devices")
     if not c["acmeStaging"] and c["panelTag"] == "latest":
         raise ValueError("Production requires a versioned panel image")
+    if type(c.get("accountingSpoolEnabled", False)) is not bool or type(c.get("buildAccountingImage", True)) is not bool:
+        raise ValueError("Accounting switches must be boolean")
+    if c.get("accountingSpoolEnabled", False):
+        endpoint = urlsplit(c.get("accountingEndpoint", ""))
+        if endpoint.scheme != "https" or not endpoint.hostname or endpoint.username or endpoint.password or endpoint.query or endpoint.fragment or endpoint.path not in ("", "/"):
+            raise ValueError("Accounting requires a trusted HTTPS origin")
+        image = c.get("accountingImage", "")
+        if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._:/-]*", image) or ":" not in image.rsplit("/", 1)[-1]:
+            raise ValueError("Accounting requires a tagged image")
+        if not c.get("buildAccountingImage", True) and image.endswith(":installer-local"):
+            raise ValueError("Remote nodes require a published accounting image")
     if c["localStorage"] and c["clusterHost"] != c["storageHost"]:
         raise ValueError("Local storage must use the cluster host address")
 
@@ -134,6 +146,9 @@ def generate(c, base):
             gatewayName="external",gatewayNamespace=namespace,panelRoute=dict(enabled=bool(c["panelHostname"]),hostname=c["panelHostname"],listener="https")),
         powerDns=dict(enabled=True,serviceType="ClusterIP",externalIPs=[c["clusterHost"]],storageClassName="zfs-iscsi",webIp=c["webIp"],ns1=c["ns1"],ns2=c["ns2"],autoCreateZones=bool(c["ns1"] and c["ns2"] and c["ns1"] != c["ns2"])),
         certManager=dict(enabled=True),mariadb=dict(enabled=True,storageClassName="zfs-iscsi",existingSecret="hostingpanel-mariadb",provisioningSecret="hostingpanel-mariadb-provisioning"))
+    if c.get("accountingSpoolEnabled", False):
+        values["kubernetesHosting"]["accountingSpool"] = dict(enabled=True, path="/srv/hosting/accounting",
+            image=c["accountingImage"], endpoint=c["accountingEndpoint"], existingSecret="hostingpanel-accounting")
     write(base/"hosting-values.json",values)
 
 if __name__ == "__main__":

@@ -44,4 +44,6 @@ export existing=true fail_build=false
 build_panel_image sample:latest "$marker"
 test ! -e "$marker"
 ! grep -q disable "$log"
+build_panel_image sample:accounting "$marker" Dockerfile.apache-accounting
+test ! -e "$marker"
 echo "Build runtime ownership and cleanup tests passed."

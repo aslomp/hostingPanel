@@ -48,8 +48,21 @@ install_storage() {
   done
   chown 1654:1654 /srv/hosting/home /srv/hosting/apache
   chmod 0755 /srv/hosting/home /srv/hosting/apache
+  if [[ $(get accountingSpoolEnabled) == True ]]; then
+    zfs list -H "$pool/hosting/accounting" >/dev/null 2>&1 || zfs create -o mountpoint=/srv/hosting/accounting -o sync=always "$pool/hosting/accounting"
+    [[ $(zfs get -H -o value mountpoint "$pool/hosting/accounting") == /srv/hosting/accounting ]] || die "Unexpected accounting mountpoint"
+    mountpoint -q /srv/hosting/accounting || die "Accounting dataset not mounted"
+    [[ $(zfs get -H -o value sync "$pool/hosting/accounting") == always ]] || die "Accounting dataset requires sync=always"
+    chown 1001:1001 /srv/hosting/accounting
+    chmod 0700 /srv/hosting/accounting
+  fi
   install -d /etc/exports.d
   printf '/srv/hosting/home %s(rw,sync,root_squash,no_subtree_check)\n/srv/hosting/apache %s(rw,sync,root_squash,no_subtree_check)\n' "$network" "$network" > /etc/exports.d/hostingpanel.exports
+  # Preserve an existing accounting export on reruns, even when ingestion is disabled.
+  if zfs list -H "$pool/hosting/accounting" >/dev/null 2>&1; then
+    [[ $(zfs get -H -o value mountpoint "$pool/hosting/accounting") == /srv/hosting/accounting ]] || die "Unexpected accounting mountpoint"
+    printf '/srv/hosting/accounting %s(rw,sync,root_squash,no_subtree_check)\n' "$network" >> /etc/exports.d/hostingpanel.exports
+  fi
   local base
   base=$(dirname "$config")
   [[ -f "$base/iscsi-chap" ]] || openssl rand -hex 8 > "$base/iscsi-chap"

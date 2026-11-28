@@ -60,6 +60,17 @@ install_platform() {
       printf "%s %s\n" "$revision" "$image" > "$stamp"
     fi
   fi
+  if [[ $(get accountingSpoolEnabled) == True ]]; then
+    # The bootstrap self-signed certificate is not a trusted accounting endpoint.
+    # An explicitly configured, already trusted endpoint is required before switching.
+    local accounting_endpoint
+    accounting_endpoint=$(require accountingEndpoint)
+    curl --fail --silent --show-error --max-time 15 --proto '=https' "${accounting_endpoint%/}/healthz" >/dev/null || die "Accounting HTTPS endpoint is not trusted/reachable; enable after panel bootstrap"
+    ensure_secret hostingpanel-accounting token
+    if [[ $(get buildAccountingImage) == True ]]; then
+      build_panel_image "$(require accountingImage)" "$base/installer-owned-docker" Dockerfile.apache-accounting
+    fi
+  fi
   helm template admin "$here/../deploy/helm/hostingpanel" -n hosting -f "$base/hosting-values.json" >/dev/null
   install_panel_with_progress "$base"
   getent ahostsv4 registry-1.docker.io >/dev/null || die "Host DNS resolution failed after panel deployment"
