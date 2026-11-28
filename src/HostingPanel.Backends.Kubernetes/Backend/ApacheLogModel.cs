@@ -28,6 +28,11 @@ internal sealed class ApacheMonthlyUsage
     public long SentBytes { get; set; }
     public long Requests { get; set; }
 }
+internal sealed class ApacheSegmentReceipt
+{
+    public Guid Id { get; set; }
+    public string Digest { get; set; } = "";
+}
 internal sealed class ApacheLogModel : IHostingPanelModelExtension, IHostingPanelSchemaExtension
 {
     public string Provider => "Kubernetes.ApacheLogs";
@@ -37,10 +42,12 @@ internal sealed class ApacheLogModel : IHostingPanelModelExtension, IHostingPane
         CREATE INDEX IF NOT EXISTS "IX_ApacheLogRows_DomainId_Kind_Id" ON "ApacheLogRows" ("DomainId","Kind","Id");
         CREATE TABLE IF NOT EXISTS "ApacheLogReceipts" ("Source" TEXT NOT NULL, "Timestamp" TEXT NOT NULL, "Digest" TEXT NOT NULL, "Occurrence" INTEGER NOT NULL, PRIMARY KEY ("Source","Timestamp","Digest","Occurrence"));
         CREATE TABLE IF NOT EXISTS "ApacheMonthlyUsage" ("OwnerId" TEXT NOT NULL, "DomainId" TEXT NOT NULL, "Month" TEXT NOT NULL, "ReceivedBytes" INTEGER NOT NULL, "SentBytes" INTEGER NOT NULL, "Requests" INTEGER NOT NULL, PRIMARY KEY ("OwnerId","DomainId","Month"));
-        """)
+        """),
+        new(2, """CREATE TABLE IF NOT EXISTS "ApacheSegmentReceipts" ("Id" TEXT NOT NULL PRIMARY KEY, "Digest" TEXT NOT NULL);""")
     ];
     public void Configure(ModelBuilder model)
     {
+        model.Entity<ApacheSegmentReceipt>(e => { e.ToTable("ApacheSegmentReceipts"); e.HasKey(x => x.Id); });
         model.Entity<ApacheLogRow>(e => { e.ToTable("ApacheLogRows"); e.HasKey(x => x.Id); e.HasIndex(x => new { x.DomainId,x.Kind,x.Id }); });
         model.Entity<ApacheLogReceipt>(e => { e.ToTable("ApacheLogReceipts"); e.HasKey(x => new { x.Source,x.Timestamp,x.Digest,x.Occurrence }); });
         model.Entity<ApacheMonthlyUsage>(e => { e.ToTable("ApacheMonthlyUsage"); e.HasKey(x => new { x.OwnerId,x.DomainId,x.Month }); });

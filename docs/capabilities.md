@@ -117,3 +117,5 @@ Apache accounting logging (Kubernetes): per-vhost structured stdout access recor
 Kubernetes website logs: owner-scoped access/error log API and domain UI, independent pod watch and log following, durable SQLite receipts and monthly HTTP usage totals. Current-container rotation/replacement loss is possible; not suitable for hard quota enforcement yet. DirectAdmin log reads remain unsupported in this capability.
 
 HTTP usage: batched SQLite ingestion, configurable raw log retention, owner-scoped monthly HTTP usage API and account overview fields. Reports partial measurements explicitly; full DA user usage contract remains unsupported until disk/mail/other usage is measured.
+
+Internal accounting ingestion supports authenticated immutable segment submission and transactionally idempotent acknowledgement. Disabled by default; producer and deployment wiring remain pending.

@@ -19,14 +19,14 @@ internal sealed class ApacheLogCollector(IServiceScopeFactory scopes, IConfigura
     private sealed record Worker(Source Source,CancellationTokenSource Stop,Task Task);
     private readonly Dictionary<string,Worker> workers = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim writer = new(1);
-    private sealed record Pending(string Source,string Timestamp,string Digest,int Ordinal,ApacheLogRow Row,ApacheAccessRecord? Access);
+    internal sealed record Pending(string Source,string Timestamp,string Digest,int Ordinal,ApacheLogRow Row,ApacheAccessRecord? Access);
     private DateTimeOffset nextRetention = DateTimeOffset.MinValue;
     private int RetentionDays => Math.Max(1, configuration.GetValue("KubernetesHosting:LogRetentionDays",30));
     private string Namespace => configuration["KubernetesHosting:Namespace"] ?? "hosting";
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        if (!configuration.GetValue<bool>("KubernetesHosting:Enabled")) return;
+        if (!configuration.GetValue<bool>("KubernetesHosting:Enabled") || configuration.GetValue<bool>("KubernetesHosting:DurableLogIngestion")) return;
         try
         {
             await resources.WatchApacheLogPodsAsync(Namespace, json => {
@@ -149,7 +149,7 @@ internal sealed class ApacheLogCollector(IServiceScopeFactory scopes, IConfigura
         return true;
     }
 
-    private async Task PersistAsync(IReadOnlyList<Pending> batch,CancellationToken ct)
+    internal async Task PersistAsync(IReadOnlyList<Pending> batch,CancellationToken ct, Guid? segmentId = null, string? segmentDigest = null)
     {
         await writer.WaitAsync(ct);
         try
@@ -157,6 +157,16 @@ internal sealed class ApacheLogCollector(IServiceScopeFactory scopes, IConfigura
             using var scope = scopes.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
             await using var tx = await db.Database.BeginTransactionAsync(ct);
+            if (segmentId is { } segment)
+            {
+                var receipt = await db.Set<ApacheSegmentReceipt>().FindAsync([segment],ct);
+                if (receipt is not null)
+                {
+                    if (receipt.Digest != segmentDigest) throw new InvalidDataException("Conflicting accounting segment.");
+                    return;
+                }
+                db.Add(new ApacheSegmentReceipt { Id=segment, Digest=segmentDigest ?? throw new InvalidDataException("Missing segment digest.") });
+            }
             var ids = batch.Select(x=>x.Row.DomainId).Distinct().ToArray();
             var owners = await db.Domains.AsNoTracking().Where(x=>ids.Contains(x.Id)).ToDictionaryAsync(x=>x.Id,x=>x.OwnerId,ct);
             var now = DateTimeOffset.UtcNow;

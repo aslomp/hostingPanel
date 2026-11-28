@@ -31,7 +31,9 @@ public static class KubernetesRegistration
     services.AddScoped<IDomainLogs, KubernetesDomainLogs>();
     services.AddScoped<KubernetesHttpUsage>();
     services.AddScoped<IHttpUsage>(sp=>sp.GetRequiredService<KubernetesHttpUsage>());
-    services.AddHostedService<ApacheLogCollector>();
+    services.AddSingleton<ApacheLogCollector>();
+        services.AddHostedService(sp => sp.GetRequiredService<ApacheLogCollector>());
+        services.AddSingleton<IApacheSegmentIngestion, ApacheSegmentIngestion>();
     services.AddSingleton<MailMutationGate>();
     services.AddScoped<SftpGoClient>();
     services.AddHostedService<SftpGoReconciler>();
