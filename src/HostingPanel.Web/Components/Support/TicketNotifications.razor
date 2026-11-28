@@ -51,8 +51,11 @@
         }));
         hub.Reconnected += async _ =>
         {
-            if (joinedChannel == channel)
+            if (joinedChannel == channel && Session.TicketChannel == channel)
+            {
                 await hub.InvokeAsync("Join", channel);
+                await InvokeAsync(Session.NotifyTicketInboxChanged);
+            }
         };
         try
         {
@@ -60,6 +63,7 @@
             await hub.InvokeAsync("Join", channel);
             connection = hub;
             joinedChannel = channel;
+            Session.NotifyTicketInboxChanged();
             StateHasChanged();
         }
         catch

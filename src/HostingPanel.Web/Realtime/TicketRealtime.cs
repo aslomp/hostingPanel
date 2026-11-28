@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text.Json;
 using HostingPanel.Web.Services;
+using HostingPanel.Api;
+using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 
@@ -14,16 +16,20 @@ namespace HostingPanel.Web.Realtime;
 /// </summary>
 public sealed class TicketChannelRegistry
 {
-    private readonly ConcurrentDictionary<string, byte> channels = new(StringComparer.Ordinal);
+    private sealed record Subscription(string? Account, Func<bool>? Connected);
+    private readonly ConcurrentDictionary<string, Subscription> channels = new(StringComparer.Ordinal);
 
-    public string Register()
+    public string Register(string? account = null, Func<bool>? connected = null)
     {
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-        channels[token] = 0;
+        channels[token] = new(account, connected);
         return token;
     }
 
-    public bool IsActive(string token) => !string.IsNullOrEmpty(token) && channels.ContainsKey(token);
+    public bool IsActive(string token) => !string.IsNullOrEmpty(token) && channels.TryGetValue(token, out var subscription) && (subscription.Connected?.Invoke() ?? true);
+
+    public string[] ForAccount(string account) => channels.Where(x =>
+        string.Equals(x.Value.Account, account, StringComparison.Ordinal) && IsActive(x.Key)).Select(x => x.Key).ToArray();
     public void Revoke(string? token)
     {
         if (token is not null) channels.TryRemove(token, out _);
@@ -51,13 +57,18 @@ public sealed class TicketLiveMonitor(
     PanelSession session,
     TicketOperations tickets,
     TicketChannelRegistry channels,
-    IHubContext<TicketHub> hub,
+    TicketEvents events,
+    IConfiguration configuration,
     ILogger<TicketLiveMonitor> logger) : IAsyncDisposable
 {
     private readonly CancellationTokenSource shutdown = new();
     private Task? work;
 
-    public void Start() => work ??= Task.Run(() => RunAsync(shutdown.Token));
+    public void Start()
+    {
+        if (string.Equals(configuration["HostingPanel:Backend"] ?? "DirectAdmin", "DirectAdmin", StringComparison.OrdinalIgnoreCase))
+            work ??= Task.Run(() => RunAsync(shutdown.Token));
+    }
 
     private async Task RunAsync(CancellationToken ct)
     {
@@ -115,9 +126,7 @@ public sealed class TicketLiveMonitor(
                     {
                         if (!session.Connected || session.TicketChannel != channel || !channels.IsActive(channel))
                             return baselineReady;
-                        await hub.Clients.Group(channel).SendAsync("InboxChanged",
-                            new TicketSignal(value.Kind, value.Id, value.Subject,
-                                DateTimeOffset.UtcNow), ct);
+                        events.ChannelChanged(channel);
                     }
             }
             known.Clear();
@@ -141,5 +150,31 @@ public sealed class TicketLiveMonitor(
         await shutdown.CancelAsync();
         if (work is not null) await work;
         shutdown.Dispose();
+    }
+}
+
+// The single channel consumer delivers invalidations, never ticket content.
+// The UI must re-read the authorized inbox. Revoked tokens are not addressed.
+public sealed class TicketSignalDispatcher(TicketEvents events, TicketChannelRegistry channels,
+    IHubContext<TicketHub> hub, ILogger<TicketSignalDispatcher> logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken ct)
+    {
+        await foreach (var change in events.Reader.ReadAllAsync(ct))
+        {
+            var targets = change.Account is { } account ? channels.ForAccount(account)
+                : change.Channel is { } channel ? new[] { channel } : [];
+            foreach (var target in targets)
+            {
+                if (!channels.IsActive(target)) continue;
+                try
+                {
+                    await hub.Clients.Group(target).SendAsync("InboxChanged",
+                        new TicketSignal("invalidation", 0, "", DateTimeOffset.UtcNow), ct);
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                { logger.LogWarning(ex, "Ticket notification delivery failed"); }
+            }
+        }
     }
 }

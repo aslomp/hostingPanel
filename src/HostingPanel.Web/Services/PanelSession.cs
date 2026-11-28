@@ -38,10 +38,10 @@ public sealed class PanelSession(TicketChannelRegistry ticketChannels, PanelSess
         if (string.IsNullOrWhiteSpace(loginKey) || !IsValidAccountName(username))
             throw new ArgumentException("A valid username and login key are required.");
         ticketChannels.Revoke(_ticketChannel);
-        _ticketChannel = ticketChannels.Register();
         _username = username.Trim();
         _loginKey = loginKey;
         _impersonatedUsername = null;
+        _ticketChannel = ticketChannels.Register(_username, () => Connected);
         NotifyChanged();
     }
 
@@ -80,8 +80,8 @@ public sealed class PanelSession(TicketChannelRegistry ticketChannels, PanelSess
     internal void SetImpersonation(string? username)
     {
         ticketChannels.Revoke(_ticketChannel);
-        _ticketChannel = ticketChannels.Register();
         _impersonatedUsername = username;
+        _ticketChannel = ticketChannels.Register(Username, () => Connected);
         NotifyChanged();
     }
 }
