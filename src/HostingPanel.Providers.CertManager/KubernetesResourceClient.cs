@@ -222,6 +222,21 @@ public sealed class KubernetesResourceClient : IDisposable
         return false;
     }
 
+    public Task<Stream> FollowApacheLogAsync(string ns, string name, CancellationToken ct) =>
+        Api.CoreV1.ReadNamespacedPodLogAsync(name, ns, container: "apache", follow: true, timestamps: true, cancellationToken: ct);
+
+    // Independent observer: do not share the website reconciler's snapshot cache.
+    public Task WatchApacheLogPodsAsync(string ns, Action<string> snapshot, Action<WatchEventType, string> observe, CancellationToken ct)
+    {
+        const string selector = "app.kubernetes.io/name=apache-baseline";
+        return RunWatchAsync<V1Pod>(
+            token => ListPodsAsync(ns, selector, token),
+            (rv, token) => Api.CoreV1.ListNamespacedPodWithHttpMessagesAsync(ns, labelSelector: selector,
+                resourceVersion: rv, allowWatchBookmarks: true, watch: true, timeoutSeconds: 300, cancellationToken: token)
+                .WatchAsync<V1Pod, V1PodList>(onError: e => throw new InvalidOperationException("Apache log pod watch failed.", e), cancellationToken: token),
+            snapshot, (kind, item) => observe(kind, KubernetesJson.Serialize(item)), ct);
+    }
+
     public Task WatchApachePodsAsync(string ns, Action changed, CancellationToken ct)
     {
         const string selector = "app.kubernetes.io/name=apache-baseline";

@@ -16,6 +16,12 @@ public static class ApacheAccessAccounting
         return $"CustomLog /proc/self/fd/1 \"{Prefix} {accountId:N} {domainId:N} %{{end:sec}}t %>s %I %O %D\"";
     }
 
+    public static string ErrorDirective(Guid accountId, Guid domainId)
+    {
+        if (accountId == Guid.Empty || domainId == Guid.Empty) throw new ArgumentException("Missing logging identity.");
+        return $"ErrorLog /proc/self/fd/2\nErrorLogFormat \"HP_ERROR_V1 {accountId:N} {domainId:N} [%l] %M\"";
+    }
+
     public static bool TryParse(string line, out ApacheAccessRecord? record)
     {
         record = null;

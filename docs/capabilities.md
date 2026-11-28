@@ -113,3 +113,5 @@ DirectAdmin native SSH authorized-key management: `ISshAuthorizedKeys`, `/hostin
 File transfer compatibility: DirectAdmin uses native FTP; Kubernetes exposes domain-scoped FTP compatibility reads/deletes and public-key-only creates/updates through the SFTP outbox. The legacy FTP controller forwards to the selected backend. Kubernetes does not accept FTP passwords or claim to implement the FTP wire protocol.
 
 Apache accounting logging (Kubernetes): per-vhost structured stdout access records contain immutable account/domain IDs, completion time, final HTTP status, received/sent bytes (mod_logio) and duration. No request URI or credentials in these access records. Parser and Apache smoke coverage provided. Durable collection, aggregation, reporting and quota enforcement are not implemented yet; stdout rotation can lose records.
+
+Kubernetes website logs: owner-scoped access/error log API and domain UI, independent pod watch and log following, durable SQLite receipts and monthly HTTP usage totals. Current-container rotation/replacement loss is possible; not suitable for hard quota enforcement yet. DirectAdmin log reads remain unsupported in this capability.
