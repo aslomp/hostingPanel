@@ -121,3 +121,5 @@ HTTP usage: batched SQLite ingestion, configurable raw log retention, owner-scop
 Internal accounting ingestion supports authenticated immutable segment submission and transactionally idempotent acknowledgement. Disabled by default; producer and deployment wiring remain pending.
 
 Optional Apache piped accounting producer and dedicated NFS spool: immutable sealed segments replay on startup and retry until committed acknowledgement. Requires Python-capable Apache image, prepared NFS export, HTTPS endpoint and secret. Live failure/recovery testing and hard quota enforcement remain open.
+
+A dedicated Apache accounting Dockerfile and isolated spool recovery tests are included; image distribution remains operator-managed.

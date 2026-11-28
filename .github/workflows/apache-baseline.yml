@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'deploy/helm/**'
+      - 'Dockerfile.apache-accounting'
+      - 'tests/test_accounting_spool.py'
       - 'src/HostingPanel.Backends.Kubernetes/**'
       - '.github/workflows/apache-baseline.yml'
   workflow_dispatch:
@@ -14,6 +16,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Verify accounting spool recovery and build Apache image
+        run: |
+          python3 tests/test_accounting_spool.py
+          docker build -f Dockerfile.apache-accounting -t hostingpanel-apache-accounting:ci .
+          docker run --rm --entrypoint /usr/bin/python3 hostingpanel-apache-accounting:ci --version
       - name: Render chart
         run: |
           helm template smoke deploy/helm/hostingpanel --namespace hosting --set backend=Kubernetes --set kubernetesHosting.enabled=true --set kubernetesHosting.nfsServer=192.0.2.1 --set kubernetesHosting.nfsPath=/home --set kubernetesHosting.gatewayName=smoke --set kubernetesHosting.apacheConfigPath=/exports/apache-config --set powerDns.enabled=false --set certManager.enabled=false > /tmp/hosting-rendered.yaml
