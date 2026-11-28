@@ -1,0 +1,101 @@
+{{- if .Values.sftpgo.enabled }}
+{{- fail "SFTPGo has been retired: disable sftpgo.enabled, supply sftp.image and sftp.existingSecret, then enable sftp.enabled" }}
+{{- end }}
+{{- if and (eq .Values.backend "Kubernetes") .Values.kubernetesHosting.enabled .Values.sftp.enabled }}
+{{- $s := .Values.sftp }}
+{{- $name := printf "%s-sftp" .Release.Name | trunc 54 | trimSuffix "-" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+spec:
+  type: {{ $s.service.type }}
+  selector:
+    hostingpanel/sftp-workload: {{ $name }}
+  ports:
+    - {name: sftp, port: {{ $s.service.port }}, targetPort: sftp}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-headless
+spec:
+  clusterIP: None
+  selector:
+    hostingpanel/sftp-workload: {{ $name }}
+  ports:
+    - {name: sftp, port: 2022, targetPort: sftp}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels:
+    hostingpanel/component: openssh
+    hostingpanel/sftp-workload: {{ $name }}
+spec:
+  replicas: 1
+  serviceName: {{ $name }}-headless
+  selector:
+    matchLabels:
+      hostingpanel/sftp-workload: {{ $name }}
+  template:
+    metadata:
+      labels:
+        hostingpanel/sftp-workload: {{ $name }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: openssh
+          image: {{ required "sftp.image is required (Dockerfile.openssh)" $s.image | quote }}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+              add: [SETUID, SETGID, SYS_CHROOT, KILL]
+          ports:
+            - {name: sftp, containerPort: 2022}
+          readinessProbe:
+            tcpSocket: {port: sftp}
+          resources: {{ toYaml $s.resources | nindent 12 }}
+          volumeMounts:
+            - {name: config, mountPath: /etc/hostingpanel, readOnly: true}
+            - {name: hostkeys, mountPath: /run/hostingpanel-hostkeys, readOnly: true}
+            - {name: jails, mountPath: /jails, readOnly: {{ not $s.enableWrites }}}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $name }}-accounts
+            defaultMode: 0444
+        - name: hostkeys
+          secret:
+            secretName: {{ required "sftp.existingSecret is required" $s.existingSecret | quote }}
+            defaultMode: 0400
+        - name: jails
+          nfs:
+            server: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}
+            path: {{ required "sftp.jailExport is required" $s.jailExport | quote }}
+            readOnly: {{ not $s.enableWrites }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+spec:
+  podSelector:
+    matchLabels:
+      hostingpanel/sftp-workload: {{ $name }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - ports:
+        - {protocol: TCP, port: 2022}
+  egress: []
+{{- end }}

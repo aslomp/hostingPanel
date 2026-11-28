@@ -83,6 +83,35 @@ public sealed class NfsDirectoryProvisioner(IConfiguration configuration)
         return (uid, gid);
     }
 
+    // Jail layout is storage-admin owned. Never mutate existing customer-owned paths.
+    internal async Task ValidateOpenSshJailAsync(string login, string owner, string relativePath,
+        int uid, int gid, CancellationToken ct)
+    {
+        if (!login.StartsWith("sftp-", StringComparison.Ordinal) || login.Length != 37 ||
+            !Guid.TryParseExact(login[5..], "N", out _) || !ValidPart(owner, false) ||
+            !KubernetesSftpAccounts.ValidRelativePath(relativePath))
+            throw new InvalidOperationException("Invalid SFTP jail identity.");
+        var root = configuration["OpenSsh:JailProvisioningPath"];
+        if (string.IsNullOrWhiteSpace(root) || !Path.IsPathFullyQualified(root))
+            throw new InvalidOperationException("Missing SFTP jail export.");
+        var jail = Path.Combine(root, login);
+        foreach (var path in new[] { root, jail })
+        {
+            var identity = await OwnershipAsync(path, ct);
+            if (identity.Uid != 0 || (File.GetUnixFileMode(path) & (UnixFileMode.GroupWrite | UnixFileMode.OtherWrite)) != 0)
+                throw new InvalidOperationException("SFTP jail ancestor is not root-owned and protected.");
+        }
+        var data = Path.Combine(jail, "data");
+        await ValidateDirectoryAsync(data, uid, gid, ct);
+        var expected = Path.Combine(configuration["KubernetesHosting:NfsProvisioningPath"]!, owner, relativePath);
+        // Inode equality is a consistency check, not proof of export identity.
+        // The trusted storage operator owns the mapping between the two exports.
+        var expectedInode = await RunAsync("/usr/bin/stat", ct, "-c", "%i", "--", expected);
+        var actualInode = await RunAsync("/usr/bin/stat", ct, "-c", "%i", "--", data);
+        if (expectedInode != actualInode)
+            throw new InvalidOperationException("SFTP jail data does not match the authorized home.");
+    }
+
     // Fail closed on unsafe ancestors. GNU rm does not follow symlinks within
     // the tree; --one-file-system prevents crossing nested mounts.
     public async Task DeleteAsync(string username, string domain, CancellationToken ct)

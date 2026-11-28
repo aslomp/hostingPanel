@@ -149,21 +149,15 @@ spec:
                   name: {{ required "mariadb.provisioningSecret is required when MariaDB is enabled" .Values.mariadb.provisioningSecret | quote }}
                   key: password
             {{- end }}
-            {{- if and (eq .Values.backend "Kubernetes") .Values.kubernetesHosting.enabled .Values.sftpgo.enabled }}
-            - name: SftpGo__EnableWrites
-              value: {{ .Values.sftpgo.enableWrites | quote }}
-            - name: SftpGo__BaseUrl
-              value: {{ printf "http://%s-admin:8080/" (printf "%s-sftpgo" .Release.Name | trunc 54 | trimSuffix "-") | quote }}
-            - name: SftpGo__Username
-              valueFrom:
-                secretKeyRef:
-                  name: {{ required "sftpgo.existingSecret is required" .Values.sftpgo.existingSecret | quote }}
-                  key: username
-            - name: SftpGo__Password
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.sftpgo.existingSecret | quote }}
-                  key: password
+            {{- if and $hosting .Values.sftp.enabled }}
+            - name: OpenSsh__Enabled
+              value: "true"
+            - name: OpenSsh__EnableWrites
+              value: {{ .Values.sftp.enableWrites | quote }}
+            - name: OpenSsh__JailProvisioningPath
+              value: /storage/sftp-jails
+            - name: OpenSsh__Workload
+              value: {{ printf "%s-sftp" .Release.Name | trunc 54 | trimSuffix "-" | quote }}
             {{- end }}
             {{- if and (eq .Values.backend "Kubernetes") .Values.stalwart.api.enabled }}
             - name: Stalwart__Enabled
@@ -214,6 +208,9 @@ spec:
             {{- if $hosting }}
             - {name: sites, mountPath: /storage/sites}
             - {name: apache-config, mountPath: /storage/apache-config}
+            {{- if .Values.sftp.enabled }}
+            - {name: sftp-jails, mountPath: /storage/sftp-jails, readOnly: true}
+            {{- end }}
             {{- end }}
       volumes:
         {{- if $hosting }}
@@ -234,6 +231,13 @@ spec:
             server: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}
             path: {{ include "hostingpanel.apacheConfigExport" . | quote }}
             readOnly: false
+        {{- end }}
+        {{- if and $hosting .Values.sftp.enabled }}
+        - name: sftp-jails
+          nfs:
+            server: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}
+            path: {{ required "sftp.jailExport is required" .Values.sftp.jailExport | quote }}
+            readOnly: true
         {{- end }}
         - name: data
           persistentVolumeClaim:

@@ -35,14 +35,11 @@ public static class KubernetesRegistration
         services.AddHostedService(sp => sp.GetRequiredService<ApacheLogCollector>());
         services.AddSingleton<IApacheSegmentIngestion, ApacheSegmentIngestion>();
     services.AddSingleton<MailMutationGate>();
-    services.AddScoped<SftpGoClient>();
-    services.AddHostedService<SftpGoReconciler>();
+    services.AddHostedService<OpenSshReconciler>();
     services.AddSingleton<SftpAccountModel>();
     services.AddSingleton<IHostingPanelModelExtension>(sp => sp.GetRequiredService<SftpAccountModel>());
     services.AddSingleton<IHostingPanelSchemaExtension>(sp => sp.GetRequiredService<SftpAccountModel>());
     services.AddScoped<ISftpAccounts, KubernetesSftpAccounts>();
-    services.AddHttpClient("sftpgo-management", http => http.Timeout = TimeSpan.FromSeconds(15))
-        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false });
     services.AddScoped<StalwartMailProvider>();
     services.AddScoped<StalwartDnsProvisioning>();
     services.AddScoped<IMailProvider>(sp => sp.GetRequiredService<StalwartMailProvider>());

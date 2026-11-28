@@ -91,6 +91,34 @@ public sealed class KubernetesResourceClient : IDisposable
         catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.NotFound) { }
     }
 
+    // Only the fixed account ConfigMap changes. Never patch the pod template for account operations.
+    public async Task<bool> ActivateOpenSshAsync(string ns, string name, string revision,
+        IReadOnlyDictionary<string,string> data, CancellationToken ct)
+    {
+        if (revision.Length != 64 || !revision.All(char.IsAsciiHexDigitLower))
+            throw new ArgumentException("Invalid SFTP revision.", nameof(revision));
+        var mapName = name + "-accounts";
+        var manifest = JsonSerializer.Serialize(new { apiVersion = "v1", kind = "ConfigMap",
+            metadata = new { name = mapName, labels = new Dictionary<string,string> {
+                ["hostingpanel/component"] = "openssh-accounts", ["hostingpanel/workload"] = name } },
+            data });
+        await ApplyAsync(manifest, ns, "hostingpanel-sftp", ct);
+        var pods = await Api.CoreV1.ListNamespacedPodAsync(ns, labelSelector: "hostingpanel/sftp-workload=" + name, cancellationToken: ct);
+        var pod = pods.Items.SingleOrDefault(x => x.Metadata.Name == name + "-0");
+        if (pods.Items.Count != 1 || pod is null || pod.Metadata.DeletionTimestamp is not null ||
+            pod.Spec.Containers.Count != 1 || pod.Spec.Containers[0].Name != "openssh" ||
+            pod.Status?.Conditions?.Any(x => x.Type == "Ready" && x.Status == "True") != true)
+            return false;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(15));
+        using var output = new MemoryStream();
+        var exit = await Api.NamespacedPodExecAsync(pod.Metadata.Name, ns, "openssh",
+            new[] { "/bin/cat", "/etc/hostingpanel/revision" }, false,
+            async (_, stdout, stderr) => await Task.WhenAll(stdout.CopyToAsync(output, timeout.Token),
+                stderr.CopyToAsync(Stream.Null, timeout.Token)), timeout.Token);
+        return exit == 0 && System.Text.Encoding.UTF8.GetString(output.ToArray()).Trim() == revision;
+    }
+
     public async Task DeleteConfigMapAsync(string ns, string name, CancellationToken ct)
     {
         try { await Api.CoreV1.DeleteNamespacedConfigMapAsync(name, ns, cancellationToken: ct); }
