@@ -10,16 +10,18 @@ public static class ApacheAccessAccounting
 {
     public const string Prefix = "HP_ACCESS_V1";
 
-    public static string Directive(Guid accountId, Guid domainId)
+    public static string Directive(Guid accountId, Guid domainId, bool durable = false)
     {
         if (accountId == Guid.Empty || domainId == Guid.Empty) throw new ArgumentException("Missing accounting identity.");
-        return $"CustomLog /proc/self/fd/1 \"{Prefix} {accountId:N} {domainId:N} %{{end:sec}}t %>s %I %O %D\"";
+        var target = durable ? "\"|/usr/bin/python3 /etc/hostingpanel-accounting/spool.py\"" : "/proc/self/fd/1";
+        return $"CustomLog {target} \"{Prefix} {accountId:N} {domainId:N} %{{end:sec}}t %>s %I %O %D\"";
     }
 
     public static string ErrorDirective(Guid accountId, Guid domainId)
     {
         if (accountId == Guid.Empty || domainId == Guid.Empty) throw new ArgumentException("Missing logging identity.");
-        return $"ErrorLog /proc/self/fd/2\nErrorLogFormat \"HP_ERROR_V1 {accountId:N} {domainId:N} [%l] %M\"";
+        var target = durable ? "\"|/usr/bin/python3 /etc/hostingpanel-accounting/spool.py\"" : "/proc/self/fd/2";
+        return $"ErrorLog {target}\nErrorLogFormat \"HP_ERROR_V1 {accountId:N} {domainId:N} [%l] %M\"";
     }
 
     public static bool TryParse(string line, out ApacheAccessRecord? record)

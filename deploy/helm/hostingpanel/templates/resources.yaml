@@ -77,6 +77,15 @@ spec:
               value: {{ .Values.certManager.enabled | quote }}
             - name: KubernetesHosting__Enabled
               value: "true"
+            {{- if .Values.kubernetesHosting.accountingSpool.enabled }}
+            - name: KubernetesHosting__DurableLogIngestion
+              value: "true"
+            - name: KubernetesHosting__AccountingIngestionToken
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "accountingSpool.existingSecret is required" .Values.kubernetesHosting.accountingSpool.existingSecret | quote }}
+                  key: token
+            {{- end }}
             - name: KubernetesHosting__LogRetentionDays
               value: {{ .Values.kubernetesHosting.logRetentionDays | quote }}
             - name: KubernetesHosting__Namespace

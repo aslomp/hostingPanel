@@ -201,7 +201,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
 
     private string Namespace => configuration["KubernetesHosting:Namespace"] ?? "hosting";
 
-    internal static (string Apache, bool Tls) BuildVirtualHost(HostedDomain domain, string username, PhpAccountIdentity identity)
+    internal static (string Apache, bool Tls) BuildVirtualHost(HostedDomain domain, string username, PhpAccountIdentity identity, bool durableAccounting = false)
     {
         var host = domain.Name;
         if (host.Length > 253 || host.Split('.').Any(label => label.Length is < 1 or > 63
@@ -226,7 +226,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var deniedPhp = php
             ? "(?i)^(?!.*(?-i:[.]php)$).*[.](?:php[0-9]*|phtml|phar|phps|inc)(?:[.]|$)"
             : "(?i)[.](?:php[0-9]*|phtml|phar|phps|inc)(?:[.]|$)";
-        var apache = "<VirtualHost *:8080>\nServerName " + host + "\n" + ApacheAccessAccounting.Directive(domain.OwnerId, domain.Id) + "\n" + ApacheAccessAccounting.ErrorDirective(domain.OwnerId, domain.Id) + "\nDocumentRoot \"" + root + "\"" +
+        var apache = "<VirtualHost *:8080>\nServerName " + host + "\n" + ApacheAccessAccounting.Directive(domain.OwnerId, domain.Id, durableAccounting) + "\n" + ApacheAccessAccounting.ErrorDirective(domain.OwnerId, domain.Id, durableAccounting) + "\nDocumentRoot \"" + root + "\"" +
             "\n<Directory \"" + root + "\">\nOptions -Indexes -ExecCGI -Includes -FollowSymLinks -SymLinksIfOwnerMatch\nAllowOverride None\nRequire all granted\nDirectoryIndex " +
             (php ? "index.php index.html" : "index.html") + "\n</Directory>\n" +
             "<DirectoryMatch \"/[.](?!well-known(?:/|$))[^/]+(?:/|$)\">\nRequire all denied\n</DirectoryMatch>\n" +

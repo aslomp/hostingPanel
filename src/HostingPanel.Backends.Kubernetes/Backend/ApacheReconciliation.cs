@@ -25,7 +25,7 @@ internal sealed class ApacheReconciliation(IConfiguration configuration, Kuberne
             throw new InvalidOperationException("Website storage unavailable; retaining previous Apache revision.");
         var revision = new ApacheConfigurationRevision(domains.Select(domain =>
             KeyValuePair.Create(domain.Id, WebsiteReconciler.BuildVirtualHost(domain,
-                accounts[domain.OwnerId].Username, identities[domain.OwnerId]).Apache)));
+                accounts[domain.OwnerId].Username, identities[domain.OwnerId], configuration.GetValue<bool>("KubernetesHosting:DurableLogIngestion")).Apache)));
         if (revision.Id == stagedApacheRevision) return;
         var store = new ApacheCandidateStore(Required("ApacheConfigPath"));
         var runtime = new ApacheRevisionRuntime(resources, Namespace);

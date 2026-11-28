@@ -119,3 +119,5 @@ Kubernetes website logs: owner-scoped access/error log API and domain UI, indepe
 HTTP usage: batched SQLite ingestion, configurable raw log retention, owner-scoped monthly HTTP usage API and account overview fields. Reports partial measurements explicitly; full DA user usage contract remains unsupported until disk/mail/other usage is measured.
 
 Internal accounting ingestion supports authenticated immutable segment submission and transactionally idempotent acknowledgement. Disabled by default; producer and deployment wiring remain pending.
+
+Optional Apache piped accounting producer and dedicated NFS spool: immutable sealed segments replay on startup and retry until committed acknowledgement. Requires Python-capable Apache image, prepared NFS export, HTTPS endpoint and secret. Live failure/recovery testing and hard quota enforcement remain open.
