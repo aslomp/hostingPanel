@@ -53,6 +53,27 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var accounts = await db.Accounts.AsNoTracking().Where(x => ownerIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id, ct);
         var (usable, storageErrors) = await nfs.EnsureAsync(domains, accounts, identities, ct);
+        if (configuration.GetValue<bool>("ZfsQuota:Enabled"))
+        {
+            var quota = new ZfsAccountQuota(configuration);
+            var quotaPackages = await db.Packages.AsNoTracking().ToDictionaryAsync(x => x.Id, ct);
+            foreach (var group in usable.GroupBy(x => x.OwnerId).ToArray())
+            {
+                try
+                {
+                    var owner = accounts[group.Key];
+                    var package = owner.PackageId is { } pid ? quotaPackages.GetValueOrDefault(pid)?.LimitsJson : null;
+                    await quota.ApplyAsync(owner.Username, identities[group.Key].Uid,
+                        ZfsAccountQuota.Resolve(package, owner.LimitsJson, "quota"),
+                        ZfsAccountQuota.Resolve(package, owner.LimitsJson, "inode"), ct);
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    foreach (var domain in group) storageErrors[domain.Id] = ex;
+                }
+            }
+            usable.RemoveAll(x => storageErrors.ContainsKey(x.Id));
+        }
         foreach (var (id, error) in storageErrors) logger.LogWarning(error, "Storage unavailable for website {Id}", id);
         var completed = new List<ReconciliationOperation>();
         var byId = rows.GroupBy(x => x.ResourceId).ToDictionary(x => x.Key, x => x.ToArray());

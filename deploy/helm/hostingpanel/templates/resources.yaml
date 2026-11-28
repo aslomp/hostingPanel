@@ -79,6 +79,12 @@ spec:
               value: "true"
             - name: KubernetesHosting__Namespace
               value: {{ .Release.Namespace | quote }}
+            {{- if .Values.kubernetesHosting.zfsQuota.enabled }}
+            - name: ZfsQuota__Enabled
+              value: "true"
+            - name: ZfsQuota__Host
+              value: {{ required "zfsQuota.host is required" .Values.kubernetesHosting.zfsQuota.host | quote }}
+            {{- end }}
             - name: KubernetesHosting__NfsServer
               value: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}
             - name: KubernetesHosting__NfsPath
@@ -203,9 +209,18 @@ spec:
             {{- if $hosting }}
             - {name: sites, mountPath: /storage/sites}
             - {name: apache-config, mountPath: /storage/apache-config}
+            {{- if .Values.kubernetesHosting.zfsQuota.enabled }}
+            - {name: zfs-quota-key, mountPath: /run/zfs-quota, readOnly: true}
+            {{- end }}
             {{- end }}
       volumes:
         {{- if $hosting }}
+        {{- if .Values.kubernetesHosting.zfsQuota.enabled }}
+        - name: zfs-quota-key
+          secret:
+            secretName: {{ required "zfsQuota.existingSecret is required" .Values.kubernetesHosting.zfsQuota.existingSecret | quote }}
+            defaultMode: 0440
+        {{- end }}
         - name: sites
           {{- if .Values.kubernetesHosting.provisioningClaim }}
           persistentVolumeClaim:

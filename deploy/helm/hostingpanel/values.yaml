@@ -32,6 +32,10 @@ kubernetesHosting:
   provisioningClaim: ""
   # Required dedicated direct NFS export on nfsServer; must not overlap nfsPath.
   apacheConfigPath: ""
+  zfsQuota:
+    enabled: false
+    host: ""
+    existingSecret: "" # private-key and known-hosts
   gatewayName: ""
   gatewayNamespace: envoy-gateway-system
   httpListener: http

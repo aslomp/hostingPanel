@@ -51,6 +51,11 @@ var checks = new List<(string Description, Action Test)>
         Require(SystemServiceOperations.ValidService("nginx.service"));
         Require(!SystemServiceOperations.ValidService("../nginx"));
     }),
+    ("Native ZFS quota units and explicit unlimited", () => {
+        Require(HostingPanel.Api.ZfsAccountQuota.Resolve("{\"quota\":\"2\"}",null,"quota")=="2097152");
+        Require(HostingPanel.Api.ZfsAccountQuota.Resolve("{\"inode\":\"42\"}","{\"inode\":\"unlimited\"}","inode")=="none");
+        Require(!HostingPanel.Api.ZfsAccountQuota.Valid("0","quota"));
+    }),
     ("Apache candidate revisions are deterministic and immutable", ApacheConfigurationRevisionTests.Run),
     ("Administrative feedback preserves HTTP status and raw response", () =>
     {
