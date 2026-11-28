@@ -83,6 +83,7 @@ public static class KubernetesRegistration
     services.AddScoped<KubernetesDatabaseCompatibility>();
     services.AddScoped<KubernetesDnsAdminCompatibility>();
     services.AddScoped<KubernetesSubdomainCompatibility>();
+    services.AddScoped<KubernetesFtpCompatibility>();
     services.AddScoped<KubernetesCompatibilityHandler>();
     services.AddScoped<IApiCompatibilityHandler>(sp => sp.GetRequiredService<KubernetesCompatibilityHandler>());
     services.AddScoped<KubernetesCertificateProvider>();

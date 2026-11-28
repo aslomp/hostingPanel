@@ -3,11 +3,18 @@
 @using HostingPanel.Web.Localization
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @inject PanelSession Session
+@inject IConfiguration Configuration
 @inject SftpOperations Operations
 @inject HostingOperationNotifications Notifications
 @inject IDialogService Dialogs
 @implements IDisposable
 
+@if (Configuration["HostingPanel:Backend"] == "DirectAdmin")
+{
+    <DirectAdminFtpAccounts />
+}
+else
+{
 <PageTitle>@L["SFTP accounts"]</PageTitle>
 <PanelPageHeader>
     <TitleContent>@L["SFTP accounts"]</TitleContent>
@@ -43,6 +50,7 @@
         <MudButton Disabled="@busy" OnClick="Cancel">@L["Cancel"]</MudButton>
     </MudPaper>
 }
+}
 @code {
     private readonly LatestRead read = new();
     private IReadOnlyList<SftpAccountEntry>? accounts;
@@ -53,7 +61,7 @@
     private string label = "", key = "", relativePath = "";
     private string? error;
     private bool CanCreate => Session.Connected && !busy && !read.Loading && accounts is not null && accounts.Count < limit;
-    protected override Task OnInitializedAsync() { Session.Changed += SessionChanged; Notifications.Changed += ProvisioningChanged; return Refresh(); }
+    protected override Task OnInitializedAsync() { Session.Changed += SessionChanged; Notifications.Changed += ProvisioningChanged; return Configuration["HostingPanel:Backend"] == "DirectAdmin" ? Task.CompletedTask : Refresh(); }
     private bool Current(string? channel) => !disposed && Session.Connected && Session.TicketChannel == channel;
     private Task Refresh()
     {
@@ -65,8 +73,8 @@
             else error = L["SFTP management is unavailable."].Value;
         }, _ => error = L["SFTP management is unavailable."].Value);
     }
-    private void ProvisioningChanged() => _ = InvokeAsync(async () => { if (disposed || !Session.Connected) return; await Refresh(); if (!disposed) StateHasChanged(); });
-    private void SessionChanged() => _ = InvokeAsync(async () => { if (disposed) return; Cancel(); var task = Refresh(); StateHasChanged(); await task; if (!disposed) StateHasChanged(); });
+    private void ProvisioningChanged() => _ = InvokeAsync(async () => { if (disposed || !Session.Connected || Configuration["HostingPanel:Backend"] == "DirectAdmin") return; await Refresh(); if (!disposed) StateHasChanged(); });
+    private void SessionChanged() => _ = InvokeAsync(async () => { if (disposed || Configuration["HostingPanel:Backend"] == "DirectAdmin") return; Cancel(); var task = Refresh(); StateHasChanged(); await task; if (!disposed) StateHasChanged(); });
     private void OpenCreate() { if (CanCreate) { Cancel(); creating = true; } }
     private void OpenEdit(SftpAccountEntry account) { if (busy || !Session.Connected) return; editing = account.Id; label = account.Label; relativePath = account.RelativePath; blocked = account.Blocked; key = string.Join("\n", account.PublicKeys ?? []); creating = true; }
     private void Cancel() { editing = null; blocked = false; creating = false; label = key = relativePath = ""; }

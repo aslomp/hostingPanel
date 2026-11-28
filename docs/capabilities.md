@@ -109,3 +109,5 @@ Kubernetes subdomain ownership uses an explicit provider-owned `SubdomainBinding
 SFTPGo remains disabled by default; enabling it now defaults to write mode and public-key account activation. Set `sftpgo.enableWrites: false` to stage disabled users on read-only storage. Production isolation acceptance remains outstanding.
 
 DirectAdmin native SSH authorized-key management: `ISshAuthorizedKeys`, `/hosting/file-access/ssh-keys`, caller-scoped upstream read/authorize/revoke with read-back. Does not grant SFTP-only confinement; server SSH policy remains authoritative. Virtual SFTP accounts remain Kubernetes-only.
+
+File transfer compatibility: DirectAdmin uses native FTP; Kubernetes exposes domain-scoped FTP compatibility reads/deletes and public-key-only creates/updates through the SFTP outbox. The legacy FTP controller forwards to the selected backend. Kubernetes does not accept FTP passwords or claim to implement the FTP wire protocol.
