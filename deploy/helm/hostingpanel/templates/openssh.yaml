@@ -55,7 +55,7 @@ spec:
       {{- end }}
       containers:
         - name: openssh
-          image: {{ required "sftp.image is required (Dockerfile.openssh)" $s.image | quote }}
+          image: {{ default "hostingpanel-openssh:installer-local" $s.image | quote }}
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 0
@@ -80,12 +80,12 @@ spec:
             defaultMode: 0444
         - name: hostkeys
           secret:
-            secretName: {{ required "sftp.existingSecret is required" $s.existingSecret | quote }}
+            secretName: {{ default "hostingpanel-ssh-hostkeys" $s.existingSecret | quote }}
             defaultMode: 0400
         - name: jails
           nfs:
             server: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}
-            path: {{ required "sftp.jailExport is required" $s.jailExport | quote }}
+            path: {{ default "/srv/hosting/sftp-jails" $s.jailExport | quote }}
             readOnly: {{ not $s.enableWrites }}
 ---
 apiVersion: networking.k8s.io/v1

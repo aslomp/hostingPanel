@@ -33,6 +33,32 @@ jobs:
             fi
             grep -qE 'apacheConfigPath|Apache configuration NFS export' /tmp/invalid.err
           done
+      - name: Render OpenSSH upgrade with installer defaults
+        run: |
+          set -eu
+          args=(-n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.gatewayName=example-gateway)
+          for mode in omitted empty; do
+            extra=()
+            if [ "$mode" = empty ]; then
+              extra=(--set-string sftp.jailExport= --set-string sftp.image= --set-string sftp.existingSecret=)
+            fi
+            helm template admin deploy/helm/hostingpanel "${args[@]}" "${extra[@]}" > "/tmp/sftp-$mode.yaml"
+            python3 - "/tmp/sftp-$mode.yaml" <<'PY'
+          import sys, yaml
+          docs = [x for x in yaml.safe_load_all(open(sys.argv[1])) if x]
+          web = next(x for x in docs if x["kind"] == "Deployment" and x["metadata"]["name"].endswith("-web"))
+          ssh = next(x for x in docs if x["kind"] == "StatefulSet" and x["metadata"]["name"] == "admin-sftp")
+          webvol = next(v for v in web["spec"]["template"]["spec"]["volumes"] if v["name"] == "sftp-jails")
+          sshspec = ssh["spec"]["template"]["spec"]
+          jail = next(v for v in sshspec["volumes"] if v["name"] == "jails")
+          hostkeys = next(v for v in sshspec["volumes"] if v["name"] == "hostkeys")
+          assert webvol["nfs"]["path"] == jail["nfs"]["path"] == "/srv/hosting/sftp-jails"
+          assert webvol["nfs"]["readOnly"] is True
+          assert jail["nfs"]["readOnly"] is False
+          assert hostkeys["secret"]["secretName"] == "hostingpanel-ssh-hostkeys"
+          assert sshspec["containers"][0]["image"] == "hostingpanel-openssh:installer-local"
+          PY
+          done
       - name: Render shared OpenSSH infrastructure
         run: |
           set -eu
