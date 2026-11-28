@@ -24,17 +24,69 @@ def sync_dir(root):
     finally:
         os.close(fd)
 
+class Journal:
+    """One locked, append-only segment. Every complete record is fsynced."""
+    def __init__(self, root):
+        self.root = root
+        ident = uuid.uuid4().hex
+        self.pending = root / (ident + ".open")
+        self.ready = root / (ident + ".ready")
+        self.file = self.pending.open("xb", buffering=0)
+        fcntl.flock(self.file, fcntl.LOCK_EX)
+        sync_dir(root)
+
+    def append(self, record):
+        if not record.endswith(b"\n"):
+            raise ValueError("incomplete record")
+        remaining = memoryview(record)
+        while remaining:
+            written = self.file.write(remaining)
+            if not written:
+                raise OSError("journal write failed")
+            remaining = remaining[written:]
+        os.fsync(self.file.fileno())
+
+    def close(self):
+        os.rename(self.pending, self.ready)
+        sync_dir(self.root)
+        self.file.close()
+        return self.ready
+
 def seal(root, records):
-    ident = uuid.uuid4().hex
-    pending = root / (ident + ".tmp")
-    ready = root / (ident + ".ready")
-    with pending.open("xb") as file:
-        file.write(b"".join(records))
-        file.flush()
-        os.fsync(file.fileno())
-    os.rename(pending, ready)
-    sync_dir(root)
-    return ready
+    journal = Journal(root)
+    for record in records:
+        journal.append(record)
+    return journal.close()
+
+def recover(root):
+    """Recover orphaned journals, never touch a currently locked writer."""
+    for pending in root.iterdir():
+        if not re.fullmatch(r"[0-9a-f]{32}\.open", pending.name) or pending.is_symlink():
+            continue
+        try:
+            with pending.open("r+b", buffering=0) as file:
+                try:
+                    fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    continue
+                if not pending.exists():
+                    continue
+                body = file.read(MAX_BYTES + 1)
+                if len(body) > MAX_BYTES:
+                    raise ValueError("oversized orphan journal")
+                end = body.rfind(b"\n") + 1
+                if end != len(body):
+                    print("accounting recovery: incomplete trailing record", file=sys.stderr, flush=True)
+                if not end:
+                    # Preserve evidence rather than submitting an empty segment.
+                    pending.rename(pending.with_suffix(".incomplete"))
+                else:
+                    file.truncate(end)
+                    os.fsync(file.fileno())
+                    pending.rename(pending.with_suffix(".ready"))
+                sync_dir(root)
+        except FileNotFoundError:
+            continue
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
@@ -101,19 +153,22 @@ def main():
     thread = threading.Thread(target=sender, args=(work, endpoint, token), daemon=True)
     thread.start()
     # Recover sealed segments from any previous replica incarnation. No idle scan.
+    recover(ROOT)
     for path in ROOT.iterdir():
         if VALID.fullmatch(path.name) and not path.is_symlink():
             work.put(path)
     # Read raw pipe bytes; select must not be used with buffered readline.
     buffer = b""
-    records = []
+    journal = None
+    count = 0
     size = 0
     deadline = None
     def flush():
-        nonlocal records, size, deadline
-        if records:
-            work.put(seal(ROOT, records))
-            records, size, deadline = [], 0, None
+        nonlocal journal, count, size, deadline
+        if journal is not None:
+            ready = journal.close()
+            journal, count, size, deadline = None, 0, 0, None
+            work.put(ready)
     while True:
         timeout = None if deadline is None else max(0, deadline - time.monotonic())
         readable, _, _ = select.select([0], [], [], timeout)
@@ -136,11 +191,13 @@ def main():
                 continue
             if size + len(record) > MAX_BYTES:
                 flush()
-            if not records:
+            if journal is None:
+                journal = Journal(ROOT)
                 deadline = time.monotonic() + 0.25
-            records.append(record)
+            journal.append(record)
+            count += 1
             size += len(record)
-            if len(records) >= 256:
+            if count >= 256:
                 flush()
         if len(buffer) > 65536:
             raise RuntimeError("oversized Apache log line")

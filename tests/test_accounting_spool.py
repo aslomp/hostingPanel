@@ -28,6 +28,22 @@ class SpoolTests(unittest.TestCase):
                 opener.return_value.open.return_value = response
                 spool.deliver(segment, "https://panel.invalid", "x"*32)
                 self.assertFalse(segment.exists())
+    def test_orphan_recovery_preserves_complete_records(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            journal = spool.Journal(root)
+            record = spool.encode(b"HP_ACCESS_V1 00000000000000000000000000000001 00000000000000000000000000000002 1795860000 200 1 2 3")
+            journal.append(record)
+            spool.recover(root)
+            self.assertTrue(journal.pending.exists())
+            journal.file.write(b"partial")
+            journal.file.close()
+            spool.recover(root)
+            self.assertEqual(journal.ready.read_bytes(), record)
+            self.assertFalse(journal.pending.exists())
+            spool.recover(root)
+            self.assertEqual(journal.ready.read_bytes(), record)
+
     def test_system_and_control_lines(self):
         self.assertIsNone(spool.encode(b"HP_SYSTEM_V1 200 1 2 3"))
         with self.assertRaises(ValueError):
