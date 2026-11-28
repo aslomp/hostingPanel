@@ -60,16 +60,27 @@ spec:
           image: {{ $s.image | quote }}
           imagePullPolicy: IfNotPresent
           securityContext:
+            {{- if $s.enableWrites }}
+            runAsUser: 0
+            runAsGroup: 0
+            runAsNonRoot: false
+            {{- else }}
             runAsUser: 1000
             runAsGroup: 1000
             runAsNonRoot: true
+            {{- end }}
             allowPrivilegeEscalation: false
-            capabilities: {drop: [ALL]}
+            capabilities:
+              drop: [ALL]
+              {{- if $s.enableWrites }}
+              add: [CHOWN, DAC_OVERRIDE, FOWNER]
+              {{- end }}
           env:
             - {name: SFTPGO_SFTPD__BINDINGS__0__PORT, value: "2022"}
             - {name: SFTPGO_SFTPD__PASSWORD_AUTHENTICATION, value: "false"}
             - {name: SFTPGO_SFTPD__KEYBOARD_INTERACTIVE_AUTHENTICATION, value: "false"}
             - {name: SFTPGO_SFTPD__ENABLED_SSH_COMMANDS, value: ""}
+            - {name: SFTPGO_COMMON__SYMLINK_MODE, value: "0"}
             - {name: SFTPGO_FTPD__BINDINGS__0__PORT, value: "0"}
             - {name: SFTPGO_WEBDAVD__BINDINGS__0__PORT, value: "0"}
             - {name: SFTPGO_HTTPD__BINDINGS__0__PORT, value: "8080"}
@@ -95,7 +106,7 @@ spec:
             {{- toYaml $s.resources | nindent 12 }}
           volumeMounts:
             - {name: state, mountPath: /var/lib/sftpgo}
-            - {name: sites, mountPath: /home, readOnly: true}
+            - {name: sites, mountPath: /home, readOnly: {{ not $s.enableWrites }}}
       securityContext:
         fsGroup: 1000
         seccompProfile: {type: RuntimeDefault}
@@ -104,7 +115,7 @@ spec:
           nfs:
             server: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}
             path: {{ required "kubernetesHosting.nfsPath is required" .Values.kubernetesHosting.nfsPath | quote }}
-            readOnly: true
+            readOnly: {{ not $s.enableWrites }}
         {{- if $s.existingClaim }}
         - name: state
           persistentVolumeClaim:

@@ -129,6 +129,8 @@ stalwart:
 # Optional SFTPGo infrastructure; read-only storage until account isolation is validated.
 sftpgo:
   enabled: false
+  # Opt in only on a dedicated, validated NFS export. Shared root process, not per-user impersonation.
+  enableWrites: false
   image: drakkan/sftpgo:v2.7.6
   existingSecret: "" # username and password for internal management bootstrap
   existingClaim: ""

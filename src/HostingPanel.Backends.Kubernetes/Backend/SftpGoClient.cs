@@ -74,9 +74,9 @@ internal sealed class SftpGoClient(IHttpClientFactory clients, IConfiguration co
 
     private static string OwnerMarker(Guid accountId) => "HostingPanel:" + accountId.ToString("D");
 
-    // First infrastructure phase intentionally provisions disabled users only.
+    // Activation is explicitly gated by the storage acceptance configuration.
     // Never adopt or overwrite an unrelated upstream account.
-    internal async Task EnsureDisabledAsync(Guid accountId, string username, string hostingUsername, string relativePath, CancellationToken ct)
+    internal async Task EnsureAsync(Guid accountId, string username, string hostingUsername, string relativePath, string publicKey, bool active, CancellationToken ct)
     {
         if (accountId == Guid.Empty) throw new ArgumentException("Missing account identity.", nameof(accountId));
         var path = PathFor(username);
@@ -88,9 +88,9 @@ internal sealed class SftpGoClient(IHttpClientFactory clients, IConfiguration co
         if (existing is not null && existing.Description != marker)
             throw new InvalidOperationException("SFTPGo user ownership conflict.");
         var payload = new {
-            username, home_dir = home, uid, gid, status = 0,
-            description = marker, public_keys = Array.Empty<string>(),
-            permissions = new Dictionary<string, string[]> { ["/"] = new[] { "list", "download" } },
+            username, home_dir = home, uid, gid, status = active ? 1 : 0,
+            description = marker, public_keys = active ? new[] { publicKey } : Array.Empty<string>(),
+            permissions = new Dictionary<string, string[]> { ["/"] = active ? new[] { "list", "download", "upload", "overwrite", "delete", "rename", "create_dirs" } : new[] { "list", "download" } },
             filters = new { denied_login_methods = new[] { "password", "keyboard-interactive", "publickey+password", "publickey+keyboard-interactive" },
                 denied_protocols = new[] { "FTP", "DAV", "HTTP" } }
         };
@@ -99,8 +99,8 @@ internal sealed class SftpGoClient(IHttpClientFactory clients, IConfiguration co
             : await client.PutAsJsonAsync(path, payload, ct);
         response.EnsureSuccessStatusCode();
         var actual = await ReadAsync(client, username, ct);
-        if (actual is null || actual.Description != marker || actual.Status != 0
-            || actual.HomeDirectory != payload.home_dir || actual.PublicKeys is not { Length: 0 })
+        if (actual is null || actual.Description != marker || actual.Status != payload.status
+            || actual.HomeDirectory != payload.home_dir || actual.PublicKeys is null || !actual.PublicKeys.SequenceEqual(payload.public_keys))
             throw new InvalidOperationException("SFTPGo user read-back failed.");
     }
 

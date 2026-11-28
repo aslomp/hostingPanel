@@ -17,8 +17,7 @@ internal sealed class SftpAccountModel : IHostingPanelModelExtension, IHostingPa
 {
     public string Provider => "Kubernetes.Sftp";
     public IReadOnlyList<HostingPanelSchemaMigration> Migrations => [
-        new(1, """CREATE TABLE IF NOT EXISTS "SftpAccounts" ("Id" TEXT NOT NULL PRIMARY KEY, "OwnerId" TEXT NOT NULL, "Username" TEXT NOT NULL UNIQUE, "Label" TEXT NOT NULL, "PublicKey" TEXT NOT NULL, UNIQUE ("OwnerId", "Label"));"""),
-        new(2, """ALTER TABLE "SftpAccounts" ADD COLUMN "RelativePath" TEXT NOT NULL DEFAULT '';""")
+        new(1, """CREATE TABLE IF NOT EXISTS "SftpAccounts" ("Id" TEXT NOT NULL PRIMARY KEY, "OwnerId" TEXT NOT NULL, "Username" TEXT NOT NULL UNIQUE, "Label" TEXT NOT NULL, "PublicKey" TEXT NOT NULL, "RelativePath" TEXT NOT NULL DEFAULT '', UNIQUE ("OwnerId", "Label"));""")
     ];
     public void Configure(ModelBuilder model)
     {

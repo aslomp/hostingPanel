@@ -65,7 +65,7 @@ internal sealed class SftpGoReconciler(IServiceScopeFactory scopes, IConfigurati
                 {
                     if (row.Username != username) throw new InvalidOperationException("Unexpected SFTP identity.");
                     // Do not activate accounts until storage confinement is validated.
-                    await client.EnsureDisabledAsync(id, username, owner.Username, row.RelativePath, ct);
+                    await client.EnsureAsync(id, username, owner.Username, row.RelativePath, row.PublicKey, configuration.GetValue<bool>("SftpGo:EnableWrites"), ct);
                 }
                 foreach (var job in jobs) Complete(job);
             }

@@ -139,6 +139,8 @@ spec:
                   key: password
             {{- end }}
             {{- if and (eq .Values.backend "Kubernetes") .Values.kubernetesHosting.enabled .Values.sftpgo.enabled }}
+            - name: SftpGo__EnableWrites
+              value: {{ .Values.sftpgo.enableWrites | quote }}
             - name: SftpGo__BaseUrl
               value: {{ printf "http://%s-admin:8080/" (printf "%s-sftpgo" .Release.Name | trunc 54 | trimSuffix "-") | quote }}
             - name: SftpGo__Username
