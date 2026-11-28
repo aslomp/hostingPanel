@@ -33,17 +33,20 @@ jobs:
             fi
             grep -qE 'apacheConfigPath|Apache configuration NFS export' /tmp/invalid.err
           done
-      - name: Render optional SFTPGo infrastructure
+      - name: Render shared OpenSSH infrastructure
         run: |
-          helm template admin deploy/helm/hostingpanel -n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.gatewayName=example-gateway --set sftpgo.enabled=true --set sftpgo.existingSecret=sftpgo-bootstrap --show-only templates/sftpgo.yaml > /tmp/sftpgo.yaml
-          grep -q 'kind: StatefulSet' /tmp/sftpgo.yaml
-          grep -q 'kind: NetworkPolicy' /tmp/sftpgo.yaml
-          grep -q 'SFTPGO_SFTPD__PASSWORD_AUTHENTICATION' /tmp/sftpgo.yaml
-          grep -q 'readOnly: false' /tmp/sftpgo.yaml
-          grep -q 'runAsUser: 0' /tmp/sftpgo.yaml
-          helm template admin deploy/helm/hostingpanel -n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.gatewayName=example-gateway --set sftpgo.enabled=true --set sftpgo.existingSecret=sftpgo-bootstrap --set sftpgo.enableWrites=false --show-only templates/sftpgo.yaml > /tmp/sftpgo-staging.yaml
-          grep -q 'readOnly: true' /tmp/sftpgo-staging.yaml
-          grep -q 'runAsNonRoot: true' /tmp/sftpgo-staging.yaml
+          set -eu
+          helm template admin deploy/helm/hostingpanel -n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.gatewayName=example-gateway --set sftp.enabled=true --set sftp.image=example.invalid/openssh:ci --set sftp.existingSecret=ssh-hostkeys --show-only templates/openssh.yaml > /tmp/openssh.yaml
+          grep -q 'kind: Deployment' /tmp/openssh.yaml
+          grep -q 'kind: NetworkPolicy' /tmp/openssh.yaml
+          grep -q 'SYS_CHROOT' /tmp/openssh.yaml
+          ! grep -q 'SYS_ADMIN\|DAC_OVERRIDE\|CHOWN\|sftpgo' /tmp/openssh.yaml
+          grep -q 'type: Recreate' /tmp/openssh.yaml
+          grep -q 'readOnly: false' /tmp/openssh.yaml
+          if helm template admin deploy/helm/hostingpanel -n hosting --set sftpgo.enabled=true >/tmp/legacy.yaml 2>/tmp/legacy.err; then
+            echo "Legacy SFTPGo configuration accepted"; exit 1
+          fi
+          grep -q 'SFTPGo has been retired' /tmp/legacy.err
 
       - name: Render durable Apache accounting profile
         run: |

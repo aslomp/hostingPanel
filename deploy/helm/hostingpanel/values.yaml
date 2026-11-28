@@ -137,20 +137,18 @@ stalwart:
     submissionEnabled: false
     pop3Enabled: false
 
-# Optional SFTPGo infrastructure. Enabling the service enables customer writes by default.
-sftpgo:
+# Shared OpenSSH service. No management server or privileged mount operations.
+sftp:
   enabled: false
-  # Shared root process, not per-user impersonation. Validate NFS isolation before production.
-  # Set false for disabled-user/read-only staging.
   enableWrites: true
-  image: drakkan/sftpgo:v2.7.6
-  existingSecret: "" # username and password for internal management bootstrap
-  existingClaim: ""
-  storageClassName: ""
-  size: 1Gi
+  image: "" # build Dockerfile.openssh and publish/import on eligible nodes
+  existingSecret: "" # ssh_host_ed25519_key
   service:
     type: ClusterIP
     port: 22
   resources:
     requests: {cpu: 100m, memory: 128Mi}
     limits: {cpu: "1", memory: 512Mi}
+# Legacy migration guard only; do not enable.
+sftpgo:
+  enabled: false

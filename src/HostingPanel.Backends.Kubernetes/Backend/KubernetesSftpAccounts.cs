@@ -40,7 +40,7 @@ internal sealed class SftpAccountModel : IHostingPanelModelExtension, IHostingPa
 }
 internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, KubernetesIdentityService identity, IConfiguration configuration, NfsDirectoryProvisioner storage, KubernetesOperationQueue operations, HostingOperationNotifications notifications) : ISftpAccounts
 {
-    private bool Enabled => !string.IsNullOrWhiteSpace(configuration["SftpGo:BaseUrl"]);
+    private bool Enabled => configuration.GetValue<bool>("OpenSsh:Enabled");
     private async Task<long> LimitAsync(HostingAccount owner, CancellationToken ct, string field = "ftp")
     {
         var package = await db.Packages.Where(p => p.Id == owner.PackageId).Select(p => p.LimitsJson).SingleOrDefaultAsync(ct);
