@@ -93,3 +93,5 @@ Kubernetes subdomain ownership uses an explicit provider-owned `SubdomainBinding
 - Optional SFTPGo Helm infrastructure: one StatefulSet, persistent state and host keys, separate internal management service and SFTP service. NFS is deliberately read-only pending UID/GID and tenant-isolation validation. No account provisioning or customer access is implemented yet.
 
 - SFTPGo internal management client supports admin token exchange, exact user lookup, create/update/delete with read-back and disabled-by-default managed users. No public API, account lifecycle wiring or customer activation yet. Internal HTTP transport requires enforced NetworkPolicy and a trusted cluster network; TLS remains a deployment follow-up.
+
+- Kubernetes SFTP account UI stores owner-scoped pending account definitions and public keys in SQLite; the existing ftp package/account limit is enforced on creation. No upstream activation or reconciliation yet. DirectAdmin SFTP management is not supported by this UI.

@@ -904,4 +904,15 @@
   <data name="Subdomain operation completed." xml:space="preserve"><value>Subdomeinbewerking voltooid.</value></data>
   <data name="Manage subdomains of this domain." xml:space="preserve"><value>Beheer subdomeinen van dit domein.</value></data>
   <data name="Retrieving subdomains…" xml:space="preserve"><value>Subdomeinen ophalen…</value></data>
+  <data name="SFTP accounts" xml:space="preserve"><value>SFTP-accounts</value></data>
+  <data name="Create SFTP account" xml:space="preserve"><value>SFTP-account toevoegen</value></data>
+  <data name="Public SSH key" xml:space="preserve"><value>Publieke SSH-sleutel</value></data>
+  <data name="Account label" xml:space="preserve"><value>Accountnaam</value></data>
+  <data name="Pending provisioning" xml:space="preserve"><value>Wacht op provisioning</value></data>
+  <data name="SFTP account limit reached." xml:space="preserve"><value>Limiet voor SFTP-accounts bereikt.</value></data>
+  <data name="SFTP management is unavailable." xml:space="preserve"><value>SFTP-beheer is niet beschikbaar.</value></data>
+  <data name="Delete SFTP account" xml:space="preserve"><value>SFTP-account verwijderen</value></data>
+  <data name="This removes the account, not its files." xml:space="preserve"><value>Dit verwijdert het account, niet de bestanden.</value></data>
+  <data name="Enter the exact login name to confirm." xml:space="preserve"><value>Voer de exacte inlognaam in ter bevestiging.</value></data>
+  <data name="SFTP accounts are not active until provisioning is available." xml:space="preserve"><value>SFTP-accounts zijn niet actief totdat provisioning beschikbaar is.</value></data>
 </root>

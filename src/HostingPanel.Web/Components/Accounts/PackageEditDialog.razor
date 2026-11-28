@@ -18,7 +18,7 @@
         @foreach (var key in PackageFields.Limits)
         {
             <MudStack Row="true" AlignItems="AlignItems.Center">
-                <MudNumericField T="long" Label="@L[FieldLabel(key)].Value" Value="@Number(key)" ValueChanged="@((long value) => SetNumber(key,value))" Min="0" Disabled="@(busy || Unlimited(key))" />
+                <MudNumericField T="long" Label="@L[key == "ftp" && Configuration["HostingPanel:Backend"] == "Kubernetes" ? "SFTP accounts" : FieldLabel(key)].Value" Value="@Number(key)" ValueChanged="@((long value) => SetNumber(key,value))" Min="0" Disabled="@(busy || Unlimited(key))" />
                 <MudCheckBox T="bool" Label="@L["Unlimited"].Value" Value="@Unlimited(key)" ValueChanged="@((bool value) => SetUnlimited(key,value))" Disabled="@busy" />
             </MudStack>
         }

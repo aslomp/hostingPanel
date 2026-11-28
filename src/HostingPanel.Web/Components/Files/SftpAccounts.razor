@@ -1,0 +1,93 @@
+@page "/sftp-accounts"
+@using HostingPanel.Api
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject PanelSession Session
+@inject SftpOperations Operations
+@inject IDialogService Dialogs
+@implements IDisposable
+
+<PageTitle>@L["SFTP accounts"]</PageTitle>
+<PanelPageHeader>
+    <TitleContent>@L["SFTP accounts"]</TitleContent>
+    <Description>@L["SFTP accounts are not active until provisioning is available."]</Description>
+    <Actions><CrudAddButton OnClick="OpenCreate" Disabled="@(!CanCreate)">@L["Create SFTP account"]</CrudAddButton></Actions>
+</PanelPageHeader>
+@if (read.Loading) { <PanelLoading>@L["Loading…"]</PanelLoading> }
+@if (error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+@if (accounts is not null)
+{
+    <MudText>@accounts.Count / @(limit == long.MaxValue ? L["Unlimited"].Value : limit.ToString())</MudText>
+    @if (accounts.Count >= limit) { <MudAlert Severity="Severity.Info">@L["SFTP account limit reached."]</MudAlert> }
+    <MudSimpleTable Dense="true" Hover="true">
+        <thead><tr><th>@L["Account label"]</th><th>@L["Username"]</th><th>@L["Status"]</th><th>@L["Actions"]</th></tr></thead>
+        <tbody>
+        @foreach (var account in accounts)
+        {
+            <tr @key="account.Id"><td>@account.Label</td><td>@account.Username</td><td>@L["Pending provisioning"]</td>
+                <td><CrudDeleteButton Label="@L["Delete SFTP account"].Value" Disabled="@busy" OnClick="() => Delete(account)" /></td></tr>
+        }
+        </tbody>
+    </MudSimpleTable>
+}
+@if (creating)
+{
+    <MudPaper Class="pa-4">
+        <MudTextField T="string" Label="@L["Account label"].Value" @bind-Value="label" Immediate="true" Disabled="@busy" />
+        <MudTextField T="string" Label="@L["Public SSH key"].Value" @bind-Value="key" Lines="3" Immediate="true" Disabled="@busy" />
+        <MudText>ssh-ed25519</MudText>
+        <MudButton Disabled="@(busy || !CanCreate || string.IsNullOrWhiteSpace(label) || string.IsNullOrWhiteSpace(key))" OnClick="Create">@L["Save"]</MudButton>
+        <MudButton Disabled="@busy" OnClick="Cancel">@L["Cancel"]</MudButton>
+    </MudPaper>
+}
+@code {
+    private readonly LatestRead read = new();
+    private IReadOnlyList<SftpAccountEntry>? accounts;
+    private long limit;
+    private bool creating, busy, disposed;
+    private string label = "", key = "";
+    private string? error;
+    private bool CanCreate => Session.Connected && !busy && !read.Loading && accounts is not null && accounts.Count < limit;
+    protected override Task OnInitializedAsync() { Session.Changed += SessionChanged; return Refresh(); }
+    private bool Current(string? channel) => !disposed && Session.Connected && Session.TicketChannel == channel;
+    private Task Refresh()
+    {
+        accounts = null; error = null;
+        if (!Session.Connected || disposed) { read.Cancel(); return Task.CompletedTask; }
+        var channel = Session.TicketChannel;
+        return read.RunAsync(ct => Operations.ListAsync(ct), () => Current(channel), result => {
+            if (result.Status == 200) { accounts = result.Accounts; limit = result.Limit; }
+            else error = L["SFTP management is unavailable."].Value;
+        }, _ => error = L["SFTP management is unavailable."].Value);
+    }
+    private void SessionChanged() => _ = InvokeAsync(async () => { if (disposed) return; Cancel(); var task = Refresh(); StateHasChanged(); await task; if (!disposed) StateHasChanged(); });
+    private void OpenCreate() { if (CanCreate) creating = true; }
+    private void Cancel() { creating = false; label = key = ""; }
+    private async Task Create()
+    {
+        if (!CanCreate) return;
+        busy = true; error = null; var channel = Session.TicketChannel;
+        try {
+            var result = await Operations.CreateAsync(new(label, key));
+            if (!Current(channel)) return;
+            if (result.Status == 201) { Cancel(); await Refresh(); }
+            else error = result.Error ?? L["SFTP management is unavailable."].Value;
+        } catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { if (Current(channel)) error = L["SFTP management is unavailable."].Value; }
+        finally { busy = false; }
+    }
+    private async Task Delete(SftpAccountEntry account)
+    {
+        if (busy || !Session.Connected) return;
+        busy = true; var channel = Session.TicketChannel;
+        try {
+            var confirmed = await Dialogs.ConfirmResourceDeletionAsync(L["Delete SFTP account"].Value, account.Username,
+                L["This removes the account, not its files."].Value, L["Enter the exact login name to confirm."].Value);
+            if (!confirmed || !Current(channel)) return;
+            var result = await Operations.DeleteAsync(account.Id);
+            if (!Current(channel)) return;
+            if (result.Status == 200) await Refresh(); else error = result.Error;
+        } catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { if (Current(channel)) error = L["SFTP management is unavailable."].Value; }
+        finally { busy = false; }
+    }
+    public void Dispose() { disposed = true; Session.Changed -= SessionChanged; read.Dispose(); }
+}
