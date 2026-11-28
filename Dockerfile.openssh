@@ -1,6 +1,13 @@
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends openssh-server python3 && rm -rf /var/lib/apt/lists/* /etc/ssh/ssh_host_* && mkdir -p /jails /run/sshd /run/hostingpanel-keys && chmod 0755 /jails /run/sshd /run/hostingpanel-keys
-COPY deploy/openssh/start.py /usr/local/lib/hostingpanel-sftp.py
+RUN groupadd -g 74 sshd && useradd -u 74 -g 74 -d /run/sshd -s /usr/sbin/nologin sshd \
+    && apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openssh-server \
+    && rm -rf /var/lib/apt/lists/* /etc/ssh/ssh_host_* \
+    && mkdir -p /jails /run/sshd /etc/hostingpanel \
+    && chmod 0755 /jails /run/sshd /etc/hostingpanel \
+    && rm /etc/passwd /etc/group /etc/shadow \
+    && ln -s /etc/hostingpanel/passwd /etc/passwd \
+    && ln -s /etc/hostingpanel/group /etc/group \
+    && ln -s /etc/hostingpanel/shadow /etc/shadow
 COPY deploy/openssh/sshd_config /etc/ssh/hostingpanel_sshd_config
 EXPOSE 2022
-ENTRYPOINT ["/usr/bin/python3","/usr/local/lib/hostingpanel-sftp.py"]
+ENTRYPOINT ["/usr/sbin/sshd","-D","-e","-f","/etc/ssh/hostingpanel_sshd_config"]

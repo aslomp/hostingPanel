@@ -27,6 +27,15 @@ rules:
     resources: ["pods/exec"]
     resourceNames: [{{- range $i := until (int .Values.kubernetesHosting.apacheReplicas) }}{{ if $i }}, {{ end }}{{ printf "apache-baseline-%d" $i | quote }}{{- end }}]
     verbs: ["get", "create"]
+  {{- if .Values.sftp.enabled }}
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    resourceNames: [{{ printf "%s-0" (printf "%s-sftp" .Release.Name | trunc 54 | trimSuffix "-") | quote }}]
+    verbs: ["get", "create"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "list", "watch"]
+  {{- end }}
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list", "watch", "create", "patch", "delete"]

@@ -5,14 +5,6 @@
 {{- $s := .Values.sftp }}
 {{- $name := printf "%s-sftp" .Release.Name | trunc 54 | trimSuffix "-" }}
 apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ $name }}-bootstrap
-data:
-  accounts.json: "[]"
-immutable: true
----
-apiVersion: v1
 kind: Service
 metadata:
   name: {{ $name }}
@@ -23,8 +15,19 @@ spec:
   ports:
     - {name: sftp, port: {{ $s.service.port }}, targetPort: sftp}
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-headless
+spec:
+  clusterIP: None
+  selector:
+    hostingpanel/sftp-workload: {{ $name }}
+  ports:
+    - {name: sftp, port: 2022, targetPort: sftp}
+---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ $name }}
   labels:
@@ -32,7 +35,7 @@ metadata:
     hostingpanel/sftp-workload: {{ $name }}
 spec:
   replicas: 1
-  strategy: {type: Recreate}
+  serviceName: {{ $name }}-headless
   selector:
     matchLabels:
       hostingpanel/sftp-workload: {{ $name }}
@@ -40,8 +43,6 @@ spec:
     metadata:
       labels:
         hostingpanel/sftp-workload: {{ $name }}
-      annotations:
-        hostingpanel/sftp-revision: bootstrap
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -60,11 +61,6 @@ spec:
             capabilities:
               drop: [ALL]
               add: [SETUID, SETGID, SYS_CHROOT, KILL]
-          env:
-            - name: HP_SFTP_REVISION
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.annotations['hostingpanel/sftp-revision']
           ports:
             - {name: sftp, containerPort: 2022}
           readinessProbe:
@@ -73,18 +69,20 @@ spec:
           volumeMounts:
             - {name: config, mountPath: /etc/hostingpanel, readOnly: true}
             - {name: hostkeys, mountPath: /run/hostingpanel-hostkeys, readOnly: true}
+            - {name: jails, mountPath: /jails, readOnly: {{ not $s.enableWrites }}}
       volumes:
         - name: config
           configMap:
-            name: {{ $name }}-bootstrap
+            name: {{ $name }}-accounts
+            defaultMode: 0444
         - name: hostkeys
           secret:
             secretName: {{ required "sftp.existingSecret is required" $s.existingSecret | quote }}
             defaultMode: 0400
-        - name: sites
+        - name: jails
           nfs:
             server: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}
-            path: {{ required "kubernetesHosting.nfsPath is required" .Values.kubernetesHosting.nfsPath | quote }}
+            path: {{ required "sftp.jailExport is required" $s.jailExport | quote }}
             readOnly: {{ not $s.enableWrites }}
 ---
 apiVersion: networking.k8s.io/v1

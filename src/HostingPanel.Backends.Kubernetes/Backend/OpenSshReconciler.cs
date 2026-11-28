@@ -9,8 +9,8 @@ using Microsoft.Extensions.Logging;
 
 namespace HostingPanel.Api;
 
-// SQLite remains authoritative. Kubernetes performs the subPath bind mounts;
-// the shared sshd needs no CAP_SYS_ADMIN and has no management HTTP endpoint.
+// SQLite remains authoritative. Only a fixed projected ConfigMap is updated;
+// sshd resolves Unix users and keys for each new connection.
 internal sealed class OpenSshReconciler(IServiceScopeFactory scopes, IConfiguration configuration,
     HostingOperationNotifications notifications, KubernetesResourceClient resources,
     NfsDirectoryProvisioner storage, ILogger<OpenSshReconciler> logger) : BackgroundService
@@ -23,18 +23,39 @@ internal sealed class OpenSshReconciler(IServiceScopeFactory scopes, IConfigurat
     {
         if (!configuration.GetValue<bool>("OpenSsh:Enabled")) return Task.CompletedTask;
         return ReconciliationLoop.RunAsync(notifications.Reader(ReconciliationTarget.Sftp),
-            (changed, token) => resources.WatchCustomResourcesAsync("apps", "v1", Namespace, "deployments",
+            (changed, token) => resources.WatchCustomResourcesAsync("apps", "v1", Namespace, "statefulsets",
                 "hostingpanel/sftp-workload=" + Workload, changed, _ => changed(), token),
             ReconcileAsync, logger, Timeout.InfiniteTimeSpan, ct, signal: () => notifications.Signal(ReconciliationTarget.Sftp));
     }
 
     internal sealed record Login(string LoginName, int Uid, int Gid, string[] Keys, string SubPath, Guid OwnerId, Guid Id);
-    internal static string Snapshot(IEnumerable<Login> logins) => JsonSerializer.Serialize(logins.OrderBy(x => x.LoginName, StringComparer.Ordinal)
-        .Select(x => new { login = x.LoginName, uid = x.Uid, gid = x.Gid, keys = x.Keys }));
     internal static string Revision(string snapshot) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(snapshot))).ToLowerInvariant();
-    // Include mount roots in the revision even when the keys and numeric identity do not change.
+    // Include authorized storage paths in the revision even if the Unix identity is unchanged.
     internal static string SnapshotWithPaths(IEnumerable<Login> logins) => JsonSerializer.Serialize(logins.OrderBy(x => x.LoginName, StringComparer.Ordinal)
         .Select(x => new { login = x.LoginName, uid = x.Uid, gid = x.Gid, keys = x.Keys, path = x.SubPath }));
+
+    // Fixed minimal system identities match Dockerfile.openssh. No real password hashes.
+    internal static Dictionary<string,string> AccountFiles(IReadOnlyCollection<Login> logins)
+    {
+        var ordered = logins.OrderBy(x => x.LoginName, StringComparer.Ordinal).ToArray();
+        var passwd = new StringBuilder("root:x:0:0:root:/root:/bin/sh\nsshd:x:74:74:sshd:/run/sshd:/usr/sbin/nologin\n");
+        var group = new StringBuilder("root:x:0:\nsshd:x:74:\n");
+        var shadow = new StringBuilder("root:*:20000:0:99999:7:::\nsshd:*:20000:0:99999:7:::\n");
+        var files = new Dictionary<string,string>();
+        foreach (var login in ordered)
+        {
+            passwd.Append($"{login.LoginName}:x:{login.Uid}:{login.Gid}::/data:/usr/sbin/nologin\n");
+            shadow.Append($"{login.LoginName}:*:20000:0:99999:7:::\n");
+            files["keys-" + login.LoginName] = string.Join("\n", login.Keys.Select(x => "restrict " + x)) + "\n";
+        }
+        foreach (var gid in ordered.Select(x => x.Gid).Distinct().Order())
+            group.Append($"hpsftp-{gid}:x:{gid}:\n");
+        files["passwd"] = passwd.ToString();
+        files["group"] = group.ToString();
+        files["shadow"] = shadow.ToString();
+        files["revision"] = Revision(SnapshotWithPaths(ordered));
+        return files;
+    }
 
     private async Task<bool> ReconcileAsync(CancellationToken ct)
     {
@@ -76,6 +97,7 @@ internal sealed class OpenSshReconciler(IServiceScopeFactory scopes, IConfigurat
                     !KubernetesSftpAccounts.ValidRelativePath(row.RelativePath)) throw new InvalidOperationException("Invalid SFTP identity.");
                 var keys = KubernetesSftpAccounts.NormalizeKeys(KubernetesSftpAccounts.DecodeKeys(row.PublicKey)) ?? throw new InvalidOperationException("Invalid keys.");
                 var (uid,gid) = await storage.ValidateSftpHomeAsync(owner.Username, row.RelativePath, ct);
+                await storage.ValidateOpenSshJailAsync(row.Username, owner.Username, row.RelativePath, uid, gid, ct);
                 if (uid < 1000 || gid < 1000 || uid is 65534 or 1654 or 1001 || gid is 65534 or 1654 or 1001)
                     throw new InvalidOperationException("Reserved Unix identity.");
                 logins.Add(new(row.Username,uid,gid,keys,owner.Username + (row.RelativePath.Length == 0 ? "" : "/" + row.RelativePath),owner.Id,row.Id));
@@ -91,10 +113,10 @@ internal sealed class OpenSshReconciler(IServiceScopeFactory scopes, IConfigurat
         logins.RemoveAll(x => failed.Contains(x.Id));
         try
         {
-            var snapshot = SnapshotWithPaths(logins);
-            if (Encoding.UTF8.GetByteCount(snapshot) > 900_000) throw new InvalidOperationException("SFTP snapshot exceeds ConfigMap budget.");
-            if (!await resources.ActivateOpenSshAsync(Namespace,Workload,Revision(snapshot),snapshot,
-                logins.ToDictionary(x => x.LoginName,x => x.SubPath),ct)) return true;
+            var files = AccountFiles(logins);
+            if (files.Sum(x => Encoding.UTF8.GetByteCount(x.Key) + Encoding.UTF8.GetByteCount(x.Value)) > 900_000)
+                throw new InvalidOperationException("SFTP accounts exceed ConfigMap budget.");
+            if (!await resources.ActivateOpenSshAsync(Namespace, Workload, files["revision"], files, ct)) return true;
             var active = logins.Select(x => x.Id).ToHashSet();
             foreach (var row in rows)
             {

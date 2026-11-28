@@ -10,7 +10,7 @@ PubkeyAuthentication yes
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitEmptyPasswords no
-AuthorizedKeysFile /run/hostingpanel-keys/%u
+AuthorizedKeysFile /etc/hostingpanel/keys-%u
 PubkeyAcceptedAlgorithms ssh-ed25519
 StrictModes yes
 DisableForwarding yes

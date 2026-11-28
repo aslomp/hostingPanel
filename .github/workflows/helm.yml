@@ -36,12 +36,12 @@ jobs:
       - name: Render shared OpenSSH infrastructure
         run: |
           set -eu
-          helm template admin deploy/helm/hostingpanel -n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.gatewayName=example-gateway --set sftp.enabled=true --set sftp.image=example.invalid/openssh:ci --set sftp.existingSecret=ssh-hostkeys --show-only templates/openssh.yaml > /tmp/openssh.yaml
-          grep -q 'kind: Deployment' /tmp/openssh.yaml
+          helm template admin deploy/helm/hostingpanel -n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.gatewayName=example-gateway --set sftp.enabled=true --set sftp.jailExport=/exports/sftp-jails --set sftp.image=example.invalid/openssh:ci --set sftp.existingSecret=ssh-hostkeys --show-only templates/openssh.yaml > /tmp/openssh.yaml
+          grep -q 'kind: StatefulSet' /tmp/openssh.yaml
           grep -q 'kind: NetworkPolicy' /tmp/openssh.yaml
           grep -q 'SYS_CHROOT' /tmp/openssh.yaml
           ! grep -q 'SYS_ADMIN\|DAC_OVERRIDE\|CHOWN\|sftpgo' /tmp/openssh.yaml
-          grep -q 'type: Recreate' /tmp/openssh.yaml
+          ! grep -q 'subPath:' /tmp/openssh.yaml
           grep -q 'readOnly: false' /tmp/openssh.yaml
           if helm template admin deploy/helm/hostingpanel -n hosting --set sftpgo.enabled=true >/tmp/legacy.yaml 2>/tmp/legacy.err; then
             echo "Legacy SFTPGo configuration accepted"; exit 1

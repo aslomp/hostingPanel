@@ -91,74 +91,32 @@ public sealed class KubernetesResourceClient : IDisposable
         catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.NotFound) { }
     }
 
-    // The chart owns the workload baseline; reconciliation owns only its account snapshot and subPath mounts.
-    public async Task<bool> ActivateOpenSshAsync(string ns, string name, string revision, string accounts,
-        IReadOnlyDictionary<string,string> homes, CancellationToken ct)
+    // Only the fixed account ConfigMap changes. Never patch the pod template for account operations.
+    public async Task<bool> ActivateOpenSshAsync(string ns, string name, string revision,
+        IReadOnlyDictionary<string,string> data, CancellationToken ct)
     {
-        var deployment = await Api.AppsV1.ReadNamespacedDeploymentAsync(name, ns, cancellationToken: ct);
-        if ((deployment.Metadata.Labels is null || !deployment.Metadata.Labels.TryGetValue("hostingpanel/component", out var component) || component != "openssh") ||
-            deployment.Spec.Strategy?.Type != "Recreate" || deployment.Spec.Replicas != 1)
-            throw new InvalidOperationException("Unexpected SFTP deployment ownership or strategy.");
-        var pod = deployment.Spec.Template;
-        var container = pod.Spec.Containers.Single();
-        if (container.Name != "openssh" || pod.Spec.Volumes.Count != 3 ||
-            !pod.Spec.Volumes.Any(x => x.Name == "sites" && x.Nfs is not null) ||
-            !pod.Spec.Volumes.Any(x => x.Name == "hostkeys" && x.Secret is not null))
-            throw new InvalidOperationException("Unexpected SFTP workload baseline.");
-        var mapName = name + "-cfg-" + revision;
-        var config = pod.Spec.Volumes.Single(x => x.Name == "config");
-        var mounts = new List<V1VolumeMount> {
-            new() { Name = "config", MountPath = "/etc/hostingpanel", ReadOnlyProperty = true },
-            new() { Name = "hostkeys", MountPath = "/run/hostingpanel-hostkeys", ReadOnlyProperty = true }
-        };
-        mounts.AddRange(homes.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => new V1VolumeMount {
-            Name = "sites", MountPath = "/jails/" + x.Key + "/data", SubPath = x.Value, ReadOnlyProperty = pod.Spec.Volumes.Single(v => v.Name == "sites").Nfs.ReadOnlyProperty == true
-        }));
-        // Immutable revision data makes a restarted pod consume the exact snapshot for its mounts.
+        if (revision.Length != 64 || !revision.All(char.IsAsciiHexDigitLower))
+            throw new ArgumentException("Invalid SFTP revision.", nameof(revision));
+        var mapName = name + "-accounts";
         var manifest = JsonSerializer.Serialize(new { apiVersion = "v1", kind = "ConfigMap",
             metadata = new { name = mapName, labels = new Dictionary<string,string> {
-                ["hostingpanel/component"] = "openssh-snapshot", ["hostingpanel/workload"] = name } },
-            immutable = true, data = new Dictionary<string,string> { ["accounts.json"] = accounts } });
+                ["hostingpanel/component"] = "openssh-accounts", ["hostingpanel/workload"] = name } },
+            data });
         await ApplyAsync(manifest, ns, "hostingpanel-sftp", ct);
-        var expectedMounts = mounts.Select(x => (x.Name, x.MountPath, x.SubPath ?? "", x.ReadOnlyProperty == true)).ToArray();
-        var actualMounts = (container.VolumeMounts ?? []).Select(x => (x.Name, x.MountPath, x.SubPath ?? "", x.ReadOnlyProperty == true)).ToArray();
-        if (config.ConfigMap?.Name != mapName || (pod.Metadata.Annotations is null || !pod.Metadata.Annotations.TryGetValue("hostingpanel/sftp-revision", out var observedRevision) || observedRevision != revision) ||
-            !expectedMounts.SequenceEqual(actualMounts))
-        {
-            var volumeIndex = pod.Spec.Volumes.ToList().FindIndex(x => x.Name == "config");
-            var patch = JsonSerializer.Serialize(new object[] {
-                new { op = "test", path = "/metadata/resourceVersion", value = deployment.Metadata.ResourceVersion },
-                new { op = "add", path = "/spec/template/metadata/annotations/hostingpanel~1sftp-revision", value = revision },
-                new { op = "replace", path = "/spec/template/spec/volumes/" + volumeIndex + "/configMap/name", value = mapName },
-                new { op = "replace", path = "/spec/template/spec/containers/0/volumeMounts",
-                    value = mounts.Select(x => new { name = x.Name, mountPath = x.MountPath, subPath = x.SubPath ?? "", readOnly = x.ReadOnlyProperty == true }) }
-            });
-            await Api.AppsV1.PatchNamespacedDeploymentAsync(new V1Patch(patch, V1Patch.PatchType.JsonPatch), name, ns, cancellationToken: ct);
-            return false;
-        }
-        var status = deployment.Status;
-        if (status is null || status.ObservedGeneration != deployment.Metadata.Generation ||
-            status.Replicas != 1 || status.UpdatedReplicas != 1 || status.ReadyReplicas != 1 || status.AvailableReplicas != 1)
-            return false;
-        // Recreate must have terminated the previous pod before reporting success.
         var pods = await Api.CoreV1.ListNamespacedPodAsync(ns, labelSelector: "hostingpanel/sftp-workload=" + name, cancellationToken: ct);
-        if (pods.Items.Count != 1 || pods.Items[0].Metadata.DeletionTimestamp is not null ||
-            (pods.Items[0].Metadata.Annotations is null || !pods.Items[0].Metadata.Annotations.TryGetValue("hostingpanel/sftp-revision", out var podRevision) || podRevision != revision) ||
-            pods.Items[0].Status?.Conditions?.Any(x => x.Type == "Ready" && x.Status == "True") != true)
+        var pod = pods.Items.SingleOrDefault(x => x.Metadata.Name == name + "-0");
+        if (pods.Items.Count != 1 || pod is null || pod.Metadata.DeletionTimestamp is not null ||
+            pod.Spec.Containers.Count != 1 || pod.Spec.Containers[0].Name != "openssh" ||
+            pod.Status?.Conditions?.Any(x => x.Type == "Ready" && x.Status == "True") != true)
             return false;
-        // The current pod is ready; older snapshots are no longer mounted. Never touch unrelated ConfigMaps.
-        var maps = await Api.CoreV1.ListNamespacedConfigMapAsync(ns, labelSelector: "hostingpanel/component=openssh-snapshot,hostingpanel/workload=" + name, cancellationToken: ct);
-        foreach (var old in maps.Items)
-        {
-            var oldName = old.Metadata.Name;
-            if (oldName == mapName || !oldName.StartsWith(name + "-cfg-", StringComparison.Ordinal) ||
-                oldName.Length != name.Length + 5 + 64 || !oldName[(name.Length + 5)..].All(char.IsAsciiHexDigitLower) ||
-                string.IsNullOrEmpty(old.Metadata.Uid) || string.IsNullOrEmpty(old.Metadata.ResourceVersion)) continue;
-            try { await Api.CoreV1.DeleteNamespacedConfigMapAsync(oldName, ns,
-                body: new V1DeleteOptions { Preconditions = new V1Preconditions { Uid = old.Metadata.Uid, ResourceVersion = old.Metadata.ResourceVersion } }, cancellationToken: ct); }
-            catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.NotFound) { }
-        }
-        return true;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(15));
+        using var output = new MemoryStream();
+        var exit = await Api.NamespacedPodExecAsync(pod.Metadata.Name, ns, "openssh",
+            new[] { "/bin/cat", "/etc/hostingpanel/revision" }, false,
+            async (_, stdout, stderr) => await Task.WhenAll(stdout.CopyToAsync(output, timeout.Token),
+                stderr.CopyToAsync(Stream.Null, timeout.Token)), timeout.Token);
+        return exit == 0 && System.Text.Encoding.UTF8.GetString(output.ToArray()).Trim() == revision;
     }
 
     public async Task DeleteConfigMapAsync(string ns, string name, CancellationToken ct)

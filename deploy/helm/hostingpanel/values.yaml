@@ -141,6 +141,7 @@ stalwart:
 sftp:
   enabled: false
   enableWrites: true
+  jailExport: "" # dedicated root-owned NFS jail tree, prepared on storage host
   image: "" # build Dockerfile.openssh and publish/import on eligible nodes
   existingSecret: "" # ssh_host_ed25519_key
   service:

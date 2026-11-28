@@ -154,6 +154,8 @@ spec:
               value: "true"
             - name: OpenSsh__EnableWrites
               value: {{ .Values.sftp.enableWrites | quote }}
+            - name: OpenSsh__JailProvisioningPath
+              value: /storage/sftp-jails
             - name: OpenSsh__Workload
               value: {{ printf "%s-sftp" .Release.Name | trunc 54 | trimSuffix "-" | quote }}
             {{- end }}
