@@ -45,7 +45,16 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         if (!Enabled) return new(501, "SFTP_NOT_CONFIGURED");
         var rows = await db.Set<SftpAccountRow>().AsNoTracking().Where(x => x.OwnerId == owner.Id)
             .OrderBy(x => x.Label).Select(x => new SftpAccountEntry(x.Id, x.Username, x.Label, x.RelativePath)).ToListAsync(ct);
-        return new(200, Accounts: rows, Limit: await LimitAsync(owner, ct));
+        var ids = rows.Select(x => x.Id).ToArray();
+        var jobs = await db.ReconciliationOperations.AsNoTracking()
+            .Where(x => x.ResourceType == "sftp-account" && ids.Contains(x.ResourceId)).ToListAsync(ct);
+        var observed = rows.Select(row => {
+            var pending = jobs.Where(x => x.ResourceId == row.Id && x.Status == "pending").ToArray();
+            var state = pending.Any(x => x.LastError != null) ? "failed" : pending.Length != 0 ? "pending"
+                : jobs.Any(x => x.ResourceId == row.Id && x.Status == "completed") ? "disabled" : "pending";
+            return row with { ProvisioningStatus = state };
+        }).ToArray();
+        return new(200, Accounts: observed, Limit: await LimitAsync(owner, ct));
     }
     internal static bool ValidRelativePath(string? path) => path is not null && path.Length <= 1024 &&
         (path.Length == 0 || path.Split('/').All(part => part.Length is > 0 and <= 255 && part is not ("." or "..") &&

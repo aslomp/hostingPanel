@@ -824,4 +824,6 @@
   <data name="Home directory" xml:space="preserve"><value>Home directory</value></data>
   <data name="Home directory (optional)" xml:space="preserve"><value>Home directory (optional)</value></data>
   <data name="Relative to your hosting directory; leave empty for full access." xml:space="preserve"><value>Relative to your hosting directory; leave empty for full access.</value></data>
+  <data name="Provisioning failed" xml:space="preserve"><value>Provisioning failed</value></data>
+  <data name="Provisioned (disabled)" xml:space="preserve"><value>Provisioned (disabled)</value></data>
 </root>

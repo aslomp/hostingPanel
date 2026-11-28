@@ -4,6 +4,7 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @inject PanelSession Session
 @inject SftpOperations Operations
+@inject HostingOperationNotifications Notifications
 @inject IDialogService Dialogs
 @implements IDisposable
 
@@ -24,7 +25,7 @@
         <tbody>
         @foreach (var account in accounts)
         {
-            <tr @key="account.Id"><td>@account.Label</td><td>@account.Username</td><td>@("/" + account.RelativePath)</td><td>@L["Pending provisioning"]</td>
+            <tr @key="account.Id"><td>@account.Label</td><td>@account.Username</td><td>@("/" + account.RelativePath)</td><td>@L[account.ProvisioningStatus switch { "failed" => "Provisioning failed", "disabled" => "Provisioned (disabled)", _ => "Pending provisioning" }]</td>
                 <td><CrudDeleteButton Label="@L["Delete SFTP account"].Value" Disabled="@busy" OnClick="() => Delete(account)" /></td></tr>
         }
         </tbody>
@@ -49,7 +50,7 @@
     private string label = "", key = "", relativePath = "";
     private string? error;
     private bool CanCreate => Session.Connected && !busy && !read.Loading && accounts is not null && accounts.Count < limit;
-    protected override Task OnInitializedAsync() { Session.Changed += SessionChanged; return Refresh(); }
+    protected override Task OnInitializedAsync() { Session.Changed += SessionChanged; Notifications.Changed += ProvisioningChanged; return Refresh(); }
     private bool Current(string? channel) => !disposed && Session.Connected && Session.TicketChannel == channel;
     private Task Refresh()
     {
@@ -61,6 +62,7 @@
             else error = L["SFTP management is unavailable."].Value;
         }, _ => error = L["SFTP management is unavailable."].Value);
     }
+    private void ProvisioningChanged() => _ = InvokeAsync(async () => { if (disposed || !Session.Connected) return; await Refresh(); if (!disposed) StateHasChanged(); });
     private void SessionChanged() => _ = InvokeAsync(async () => { if (disposed) return; Cancel(); var task = Refresh(); StateHasChanged(); await task; if (!disposed) StateHasChanged(); });
     private void OpenCreate() { if (CanCreate) creating = true; }
     private void Cancel() { creating = false; label = key = relativePath = ""; }
@@ -90,5 +92,5 @@
         } catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { if (Current(channel)) error = L["SFTP management is unavailable."].Value; }
         finally { busy = false; }
     }
-    public void Dispose() { disposed = true; Session.Changed -= SessionChanged; read.Dispose(); }
+    public void Dispose() { disposed = true; Session.Changed -= SessionChanged; Notifications.Changed -= ProvisioningChanged; read.Dispose(); }
 }

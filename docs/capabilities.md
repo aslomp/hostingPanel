@@ -103,3 +103,5 @@ Kubernetes subdomain ownership uses an explicit provider-owned `SubdomainBinding
 - Official legacy CMD_API_SSH_KEYS GET/POST is forwarded unchanged to DirectAdmin using caller credentials. Kubernetes rejects that operation (system SSH keys are not virtual SFTP accounts). Separate /hosting/file-access/sftp routes expose the owner-scoped pending SFTP account capability; no pinned Swagger changes or FTP password compatibility translation.
 
 - SFTPGo reconciliation consumes durable account, owner and package operations through the shared channel loop; initial startup reconciles existing rows. Users remain disabled pending runtime filesystem validation. No idle polling.
+
+- SFTP account overview displays pending, failed or completed-disabled provisioning status from the outbox and refreshes on existing invalidations. Removal requests upstream connection termination and verifies no matching connections remain. Zero entitlement revokes users. Live validation pending; activation remains blocked.

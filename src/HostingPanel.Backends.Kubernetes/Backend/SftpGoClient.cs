@@ -104,17 +104,40 @@ internal sealed class SftpGoClient(IHttpClientFactory clients, IConfiguration co
             throw new InvalidOperationException("SFTPGo user read-back failed.");
     }
 
+    private static async Task DisconnectAsync(HttpClient client, string username, CancellationToken ct)
+    {
+        using var response = await client.GetAsync("api/v2/connections", ct);
+        response.EnsureSuccessStatusCode();
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        foreach (var connection in document.RootElement.EnumerateArray())
+        {
+            if (connection.GetProperty("username").GetString() != username) continue;
+            var id = connection.GetProperty("connection_id").GetString();
+            if (string.IsNullOrWhiteSpace(id)) throw new InvalidOperationException("Missing connection identity.");
+            using var deletion = await client.DeleteAsync("api/v2/connections/" + Uri.EscapeDataString(id), ct);
+            if (deletion.StatusCode != HttpStatusCode.NotFound) deletion.EnsureSuccessStatusCode();
+        }
+        using var verification = await client.GetAsync("api/v2/connections", ct);
+        verification.EnsureSuccessStatusCode();
+        using var observed = JsonDocument.Parse(await verification.Content.ReadAsStringAsync(ct));
+        if (observed.RootElement.EnumerateArray().Any(x => x.GetProperty("username").GetString() == username))
+            throw new InvalidOperationException("SFTPGo connection termination not verified.");
+    }
+
     internal async Task DeleteAsync(Guid accountId, string username, CancellationToken ct)
     {
         if (accountId == Guid.Empty) throw new ArgumentException("Missing account identity.", nameof(accountId));
         using var client = await ConnectAsync(ct);
         var existing = await ReadAsync(client, username, ct);
-        if (existing is null) return;
-        if (existing.Description != OwnerMarker(accountId))
+        if (existing is not null && existing.Description != OwnerMarker(accountId))
             throw new InvalidOperationException("SFTPGo user ownership conflict.");
-        using var response = await client.DeleteAsync(PathFor(username), ct);
-        response.EnsureSuccessStatusCode();
+        if (existing is not null)
+        {
+            using var response = await client.DeleteAsync(PathFor(username), ct);
+            if (response.StatusCode != HttpStatusCode.NotFound) response.EnsureSuccessStatusCode();
+        }
         if (await ReadAsync(client, username, ct) is not null)
             throw new InvalidOperationException("SFTPGo user deletion not verified.");
+        await DisconnectAsync(client, username, ct);
     }
 }

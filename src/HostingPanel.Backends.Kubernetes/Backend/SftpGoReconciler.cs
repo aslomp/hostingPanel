@@ -57,7 +57,9 @@ internal sealed class SftpGoReconciler(IServiceScopeFactory scopes, IConfigurati
                 var row = await workDb.Set<SftpAccountRow>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
                 var owner = row is null ? null : await workDb.Accounts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == row.OwnerId, ct);
                 var username = "sftp-" + id.ToString("N");
-                if (row is null || owner is null || owner.Suspended)
+                var package = owner is null ? null : await workDb.Packages.AsNoTracking()
+                    .Where(x => x.Id == owner.PackageId).Select(x => x.LimitsJson).SingleOrDefaultAsync(ct);
+                if (row is null || owner is null || owner.Suspended || MailLimitPolicy.Resolve(package, owner.LimitsJson, "ftp") == 0)
                     await client.DeleteAsync(id, username, ct);
                 else
                 {

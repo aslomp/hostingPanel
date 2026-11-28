@@ -37,3 +37,5 @@ Subdomain deletion requires parent authorization and exact child FQDN confirmati
 ## SFTP
 
 The SFTP worker consumes a separate coalescing channel with no idle polling. SFTP account mutations commit an outbox entry with desired state; owner and package changes stage additional invalidations. Startup stages existing rows without pending operations. Deleted user identity is derived from the immutable SFTP account GUID. Failed external operations remain pending and retry with capped backoff. The current safety gate provisions only disabled users; no customer login or NFS writes are enabled. Runtime confinement, active-session revocation and observed activation remain follow-up work.
+
+SFTP deletion also requests termination of remaining upstream connections and verifies the connection inventory. A zero entitlement revokes provisioned users. The UI refreshes owner-scoped status through existing in-process invalidation notifications (Blazor Server); no new polling or standalone SignalR hub.

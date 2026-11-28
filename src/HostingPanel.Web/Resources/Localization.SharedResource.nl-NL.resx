@@ -918,4 +918,6 @@
   <data name="Home directory" xml:space="preserve"><value>Hoofddirectory</value></data>
   <data name="Home directory (optional)" xml:space="preserve"><value>Hoofddirectory (optioneel)</value></data>
   <data name="Relative to your hosting directory; leave empty for full access." xml:space="preserve"><value>Relatief aan je hostingdirectory; laat leeg voor volledige toegang.</value></data>
+  <data name="Provisioning failed" xml:space="preserve"><value>Provisioning mislukt</value></data>
+  <data name="Provisioned (disabled)" xml:space="preserve"><value>Geprovisioneerd (uitgeschakeld)</value></data>
 </root>
