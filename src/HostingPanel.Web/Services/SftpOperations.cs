@@ -7,6 +7,8 @@ public sealed class SftpOperations(BackendOperationScope scope)
         scope.RunOptionalAsync<ISftpAccounts, SftpAccountResult>((p, auth, token) => p.ListAsync(auth, token), Unsupported, ct);
     public Task<SftpAccountResult> CreateAsync(SftpAccountRequest input) =>
         scope.RunOptionalAsync<ISftpAccounts, SftpAccountResult>((p, auth, token) => p.CreateAsync(input, auth, token), Unsupported);
+    public Task<SftpAccountResult> UpdateAsync(Guid id, SftpAccountUpdate input) =>
+        scope.RunOptionalAsync<ISftpAccounts, SftpAccountResult>((p, auth, token) => p.UpdateAsync(id, input, auth, token), Unsupported);
     public Task<SftpAccountResult> DeleteAsync(Guid id) =>
         scope.RunOptionalAsync<ISftpAccounts, SftpAccountResult>((p, auth, token) => p.DeleteAsync(id, auth, token), Unsupported);
 }

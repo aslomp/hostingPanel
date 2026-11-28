@@ -59,14 +59,23 @@ internal sealed class SftpGoReconciler(IServiceScopeFactory scopes, IConfigurati
                 var username = "sftp-" + id.ToString("N");
                 var package = owner is null ? null : await workDb.Packages.AsNoTracking()
                     .Where(x => x.Id == owner.PackageId).Select(x => x.LimitsJson).SingleOrDefaultAsync(ct);
-                if (row is null || owner is null || owner.Suspended || MailLimitPolicy.Resolve(package, owner.LimitsJson, "ftp") == 0)
+                var state = await workDb.Set<SftpAccountState>().SingleOrDefaultAsync(x => x.Id == id, ct);
+                var active = configuration.GetValue<bool>("SftpGo:EnableWrites");
+                var revoked = row is null || owner is null || owner.Suspended || state?.Blocked == true || MailLimitPolicy.Resolve(package, owner.LimitsJson, "ftp") == 0;
+                if (revoked)
                     await client.DeleteAsync(id, username, ct);
                 else
                 {
-                    if (row.Username != username) throw new InvalidOperationException("Unexpected SFTP identity.");
+                    if (row!.Username != username) throw new InvalidOperationException("Unexpected SFTP identity.");
                     // Do not activate accounts until storage confinement is validated.
-                    await client.EnsureAsync(id, username, owner.Username, row.RelativePath, row.PublicKey, configuration.GetValue<bool>("SftpGo:EnableWrites"), ct);
+                    await client.EnsureAsync(id, username, owner!.Username, row.RelativePath, row.PublicKey, active, ct);
                 }
+                if (row is not null)
+                {
+                    if (state is null) { state = new() { Id = id }; workDb.Add(state); }
+                    state.Observed = revoked || !active ? "disabled" : "active";
+                }
+                else if (state is not null) workDb.Remove(state);
                 foreach (var job in jobs) Complete(job);
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)

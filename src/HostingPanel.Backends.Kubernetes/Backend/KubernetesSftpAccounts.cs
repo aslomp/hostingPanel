@@ -13,14 +13,22 @@ internal sealed class SftpAccountRow
     public string PublicKey { get; set; } = "";
     public string RelativePath { get; set; } = "";
 }
+internal sealed class SftpAccountState
+{
+    public Guid Id { get; set; }
+    public bool Blocked { get; set; }
+    public string Observed { get; set; } = "pending";
+}
 internal sealed class SftpAccountModel : IHostingPanelModelExtension, IHostingPanelSchemaExtension
 {
     public string Provider => "Kubernetes.Sftp";
     public IReadOnlyList<HostingPanelSchemaMigration> Migrations => [
-        new(1, """CREATE TABLE IF NOT EXISTS "SftpAccounts" ("Id" TEXT NOT NULL PRIMARY KEY, "OwnerId" TEXT NOT NULL, "Username" TEXT NOT NULL UNIQUE, "Label" TEXT NOT NULL, "PublicKey" TEXT NOT NULL, "RelativePath" TEXT NOT NULL DEFAULT '', UNIQUE ("OwnerId", "Label"));""")
+        new(1, """CREATE TABLE IF NOT EXISTS "SftpAccounts" ("Id" TEXT NOT NULL PRIMARY KEY, "OwnerId" TEXT NOT NULL, "Username" TEXT NOT NULL UNIQUE, "Label" TEXT NOT NULL, "PublicKey" TEXT NOT NULL, "RelativePath" TEXT NOT NULL DEFAULT '', UNIQUE ("OwnerId", "Label"));"""),
+        new(2, """CREATE TABLE IF NOT EXISTS "SftpAccountStates" ("Id" TEXT NOT NULL PRIMARY KEY, "Blocked" INTEGER NOT NULL, "Observed" TEXT NOT NULL);""")
     ];
     public void Configure(ModelBuilder model)
     {
+        model.Entity<SftpAccountState>(e => { e.ToTable("SftpAccountStates"); e.HasKey(x => x.Id); });
         model.Entity<SftpAccountRow>(e => {
             e.ToTable("SftpAccounts");
             e.HasKey(x => x.Id);
@@ -47,11 +55,12 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         var ids = rows.Select(x => x.Id).ToArray();
         var jobs = await db.ReconciliationOperations.AsNoTracking()
             .Where(x => x.ResourceType == "sftp-account" && ids.Contains(x.ResourceId)).ToListAsync(ct);
+        var states = await db.Set<SftpAccountState>().AsNoTracking().Where(x => ids.Contains(x.Id)).ToDictionaryAsync(x => x.Id, ct);
         var observed = rows.Select(row => {
             var pending = jobs.Where(x => x.ResourceId == row.Id && x.Status == "pending").ToArray();
             var state = pending.Any(x => x.LastError != null) ? "failed" : pending.Length != 0 ? "pending"
-                : jobs.Any(x => x.ResourceId == row.Id && x.Status == "completed") ? "disabled" : "pending";
-            return row with { ProvisioningStatus = state };
+                : states.GetValueOrDefault(row.Id)?.Observed ?? "pending";
+            return row with { ProvisioningStatus = state, Blocked = states.GetValueOrDefault(row.Id)?.Blocked ?? false };
         }).ToArray();
         return new(200, Accounts: observed, Limit: await LimitAsync(owner, ct));
     }
@@ -98,6 +107,36 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         notifications.PublishChange(ReconciliationTarget.Sftp);
         return new(202);
     }
+    public async Task<SftpAccountResult> UpdateAsync(Guid id, SftpAccountUpdate input, AuthenticationHeaderValue auth, CancellationToken ct)
+    {
+        var owner = await identity.AuthenticateAsync(auth, ct);
+        if (owner is null) return new(401, "UNAUTHORIZED");
+        if (!Enabled) return new(501, "SFTP_NOT_CONFIGURED");
+        if (input.Label is not { Length: > 0 and <= 24 } || !input.Label.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
+            || !ValidRelativePath(input.RelativePath) || input.PublicKey is not null && !ValidKey(input.PublicKey))
+            return new(400, "INVALID_SFTP_ACCOUNT");
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var row = await db.Set<SftpAccountRow>().SingleOrDefaultAsync(x => x.Id == id && x.OwnerId == owner.Id, ct);
+        if (row is null) return new(404, "SFTP_ACCOUNT_NOT_FOUND");
+        if (!input.Blocked)
+        {
+            try { await storage.ValidateSftpHomeAsync(owner.Username, input.RelativePath, ct); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            { return new(409, "SFTP_HOME_UNAVAILABLE_OR_UNSAFE"); }
+        }
+        var state = await db.Set<SftpAccountState>().FindAsync([id], ct);
+        if (state is null) { state = new() { Id = id }; db.Add(state); }
+        state.Blocked = input.Blocked;
+        state.Observed = "pending";
+        row.Label = input.Label.ToLowerInvariant();
+        row.RelativePath = input.RelativePath;
+        if (input.PublicKey is not null) row.PublicKey = input.PublicKey.Trim();
+        operations.Schedule("sftp-account", id, "update");
+        try { await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); }
+        catch (DbUpdateException) { return new(409, "SFTP_ACCOUNT_CONFLICT"); }
+        notifications.PublishChange(ReconciliationTarget.Sftp);
+        return new(202);
+    }
     public async Task<SftpAccountResult> DeleteAsync(Guid id, AuthenticationHeaderValue auth, CancellationToken ct)
     {
         var owner = await identity.AuthenticateAsync(auth, ct);
@@ -106,6 +145,8 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         var row = await db.Set<SftpAccountRow>().SingleOrDefaultAsync(x => x.Id == id && x.OwnerId == owner.Id, ct);
         if (row is null) return new(404, "SFTP_ACCOUNT_NOT_FOUND");
         operations.Schedule("sftp-account", row.Id, "delete");
+        var state = await db.Set<SftpAccountState>().FindAsync([id], ct);
+        if (state is not null) db.Remove(state);
         db.Remove(row);
         await db.SaveChangesAsync(ct);
         notifications.PublishChange(ReconciliationTarget.Sftp);

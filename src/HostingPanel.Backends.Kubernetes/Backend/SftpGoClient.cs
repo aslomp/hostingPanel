@@ -87,6 +87,14 @@ internal sealed class SftpGoClient(IHttpClientFactory clients, IConfiguration co
         var existing = await ReadAsync(client, username, ct);
         if (existing is not null && existing.Description != marker)
             throw new InvalidOperationException("SFTPGo user ownership conflict.");
+        if (existing is not null && (existing.HomeDirectory != home || existing.Status != (active ? 1 : 0) || !((existing.PublicKeys ?? []).SequenceEqual(active ? new[] { publicKey } : Array.Empty<string>()))))
+        {
+            // Remove old access before changing credentials or confinement.
+            using var removed = await client.DeleteAsync(path, ct);
+            removed.EnsureSuccessStatusCode();
+            await DisconnectAsync(client, username, ct);
+            existing = null;
+        }
         var payload = new {
             username, home_dir = home, uid, gid, status = active ? 1 : 0,
             description = marker, public_keys = active ? new[] { publicKey } : Array.Empty<string>(),

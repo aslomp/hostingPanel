@@ -11,7 +11,7 @@
 <PageTitle>@L["SFTP accounts"]</PageTitle>
 <PanelPageHeader>
     <TitleContent>@L["SFTP accounts"]</TitleContent>
-    <Description>@L["SFTP accounts are not active until provisioning is available."]</Description>
+    <Description>@L["Manage key-based SFTP access to your hosting directory."]</Description>
     <Actions><CrudAddButton OnClick="OpenCreate" Disabled="@(!CanCreate)">@L["Create SFTP account"]</CrudAddButton></Actions>
 </PanelPageHeader>
 @if (read.Loading) { <PanelLoading>@L["Loading…"]</PanelLoading> }
@@ -25,8 +25,8 @@
         <tbody>
         @foreach (var account in accounts)
         {
-            <tr @key="account.Id"><td>@account.Label</td><td>@account.Username</td><td>@("/" + account.RelativePath)</td><td>@L[account.ProvisioningStatus switch { "failed" => "Provisioning failed", "disabled" => "Provisioned (disabled)", _ => "Pending provisioning" }]</td>
-                <td><CrudDeleteButton Label="@L["Delete SFTP account"].Value" Disabled="@busy" OnClick="() => Delete(account)" /></td></tr>
+            <tr @key="account.Id"><td>@account.Label</td><td>@account.Username</td><td>@("/" + account.RelativePath)</td><td>@L[account.ProvisioningStatus switch { "active" => "Active", "failed" => "Provisioning failed", "disabled" => "Provisioned (disabled)", _ => "Pending provisioning" }]</td>
+                <td><MudButton Disabled="@busy" OnClick="() => OpenEdit(account)">@L["Edit"]</MudButton><CrudDeleteButton Label="@L["Delete SFTP account"].Value" Disabled="@busy" OnClick="() => Delete(account)" /></td></tr>
         }
         </tbody>
     </MudSimpleTable>
@@ -38,7 +38,8 @@
         <MudTextField T="string" Label="@L["Home directory (optional)"].Value" HelperText="@L["Relative to your hosting directory; leave empty for full access."].Value" @bind-Value="relativePath" Immediate="true" Disabled="@busy" />
         <MudTextField T="string" Label="@L["Public SSH key"].Value" @bind-Value="key" Lines="3" Immediate="true" Disabled="@busy" />
         <MudText>ssh-ed25519</MudText>
-        <MudButton Disabled="@(busy || !CanCreate || string.IsNullOrWhiteSpace(label) || string.IsNullOrWhiteSpace(key))" OnClick="Create">@L["Save"]</MudButton>
+        @if (editing is not null) { <MudText>@L["Leave the key empty to retain it."]</MudText><MudCheckBox T="bool" @bind-Value="blocked" Label="@L["Block access"].Value" Disabled="@busy" /> }
+        <MudButton Disabled="@(busy || (editing is null && (!CanCreate || string.IsNullOrWhiteSpace(key))) || string.IsNullOrWhiteSpace(label))" OnClick="Create">@L["Save"]</MudButton>
         <MudButton Disabled="@busy" OnClick="Cancel">@L["Cancel"]</MudButton>
     </MudPaper>
 }
@@ -46,6 +47,8 @@
     private readonly LatestRead read = new();
     private IReadOnlyList<SftpAccountEntry>? accounts;
     private long limit;
+    private Guid? editing;
+    private bool blocked;
     private bool creating, busy, disposed;
     private string label = "", key = "", relativePath = "";
     private string? error;
@@ -64,14 +67,17 @@
     }
     private void ProvisioningChanged() => _ = InvokeAsync(async () => { if (disposed || !Session.Connected) return; await Refresh(); if (!disposed) StateHasChanged(); });
     private void SessionChanged() => _ = InvokeAsync(async () => { if (disposed) return; Cancel(); var task = Refresh(); StateHasChanged(); await task; if (!disposed) StateHasChanged(); });
-    private void OpenCreate() { if (CanCreate) creating = true; }
-    private void Cancel() { creating = false; label = key = relativePath = ""; }
+    private void OpenCreate() { if (CanCreate) { Cancel(); creating = true; } }
+    private void OpenEdit(SftpAccountEntry account) { if (busy || !Session.Connected) return; editing = account.Id; label = account.Label; relativePath = account.RelativePath; blocked = account.Blocked; key = ""; creating = true; }
+    private void Cancel() { editing = null; blocked = false; creating = false; label = key = relativePath = ""; }
     private async Task Create()
     {
-        if (!CanCreate) return;
+        if (busy || !Session.Connected || (editing is null && !CanCreate)) return;
         busy = true; error = null; var channel = Session.TicketChannel;
         try {
-            var result = await Operations.CreateAsync(new(label, key, relativePath));
+            var result = editing is Guid id
+                ? await Operations.UpdateAsync(id, new(label, relativePath, blocked, string.IsNullOrWhiteSpace(key) ? null : key))
+                : await Operations.CreateAsync(new(label, key, relativePath));
             if (!Current(channel)) return;
             if (result.Status == 202) { Cancel(); await Refresh(); }
             else error = result.Error ?? L["SFTP management is unavailable."].Value;

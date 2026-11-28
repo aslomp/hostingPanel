@@ -29,6 +29,10 @@ public sealed class HostingSftpController(IEnumerable<ISftpAccounts> providers) 
     public Task<IResult> Create([FromBody] SftpAccountRequest input, CancellationToken ct) =>
         Run((p, a) => p.CreateAsync(input, a, ct));
 
+    [HttpPatch("/hosting/file-access/sftp/{id:guid}")]
+    public Task<IResult> Update(Guid id, [FromBody] SftpAccountUpdate input, CancellationToken ct) =>
+        Run((p, a) => p.UpdateAsync(id, input, a, ct));
+
     [HttpDelete("/hosting/file-access/sftp/{id:guid}")]
     public Task<IResult> Delete(Guid id, [FromQuery] string confirmation, CancellationToken ct) =>
         Run(async (p, a) => {

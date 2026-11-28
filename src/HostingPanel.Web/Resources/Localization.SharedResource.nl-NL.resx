@@ -920,4 +920,7 @@
   <data name="Relative to your hosting directory; leave empty for full access." xml:space="preserve"><value>Relatief aan je hostingdirectory; laat leeg voor volledige toegang.</value></data>
   <data name="Provisioning failed" xml:space="preserve"><value>Provisioning mislukt</value></data>
   <data name="Provisioned (disabled)" xml:space="preserve"><value>Geprovisioneerd (uitgeschakeld)</value></data>
+  <data name="Manage key-based SFTP access to your hosting directory." xml:space="preserve"><value>Beheer SFTP-toegang met SSH-sleutels tot je hostingdirectory.</value></data>
+  <data name="Leave the key empty to retain it." xml:space="preserve"><value>Laat de sleutel leeg om deze te behouden.</value></data>
+  <data name="Block access" xml:space="preserve"><value>Toegang blokkeren</value></data>
 </root>
