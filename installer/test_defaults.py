@@ -1,9 +1,10 @@
 import json
 import pathlib
 import unittest
+import tempfile
 from unittest.mock import patch
 from defaults import defaults, network_defaults, email_valid, complete
-from generate import hostname_valid, validate
+from generate import hostname_valid, validate, generate
 
 class DefaultTests(unittest.TestCase):
     def test_network_is_single_node(self):
@@ -51,6 +52,28 @@ class DefaultTests(unittest.TestCase):
         c["accountingEndpoint"] = "http://panel.hosting.test"
         with self.assertRaises(ValueError):
             validate(c)
+
+    def test_sftp_port(self):
+        template = json.loads(pathlib.Path(__file__).with_name("cluster.example.json").read_text())
+        c = defaults(template, "10.0.0.10", "10.0.0.10/32", "admin@hosting.test", "--full-server")
+        self.assertEqual(c["sftpPort"], 2223)
+        with tempfile.TemporaryDirectory() as directory:
+            base = pathlib.Path(directory)
+            (base / "csi-key").write_text("fixture-key")
+            (base / "iscsi-chap").write_text("0123456789abcdef")
+            for port in (None, 2300):
+                if port is None:
+                    c.pop("sftpPort", None)
+                else:
+                    c["sftpPort"] = port
+                validate(c)
+                generate(c, base)
+                values = json.loads((base / "hosting-values.json").read_text())
+                self.assertEqual(values["sftp"]["service"]["port"], port or 2223)
+        for port in (0, 65536, 22, 2222, "2300", True):
+            c["sftpPort"] = port
+            with self.assertRaises(ValueError):
+                validate(c)
 
     def test_hostname_validation(self):
         self.assertTrue(hostname_valid("ns1.hosting.test"))

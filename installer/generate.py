@@ -28,6 +28,11 @@ def hostname_valid(value):
 
 
 def validate(c):
+    port = c.get("sftpPort", 2223)
+    if type(port) is not int or not 1 <= port <= 65535:
+        raise ValueError("sftpPort must be an integer TCP port from 1 to 65535")
+    if port in (22, 25, 53, 80, 443, 465, 587, 993, 995, 2222, 4190, 6443):
+        raise ValueError("sftpPort conflicts with a standard hosting or management port")
     for k in ("clusterHost", "storageHost", "webIp"):
         if ipaddress.ip_address(c[k]).version != 4:
             raise ValueError(f"{k}: IPv4 required")
@@ -149,6 +154,7 @@ def generate(c, base):
     if c.get("accountingSpoolEnabled", False):
         values["kubernetesHosting"]["accountingSpool"] = dict(enabled=True, path="/srv/hosting/accounting",
             image=c["accountingImage"], endpoint=c["accountingEndpoint"], existingSecret="hostingpanel-accounting")
+    values["sftp"] = dict(image="hostingpanel-openssh:installer-local", jailExport="/srv/hosting/sftp-jails", existingSecret="hostingpanel-ssh-hostkeys", service=dict(port=c.get("sftpPort", 2223)))
     write(base/"hosting-values.json",values)
 
 if __name__ == "__main__":

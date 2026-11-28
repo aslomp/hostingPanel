@@ -17,7 +17,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          args=(-n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.gatewayName=example-gateway)
+          args=(-n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.gatewayName=example-gateway --set sftp.jailExport=/exports/sftp-jails --set sftp.image=example.invalid/openssh:ci --set sftp.existingSecret=ssh-hostkeys)
           helm lint deploy/helm/hostingpanel "${args[@]}"
           helm template admin deploy/helm/hostingpanel "${args[@]}" > /tmp/hosting.yaml
           grep -q 'harbor.eagleconnect.nl/hosting/admin:latest' /tmp/hosting.yaml
@@ -36,8 +36,13 @@ jobs:
       - name: Render shared OpenSSH infrastructure
         run: |
           set -eu
-          helm template admin deploy/helm/hostingpanel -n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.gatewayName=example-gateway --set sftp.enabled=true --set sftp.jailExport=/exports/sftp-jails --set sftp.image=example.invalid/openssh:ci --set sftp.existingSecret=ssh-hostkeys --show-only templates/openssh.yaml > /tmp/openssh.yaml
+          helm template admin deploy/helm/hostingpanel -n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.gatewayName=example-gateway --set sftp.jailExport=/exports/sftp-jails --set sftp.image=example.invalid/openssh:ci --set sftp.existingSecret=ssh-hostkeys --show-only templates/openssh.yaml > /tmp/openssh.yaml
           grep -q 'kind: StatefulSet' /tmp/openssh.yaml
+          grep -q 'type: LoadBalancer' /tmp/openssh.yaml
+          grep -q 'externalTrafficPolicy: Local' /tmp/openssh.yaml
+          grep -q 'port: 2223, targetPort: sftp' /tmp/openssh.yaml
+          helm template admin deploy/helm/hostingpanel -n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.gatewayName=example-gateway --set sftp.jailExport=/exports/sftp-jails --set sftp.image=example.invalid/openssh:ci --set sftp.existingSecret=ssh-hostkeys --set sftp.service.port=2300 --show-only templates/openssh.yaml > /tmp/openssh-custom.yaml
+          grep -q 'port: 2300, targetPort: sftp' /tmp/openssh-custom.yaml
           grep -q 'kind: NetworkPolicy' /tmp/openssh.yaml
           grep -q 'SYS_CHROOT' /tmp/openssh.yaml
           ! grep -q 'SYS_ADMIN\|DAC_OVERRIDE\|CHOWN\|sftpgo' /tmp/openssh.yaml
@@ -52,11 +57,11 @@ jobs:
         run: |
           set -eu
           args=''
-          helm template admin deploy/helm/hostingpanel -n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.apacheConfigPath=/exports/apache --set kubernetesHosting.gatewayName=example-gateway --set kubernetesHosting.accountingSpool.enabled=true --set kubernetesHosting.accountingSpool.path=/exports/accounting --set kubernetesHosting.accountingSpool.image=example.invalid/apache:ci --set kubernetesHosting.accountingSpool.endpoint=https://panel.example.invalid --set kubernetesHosting.accountingSpool.existingSecret=accounting > /tmp/accounting.yaml
+          helm template admin deploy/helm/hostingpanel -n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.apacheConfigPath=/exports/apache --set kubernetesHosting.gatewayName=example-gateway --set sftp.jailExport=/exports/sftp-jails --set sftp.image=example.invalid/openssh:ci --set sftp.existingSecret=ssh-hostkeys --set kubernetesHosting.accountingSpool.enabled=true --set kubernetesHosting.accountingSpool.path=/exports/accounting --set kubernetesHosting.accountingSpool.image=example.invalid/apache:ci --set kubernetesHosting.accountingSpool.endpoint=https://panel.example.invalid --set kubernetesHosting.accountingSpool.existingSecret=accounting > /tmp/accounting.yaml
           grep -q 'name: accounting-spool' /tmp/accounting.yaml
           grep -q 'name: KubernetesHosting__DurableLogIngestion' /tmp/accounting.yaml
           grep -q 'path: "/exports/accounting"' /tmp/accounting.yaml
-          if helm template admin deploy/helm/hostingpanel -n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.apacheConfigPath=/exports/apache --set kubernetesHosting.gatewayName=example-gateway --set kubernetesHosting.accountingSpool.enabled=true --set kubernetesHosting.accountingSpool.path=/exports/sites/accounting --set kubernetesHosting.accountingSpool.image=example.invalid/apache:ci --set kubernetesHosting.accountingSpool.endpoint=https://panel.example.invalid --set kubernetesHosting.accountingSpool.existingSecret=accounting >/tmp/bad-accounting.yaml 2>/tmp/bad-accounting.err; then
+          if helm template admin deploy/helm/hostingpanel -n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.apacheConfigPath=/exports/apache --set kubernetesHosting.gatewayName=example-gateway --set sftp.jailExport=/exports/sftp-jails --set sftp.image=example.invalid/openssh:ci --set sftp.existingSecret=ssh-hostkeys --set kubernetesHosting.accountingSpool.enabled=true --set kubernetesHosting.accountingSpool.path=/exports/sites/accounting --set kubernetesHosting.accountingSpool.image=example.invalid/apache:ci --set kubernetesHosting.accountingSpool.endpoint=https://panel.example.invalid --set kubernetesHosting.accountingSpool.existingSecret=accounting >/tmp/bad-accounting.yaml 2>/tmp/bad-accounting.err; then
             echo 'Unexpectedly accepted overlapping accounting export'; exit 1
           fi
           grep -q 'Accounting export must not overlap' /tmp/bad-accounting.err

@@ -24,5 +24,6 @@
   "accountingSpoolEnabled": false,
   "accountingImage": "hostingpanel-apache-accounting:installer-local",
   "accountingEndpoint": "",
-  "buildAccountingImage": true
+  "buildAccountingImage": true,
+  "sftpPort": 2223
 }
