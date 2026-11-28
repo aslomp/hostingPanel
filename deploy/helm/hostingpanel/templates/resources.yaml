@@ -208,6 +208,9 @@ spec:
             {{- if $hosting }}
             - {name: sites, mountPath: /storage/sites}
             - {name: apache-config, mountPath: /storage/apache-config}
+            {{- if .Values.sftp.enabled }}
+            - {name: sftp-jails, mountPath: /storage/sftp-jails, readOnly: true}
+            {{- end }}
             {{- end }}
       volumes:
         {{- if $hosting }}
@@ -228,6 +231,13 @@ spec:
             server: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}
             path: {{ include "hostingpanel.apacheConfigExport" . | quote }}
             readOnly: false
+        {{- end }}
+        {{- if and $hosting .Values.sftp.enabled }}
+        - name: sftp-jails
+          nfs:
+            server: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}
+            path: {{ required "sftp.jailExport is required" .Values.sftp.jailExport | quote }}
+            readOnly: true
         {{- end }}
         - name: data
           persistentVolumeClaim:

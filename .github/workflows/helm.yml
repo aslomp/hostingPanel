@@ -41,7 +41,7 @@ jobs:
           grep -q 'kind: NetworkPolicy' /tmp/openssh.yaml
           grep -q 'SYS_CHROOT' /tmp/openssh.yaml
           ! grep -q 'SYS_ADMIN\|DAC_OVERRIDE\|CHOWN\|sftpgo' /tmp/openssh.yaml
-          ! grep -q 'subPath:' /tmp/openssh.yaml
+          if grep -q 'subPath:' /tmp/openssh.yaml; then echo 'Unexpected per-account mounts'; exit 1; fi
           grep -q 'readOnly: false' /tmp/openssh.yaml
           if helm template admin deploy/helm/hostingpanel -n hosting --set sftpgo.enabled=true >/tmp/legacy.yaml 2>/tmp/legacy.err; then
             echo "Legacy SFTPGo configuration accepted"; exit 1
