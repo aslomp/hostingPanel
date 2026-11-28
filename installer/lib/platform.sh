@@ -71,6 +71,8 @@ install_platform() {
       build_panel_image "$(require accountingImage)" "$base/installer-owned-docker" Dockerfile.apache-accounting
     fi
   fi
+  ensure_ssh_hostkey
+  build_panel_image hostingpanel-openssh:installer-local "$base/installer-owned-docker" Dockerfile.openssh
   helm template admin "$here/../deploy/helm/hostingpanel" -n hosting -f "$base/hosting-values.json" >/dev/null
   install_panel_with_progress "$base"
   getent ahostsv4 registry-1.docker.io >/dev/null || die "Host DNS resolution failed after panel deployment"
@@ -89,6 +91,16 @@ install_platform() {
   apt-get install -y dnsutils
   python3 "$here/bootstrap-dns.py" "$config"
 }
+
+ensure_ssh_hostkey() (
+  local existing tmp
+  existing=$(k3s kubectl -n hosting get secret hostingpanel-ssh-hostkeys --ignore-not-found -o name)
+  [[ -z "$existing" ]] || return 0
+  tmp=$(mktemp -d)
+  trap 'rm -rf -- "$tmp"' EXIT
+  ssh-keygen -q -t ed25519 -N '' -f "$tmp/ssh_host_ed25519_key"
+  k3s kubectl -n hosting create secret generic hostingpanel-ssh-hostkeys --from-file=ssh_host_ed25519_key="$tmp/ssh_host_ed25519_key"
+)
 
 ensure_secret() (
   local name=$1

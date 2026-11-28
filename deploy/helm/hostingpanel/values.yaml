@@ -143,7 +143,7 @@ stalwart:
 
 # Shared OpenSSH service. No management server or privileged mount operations.
 sftp:
-  enabled: false
+  enabled: true
   enableWrites: true
   jailExport: "" # dedicated root-owned NFS jail tree, prepared on storage host
   image: "" # build Dockerfile.openssh and publish/import on eligible nodes
