@@ -109,3 +109,5 @@ Dedicated package screens use the caller's credentials and CMD_API_PACKAGES_USER
 ## SSH keys and SFTP
 
 The official legacy GET/POST `CMD_API_SSH_KEYS` endpoint is forwarded unchanged using the caller's credentials. It manages SSH keys of the upstream system account, not independent path-scoped SFTP users. DirectAdmin server policy controls whether those keys enable shell or file access. HostingPanel does not translate them into SFTPGo accounts or silently enable SSH. The additive `/hosting/file-access/sftp` account API is Kubernetes-only and returns 501 on DirectAdmin. The pinned Swagger is unchanged.
+
+Native authorized-key management is available at GET/POST `/hosting/file-access/ssh-keys` and POST `/hosting/file-access/ssh-keys/revoke`. The DirectAdmin capability reads the documented authorized-key inventory, authorizes pasted public keys and revokes an exact fingerprint, checking legacy errors and independently reading back each mutation. No local mirror, generated private keys or implicit SSH enablement. The virtual SFTP API remains separate; Kubernetes does not implement native system SSH keys.

@@ -8,6 +8,7 @@ public static class DirectAdminRegistration
 
     services.AddScoped<DirectAdminBackend>();
     services.AddScoped<ISubdomains, DirectAdminSubdomains>();
+    services.AddScoped<ISshAuthorizedKeys, DirectAdminSshAuthorizedKeys>();
     services.AddScoped<IMailProvider, DirectAdminMailProvider>();
     services.AddScoped<IAccountNameservers, DirectAdminAccountNameservers>();
     services.AddScoped<IAuthenticationProvider>(sp => sp.GetRequiredService<DirectAdminBackend>());
