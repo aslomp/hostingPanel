@@ -105,3 +105,7 @@ For future changes follow [AGENTS.md](../AGENTS.md), the [architecture](architec
 ## Package management
 
 Dedicated package screens use the caller's credentials and CMD_API_PACKAGES_USER / CMD_API_PACKAGES_RESELLER for list and detail. CMD_API_MANAGE_USER_PACKAGES / CMD_API_MANAGE_RESELLER_PACKAGES accept legacy save/delete forms. Changes require authoritative read-back. Unknown settings on existing packages block editing rather than silently resetting upstream configuration. The pinned modern Swagger is unchanged.
+
+## SSH keys and SFTP
+
+The official legacy GET/POST `CMD_API_SSH_KEYS` endpoint is forwarded unchanged using the caller's credentials. It manages SSH keys of the upstream system account, not independent path-scoped SFTP users. DirectAdmin server policy controls whether those keys enable shell or file access. HostingPanel does not translate them into SFTPGo accounts or silently enable SSH. The additive `/hosting/file-access/sftp` account API is Kubernetes-only and returns 501 on DirectAdmin. The pinned Swagger is unchanged.
