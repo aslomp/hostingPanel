@@ -226,7 +226,7 @@ public sealed class WebsiteReconciler(IServiceScopeFactory scopes, IConfiguratio
         var deniedPhp = php
             ? "(?i)^(?!.*(?-i:[.]php)$).*[.](?:php[0-9]*|phtml|phar|phps|inc)(?:[.]|$)"
             : "(?i)[.](?:php[0-9]*|phtml|phar|phps|inc)(?:[.]|$)";
-        var apache = "<VirtualHost *:8080>\nServerName " + host + "\nDocumentRoot \"" + root + "\"" +
+        var apache = "<VirtualHost *:8080>\nServerName " + host + "\n" + ApacheAccessAccounting.Directive(domain.OwnerId, domain.Id) + "\nDocumentRoot \"" + root + "\"" +
             "\n<Directory \"" + root + "\">\nOptions -Indexes -ExecCGI -Includes -FollowSymLinks -SymLinksIfOwnerMatch\nAllowOverride None\nRequire all granted\nDirectoryIndex " +
             (php ? "index.php index.html" : "index.html") + "\n</Directory>\n" +
             "<DirectoryMatch \"/[.](?!well-known(?:/|$))[^/]+(?:/|$)\">\nRequire all denied\n</DirectoryMatch>\n" +

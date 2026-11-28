@@ -111,3 +111,5 @@ SFTPGo remains disabled by default; enabling it now defaults to write mode and p
 DirectAdmin native SSH authorized-key management: `ISshAuthorizedKeys`, `/hosting/file-access/ssh-keys`, caller-scoped upstream read/authorize/revoke with read-back. Does not grant SFTP-only confinement; server SSH policy remains authoritative. Virtual SFTP accounts remain Kubernetes-only.
 
 File transfer compatibility: DirectAdmin uses native FTP; Kubernetes exposes domain-scoped FTP compatibility reads/deletes and public-key-only creates/updates through the SFTP outbox. The legacy FTP controller forwards to the selected backend. Kubernetes does not accept FTP passwords or claim to implement the FTP wire protocol.
+
+Apache accounting logging (Kubernetes): per-vhost structured stdout access records contain immutable account/domain IDs, completion time, final HTTP status, received/sent bytes (mod_logio) and duration. No request URI or credentials in these access records. Parser and Apache smoke coverage provided. Durable collection, aggregation, reporting and quota enforcement are not implemented yet; stdout rotation can lose records.

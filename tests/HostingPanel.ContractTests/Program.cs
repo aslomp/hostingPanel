@@ -51,6 +51,7 @@ var checks = new List<(string Description, Action Test)>
         Require(SystemServiceOperations.ValidService("nginx.service"));
         Require(!SystemServiceOperations.ValidService("../nginx"));
     }),
+    ("Apache accounting log contract", ApacheAccessAccountingTests.Run),
     ("Apache candidate revisions are deterministic and immutable", ApacheConfigurationRevisionTests.Run),
     ("Administrative feedback preserves HTTP status and raw response", () =>
     {

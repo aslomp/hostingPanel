@@ -76,11 +76,13 @@ data:
     Listen 8080
     Listen 8081
     ServerName localhost
-    LogFormat "%h %l %u %t \"%r\" %>s %b" common
+    # Never record request targets, query strings, cookies or credentials in access logs.
+    LogFormat "HP_SYSTEM_V1 %>s %I %O %D" common
     LoadModule mpm_event_module modules/mod_mpm_event.so
     LoadModule unixd_module modules/mod_unixd.so
     LoadModule authz_core_module modules/mod_authz_core.so
     LoadModule log_config_module modules/mod_log_config.so
+    LoadModule logio_module modules/mod_logio.so
     LoadModule dir_module modules/mod_dir.so
     LoadModule mime_module modules/mod_mime.so
     LoadModule proxy_module modules/mod_proxy.so
@@ -134,7 +136,7 @@ spec:
     metadata:
       labels: {app.kubernetes.io/name: apache-baseline}
       annotations:
-        hostingpanel/apache-config: "shared-nfs-v1"
+        hostingpanel/apache-config: "shared-nfs-v1-accounting-v1"
     spec:
       automountServiceAccountToken: false
       securityContext:
