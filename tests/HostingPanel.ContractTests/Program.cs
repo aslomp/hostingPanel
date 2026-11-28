@@ -53,9 +53,9 @@ var checks = new List<(string Description, Action Test)>
     }),
     ("Apache accounting log contract", ApacheAccessAccountingTests.Run),
     ("HTTP accounting limits preserve package overrides and MiB units", () => {
-        Require(KubernetesHttpUsage.ResolveLimit("{\"bandwidth\":\"2\"}",null)==(true,2097152L));
-        Require(KubernetesHttpUsage.ResolveLimit("{\"bandwidth\":\"2\"}","{\"bandwidth\":\"unlimited\"}")== (true,(long?)null));
-        Require(KubernetesHttpUsage.ResolveLimit(null,null)==(false,(long?)null));
+        Require(HostingPanel.Api.KubernetesHttpUsage.ResolveLimit("{\"bandwidth\":\"2\"}",null)==(true,(long?)2097152L));
+        Require(HostingPanel.Api.KubernetesHttpUsage.ResolveLimit("{\"bandwidth\":\"2\"}","{\"bandwidth\":\"unlimited\"}")== (true,(long?)null));
+        Require(HostingPanel.Api.KubernetesHttpUsage.ResolveLimit(null,null)==(false,(long?)null));
     }),
     ("Apache candidate revisions are deterministic and immutable", ApacheConfigurationRevisionTests.Run),
     ("Administrative feedback preserves HTTP status and raw response", () =>
