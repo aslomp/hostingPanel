@@ -125,3 +125,18 @@ stalwart:
     httpsEnabled: false
     submissionEnabled: false
     pop3Enabled: false
+
+# Optional SFTPGo infrastructure; read-only storage until account isolation is validated.
+sftpgo:
+  enabled: false
+  image: drakkan/sftpgo:v2.7.6
+  existingSecret: "" # username and password for internal management bootstrap
+  existingClaim: ""
+  storageClassName: ""
+  size: 1Gi
+  service:
+    type: ClusterIP
+    port: 22
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: "1", memory: 512Mi}
