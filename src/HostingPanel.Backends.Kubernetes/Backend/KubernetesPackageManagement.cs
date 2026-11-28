@@ -60,6 +60,7 @@ public sealed class KubernetesPackageManagement(HostingPanelDbContext db, Kubern
             return new(400, "INVALID_PACKAGE");
         if (package.Settings.TryGetValue("sftpKeys", out var keyLimit) && keyLimit != "unlimited" && (!long.TryParse(keyLimit, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var keyCount) || keyCount < 0))
             return new(400, "INVALID_PACKAGE");
+        if (package.Settings.Any(x => x.Key is "quota" or "inode" && !ZfsAccountQuota.Valid(x.Value,x.Key))) return new(400,"INVALID_STORAGE_QUOTA");
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var rows = await Available(principal, ct);
         var row = Find(rows, kind, package.Name, principal.Id);

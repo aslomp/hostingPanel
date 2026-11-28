@@ -208,12 +208,30 @@ spec:
             {{- if $hosting }}
             - {name: sites, mountPath: /storage/sites}
             - {name: apache-config, mountPath: /storage/apache-config}
+            {{- if .Values.kubernetesHosting.zfsQuota.enabled }}
+            - {name: zfs-quota-key, mountPath: /run/zfs-quota, readOnly: true}
+            {{- end }}
+            {{- if .Values.kubernetesHosting.zfsQuota.enabled }}
+            - {name: zfs-quota-key, mountPath: /run/zfs-quota, readOnly: true}
+            {{- end }}
             {{- if .Values.sftp.enabled }}
             - {name: sftp-jails, mountPath: /storage/sftp-jails, readOnly: true}
             {{- end }}
             {{- end }}
       volumes:
         {{- if $hosting }}
+        {{- if .Values.kubernetesHosting.zfsQuota.enabled }}
+        - name: zfs-quota-key
+          secret:
+            secretName: {{ required "zfsQuota.existingSecret is required" .Values.kubernetesHosting.zfsQuota.existingSecret | quote }}
+            defaultMode: 0440
+        {{- end }}
+        {{- if .Values.kubernetesHosting.zfsQuota.enabled }}
+        - name: zfs-quota-key
+          secret:
+            secretName: {{ required "zfsQuota.existingSecret is required" .Values.kubernetesHosting.zfsQuota.existingSecret | quote }}
+            defaultMode: 0440
+        {{- end }}
         - name: sites
           {{- if .Values.kubernetesHosting.provisioningClaim }}
           persistentVolumeClaim:

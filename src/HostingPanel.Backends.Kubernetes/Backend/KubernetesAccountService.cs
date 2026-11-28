@@ -126,7 +126,8 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         var principal = await identity.AuthenticateAsync(auth, ct);
         if (principal is null) return new(401, "UNAUTHORIZED");
         if (change.Field is not ("bandwidth" or "quota" or "inode" or "nemails" or "ftp")
-            || !long.TryParse(change.Value, out var amount) || amount < 0) return new(400, "INVALID_LIMIT");
+            || (change.Value != "unlimited" && (!long.TryParse(change.Value, out var amount) || amount < 0))) return new(400, "INVALID_LIMIT");
+        if (change.Field is "quota" or "inode" && !ZfsAccountQuota.Valid(change.Value, change.Field)) return new(400, "INVALID_LIMIT");
         var ids = await identity.VisibleAccountsAsync(principal, ct);
         var account = await db.Accounts.FirstOrDefaultAsync(x => x.Username == username && x.Kind == kind, ct);
         if (account is null) return new(404, "ACCOUNT_NOT_FOUND");
