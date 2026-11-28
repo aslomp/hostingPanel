@@ -101,3 +101,5 @@ Kubernetes subdomain ownership uses an explicit provider-owned `SubdomainBinding
 - SFTP directory preflight reuses NFS provisioning ownership and permission checks at account creation and before disabled-user provisioning. It rejects missing directories, symlink components, root ownership and mismatching descendant UID/GID; no storage changes are made. This is not a runtime confinement guarantee against concurrent renames. Activation remains disabled pending live filesystem isolation and ownership validation.
 
 - Official legacy CMD_API_SSH_KEYS GET/POST is forwarded unchanged to DirectAdmin using caller credentials. Kubernetes rejects that operation (system SSH keys are not virtual SFTP accounts). Separate /hosting/file-access/sftp routes expose the owner-scoped pending SFTP account capability; no pinned Swagger changes or FTP password compatibility translation.
+
+- SFTPGo reconciliation consumes durable account, owner and package operations through the shared channel loop; initial startup reconciles existing rows. Users remain disabled pending runtime filesystem validation. No idle polling.

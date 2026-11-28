@@ -71,7 +71,7 @@
         try {
             var result = await Operations.CreateAsync(new(label, key, relativePath));
             if (!Current(channel)) return;
-            if (result.Status == 201) { Cancel(); await Refresh(); }
+            if (result.Status == 202) { Cancel(); await Refresh(); }
             else error = result.Error ?? L["SFTP management is unavailable."].Value;
         } catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { if (Current(channel)) error = L["SFTP management is unavailable."].Value; }
         finally { busy = false; }
@@ -86,7 +86,7 @@
             if (!confirmed || !Current(channel)) return;
             var result = await Operations.DeleteAsync(account.Id);
             if (!Current(channel)) return;
-            if (result.Status == 200) await Refresh(); else error = result.Error;
+            if (result.Status == 202) await Refresh(); else error = result.Error;
         } catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { if (Current(channel)) error = L["SFTP management is unavailable."].Value; }
         finally { busy = false; }
     }

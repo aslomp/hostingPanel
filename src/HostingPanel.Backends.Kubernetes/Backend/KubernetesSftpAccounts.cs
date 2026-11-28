@@ -30,7 +30,7 @@ internal sealed class SftpAccountModel : IHostingPanelModelExtension, IHostingPa
         });
     }
 }
-internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, KubernetesIdentityService identity, IConfiguration configuration, NfsDirectoryProvisioner storage) : ISftpAccounts
+internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, KubernetesIdentityService identity, IConfiguration configuration, NfsDirectoryProvisioner storage, KubernetesOperationQueue operations, HostingOperationNotifications notifications) : ISftpAccounts
 {
     private bool Enabled => !string.IsNullOrWhiteSpace(configuration["SftpGo:BaseUrl"]);
     private async Task<long> LimitAsync(HostingAccount owner, CancellationToken ct)
@@ -84,9 +84,11 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         { return new(503, "SFTP_STORAGE_TIMEOUT"); }
         var id = Guid.NewGuid();
         rows.Add(new SftpAccountRow { Id = id, OwnerId = owner.Id, Username = "sftp-" + id.ToString("N"), Label = input.Label.ToLowerInvariant(), PublicKey = input.PublicKey.Trim(), RelativePath = input.RelativePath });
+        operations.Schedule("sftp-account", id, "create");
         try { await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); }
         catch (DbUpdateException) { return new(409, "SFTP_ACCOUNT_CONFLICT"); }
-        return new(201);
+        notifications.PublishChange(ReconciliationTarget.Sftp);
+        return new(202);
     }
     public async Task<SftpAccountResult> DeleteAsync(Guid id, AuthenticationHeaderValue auth, CancellationToken ct)
     {
@@ -95,8 +97,10 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         if (!Enabled) return new(501, "SFTP_NOT_CONFIGURED");
         var row = await db.Set<SftpAccountRow>().SingleOrDefaultAsync(x => x.Id == id && x.OwnerId == owner.Id, ct);
         if (row is null) return new(404, "SFTP_ACCOUNT_NOT_FOUND");
+        operations.Schedule("sftp-account", row.Id, "delete");
         db.Remove(row);
         await db.SaveChangesAsync(ct);
-        return new(200);
+        notifications.PublishChange(ReconciliationTarget.Sftp);
+        return new(202);
     }
 }

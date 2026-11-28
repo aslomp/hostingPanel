@@ -87,10 +87,11 @@ public sealed class KubernetesPackageManagement(HostingPanelDbContext db, Kubern
         }
         fields[KindKey] = kind;
         row.LimitsJson = JsonSerializer.Serialize(fields);
+        if (!create) db.ReconciliationOperations.Add(new ReconciliationOperation { ResourceType = "sftp-package", ResourceId = row.Id, Action = "update" });
         try { await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct); }
         catch (DbUpdateException) { return new(409, "PACKAGE_CONFLICT"); }
         certificateWork?.AllChanged();
-        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns | ReconciliationTarget.Sftp);
         return new(create ? 201 : 200, null);
     }
 

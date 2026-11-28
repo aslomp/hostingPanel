@@ -27,6 +27,7 @@ public static class KubernetesRegistration
     services.AddScoped<KubernetesIdentityService>();
     services.AddSingleton<MailMutationGate>();
     services.AddScoped<SftpGoClient>();
+    services.AddHostedService<SftpGoReconciler>();
     services.AddSingleton<SftpAccountModel>();
     services.AddSingleton<IHostingPanelModelExtension>(sp => sp.GetRequiredService<SftpAccountModel>());
     services.AddSingleton<IHostingPanelSchemaExtension>(sp => sp.GetRequiredService<SftpAccountModel>());

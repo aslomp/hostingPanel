@@ -2,7 +2,7 @@ using System.Net.Http.Headers;
 
 namespace HostingPanel.Api;
 
-public sealed record SftpAccountEntry(Guid Id, string Username, string Label, string RelativePath = "");
+public sealed record SftpAccountEntry(Guid Id, string Username, string Label, string RelativePath = "", string ProvisioningStatus = "pending");
 public sealed record SftpAccountRequest(string Label, string PublicKey, string RelativePath = "");
 public sealed record SftpAccountResult(int Status, string? Error = null, IReadOnlyList<SftpAccountEntry>? Accounts = null, long Limit = 0);
 public interface ISftpAccounts
