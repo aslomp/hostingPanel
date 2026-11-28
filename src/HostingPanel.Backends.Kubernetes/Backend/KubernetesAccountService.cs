@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HostingPanel.Api;
 
-public sealed class KubernetesAccountService(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesProvisioningService provisioning, KubernetesOperationQueue operations, HostingOperationNotifications? notifications = null, CertificateWork? certificateWork = null) : IAccountCatalog, IAccountMutations, IAccountOverview, IUserDetails, IImpersonation
+public sealed class KubernetesAccountService(HostingPanelDbContext db, KubernetesIdentityService identity, KubernetesProvisioningService provisioning, KubernetesOperationQueue operations, HostingOperationNotifications? notifications = null, CertificateWork? certificateWork = null, KubernetesHttpUsage? httpUsage = null) : IAccountCatalog, IAccountMutations, IAccountOverview, IUserDetails, IImpersonation
 {
     public async Task<AccountCatalogResult> ListAsync(AuthenticationHeaderValue auth, CancellationToken ct)
     {
@@ -175,7 +175,14 @@ public sealed class KubernetesAccountService(HostingPanelDbContext db, Kubernete
         };
         var limits = package is null ? null :
             JsonSerializer.Deserialize<Dictionary<string, string>>(package.LimitsJson);
-        return new(200, config, package?.Name, limits, null);
+        if (httpUsage is null) return new(200, config, package?.Name, limits, null);
+        var measured = await httpUsage.ReadOwnerAsync(row,DateTimeOffset.UtcNow.ToString("yyyy-MM",System.Globalization.CultureInfo.InvariantCulture),ct);
+        var usage = new Dictionary<string,string> {
+            ["httpBandwidthBytes"] = checked(measured.ReceivedBytes + measured.SentBytes).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["httpRequests"] = measured.Requests.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["httpAccountingMonth"] = measured.Month!
+        };
+        return new(200,config,package?.Name,limits,null,usage,"HTTP_ONLY_PARTIAL_USAGE");
     }
 
     public Task<UserDetailResult> GetAsync(string username, string kind, AuthenticationHeaderValue auth, CancellationToken ct)

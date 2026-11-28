@@ -42,6 +42,17 @@ kubernetesHosting:
   httpsListener: https
   apacheImage: httpd:2.4
   apacheReplicas: 1
+  # Customer access/error log retention; monthly accounting is retained separately.
+  logRetentionDays: 30
+  accountingSpool:
+    enabled: false
+    # Separate NFS export, writable by Apache UID/GID 1001.
+    path: ""
+    # Apache image containing Python 3 (standard library only).
+    image: ""
+    # HTTPS URL of the panel, including trusted certificate chain.
+    endpoint: ""
+    existingSecret: "" # key: token
   phpImage: php:8.6.0-fpm
   phpReplicas: 1
   allowSharedPhpRuntime: false
@@ -130,20 +141,19 @@ stalwart:
     submissionEnabled: false
     pop3Enabled: false
 
-# Optional SFTPGo infrastructure. Enabling the service enables customer writes by default.
-sftpgo:
+# Shared OpenSSH service. No management server or privileged mount operations.
+sftp:
   enabled: false
-  # Shared root process, not per-user impersonation. Validate NFS isolation before production.
-  # Set false for disabled-user/read-only staging.
   enableWrites: true
-  image: drakkan/sftpgo:v2.7.6
-  existingSecret: "" # username and password for internal management bootstrap
-  existingClaim: ""
-  storageClassName: ""
-  size: 1Gi
+  jailExport: "" # dedicated root-owned NFS jail tree, prepared on storage host
+  image: "" # build Dockerfile.openssh and publish/import on eligible nodes
+  existingSecret: "" # ssh_host_ed25519_key
   service:
     type: ClusterIP
     port: 22
   resources:
     requests: {cpu: 100m, memory: 128Mi}
     limits: {cpu: "1", memory: 512Mi}
+# Legacy migration guard only; do not enable.
+sftpgo:
+  enabled: false

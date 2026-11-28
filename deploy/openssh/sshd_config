@@ -1,0 +1,25 @@
+Port 2022
+HostKey /run/hostingpanel-hostkeys/ssh_host_ed25519_key
+PidFile /run/sshd.pid
+UsePAM no
+UseDNS no
+PermitRootLogin no
+AllowUsers sftp-*
+AuthenticationMethods publickey
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no
+AuthorizedKeysFile /etc/hostingpanel/keys-%u
+PubkeyAcceptedAlgorithms ssh-ed25519
+StrictModes yes
+DisableForwarding yes
+PermitTTY no
+PermitUserRC no
+PermitUserEnvironment no
+X11Forwarding no
+MaxAuthTries 3
+ChrootDirectory /jails/%u
+Subsystem sftp internal-sftp
+ForceCommand internal-sftp -d /data -P symlink,hardlink
+LogLevel VERBOSE

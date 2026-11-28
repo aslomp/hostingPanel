@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HostingPanel.Api;
 
-public sealed class KubernetesTicketService(HostingPanelDbContext db, KubernetesIdentityService identity) : ITickets
+public sealed class KubernetesTicketService(HostingPanelDbContext db, KubernetesIdentityService identity, TicketEvents? events = null) : ITickets
 {
     public async Task<(int Status, TicketInbox? Inbox, string? Error)> GetInboxAsync(
         AuthenticationHeaderValue auth, CancellationToken ct)
@@ -53,6 +53,7 @@ public sealed class KubernetesTicketService(HostingPanelDbContext db, Kubernetes
             Recipient = input.Recipient, Priority = input.Priority
         });
         await db.SaveChangesAsync(ct);
+        events?.AccountChanged(principal.Username);
         return new(200, null);
     }
 
@@ -72,6 +73,7 @@ public sealed class KubernetesTicketService(HostingPanelDbContext db, Kubernetes
         });
         if (input.Close) ticket.Open = false;
         await db.SaveChangesAsync(ct);
+        events?.AccountChanged(principal.Username);
         return new(200, null);
     }
 
@@ -87,6 +89,7 @@ public sealed class KubernetesTicketService(HostingPanelDbContext db, Kubernetes
         if (ticket.OwnerId != principal.Id) return new(403, "ACCESS_DENIED");
         ticket.Open = input.Open;
         await db.SaveChangesAsync(ct);
+        events?.AccountChanged(principal.Username);
         return new(200, null);
     }
 }

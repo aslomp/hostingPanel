@@ -21,6 +21,15 @@ public static class SftpPolicyTests
         Require(KubernetesSftpAccounts.DecodeKeys(System.Text.Json.JsonSerializer.Serialize(new[] { first, second })).SequenceEqual([first, second]));
         Require(KubernetesSftpAccounts.ValidRelativePath("domains/example.nl/public_html"));
         Require(KubernetesSftpAccounts.ValidRelativePath(""));
+        var id = Guid.NewGuid();
+        var login = new OpenSshReconciler.Login("sftp-" + id.ToString("N"), 10042, 10042, [first], "customer/a", id, id);
+        var snapshot = OpenSshReconciler.SnapshotWithPaths([login]);
+        Require(OpenSshReconciler.Revision(snapshot).Length == 64);
+        var files = OpenSshReconciler.AccountFiles([login]);
+        Require(files["passwd"].Contains(login.LoginName + ":x:10042:10042:"));
+        Require(files["shadow"].Contains(login.LoginName + ":*:"));
+        Require(files["keys-" + login.LoginName] == "restrict " + first + "\n");
+        Require(OpenSshReconciler.Revision(snapshot) != OpenSshReconciler.Revision(OpenSshReconciler.SnapshotWithPaths([login with { SubPath = "customer/b" }])));
         foreach (var invalid in new[] { "../other", "/home/other", "a//b", "a/../b", "a\\b" })
             Require(!KubernetesSftpAccounts.ValidRelativePath(invalid));
     }

@@ -20,5 +20,9 @@
   "panelTag": "installer-local",
   "poolDevices": [],
   "confirmPoolCreation": false,
-  "buildPanelImage": true
+  "buildPanelImage": true,
+  "accountingSpoolEnabled": false,
+  "accountingImage": "hostingpanel-apache-accounting:installer-local",
+  "accountingEndpoint": "",
+  "buildAccountingImage": true
 }

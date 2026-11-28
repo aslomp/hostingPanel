@@ -13,3 +13,12 @@
 {{- end -}}
 {{- $path -}}
 {{- end -}}
+
+{{- define "hostingpanel.accountingExport" -}}
+{{- $path := required "kubernetesHosting.accountingSpool.path is required" .Values.kubernetesHosting.accountingSpool.path -}}
+{{- if or (not (hasPrefix "/" $path)) (eq $path "/") (ne $path (clean $path)) -}}{{ fail "Accounting export must be canonical absolute non-root" }}{{- end -}}
+{{- range $other := list (clean .Values.kubernetesHosting.nfsPath) (include "hostingpanel.apacheConfigExport" .) -}}
+{{- if or (eq $other "/") (eq $other $path) (hasPrefix (printf "%s/" $other) $path) (hasPrefix (printf "%s/" $path) $other) -}}{{ fail "Accounting export must not overlap customer or configuration storage" }}{{- end -}}
+{{- end -}}
+{{- $path -}}
+{{- end -}}

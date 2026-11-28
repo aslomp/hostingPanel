@@ -90,24 +90,21 @@ Domain settings `mailAutoPublish` and `mailAutoRotate` are independent desired-s
 
 Kubernetes subdomain ownership uses an explicit provider-owned `SubdomainBindings` relation (child HostedDomain, parent HostedDomain, normalized label). The parent determines the hosting account; the caller cannot specify an owner. The scoped capability authenticates and checks the existing account hierarchy before inventory or mutation validation. Nested subdomains are not supported in this stage. Generic domain deletion refuses linked children and parents; remove children using the subdomain workflow first. Create persists the child and relation atomically with website intent, then signals the existing website channel. The worker provisions the separate full-hostname documentroot, shared Apache vhost, HTTPRoute and account PHP runtime. DNS uses a CNAME in the owned parent zone; missing parent zones defer durable domain-dns work until DNS invalidation. Subdomain creation copies the parent's certificate enablement, provider and key type into independent child ACME intent, queues the child ID after commit, and uses the existing CertificateReconciler. Subdomain deletion stages website, certificate, DNS and storage cleanup using existing workers. HTTP 202 indicates accepted desired state, not DNS or serving readiness.
 
-- Optional SFTPGo Helm infrastructure: one StatefulSet, persistent state and host keys, separate internal management service and SFTP service. NFS is deliberately read-only pending UID/GID and tenant-isolation validation. No account provisioning or customer access is implemented yet.
-
-- SFTPGo internal management client supports admin token exchange, exact user lookup, create/update/delete with read-back and disabled-by-default managed users. No public API, account lifecycle wiring or customer activation yet. Internal HTTP transport requires enforced NetworkPolicy and a trusted cluster network; TLS remains a deployment follow-up.
-
-- Kubernetes SFTP account UI stores owner-scoped pending account definitions and public keys in SQLite; the existing ftp package/account limit is enforced on creation. No upstream activation or reconciliation yet. DirectAdmin SFTP management is not supported by this UI.
-
-- Pending SFTP accounts support an optional relative home directory, stored in the provider schema. Absolute paths, empty path components, traversal and unsupported characters are rejected. Storage existence, ownership and symlink confinement must be verified before activation; no upstream user is activated by this feature.
-
-- SFTP directory preflight reuses NFS provisioning ownership and permission checks at account creation and before disabled-user provisioning. It rejects missing directories, symlink components, root ownership and mismatching descendant UID/GID; no storage changes are made. This is not a runtime confinement guarantee against concurrent renames. Activation remains disabled pending live filesystem isolation and ownership validation.
-
-- Official legacy CMD_API_SSH_KEYS GET/POST is forwarded unchanged to DirectAdmin using caller credentials. Kubernetes rejects that operation (system SSH keys are not virtual SFTP accounts). Separate /hosting/file-access/sftp routes expose the owner-scoped pending SFTP account capability; no pinned Swagger changes or FTP password compatibility translation.
-
-- SFTPGo reconciliation consumes durable account, owner and package operations through the shared channel loop; initial startup reconciles existing rows. Users remain disabled pending runtime filesystem validation. No idle polling.
-
-- SFTP account overview displays pending, failed or completed-disabled provisioning status from the outbox and refreshes on existing invalidations. Removal requests upstream connection termination and verifies no matching connections remain. Zero entitlement revokes users. Live validation pending; activation remains blocked.
-
-SFTPGo remains disabled by default; enabling it now defaults to write mode and public-key account activation. Set `sftpgo.enableWrites: false` to stage disabled users on read-only storage. Production isolation acceptance remains outstanding.
+- Kubernetes ticket creation, replies and status changes persist before account-scoped channel invalidation; SignalR consumes the channel without polling SQLite. DirectAdmin-only observation remains a 15-second fallback. Support recipient routing is unchanged.
+- Shared OpenSSH replaces SFTPGo: one listener, kernel chroot per login, native UID/GID and one permanent NFS jail export. SQLite and the existing owner-scoped public-key API/outbox remain authoritative. A fixed projected ConfigMap changes Unix identities and keys without pod restarts; no additional management server or LDAP. Storage-side jail preparation and selective active-session revocation remain outstanding; not production-ready.
 
 DirectAdmin native SSH authorized-key management: `ISshAuthorizedKeys`, `/hosting/file-access/ssh-keys`, caller-scoped upstream read/authorize/revoke with read-back. Does not grant SFTP-only confinement; server SSH policy remains authoritative. Virtual SFTP accounts remain Kubernetes-only.
 
 File transfer compatibility: DirectAdmin uses native FTP; Kubernetes exposes domain-scoped FTP compatibility reads/deletes and public-key-only creates/updates through the SFTP outbox. The legacy FTP controller forwards to the selected backend. Kubernetes does not accept FTP passwords or claim to implement the FTP wire protocol.
+
+Apache accounting logging (Kubernetes): per-vhost structured stdout access records contain immutable account/domain IDs, completion time, final HTTP status, received/sent bytes (mod_logio) and duration. No request URI or credentials in these access records. Parser and Apache smoke coverage provided. Durable collection, aggregation, reporting and quota enforcement are not implemented yet; stdout rotation can lose records.
+
+Kubernetes website logs: owner-scoped access/error log API and domain UI, independent pod watch and log following, durable SQLite receipts and monthly HTTP usage totals. Current-container rotation/replacement loss is possible; not suitable for hard quota enforcement yet. DirectAdmin log reads remain unsupported in this capability.
+
+HTTP usage: batched SQLite ingestion, configurable raw log retention, owner-scoped monthly HTTP usage API and account overview fields. Reports partial measurements explicitly; full DA user usage contract remains unsupported until disk/mail/other usage is measured.
+
+Internal accounting ingestion supports authenticated immutable segment submission and transactionally idempotent acknowledgement. Disabled by default; producer and deployment wiring remain pending.
+
+Optional Apache piped accounting producer and dedicated NFS spool: immutable sealed segments replay on startup and retry until committed acknowledgement. Requires Python-capable Apache image, prepared NFS export, HTTPS endpoint and secret. Live failure/recovery testing and hard quota enforcement remain open.
+
+A dedicated Apache accounting Dockerfile and isolated spool recovery tests are included; image distribution remains operator-managed.

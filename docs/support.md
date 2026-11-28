@@ -8,11 +8,11 @@ DirectAdmin TicketService combines received tickets, outgoing requests and messa
 
 ## Live activity
 
-TicketLiveMonitor is a circuit-scoped asynchronous monitor, started by TicketNotifications. It polls TicketOperations.InboxAsync every 15 seconds while a session is active; despite its original DirectAdmin-oriented comment it calls the selected provider. The initial successful observation establishes a baseline without announcing historical tickets. It tracks ticket reply signatures and message presence; changes publish InboxChanged over TicketHub (/hubs/tickets).
+KubernetesTicketService saves ticket creation, replies and status changes to SQLite before publishing an account-scoped invalidation to TicketEvents. TicketSignalDispatcher is the single channel consumer and sends only a generic InboxChanged notification to active circuit tokens registered for that account. The frontend reads the authorized inbox again; no ticket content or credentials travel in the notification. There is no Kubernetes ticket polling.
 
-TicketChannelRegistry issues circuit-bound subscription tokens and supports revocation. PanelSession rotates the token on identity changes and revokes it on disconnect/disposal. The monitor checks the active effective channel before publishing. TicketNotifications manages a SignalR connection, rejoins after reconnect, increments the badge, shows a snackbar and notifies the circuit to refresh its inbox. Normal ticket pages still work if the hub is unavailable.
+TicketLiveMonitor starts only for DirectAdmin, where upstream push is not available. Its 15-second observation detects changes for the effective identity and publishes a circuit-scoped invalidation into the same channel; it never sends SignalR messages itself. DirectAdmin remains authoritative and is not mirrored in SQLite.
 
-The SignalR client in the Razor component runs on the server-side interactive circuit; it is not a direct DirectAdmin push endpoint. The application uses polling upstream. Do not send credentials on the hub. Subscription tokens and notification payloads must be treated as private; do not assume the token registry itself provides complete connection revocation or production authorization assurance. Verify cross-session isolation and reconnect/disposal behavior in tests before extending the hub.
+PanelSession rotates subscription tokens on identity changes and revokes them on disconnect/disposal. The dispatcher checks active subscriptions and session connectivity before sending. The SignalR component rejoins after reconnect and invalidates its inbox to recover missed changes. Notifications are in-process, best effort and not a durable delivery queue; the ticket database is durable. Existing owner-only support routing is unchanged.
 
 HostingOperationNotifications is a separate in-process invalidation event for hosting reconciliation, not the ticket hub and not an event stream containing account data.
 

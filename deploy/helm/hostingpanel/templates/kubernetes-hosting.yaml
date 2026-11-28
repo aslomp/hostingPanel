@@ -20,9 +20,22 @@ rules:
     resources: ["pods"]
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
+    resources: ["pods/log"]
+    resourceNames: [{{- range $i := until (int .Values.kubernetesHosting.apacheReplicas) }}{{ if $i }}, {{ end }}{{ printf "apache-baseline-%d" $i | quote }}{{- end }}]
+    verbs: ["get"]
+  - apiGroups: [""]
     resources: ["pods/exec"]
     resourceNames: [{{- range $i := until (int .Values.kubernetesHosting.apacheReplicas) }}{{ if $i }}, {{ end }}{{ printf "apache-baseline-%d" $i | quote }}{{- end }}]
     verbs: ["get", "create"]
+  {{- if .Values.sftp.enabled }}
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    resourceNames: [{{ printf "%s-0" (printf "%s-sftp" .Release.Name | trunc 54 | trimSuffix "-") | quote }}]
+    verbs: ["get", "create"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "list", "watch"]
+  {{- end }}
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list", "watch", "create", "patch", "delete"]
@@ -76,11 +89,13 @@ data:
     Listen 8080
     Listen 8081
     ServerName localhost
-    LogFormat "%h %l %u %t \"%r\" %>s %b" common
+    # Never record request targets, query strings, cookies or credentials in access logs.
+    LogFormat "HP_SYSTEM_V1 %>s %I %O %D" common
     LoadModule mpm_event_module modules/mod_mpm_event.so
     LoadModule unixd_module modules/mod_unixd.so
     LoadModule authz_core_module modules/mod_authz_core.so
     LoadModule log_config_module modules/mod_log_config.so
+    LoadModule logio_module modules/mod_logio.so
     LoadModule dir_module modules/mod_dir.so
     LoadModule mime_module modules/mod_mime.so
     LoadModule proxy_module modules/mod_proxy.so
@@ -120,6 +135,16 @@ data:
         IncludeOptional /storage/apache-config/active.conf
     </IfDefine>
 ---
+{{- if .Values.kubernetesHosting.accountingSpool.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: apache-accounting-script
+data:
+  spool.py: |
+{{ .Files.Get "files/accounting-spool.py" | indent 4 }}
+---
+{{- end }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -134,7 +159,11 @@ spec:
     metadata:
       labels: {app.kubernetes.io/name: apache-baseline}
       annotations:
-        hostingpanel/apache-config: "shared-nfs-v1"
+        hostingpanel/apache-config: "shared-nfs-v1-accounting-v1"
+        hostingpanel/accounting-spool: {{ .Values.kubernetesHosting.accountingSpool.enabled | quote }}
+        {{- if .Values.kubernetesHosting.accountingSpool.enabled }}
+        hostingpanel/accounting-script: {{ .Files.Get "files/accounting-spool.py" | sha256sum | quote }}
+        {{- end }}
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -145,7 +174,19 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: apache
+          {{- if .Values.kubernetesHosting.accountingSpool.enabled }}
+          image: {{ required "accountingSpool.image must contain Python 3" .Values.kubernetesHosting.accountingSpool.image | quote }}
+          env:
+            - name: HP_ACCOUNTING_ENDPOINT
+              value: {{ required "accountingSpool.endpoint is required" .Values.kubernetesHosting.accountingSpool.endpoint | quote }}
+            - name: HP_ACCOUNTING_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "accountingSpool.existingSecret is required" .Values.kubernetesHosting.accountingSpool.existingSecret | quote }}
+                  key: token
+          {{- else }}
           image: {{ .Values.kubernetesHosting.apacheImage | quote }}
+          {{- end }}
           command: ["httpd", "-DFOREGROUND", "-f", "/etc/hostingpanel/httpd.conf"]
           ports: [{name: http, containerPort: 8080}, {name: health, containerPort: 8081}]
           securityContext:
@@ -159,7 +200,21 @@ spec:
             - {name: config, mountPath: /etc/hostingpanel, readOnly: true}
             - {name: sites, mountPath: /home, readOnly: true}
             - {name: apache-config, mountPath: /storage/apache-config, readOnly: true}
+            {{- if .Values.kubernetesHosting.accountingSpool.enabled }}
+            - {name: accounting-spool, mountPath: /storage/accounting-spool}
+            - {name: accounting-script, mountPath: /etc/hostingpanel-accounting, readOnly: true}
+            {{- end }}
       volumes:
+        {{- if .Values.kubernetesHosting.accountingSpool.enabled }}
+        - name: accounting-spool
+          nfs:
+            server: {{ .Values.kubernetesHosting.nfsServer | quote }}
+            path: {{ include "hostingpanel.accountingExport" . | quote }}
+            readOnly: false
+        - name: accounting-script
+          configMap:
+            name: apache-accounting-script
+        {{- end }}
         - name: apache-config
           nfs:
             server: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}

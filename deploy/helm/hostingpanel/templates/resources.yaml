@@ -77,14 +77,19 @@ spec:
               value: {{ .Values.certManager.enabled | quote }}
             - name: KubernetesHosting__Enabled
               value: "true"
+            {{- if .Values.kubernetesHosting.accountingSpool.enabled }}
+            - name: KubernetesHosting__DurableLogIngestion
+              value: "true"
+            - name: KubernetesHosting__AccountingIngestionToken
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "accountingSpool.existingSecret is required" .Values.kubernetesHosting.accountingSpool.existingSecret | quote }}
+                  key: token
+            {{- end }}
+            - name: KubernetesHosting__LogRetentionDays
+              value: {{ .Values.kubernetesHosting.logRetentionDays | quote }}
             - name: KubernetesHosting__Namespace
               value: {{ .Release.Namespace | quote }}
-            {{- if .Values.kubernetesHosting.zfsQuota.enabled }}
-            - name: ZfsQuota__Enabled
-              value: "true"
-            - name: ZfsQuota__Host
-              value: {{ required "zfsQuota.host is required" .Values.kubernetesHosting.zfsQuota.host | quote }}
-            {{- end }}
             - name: KubernetesHosting__NfsServer
               value: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}
             - name: KubernetesHosting__NfsPath
@@ -144,21 +149,15 @@ spec:
                   name: {{ required "mariadb.provisioningSecret is required when MariaDB is enabled" .Values.mariadb.provisioningSecret | quote }}
                   key: password
             {{- end }}
-            {{- if and (eq .Values.backend "Kubernetes") .Values.kubernetesHosting.enabled .Values.sftpgo.enabled }}
-            - name: SftpGo__EnableWrites
-              value: {{ .Values.sftpgo.enableWrites | quote }}
-            - name: SftpGo__BaseUrl
-              value: {{ printf "http://%s-admin:8080/" (printf "%s-sftpgo" .Release.Name | trunc 54 | trimSuffix "-") | quote }}
-            - name: SftpGo__Username
-              valueFrom:
-                secretKeyRef:
-                  name: {{ required "sftpgo.existingSecret is required" .Values.sftpgo.existingSecret | quote }}
-                  key: username
-            - name: SftpGo__Password
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.sftpgo.existingSecret | quote }}
-                  key: password
+            {{- if and $hosting .Values.sftp.enabled }}
+            - name: OpenSsh__Enabled
+              value: "true"
+            - name: OpenSsh__EnableWrites
+              value: {{ .Values.sftp.enableWrites | quote }}
+            - name: OpenSsh__JailProvisioningPath
+              value: /storage/sftp-jails
+            - name: OpenSsh__Workload
+              value: {{ printf "%s-sftp" .Release.Name | trunc 54 | trimSuffix "-" | quote }}
             {{- end }}
             {{- if and (eq .Values.backend "Kubernetes") .Values.stalwart.api.enabled }}
             - name: Stalwart__Enabled
@@ -212,9 +211,21 @@ spec:
             {{- if .Values.kubernetesHosting.zfsQuota.enabled }}
             - {name: zfs-quota-key, mountPath: /run/zfs-quota, readOnly: true}
             {{- end }}
+            {{- if .Values.kubernetesHosting.zfsQuota.enabled }}
+            - {name: zfs-quota-key, mountPath: /run/zfs-quota, readOnly: true}
+            {{- end }}
+            {{- if .Values.sftp.enabled }}
+            - {name: sftp-jails, mountPath: /storage/sftp-jails, readOnly: true}
+            {{- end }}
             {{- end }}
       volumes:
         {{- if $hosting }}
+        {{- if .Values.kubernetesHosting.zfsQuota.enabled }}
+        - name: zfs-quota-key
+          secret:
+            secretName: {{ required "zfsQuota.existingSecret is required" .Values.kubernetesHosting.zfsQuota.existingSecret | quote }}
+            defaultMode: 0440
+        {{- end }}
         {{- if .Values.kubernetesHosting.zfsQuota.enabled }}
         - name: zfs-quota-key
           secret:
@@ -238,6 +249,13 @@ spec:
             server: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}
             path: {{ include "hostingpanel.apacheConfigExport" . | quote }}
             readOnly: false
+        {{- end }}
+        {{- if and $hosting .Values.sftp.enabled }}
+        - name: sftp-jails
+          nfs:
+            server: {{ required "kubernetesHosting.nfsServer is required" .Values.kubernetesHosting.nfsServer | quote }}
+            path: {{ required "sftp.jailExport is required" .Values.sftp.jailExport | quote }}
+            readOnly: true
         {{- end }}
         - name: data
           persistentVolumeClaim:

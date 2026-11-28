@@ -18,6 +18,7 @@ if (args.Contains("--certificate-watch-integration"))
 
 var checks = new List<(string Description, Action Test)>
 {
+    ("Ticket events follow persisted owner-scoped mutations", TicketEventTests.Run),
     ("Subdomain ownership follows authorized parent and rejects foreign accounts", SubdomainOwnershipTests.Run),
     ("Legacy DNS administration enforces admin access and persists existing DNS intent", LegacyDnsAdminTests.Run),
     ("Mail DNS imports preserve existing customer records", StalwartDnsTests.Run),
@@ -50,6 +51,12 @@ var checks = new List<(string Description, Action Test)>
         Require(!SystemUpdateOperations.ValidPackages(["nginx/path"]));
         Require(SystemServiceOperations.ValidService("nginx.service"));
         Require(!SystemServiceOperations.ValidService("../nginx"));
+    }),
+    ("Apache accounting log contract", ApacheAccessAccountingTests.Run),
+    ("HTTP accounting limits preserve package overrides and MiB units", () => {
+        Require(HostingPanel.Api.KubernetesHttpUsage.ResolveLimit("{\"bandwidth\":\"2\"}",null)==(true,(long?)2097152L));
+        Require(HostingPanel.Api.KubernetesHttpUsage.ResolveLimit("{\"bandwidth\":\"2\"}","{\"bandwidth\":\"unlimited\"}")== (true,(long?)null));
+        Require(HostingPanel.Api.KubernetesHttpUsage.ResolveLimit(null,null)==(false,(long?)null));
     }),
     ("Native ZFS quota units and explicit unlimited", () => {
         Require(HostingPanel.Api.ZfsAccountQuota.Resolve("{\"quota\":\"2\"}",null,"quota")=="2097152");
