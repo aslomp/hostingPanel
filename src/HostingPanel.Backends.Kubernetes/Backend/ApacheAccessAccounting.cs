@@ -17,7 +17,7 @@ public static class ApacheAccessAccounting
         return $"CustomLog {target} \"{Prefix} {accountId:N} {domainId:N} %{{end:sec}}t %>s %I %O %D\"";
     }
 
-    public static string ErrorDirective(Guid accountId, Guid domainId)
+    public static string ErrorDirective(Guid accountId, Guid domainId, bool durable = false)
     {
         if (accountId == Guid.Empty || domainId == Guid.Empty) throw new ArgumentException("Missing logging identity.");
         var target = durable ? "\"|/usr/bin/python3 /etc/hostingpanel-accounting/spool.py\"" : "/proc/self/fd/2";
