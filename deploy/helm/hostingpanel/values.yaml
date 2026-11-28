@@ -149,8 +149,9 @@ sftp:
   image: "" # build Dockerfile.openssh and publish/import on eligible nodes
   existingSecret: "" # ssh_host_ed25519_key
   service:
-    type: ClusterIP
-    port: 22
+    type: LoadBalancer
+    port: 2222 # host administration keeps TCP 22
+    externalTrafficPolicy: Local
   resources:
     requests: {cpu: 100m, memory: 128Mi}
     limits: {cpu: "1", memory: 512Mi}

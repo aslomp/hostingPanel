@@ -10,6 +10,9 @@ metadata:
   name: {{ $name }}
 spec:
   type: {{ $s.service.type }}
+  {{- if or (eq $s.service.type "LoadBalancer") (eq $s.service.type "NodePort") }}
+  externalTrafficPolicy: {{ $s.service.externalTrafficPolicy }}
+  {{- end }}
   selector:
     hostingpanel/sftp-workload: {{ $name }}
   ports:
