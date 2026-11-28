@@ -1,0 +1,44 @@
+@page "/domains/{Domain}/logs"
+@using HostingPanel.Api
+@using HostingPanel.Web.Localization
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
+@inject DomainOperations DomainOps
+@inject PanelSession Session
+@implements IDisposable
+
+<PanelPageHeader>
+    <Breadcrumb><a href="@($"/domains/{Uri.EscapeDataString(Domain)}")">@Domain</a></Breadcrumb>
+    <TitleContent>@L["Website logs"]</TitleContent>
+</PanelPageHeader>
+<MudButton OnClick="Access" Disabled="@read.Loading">@L["Access log"]</MudButton>
+<MudButton OnClick="Errors" Disabled="@read.Loading">@L["Error log"]</MudButton>
+<MudButton OnClick="Refresh" Disabled="@read.Loading">@L["Refresh"]</MudButton>
+@if(error is not null) { <MudAlert Severity="Severity.Error">@error</MudAlert> }
+<MudSimpleTable Dense="true"><thead><tr><th>@L["Time"]</th><th>@L["Message"]</th></tr></thead><tbody>
+@foreach(var entry in entries) { <tr><td>@entry.Timestamp</td><td style="white-space:pre-wrap;overflow-wrap:anywhere">@entry.Message</td></tr> }
+</tbody></MudSimpleTable>
+<MudButton OnClick="Older" Disabled="@(read.Loading || entries.Count < 100)">@L["Older entries"]</MudButton>
+@code {
+    [Parameter] public string Domain { get; set; } = "";
+    private readonly LatestRead read = new();
+    private IReadOnlyList<DomainLogEntry> entries = [];
+    private string kind="access";
+    private string? error;
+    protected override void OnInitialized() => Session.Changed += Changed;
+    protected override Task OnParametersSetAsync() => Refresh();
+    private void Changed() => _ = InvokeAsync(async () => { await Refresh(); StateHasChanged(); });
+    private Task Access() { kind="access"; return Refresh(); }
+    private Task Errors() { kind="error"; return Refresh(); }
+    private Task Refresh() => Load(null);
+    private Task Older() => Load(entries.LastOrDefault()?.Id);
+    private Task Load(long? before)
+    {
+        entries=[]; error=null;
+        if(!Session.Connected) { read.Cancel(); return Task.CompletedTask; }
+        var domain=Domain; var selected=kind; var channel=Session.TicketChannel;
+        return read.RunAsync(ct=>DomainOps.ReadLogsAsync(domain,selected,before,100,ct),
+            ()=>Session.Connected && Session.TicketChannel==channel && Domain==domain && kind==selected,
+            result=>{ if(result.Status==200) entries=result.Entries??[]; else error=result.Error; },_=>error="LOG_READ_FAILED");
+    }
+    public void Dispose() { Session.Changed-=Changed; read.Dispose(); }
+}

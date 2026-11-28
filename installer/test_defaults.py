@@ -3,7 +3,7 @@ import pathlib
 import unittest
 from unittest.mock import patch
 from defaults import defaults, network_defaults, email_valid, complete
-from generate import hostname_valid
+from generate import hostname_valid, validate
 
 class DefaultTests(unittest.TestCase):
     def test_network_is_single_node(self):
@@ -38,6 +38,19 @@ class DefaultTests(unittest.TestCase):
         with patch("defaults.ask_hostname", side_effect=["ns1.hosting.test", "ns1.hosting.test", "panel.hosting.test"]):
             with self.assertRaises(ValueError):
                 complete(c)
+
+    def test_accounting_requires_explicit_trusted_origin_and_image(self):
+        template = json.loads(pathlib.Path(__file__).with_name("cluster.example.json").read_text())
+        c = defaults(template, "10.0.0.10", "10.0.0.10/32", "admin@hosting.test", "--full-server")
+        self.assertFalse(c["accountingSpoolEnabled"])
+        c["accountingSpoolEnabled"] = True
+        with self.assertRaises(ValueError):
+            validate(c)
+        c["accountingEndpoint"] = "https://panel.hosting.test"
+        validate(c)
+        c["accountingEndpoint"] = "http://panel.hosting.test"
+        with self.assertRaises(ValueError):
+            validate(c)
 
     def test_hostname_validation(self):
         self.assertTrue(hostname_valid("ns1.hosting.test"))

@@ -32,6 +32,9 @@ public sealed class DomainOperations(BackendOperationScope scope)
         scope.RunOptionalAsync<ISubdomains, SubdomainMutation>((p, auth, token) => p.DeleteAsync(domain, label, confirmation, auth, token),
             new(501, "SUBDOMAINS_UNSUPPORTED"), ct);
 
+    public Task<DomainLogResult> ReadLogsAsync(string domain,string kind,long? before,int count,CancellationToken ct = default) =>
+        scope.RunOptionalAsync<IDomainLogs,DomainLogResult>((p,a,token) => p.ReadAsync(domain,kind,before,count,a,token),new(501,"DOMAIN_LOGS_NOT_SUPPORTED"),ct);
+
     public async Task<string?> GetProvisioningStatusAsync(string domain, CancellationToken ct = default)
     {
         var result = await GetAsync(domain, ct);

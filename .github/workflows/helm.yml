@@ -44,3 +44,16 @@ jobs:
           helm template admin deploy/helm/hostingpanel -n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.gatewayName=example-gateway --set sftpgo.enabled=true --set sftpgo.existingSecret=sftpgo-bootstrap --set sftpgo.enableWrites=false --show-only templates/sftpgo.yaml > /tmp/sftpgo-staging.yaml
           grep -q 'readOnly: true' /tmp/sftpgo-staging.yaml
           grep -q 'runAsNonRoot: true' /tmp/sftpgo-staging.yaml
+
+      - name: Render durable Apache accounting profile
+        run: |
+          set -eu
+          args=''
+          helm template admin deploy/helm/hostingpanel -n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.apacheConfigPath=/exports/apache --set kubernetesHosting.gatewayName=example-gateway --set kubernetesHosting.accountingSpool.enabled=true --set kubernetesHosting.accountingSpool.path=/exports/accounting --set kubernetesHosting.accountingSpool.image=example.invalid/apache:ci --set kubernetesHosting.accountingSpool.endpoint=https://panel.example.invalid --set kubernetesHosting.accountingSpool.existingSecret=accounting > /tmp/accounting.yaml
+          grep -q 'name: accounting-spool' /tmp/accounting.yaml
+          grep -q 'name: KubernetesHosting__DurableLogIngestion' /tmp/accounting.yaml
+          grep -q 'path: "/exports/accounting"' /tmp/accounting.yaml
+          if helm template admin deploy/helm/hostingpanel -n hosting -f deploy/helm/values-hosting.example.yaml --set kubernetesHosting.nfsServer=192.0.2.10 --set kubernetesHosting.nfsPath=/exports/sites --set kubernetesHosting.apacheConfigPath=/exports/apache --set kubernetesHosting.gatewayName=example-gateway --set kubernetesHosting.accountingSpool.enabled=true --set kubernetesHosting.accountingSpool.path=/exports/sites/accounting --set kubernetesHosting.accountingSpool.image=example.invalid/apache:ci --set kubernetesHosting.accountingSpool.endpoint=https://panel.example.invalid --set kubernetesHosting.accountingSpool.existingSecret=accounting >/tmp/bad-accounting.yaml 2>/tmp/bad-accounting.err; then
+            echo 'Unexpectedly accepted overlapping accounting export'; exit 1
+          fi
+          grep -q 'Accounting export must not overlap' /tmp/bad-accounting.err
