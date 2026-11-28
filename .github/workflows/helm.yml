@@ -24,6 +24,12 @@ jobs:
           grep -q 'php:8.6.0-fpm' /tmp/hosting.yaml
           grep -q 'name: apache-baseline' /tmp/hosting.yaml
           grep -q 'kind: RoleBinding' /tmp/hosting.yaml
+          grep -q 'name: admin-stalwart' /tmp/hosting.yaml
+          helm template admin deploy/helm/hostingpanel "${args[@]}" --set stalwart.storageClassName=zfs-iscsi --show-only templates/stalwart.yaml > /tmp/stalwart.yaml
+          grep -q 'kind: StatefulSet' /tmp/stalwart.yaml
+          test "$(grep -c 'storageClassName: "zfs-iscsi"' /tmp/stalwart.yaml)" -eq 2
+          helm template admin deploy/helm/hostingpanel "${args[@]}" --set stalwart.enabled=false > /tmp/no-stalwart.yaml
+          ! grep -q 'name: admin-stalwart' /tmp/no-stalwart.yaml
           helm template admin deploy/helm/hostingpanel "${args[@]}" --set powerDns.enabled=true --show-only templates/powerdns.yaml > /tmp/powerdns.yaml
           grep -q 'fsGroup: 953' /tmp/powerdns.yaml
           grep -q 'fsGroupChangePolicy: OnRootMismatch' /tmp/powerdns.yaml

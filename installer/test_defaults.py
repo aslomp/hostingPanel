@@ -1,9 +1,10 @@
 import json
 import pathlib
 import unittest
+import tempfile
 from unittest.mock import patch
 from defaults import defaults, network_defaults, email_valid, complete
-from generate import hostname_valid, validate
+from generate import hostname_valid, validate, generate
 
 class DefaultTests(unittest.TestCase):
     def test_network_is_single_node(self):
@@ -51,6 +52,18 @@ class DefaultTests(unittest.TestCase):
         c["accountingEndpoint"] = "http://panel.hosting.test"
         with self.assertRaises(ValueError):
             validate(c)
+
+    def test_generated_stalwart_storage(self):
+        template = json.loads(pathlib.Path(__file__).with_name("cluster.example.json").read_text())
+        c = defaults(template, "10.0.0.10", "10.0.0.10/32", "admin@hosting.test", "--full-server")
+        with tempfile.TemporaryDirectory() as directory:
+            base = pathlib.Path(directory)
+            (base / "csi-key").write_text("fixture-key")
+            (base / "iscsi-chap").write_text("0123456789abcdef")
+            generate(c, base)
+            values = json.loads((base / "hosting-values.json").read_text())
+            self.assertEqual(values["stalwart"]["storageClassName"], "zfs-iscsi")
+            self.assertNotIn("enabled", values["stalwart"])  # chart owns feature default
 
     def test_hostname_validation(self):
         self.assertTrue(hostname_valid("ns1.hosting.test"))

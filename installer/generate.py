@@ -149,6 +149,8 @@ def generate(c, base):
     if c.get("accountingSpoolEnabled", False):
         values["kubernetesHosting"]["accountingSpool"] = dict(enabled=True, path="/srv/hosting/accounting",
             image=c["accountingImage"], endpoint=c["accountingEndpoint"], existingSecret="hostingpanel-accounting")
+    # The canonical chart owns default mail enablement; supply the installer storage class.
+    values["stalwart"] = dict(storageClassName="zfs-iscsi")
     write(base/"hosting-values.json",values)
 
 if __name__ == "__main__":
