@@ -18,7 +18,7 @@ public sealed class HostingSftpController(IEnumerable<ISftpAccounts> providers) 
             return Results.Json(new { type = result.Error }, statusCode: result.Status);
         return result.Accounts is not null
             ? Results.Json(new { accounts = result.Accounts, limit = result.Limit == long.MaxValue ? (long?)null : result.Limit,
-                unlimited = result.Limit == long.MaxValue }, statusCode: result.Status)
+                unlimited = result.Limit == long.MaxValue, keyLimit = result.KeyLimit == long.MaxValue ? (long?)null : result.KeyLimit, keysUnlimited = result.KeyLimit == long.MaxValue }, statusCode: result.Status)
             : Results.StatusCode(result.Status);
     }
 

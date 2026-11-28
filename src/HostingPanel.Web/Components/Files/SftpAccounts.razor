@@ -37,7 +37,7 @@
         <MudTextField T="string" Label="@L["Account label"].Value" @bind-Value="label" Immediate="true" Disabled="@busy" />
         <MudTextField T="string" Label="@L["Home directory (optional)"].Value" HelperText="@L["Relative to your hosting directory; leave empty for full access."].Value" @bind-Value="relativePath" Immediate="true" Disabled="@busy" />
         <MudTextField T="string" Label="@L["Public SSH keys"].Value" @bind-Value="key" Lines="6" Immediate="true" Disabled="@busy" />
-        <MudText>ssh-ed25519</MudText>
+        <MudText>ssh-ed25519 — @L["SSH keys per SFTP account"]: @(keyLimit == long.MaxValue ? L["Unlimited"].Value : keyLimit.ToString())</MudText>
         @if (editing is not null) { <MudText>@L["One public key per line."]</MudText><MudCheckBox T="bool" @bind-Value="blocked" Label="@L["Block access"].Value" Disabled="@busy" /> }
         <MudButton Disabled="@(busy || (editing is null && (!CanCreate || string.IsNullOrWhiteSpace(key))) || string.IsNullOrWhiteSpace(label) || string.IsNullOrWhiteSpace(key))" OnClick="Create">@L["Save"]</MudButton>
         <MudButton Disabled="@busy" OnClick="Cancel">@L["Cancel"]</MudButton>
@@ -46,7 +46,7 @@
 @code {
     private readonly LatestRead read = new();
     private IReadOnlyList<SftpAccountEntry>? accounts;
-    private long limit;
+    private long limit, keyLimit;
     private Guid? editing;
     private bool blocked;
     private bool creating, busy, disposed;
@@ -61,7 +61,7 @@
         if (!Session.Connected || disposed) { read.Cancel(); return Task.CompletedTask; }
         var channel = Session.TicketChannel;
         return read.RunAsync(ct => Operations.ListAsync(ct), () => Current(channel), result => {
-            if (result.Status == 200) { accounts = result.Accounts; limit = result.Limit; }
+            if (result.Status == 200) { accounts = result.Accounts; limit = result.Limit; keyLimit = result.KeyLimit; }
             else error = L["SFTP management is unavailable."].Value;
         }, _ => error = L["SFTP management is unavailable."].Value);
     }

@@ -46,4 +46,6 @@ SFTP deletion also requests termination of remaining upstream connections and ve
 
 SFTP account updates (label, home directory, replacement public key, individual block) use the same durable outbox. Observed active/disabled status is persisted separately from desired block state. Credential and root changes revoke the previous upstream user and connections before recreating it. Existing accounts retain their key if omitted in PATCH.
 
-SFTP accounts support 1–32 distinct Ed25519 public keys. The existing key column supports both legacy single-key values and JSON arrays. The owner-scoped API exposes the public keys; PATCH can replace the set or retain it by omitting both key fields. Credential changes disconnect old sessions before reprovisioning.
+SFTP accounts support one or more distinct Ed25519 public keys. The existing key column supports both legacy single-key values and JSON arrays. The owner-scoped API exposes the public keys; PATCH can replace the set or retain it by omitting both key fields. Credential changes disconnect old sessions before reprovisioning.
+
+The Kubernetes hosting package field `sftpKeys` specifies the maximum keys per SFTP account, or `unlimited`. Missing entitlement defaults to zero. No fixed key-count ceiling exists. Downgrades preserve existing keys; reductions remain permitted, while new additions above the package limit are rejected. DirectAdmin package fields remain unchanged.

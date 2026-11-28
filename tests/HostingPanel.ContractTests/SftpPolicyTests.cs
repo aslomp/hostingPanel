@@ -13,6 +13,9 @@ public static class SftpPolicyTests
         Require(KubernetesSftpAccounts.NormalizeKeys([first, second])?.Length == 2);
         Require(KubernetesSftpAccounts.NormalizeKeys([first, first + " comment"]) is null);
         Require(KubernetesSftpAccounts.NormalizeKeys([]) is null);
+        var many = Enumerable.Range(1, 100).Select(i => { var b = (byte[])blob.Clone(); b[50] = (byte)i; return "ssh-ed25519 " + Convert.ToBase64String(b); }).ToArray();
+        Require(KubernetesSftpAccounts.NormalizeKeys(many)?.Length == 100);
+        Require(MailLimitPolicy.Resolve("{\"sftpKeys\":\"unlimited\"}", null, "sftpKeys") == long.MaxValue);
         Require(KubernetesSftpAccounts.NormalizeKeys([first + "\n" + second]) is null);
         Require(KubernetesSftpAccounts.DecodeKeys(first).SequenceEqual([first]));
         Require(KubernetesSftpAccounts.DecodeKeys(System.Text.Json.JsonSerializer.Serialize(new[] { first, second })).SequenceEqual([first, second]));

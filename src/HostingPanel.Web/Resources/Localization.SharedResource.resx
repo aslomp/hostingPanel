@@ -831,4 +831,5 @@
   <data name="Block access" xml:space="preserve"><value>Block access</value></data>
   <data name="Public SSH keys" xml:space="preserve"><value>Public SSH keys</value></data>
   <data name="One public key per line." xml:space="preserve"><value>One public key per line.</value></data>
+  <data name="SSH keys per SFTP account" xml:space="preserve"><value>SSH keys per SFTP account</value></data>
 </root>

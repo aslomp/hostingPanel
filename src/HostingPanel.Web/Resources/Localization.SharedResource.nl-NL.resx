@@ -925,4 +925,5 @@
   <data name="Block access" xml:space="preserve"><value>Toegang blokkeren</value></data>
   <data name="Public SSH keys" xml:space="preserve"><value>Publieke SSH-sleutels</value></data>
   <data name="One public key per line." xml:space="preserve"><value>Eén publieke sleutel per regel.</value></data>
+  <data name="SSH keys per SFTP account" xml:space="preserve"><value>SSH-sleutels per SFTP-account</value></data>
 </root>

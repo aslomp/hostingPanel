@@ -41,10 +41,10 @@ internal sealed class SftpAccountModel : IHostingPanelModelExtension, IHostingPa
 internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, KubernetesIdentityService identity, IConfiguration configuration, NfsDirectoryProvisioner storage, KubernetesOperationQueue operations, HostingOperationNotifications notifications) : ISftpAccounts
 {
     private bool Enabled => !string.IsNullOrWhiteSpace(configuration["SftpGo:BaseUrl"]);
-    private async Task<long> LimitAsync(HostingAccount owner, CancellationToken ct)
+    private async Task<long> LimitAsync(HostingAccount owner, CancellationToken ct, string field = "ftp")
     {
         var package = await db.Packages.Where(p => p.Id == owner.PackageId).Select(p => p.LimitsJson).SingleOrDefaultAsync(ct);
-        return MailLimitPolicy.Resolve(package, owner.LimitsJson, "ftp");
+        return MailLimitPolicy.Resolve(package, field == "sftpKeys" ? null : owner.LimitsJson, field);
     }
     public async Task<SftpAccountResult> ListAsync(AuthenticationHeaderValue auth, CancellationToken ct)
     {
@@ -64,7 +64,7 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
                 : states.GetValueOrDefault(row.Id)?.Observed ?? "pending";
             return row with { ProvisioningStatus = state, Blocked = states.GetValueOrDefault(row.Id)?.Blocked ?? false, PublicKeys = DecodeKeys(keys[row.Id]) };
         }).ToArray();
-        return new(200, Accounts: observed, Limit: await LimitAsync(owner, ct));
+        return new(200, Accounts: observed, Limit: await LimitAsync(owner, ct), KeyLimit: await LimitAsync(owner, ct, "sftpKeys"));
     }
     internal static bool ValidRelativePath(string? path) => path is not null && path.Length <= 1024 &&
         (path.Length == 0 || path.Split('/').All(part => part.Length is > 0 and <= 255 && part is not ("." or "..") &&
@@ -90,7 +90,7 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
 
     internal static string[]? NormalizeKeys(IReadOnlyList<string>? keys)
     {
-        if (keys is null || keys.Count is < 1 or > 32 || keys.Any(k => k is null || !ValidKey(k))) return null;
+        if (keys is null || keys.Count < 1 || keys.Any(k => k is null || !ValidKey(k))) return null;
         var normalized = keys.Select(k => k.Trim()).ToArray();
         // Compare key material rather than comments.
         if (normalized.Select(k => k.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1]).Distinct(StringComparer.Ordinal).Count() != normalized.Length) return null;
@@ -108,6 +108,7 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var currentOwner = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == owner.Id && !x.Suspended, ct);
         if (currentOwner is null) return new(403, "ACCESS_DENIED");
+        if (publicKeys.LongLength > await LimitAsync(currentOwner, ct, "sftpKeys")) return new(409, "SFTP_KEY_LIMIT_REACHED");
         var limit = await LimitAsync(currentOwner, ct);
         var rows = db.Set<SftpAccountRow>();
         if (await rows.LongCountAsync(x => x.OwnerId == owner.Id, ct) >= limit) return new(409, "SFTP_LIMIT_REACHED");
@@ -129,12 +130,17 @@ internal sealed class KubernetesSftpAccounts(HostingPanelDbContext db, Kubernete
         var owner = await identity.AuthenticateAsync(auth, ct);
         if (owner is null) return new(401, "UNAUTHORIZED");
         if (!Enabled) return new(501, "SFTP_NOT_CONFIGURED");
+        var publicKeys = NormalizeKeys(input.PublicKeys ?? (input.PublicKey is null ? null : new[] { input.PublicKey }));
         if (input.Label is not { Length: > 0 and <= 24 } || !input.Label.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
             || !ValidRelativePath(input.RelativePath) || (input.PublicKeys is not null || input.PublicKey is not null) && publicKeys is null)
             return new(400, "INVALID_SFTP_ACCOUNT");
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var row = await db.Set<SftpAccountRow>().SingleOrDefaultAsync(x => x.Id == id && x.OwnerId == owner.Id, ct);
         if (row is null) return new(404, "SFTP_ACCOUNT_NOT_FOUND");
+        var currentOwner = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == owner.Id && !x.Suspended, ct);
+        if (currentOwner is null) return new(403, "ACCESS_DENIED");
+        if (publicKeys is not null && publicKeys.LongLength > await LimitAsync(currentOwner, ct, "sftpKeys") && publicKeys.LongLength >= DecodeKeys(row.PublicKey).LongLength)
+            return new(409, "SFTP_KEY_LIMIT_REACHED");
         if (!input.Blocked)
         {
             try { await storage.ValidateSftpHomeAsync(owner.Username, input.RelativePath, ct); }
