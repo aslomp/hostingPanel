@@ -2,6 +2,7 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResource> L
 @using static HostingPanel.Web.Components.Layout.NavigationCatalog
 @inject NavigationContextState NavContext
+@inject IConfiguration Configuration
 @implements IDisposable
 <div class="analytics-sidebar">
     <div class="analytics-context">
@@ -19,7 +20,7 @@
             <MudNavGroup @key="navGroup.Title" Title="@L[navGroup.Title].Value" Expanded="true">
                 @foreach (var item in navGroup.Items)
                 {
-                    <MudNavLink @key="item.Label" Href="@item.Path" Match="NavLinkMatch.All">@L[item.Label]</MudNavLink>
+                    <MudNavLink @key="item.Label" Href="@item.Path" Match="NavLinkMatch.All">@L[item.Path == "/sftp-accounts" && Configuration["HostingPanel:Backend"] == "DirectAdmin" ? "FTP accounts" : item.Label]</MudNavLink>
                 }
             </MudNavGroup>
         }

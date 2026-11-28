@@ -10,10 +10,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HostingPanel.Api;
 
-public sealed class KubernetesCompatibilityHandler(KubernetesDatabaseCompatibility? database = null, KubernetesDnsAdminCompatibility? dns = null, KubernetesSubdomainCompatibility? subdomains = null) : IApiCompatibilityHandler
+public sealed class KubernetesCompatibilityHandler(KubernetesDatabaseCompatibility? database = null, KubernetesDnsAdminCompatibility? dns = null, KubernetesSubdomainCompatibility? subdomains = null, KubernetesFtpCompatibility? ftp = null) : IApiCompatibilityHandler
 {
     public Task ForwardAsync(HttpContext context)
     {
+        if (ftp is not null && (string.Equals(context.Request.Path.Value, "/CMD_API_FTP", StringComparison.OrdinalIgnoreCase) || string.Equals(context.Request.Path.Value, "/CMD_API_FTP_SHOW", StringComparison.OrdinalIgnoreCase))) return ftp.ForwardAsync(context);
         if (subdomains is not null && string.Equals(context.Request.Path.Value, "/CMD_API_SUBDOMAINS", StringComparison.OrdinalIgnoreCase))
             return subdomains.ForwardAsync(context);
         if (dns is not null && string.Equals(context.Request.Path.Value, "/CMD_API_DNS_ADMIN", StringComparison.OrdinalIgnoreCase))

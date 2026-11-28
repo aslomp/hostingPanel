@@ -26,6 +26,14 @@ public static class KubernetesRegistration
     services.AddSingleton<CertificateWork>();
     services.AddScoped<KubernetesIdentityService>();
     services.AddSingleton<MailMutationGate>();
+    services.AddScoped<SftpGoClient>();
+    services.AddHostedService<SftpGoReconciler>();
+    services.AddSingleton<SftpAccountModel>();
+    services.AddSingleton<IHostingPanelModelExtension>(sp => sp.GetRequiredService<SftpAccountModel>());
+    services.AddSingleton<IHostingPanelSchemaExtension>(sp => sp.GetRequiredService<SftpAccountModel>());
+    services.AddScoped<ISftpAccounts, KubernetesSftpAccounts>();
+    services.AddHttpClient("sftpgo-management", http => http.Timeout = TimeSpan.FromSeconds(15))
+        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false });
     services.AddScoped<StalwartMailProvider>();
     services.AddScoped<StalwartDnsProvisioning>();
     services.AddScoped<IMailProvider>(sp => sp.GetRequiredService<StalwartMailProvider>());
@@ -75,6 +83,7 @@ public static class KubernetesRegistration
     services.AddScoped<KubernetesDatabaseCompatibility>();
     services.AddScoped<KubernetesDnsAdminCompatibility>();
     services.AddScoped<KubernetesSubdomainCompatibility>();
+    services.AddScoped<KubernetesFtpCompatibility>();
     services.AddScoped<KubernetesCompatibilityHandler>();
     services.AddScoped<IApiCompatibilityHandler>(sp => sp.GetRequiredService<KubernetesCompatibilityHandler>());
     services.AddScoped<KubernetesCertificateProvider>();

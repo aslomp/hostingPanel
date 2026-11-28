@@ -97,6 +97,7 @@ builder.Services.AddScoped<AccountOperations>();
 builder.Services.AddScoped<PackageOperations>();
 builder.Services.AddScoped<DomainOperations>();
 builder.Services.AddScoped<MailOperations>();
+builder.Services.AddScoped<SftpOperations>();
 builder.Services.AddScoped<DnsOperations>();
 builder.Services.AddScoped<DatabaseOperations>();
 builder.Services.AddScoped<TicketOperations>();

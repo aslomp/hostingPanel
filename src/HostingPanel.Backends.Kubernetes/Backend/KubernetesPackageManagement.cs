@@ -56,7 +56,9 @@ public sealed class KubernetesPackageManagement(HostingPanelDbContext db, Kubern
     {
         var (status, principal) = await Authorize(kind, auth, ct);
         if (principal is null) return new(status, Error(status));
-        if (!PackageFields.ValidName(package.Name) || !PackageFields.ValidSettings(kind, package.Settings.Where(x => x.Key != PhpRuntimePolicy.Key).ToDictionary(x => x.Key, x => x.Value)))
+        if (!PackageFields.ValidName(package.Name) || !PackageFields.ValidSettings(kind, package.Settings.Where(x => x.Key != PhpRuntimePolicy.Key && x.Key != "sftpKeys").ToDictionary(x => x.Key, x => x.Value)))
+            return new(400, "INVALID_PACKAGE");
+        if (package.Settings.TryGetValue("sftpKeys", out var keyLimit) && keyLimit != "unlimited" && (!long.TryParse(keyLimit, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var keyCount) || keyCount < 0))
             return new(400, "INVALID_PACKAGE");
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var rows = await Available(principal, ct);
@@ -87,10 +89,11 @@ public sealed class KubernetesPackageManagement(HostingPanelDbContext db, Kubern
         }
         fields[KindKey] = kind;
         row.LimitsJson = JsonSerializer.Serialize(fields);
+        if (!create) db.ReconciliationOperations.Add(new ReconciliationOperation { ResourceType = "sftp-package", ResourceId = row.Id, Action = "update" });
         try { await db.SaveChangesAsync(ct); await transaction.CommitAsync(ct); }
         catch (DbUpdateException) { return new(409, "PACKAGE_CONFLICT"); }
         certificateWork?.AllChanged();
-        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns);
+        notifications?.PublishChange(ReconciliationTarget.Website | ReconciliationTarget.Dns | ReconciliationTarget.Sftp);
         return new(create ? 201 : 200, null);
     }
 
