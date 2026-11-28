@@ -29,6 +29,8 @@ public static class KubernetesRegistration
     services.AddSingleton<IHostingPanelModelExtension>(sp => sp.GetRequiredService<ApacheLogModel>());
     services.AddSingleton<IHostingPanelSchemaExtension>(sp => sp.GetRequiredService<ApacheLogModel>());
     services.AddScoped<IDomainLogs, KubernetesDomainLogs>();
+    services.AddScoped<KubernetesHttpUsage>();
+    services.AddScoped<IHttpUsage>(sp=>sp.GetRequiredService<KubernetesHttpUsage>());
     services.AddHostedService<ApacheLogCollector>();
     services.AddSingleton<MailMutationGate>();
     services.AddScoped<SftpGoClient>();

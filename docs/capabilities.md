@@ -115,3 +115,5 @@ File transfer compatibility: DirectAdmin uses native FTP; Kubernetes exposes dom
 Apache accounting logging (Kubernetes): per-vhost structured stdout access records contain immutable account/domain IDs, completion time, final HTTP status, received/sent bytes (mod_logio) and duration. No request URI or credentials in these access records. Parser and Apache smoke coverage provided. Durable collection, aggregation, reporting and quota enforcement are not implemented yet; stdout rotation can lose records.
 
 Kubernetes website logs: owner-scoped access/error log API and domain UI, independent pod watch and log following, durable SQLite receipts and monthly HTTP usage totals. Current-container rotation/replacement loss is possible; not suitable for hard quota enforcement yet. DirectAdmin log reads remain unsupported in this capability.
+
+HTTP usage: batched SQLite ingestion, configurable raw log retention, owner-scoped monthly HTTP usage API and account overview fields. Reports partial measurements explicitly; full DA user usage contract remains unsupported until disk/mail/other usage is measured.

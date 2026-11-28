@@ -77,6 +77,8 @@ spec:
               value: {{ .Values.certManager.enabled | quote }}
             - name: KubernetesHosting__Enabled
               value: "true"
+            - name: KubernetesHosting__LogRetentionDays
+              value: {{ .Values.kubernetesHosting.logRetentionDays | quote }}
             - name: KubernetesHosting__Namespace
               value: {{ .Release.Namespace | quote }}
             - name: KubernetesHosting__NfsServer

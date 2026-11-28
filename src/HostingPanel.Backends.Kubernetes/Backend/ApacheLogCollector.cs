@@ -19,6 +19,9 @@ internal sealed class ApacheLogCollector(IServiceScopeFactory scopes, IConfigura
     private sealed record Worker(Source Source,CancellationTokenSource Stop,Task Task);
     private readonly Dictionary<string,Worker> workers = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim writer = new(1);
+    private sealed record Pending(string Source,string Timestamp,string Digest,int Ordinal,ApacheLogRow Row,ApacheAccessRecord? Access);
+    private DateTimeOffset nextRetention = DateTimeOffset.MinValue;
+    private int RetentionDays => Math.Max(1, configuration.GetValue("KubernetesHosting:LogRetentionDays",30));
     private string Namespace => configuration["KubernetesHosting:Namespace"] ?? "hosting";
 
     protected override async Task ExecuteAsync(CancellationToken ct)
@@ -85,8 +88,26 @@ internal sealed class ApacheLogCollector(IServiceScopeFactory scopes, IConfigura
                 using var reader = new StreamReader(stream);
                 var occurrences = new Dictionary<string,int>(StringComparer.Ordinal);
                 string? currentTimestamp = null;
-                while (await reader.ReadLineAsync(ct) is { } line)
+                var batch = new List<Pending>(256);
+                var read = reader.ReadLineAsync(ct).AsTask();
+                while (true)
                 {
+                    if (batch.Count != 0 && !read.IsCompleted)
+                    {
+                        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                        var deadline = Task.Delay(TimeSpan.FromMilliseconds(250),timeout.Token);
+                        if (await Task.WhenAny(read,deadline) == deadline)
+                        {
+                            ct.ThrowIfCancellationRequested();
+                            await PersistAsync(batch,ct);
+                            batch.Clear();
+                            continue;
+                        }
+                        timeout.Cancel();
+                    }
+                    var line = await read;
+                    if (line is null) break;
+                    read = reader.ReadLineAsync(ct).AsTask();
                     var split = line.IndexOf(' ');
                     if (split < 1 || line.Length > 16384) continue;
                     var timestamp = line[..split];
@@ -97,8 +118,14 @@ internal sealed class ApacheLogCollector(IServiceScopeFactory scopes, IConfigura
                     var digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(payload)));
                     var ordinal = occurrences.GetValueOrDefault(digest) + 1;
                     occurrences[digest] = ordinal;
-                    await PersistAsync(source.Identity,timestamp,digest,ordinal,row!,access,ct);
+                    batch.Add(new(source.Identity,timestamp,digest,ordinal,row!,access));
+                    if (batch.Count >= 256)
+                    {
+                        await PersistAsync(batch,ct);
+                        batch.Clear();
+                    }
                 }
+                if (batch.Count != 0) await PersistAsync(batch,ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
             catch (Exception ex) { logger.LogWarning("Apache accounting stream interrupted for {Pod}: {Error}",source.Name,ex.GetType().Name); }
@@ -122,7 +149,7 @@ internal sealed class ApacheLogCollector(IServiceScopeFactory scopes, IConfigura
         return true;
     }
 
-    private async Task PersistAsync(string source,string timestamp,string digest,int ordinal,ApacheLogRow row,ApacheAccessRecord? access,CancellationToken ct)
+    private async Task PersistAsync(IReadOnlyList<Pending> batch,CancellationToken ct)
     {
         await writer.WaitAsync(ct);
         try
@@ -130,20 +157,30 @@ internal sealed class ApacheLogCollector(IServiceScopeFactory scopes, IConfigura
             using var scope = scopes.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<HostingPanelDbContext>();
             await using var tx = await db.Database.BeginTransactionAsync(ct);
-            if (await db.Set<ApacheLogReceipt>().FindAsync([source,timestamp,digest,ordinal],ct) is not null) return;
-            // Do not attribute unknown/reassigned domains to another account.
-            if (!await db.Domains.AsNoTracking().AnyAsync(x => x.Id == row.DomainId && x.OwnerId == row.OwnerId,ct)) return;
-            db.Add(new ApacheLogReceipt { Source=source,Timestamp=timestamp,Digest=digest,Occurrence=ordinal });
-            db.Add(row);
-            if (access is not null)
+            var ids = batch.Select(x=>x.Row.DomainId).Distinct().ToArray();
+            var owners = await db.Domains.AsNoTracking().Where(x=>ids.Contains(x.Id)).ToDictionaryAsync(x=>x.Id,x=>x.OwnerId,ct);
+            var now = DateTimeOffset.UtcNow;
+            var cutoff = now.AddDays(-RetentionDays).ToString("O",CultureInfo.InvariantCulture);
+            foreach (var item in batch)
             {
+                var row = item.Row;
+                if (!owners.TryGetValue(row.DomainId,out var owner) || owner != row.OwnerId) continue;
+                if (await db.Set<ApacheLogReceipt>().FindAsync([item.Source,item.Timestamp,item.Digest,item.Ordinal],ct) is not null) continue;
+                db.Add(new ApacheLogReceipt { Source=item.Source,Timestamp=item.Timestamp,Digest=item.Digest,Occurrence=item.Ordinal });
+                if (string.CompareOrdinal(row.Timestamp,cutoff)>=0) db.Add(row);
+                if (item.Access is not { } access) continue;
                 var month = access.CompletedAt.ToString("yyyy-MM",CultureInfo.InvariantCulture);
                 var usage = await db.Set<ApacheMonthlyUsage>().FindAsync([row.OwnerId,row.DomainId,month],ct);
                 if (usage is null) { usage = new() { OwnerId=row.OwnerId,DomainId=row.DomainId,Month=month }; db.Add(usage); }
                 checked { usage.ReceivedBytes += access.ReceivedBytes; usage.SentBytes += access.SentBytes; usage.Requests++; }
             }
             await db.SaveChangesAsync(ct);
+            // Retention is triggered by real ingestion, never an idle polling loop.
+            var prune = now >= nextRetention;
+            if (prune)
+                await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM ApacheLogRows WHERE Timestamp < {cutoff}",ct);
             await tx.CommitAsync(ct);
+            if (prune) nextRetention = now.AddHours(1);
         }
         finally { writer.Release(); }
     }
