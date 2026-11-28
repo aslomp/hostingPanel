@@ -143,14 +143,15 @@ stalwart:
 
 # Shared OpenSSH service. No management server or privileged mount operations.
 sftp:
-  enabled: false
+  enabled: true
   enableWrites: true
-  jailExport: "" # dedicated root-owned NFS jail tree, prepared on storage host
-  image: "" # build Dockerfile.openssh and publish/import on eligible nodes
-  existingSecret: "" # ssh_host_ed25519_key
+  jailExport: /srv/hosting/sftp-jails # dedicated root-owned NFS jail export, prepared by installer
+  image: hostingpanel-openssh:installer-local # override with registry image on multi-node clusters
+  existingSecret: hostingpanel-ssh-hostkeys # ssh_host_ed25519_key; created by installer
   service:
-    type: ClusterIP
-    port: 22
+    type: LoadBalancer
+    port: 2223 # TCP 22 is host SSH; TCP 2222 is DirectAdmin
+    externalTrafficPolicy: Local
   resources:
     requests: {cpu: 100m, memory: 128Mi}
     limits: {cpu: "1", memory: 512Mi}

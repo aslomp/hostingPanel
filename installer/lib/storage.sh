@@ -56,8 +56,14 @@ install_storage() {
     chown 1001:1001 /srv/hosting/accounting
     chmod 0700 /srv/hosting/accounting
   fi
+  zfs list -H "$pool/hosting/sftp-jails" >/dev/null 2>&1 || zfs create -o mountpoint=/srv/hosting/sftp-jails "$pool/hosting/sftp-jails"
+  [[ $(zfs get -H -o value mountpoint "$pool/hosting/sftp-jails") == /srv/hosting/sftp-jails ]] || die "Unexpected SFTP jail mountpoint"
+  mountpoint -q /srv/hosting/sftp-jails || die "SFTP jail dataset not mounted"
+  chown root:root /srv/hosting/sftp-jails
+  chmod 0755 /srv/hosting/sftp-jails
   install -d /etc/exports.d
   printf '/srv/hosting/home %s(rw,sync,root_squash,no_subtree_check)\n/srv/hosting/apache %s(rw,sync,root_squash,no_subtree_check)\n' "$network" "$network" > /etc/exports.d/hostingpanel.exports
+  printf '/srv/hosting/sftp-jails %s(rw,sync,root_squash,no_subtree_check)\n' "$network" >> /etc/exports.d/hostingpanel.exports
   # Preserve an existing accounting export on reruns, even when ingestion is disabled.
   if zfs list -H "$pool/hosting/accounting" >/dev/null 2>&1; then
     [[ $(zfs get -H -o value mountpoint "$pool/hosting/accounting") == /srv/hosting/accounting ]] || die "Unexpected accounting mountpoint"
